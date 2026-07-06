@@ -1,0 +1,5 @@
+# This Downloads folder contains many unrelated personal files.
+# Only the roadrace prototype files are meant to be tracked in this repo.
+*
+!.gitignore
+!roadrace_*
