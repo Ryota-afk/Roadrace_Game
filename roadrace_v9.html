@@ -2038,7 +2038,7 @@ function App() {
           </section>
         )}
         <div style={{ display: "grid", gap: 8 }}>
-          <Btn disabled={!ready} onClick={() => startRace(true)}>3D観戦でスタート 🏁</Btn>
+          <Btn disabled={!ready} onClick={() => startRace(true)}>観戦しながらスタート 🏁</Btn>
           <Btn outline disabled={!ready} onClick={() => startRace(false)}>結果だけ見る（スキップ）</Btn>
           <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
         </div>
