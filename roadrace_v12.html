@@ -834,7 +834,20 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const groupDist = puller.lastOwnDist;
         const ownCapable = tickDistance(en, segType, "pull", course.steepness);
         let dist;
-        if (ownCapable >= groupDist * (windActive ? 0.80 : 0.9)) dist = groupDist;
+        if (ownCapable >= groupDist * (windActive ? 0.80 : 0.9)) {
+          // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
+          // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
+          // ゴールタイムが不自然なほど大量に完全一致してしまう（差が均質すぎる問題）。
+          // スプリント区間に限り、各選手自身のスプリント適性（ownCapable/groupDistの比）と
+          // 小さな運要素を反映した微差を加え、集団のままでも着差にばらつきが出るようにする
+          if (segType === "sprint") {
+            const abilityEdge = ownCapable / groupDist - 1;
+            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.05;
+            dist = groupDist * Math.max(0.94, Math.min(1.06, 1 + abilityEdge * 0.6 + luck));
+          } else {
+            dist = groupDist;
+          }
+        }
         else { dist = ownCapable; en.mode = "solo"; }
         en.pos = Math.min(course.length, en.pos + dist);
         en.energy -= energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * (windActive && en.mode === "draft" ? 1.25 : 1);
@@ -1154,7 +1167,7 @@ function modeStreakAt(en, rt, mode, cap) {
 function topLateral(course, frac) {
   return Math.sin(frac * Math.PI * course.f1 + course.ph1) * course.amp1 + Math.sin(frac * course.f2 + course.ph2) * course.amp2;
 }
-const MAP_W = 660, TOP_H = 120, SIDE_H = 80, MAP_PAD = 18;
+const MAP_W = 660, TOP_H = 150, SIDE_H = 96, MAP_PAD = 18;
 // v10: 俯瞰マップ・側面マップを「先頭集団を追従してズームするカメラ」方式に変更。
 // 全コースを常時表示するのではなく、まだゴールしていない選手たちの広がりに合わせて
 // ズーム幅を自動調整する（競馬のトラッキングシステムのような大きな表示を再現）
@@ -1181,7 +1194,7 @@ function buildTopPath(course, start, end) {
     const t = i / 60;
     const f = start + t * (end - start);
     const range = course.amp1 + course.amp2 || 1;
-    const y = TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 14);
+    const y = TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 20);
     pts.push(`${(MAP_PAD + t * (MAP_W - MAP_PAD * 2)).toFixed(1)},${y.toFixed(1)}`);
   }
   return pts.join(" ");
@@ -1192,7 +1205,7 @@ function buildSidePath(course, start, end) {
   for (let i = 0; i <= 60; i++) {
     const t = i / 60;
     const f = start + t * (end - start);
-    const y = SIDE_H - 12 - (course.yAt(f) / maxElev) * (SIDE_H - 24);
+    const y = SIDE_H - 16 - (course.yAt(f) / maxElev) * (SIDE_H - 32);
     pts.push(`${(MAP_PAD + t * (MAP_W - MAP_PAD * 2)).toFixed(1)},${y.toFixed(1)}`);
   }
   return pts.join(" ");
@@ -1311,8 +1324,8 @@ function RaceView({ sim, onFinish }) {
 
   const topPath = useMemo(() => buildTopPath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
   const sidePath = useMemo(() => buildSidePath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
-  const topYAt = (f) => { const range = course.amp1 + course.amp2 || 1; return TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 14); };
-  const sideYAt = (f) => { const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev)); return SIDE_H - 12 - (course.yAt(f) / maxElev) * (SIDE_H - 24); };
+  const topYAt = (f) => { const range = course.amp1 + course.amp2 || 1; return TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 20); };
+  const sideYAt = (f) => { const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev)); return SIDE_H - 16 - (course.yAt(f) / maxElev) * (SIDE_H - 32); };
 
   // v12: 集団の隊列シェイプを毎レンダー計算する。各選手は共有の軌道をなぞるのではなく、
   // 選手ごとに周波数・位相が異なる独立した揺らぎで集団の中を漂う（他の選手と同期しない）。
@@ -1446,9 +1459,16 @@ function RaceView({ sim, onFinish }) {
         }
         const fracs = framing.map(r => r.frac);
         const maxF = Math.max(...fracs), minF = Math.min(...fracs);
+        const spreadF = maxF - minF;
         const center = (maxF + minF) / 2;
-        let span = Math.min(MAX_VIEW_FRAC, Math.max(MIN_VIEW_FRAC, (maxF - minF) * 1.6));
+        let span = Math.min(MAX_VIEW_FRAC, Math.max(MIN_VIEW_FRAC, spreadF * 1.6));
         if (finalSegRef.current) span = Math.min(span, SPRINT_MIN_VIEW_FRAC);
+        // v12バグ修正: 逃げとメイン集団の差が開きMAX_VIEW_FRAC（最大ズームアウト幅）を
+        // 超えると、上のMath.minでspanが実際に必要な幅より狭く決まってしまい、
+        // 「先頭集団」カメラで追っているはずの選手がキャンバス範囲外（画面右側など）に
+        // 押し出されて見えなくなるバグがあった。安全マージンを削ってでも全員が必ず
+        // 表示範囲に収まるよう、実際の広がりを下回らない値まで引き上げる
+        span = Math.max(span, spreadF + 0.01);
         let start = center - span * VIEW_LEAD_BIAS;
         let end = start + span;
         if (start < 0) { start = 0; end = Math.min(1, span); }
@@ -1578,10 +1598,11 @@ function RaceView({ sim, onFinish }) {
         <>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 120, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 150, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               {/* v12: 集団の2次元的な広がり（団子状〜エシュロン時の斜め隊列）に対して
-                  道幅が狭すぎて選手がはみ出て見える問題を修正するため大幅に拡張 */}
-              <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="42" strokeLinecap="round" />
+                  道幅が狭すぎて選手がはみ出て見える問題を修正するため大幅に拡張。
+                  さらに拡張してほしいという追加フィードバックを受け再拡大 */}
+              <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="60" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
               <circle cx={mapX(1, cam.start, cam.end)} cy={topYAt(1)} r="4" fill={C.red} />
               {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
@@ -1622,9 +1643,9 @@ function RaceView({ sim, onFinish }) {
           </div>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 80, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 96, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
-              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="6" />
+              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="9" />
               {ridersUi.map(r => {
                 const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
                 const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
@@ -1943,18 +1964,25 @@ function App() {
   function startStage2() {
     if (stage2LockRef.current) return;
     stage2LockRef.current = true;
-    let simResult = null, watchFlag = false, raceRef = null;
+    // v12バグ修正: watchFlagをsetGのfunctional updater内で代入し、その直後（同期的に）
+    // if(!watchFlag)で参照していたため、Reactがupdaterをこの行より後（バッチ処理の
+    // 反映時）に呼ぶ場合、常にwatchFlag=falseの初期値のまま判定されてしまい、観戦モードで
+    // 開始したはずの2日目が毎回「結果だけ見る」経路に落ちて即座に確定してしまっていた
+    // （2日目が実行されないように見えるバグの原因）。gc.watchはステージレース開始時に
+    // 一度決まったら変わらない値なので、setGを呼ぶ前に外側のgから同期的に読んで安全に使う
+    const watchFlag = g.gc.watch;
+    let simResult = null, raceRef = null;
     setG(s => {
       const gc = s.gc;
       const roster2 = s.roster.map(r => gc.starters.includes(r.id) ? { ...r, fatigue: Math.max(0, r.fatigue - 20) } : r);
       const squad = roster2.filter(r => gc.starters.includes(r.id));
       // v12: 2日目もステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
       const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, "day2", gc.directive);
-      simResult = sim; watchFlag = gc.watch; raceRef = gc.race;
+      simResult = sim; raceRef = gc.race;
       return {
         ...s, roster: roster2, result: sim,
         gc: { ...s.gc, stage: 2 },
-        screen: gc.watch ? "race" : "result_pending",
+        screen: watchFlag ? "race" : "result_pending",
       };
     });
     if (!watchFlag) setTimeout(() => finishRace(simResult, raceRef, 2), 0);
