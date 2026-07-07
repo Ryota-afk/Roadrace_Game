@@ -1164,6 +1164,8 @@ const VIEW_LEAD_BIAS = 0.42;  // 集団の中心を画面の何%の位置に置�
 // v11: ゴール直前（最終区間突入後）の演出。カメラを先頭集団だけに絞ってさらに拡大し、
 // 時間の進行を遅くしてスプリント勝負を細かく見られるようにする
 const SPRINT_MIN_VIEW_FRAC = 0.018; // 最終区間突入後のズーム上限（通常のMIN_VIEW_FRACよりさらに狭い）
+// v12: 最終区間突入の時間ベース判定（優勝者の確定タイムの残り何%を「最終区間」とみなすか）
+const FINAL_SEG_TIME_RATIO = 0.045;
 const SPRINT_SLOWDOWN = 0.4;        // 最終区間突入後、clock進行に掛ける追加の減速係数
 function mapX(f, start, end) { return MAP_PAD + ((f - start) / (end - start)) * (MAP_W - MAP_PAD * 2); }
 function buildTopPath(course, start, end) {
@@ -1338,7 +1340,9 @@ function RaceView({ sim, onFinish }) {
   useEffect(() => {
     const riders = sim.entrants.map((e) => ({
       e, frac: 0, mode: "draft", gid: e.id, slot: 0, dropStreak: 0, attackStreak: 0,
-      color: e.team === "PLAYER" && e.isAce ? C.yellow : e.color,
+      // v12: エースのみ黄色を使い、他のAI含む何色とも被らないようにする。
+      // 自チームのアシストは白系（他チームは赤/青/紫/橙）で「自分のチーム」だと一目でわかるようにする
+      color: e.team === "PLAYER" ? (e.isAce ? C.yellow : "#eef1f6") : e.color,
       biasX: -0.3, // v12: 前後バイアス（誰が前寄りか）。slotに応じて緩やかに追従する永続値
     }));
 
@@ -1422,8 +1426,15 @@ function RaceView({ sim, onFinish }) {
         setCam({ start, end });
       }
       // 最終区間突入判定
+      // v12: 位置ベース（最終区間に実際に入ったか）に加えて時間ベースの判定もOR条件で追加。
+      // MAX_TICKS到達により、山岳など遅いレースでは選手の位置が実際には最終区間まで
+      // 到達しないままfinishTimeが外挿で確定してしまうことがあり、位置ベースの判定だけでは
+      // 山岳ゴール等で最終区間演出が一度も発火しない不具合があったための対策
       if (!finalSegRef.current) {
-        const anyInFinal = riders.some(r => course.segTypeAt(r.frac * course.length).idx >= course.finalIdx);
+        const posBasedFinal = riders.some(r => course.segTypeAt(r.frac * course.length).idx >= course.finalIdx);
+        const winnerFinishTime = Math.min(...riders.map(r => r.e.finishTime));
+        const timeBasedFinal = rt >= winnerFinishTime * (1 - FINAL_SEG_TIME_RATIO);
+        const anyInFinal = posBasedFinal || timeBasedFinal;
         if (anyInFinal) {
           finalSegRef.current = true; setFinalSeg(true);
           // v11: 最終区間突入をはっきり体感できるよう、切り替わりの瞬間にバナー表示する
@@ -1531,6 +1542,7 @@ function RaceView({ sim, onFinish }) {
                 const drawFrac = Math.min(1, r.frac + attackBonus);
                 return (
                   <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${topYAt(drawFrac) + dy})`}>
+                    {camMode === r.id && <circle r="10" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
                     {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
                     {r.slot === 1 && r.mode === "draft" && <circle r={r.isAce ? 7.5 : 6} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
                     <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
@@ -1551,17 +1563,19 @@ function RaceView({ sim, onFinish }) {
                 const drawFrac = Math.min(1, r.frac + attackBonus);
                 return (
                   <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${sideYAt(drawFrac) - Math.abs(dy) * 0.6})`}>
+                    {camMode === r.id && <circle r="9" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
                     {r.mode === "attack" && <circle r="7" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
                     {r.slot === 1 && r.mode === "draft" && <circle r={r.isAce ? 6.5 : 5} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
                     <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
+                    {r.isPlayer && <circle r="1.3" fill="#14171d" />}
                   </g>
                 );
               })}
             </svg>
           </div>
           <div style={{ fontSize: 10, color: C.sub, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <span>● 黄色＝エース</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
-            <span style={{ color: C.yellow }}>点線＝次に牽引予定</span>
+            <span>● 黄色＝エース</span><span>○ 白＝自チームのアシスト</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
+            <span style={{ color: C.yellow }}>点線＝次に牽引予定</span><span style={{ color: C.green }}>◎ 緑丸＝カメラで追跡中の選手</span>
             <span>選手はそれぞれ独立して集団内を漂う（巡航時は団子状、高強度区間ほど縦に伸びる）／中心から離れて動かなくなったら千切れかけ</span>
           </div>
         </>
