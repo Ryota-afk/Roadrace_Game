@@ -1,28 +1,3 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ロードレース・プロチーム運営 v12</title>
-<style>
-  html, body { margin: 0; padding: 0; background: #14171d; }
-  #root { min-height: 100vh; }
-  #loading { color: #9aa3b5; font-family: sans-serif; padding: 24px; }
-</style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client"
-  }
-}
-</script>
-<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-</head>
-<body>
-<div id="root"><div id="loading">読み込み中…（初回はCDNからReactを取得します）</div></div>
-<script type="text/babel" data-type="module" data-presets="react">
-import { createRoot } from "react-dom/client";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 
 /* =========================================================
@@ -2860,7 +2835,3 @@ function App() {
 function t_label(type) { return TYPES[type]?.label || type; }
 
 export default App;
-createRoot(document.getElementById("root")).render(<App />);
-</script>
-</body>
-</html>
