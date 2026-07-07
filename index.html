@@ -1339,8 +1339,16 @@ function RaceView({ sim, onFinish }) {
     const wanderY = riderWander(r.id, 5, packTSec, PACK_WANDER_FREQ_Y);
     const ex = L * Math.max(-1, Math.min(1, r.biasX * 0.55 + wanderX * 0.6));
     const ey = W * wanderY;
-    let dx = ex * Math.cos(tilt) - ey * Math.sin(tilt);
-    let dy = ex * Math.sin(tilt) + ey * Math.cos(tilt);
+    // v12バグ修正: exはコース位置（frac）単位、eyは画面ピクセル単位で、そのままではスケールが
+    // 全く異なる（exは0.03前後、eyは数〜十数px）。横風のtilt回転で両者を直接混ぜると、
+    // dx（frac単位のまま後でmapXにより数百px/fracに再拡大される）にピクセル単位の値が
+    // 漏れ込み、画面外まで吹き飛ぶ選手が出るバグになっていた。回転はピクセル単位に揃えてから行い、
+    // 結果のx成分だけをfrac単位に戻す
+    const pxPerFrac = (MAP_W - MAP_PAD * 2) / Math.max(span, 1e-4);
+    const exPx = ex * pxPerFrac;
+    let dxPx = exPx * Math.cos(tilt) - ey * Math.sin(tilt);
+    let dy = exPx * Math.sin(tilt) + ey * Math.cos(tilt);
+    let dx = dxPx / pxPerFrac;
     // 千切れかけの選手は揺らぎを徐々にフェードアウトしつつ後方へドリフトし、単独走に見せる
     dx = dx * (1 - dropRatio) - dropRatio * DROP_EXTRA_DX_RATIO * span;
     dy = dy * (1 - dropRatio) + dropRatio * DROP_EXTRA_LANE;
