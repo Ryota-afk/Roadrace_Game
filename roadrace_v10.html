@@ -316,6 +316,18 @@ function overall(r) {
   const vals = AB_KEYS.map(k => r[k]).sort((a, b) => b - a);
   return Math.round(vals[0] * 0.5 + vals[1] * 0.3 + (vals[2] + vals[3] + vals[4]) / 3 * 0.2);
 }
+// v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
+const DISCIPLINES = {
+  flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
+  climb:  { label: "山岳",      calc: r => r.climb * 0.7 + r.stamina * 0.3 },
+  sprint: { label: "スプリント", calc: r => r.sprint * 0.7 + r.flat * 0.2 + r.stamina * 0.1 },
+  solo:   { label: "独走(TT)",  calc: r => r.solo * 0.7 + r.stamina * 0.3 },
+  hill:   { label: "丘陵",      calc: r => r.climb * 0.4 + r.sprint * 0.4 + r.stamina * 0.2 },
+};
+const DISCIPLINE_KEYS = Object.keys(DISCIPLINES);
+function disciplineScore(r, key) { return Math.round(DISCIPLINES[key].calc(r)); }
+// レースの favors（脚質）から、編成画面で強調表示する種目別スコアを引く
+const FAVORS_TO_DISCIPLINE = { SPR: "sprint", CLM: "climb", PUN: "hill", TT: "solo" };
 function fmtTime(sec) { const m = Math.floor(sec / 60), s = Math.floor(sec % 60); return `${m}:${String(s).padStart(2, "0")}`; }
 function fmtGap(sec) { return sec < 0.5 ? "TOP" : `+${fmtTime(sec)}`; }
 
@@ -953,6 +965,27 @@ function AbilityGrid({ r }) {
             </div>
             <div style={{ height: 3, background: C.line, borderRadius: 2 }}>
               <div style={{ height: 3, width: `${Math.min(100, r[k] + partBonus)}%`, background: broke ? C.yellow : AB_COLOR[k], borderRadius: 2 }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+// v10: 種目別複合適性スコアの表示（レーダー的な棒グラフ）。highlightKeyを指定すると
+// そのレース種別に対応する項目だけ強調表示する（編成画面での「このレースに向いているか」用）
+function DisciplineGrid({ r, highlightKey }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, marginTop: 4 }}>
+      {DISCIPLINE_KEYS.map(k => {
+        const score = disciplineScore(r, k);
+        const hi = k === highlightKey;
+        return (
+          <div key={k}>
+            <div style={{ fontSize: 9.5, color: hi ? C.yellow : C.sub }}>{DISCIPLINES[k].label}{hi ? " ★" : ""}</div>
+            <div style={{ fontFamily: FONT_M, fontSize: 12.5, color: hi ? C.yellow : C.text }}>{score}</div>
+            <div style={{ height: 3, background: C.line, borderRadius: 2 }}>
+              <div style={{ height: 3, width: `${Math.min(100, score)}%`, background: hi ? C.yellow : C.purple, borderRadius: 2 }} />
             </div>
           </div>
         );
@@ -1610,7 +1643,7 @@ function App() {
   );
   const Nav = () => (
     <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-      {[["home", "🏁 レース"], ["riders", "👥 選手・練習"], ["shop", "🛒 ショップ"]].map(([k, l]) => (
+      {[["home", "🏁 レース"], ["riders", "👥 選手・練習"], ["shop", "🛒 ショップ"], ["help", "📖 ヘルプ"]].map(([k, l]) => (
         <button key={k} onClick={() => setG(s => ({ ...s, tab: k }))}
           style={{
             flex: 1, padding: "9px 4px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: FONT_D, cursor: "pointer",
@@ -1829,6 +1862,8 @@ function App() {
                 <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
                 <FatigueBar v={r.fatigue} />
                 <AbilityGrid r={r} />
+                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>種目別適性</div>
+                <DisciplineGrid r={r} />
                 <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ fontSize: 11, color: C.sub }}>練習:</span>
                   <select value={r.focus} onChange={e => setFocus(r.id, e.target.value)}
@@ -1952,7 +1987,87 @@ function App() {
               })}
             </div>
           </section>
-          <Btn outline color={C.sub} onClick={() => { if (window.confirm("最初からやり直しますか？")) setG(initGame()); }}>ゲームをリセット</Btn>
+          <Btn outline color={C.sub} onClick={() => { if (window.confirm("最初からやり直しますか？セーブデータも消えます。")) { clearSaveGame(); setG(initGame()); } }}>ゲームをリセット</Btn>
+        </div>
+      );
+    }
+    if (g.tab === "help") {
+      const roleRows = Object.entries(ROLES).map(([k, v]) => ({ key: k, ...v }));
+      const ROLE_PROS_CONS = {
+        lead: { pro: "エースを最後まで牽引。最も信頼できる基本役割", con: "脚質が合わなくても最後まで牽引を続けるため、コースと合わないと非効率になりがち" },
+        sub: { pro: "第一アシストを後方から支援し、序盤の消耗を分散できる", con: "脚がなくなると早期に離脱し、そこから先の牽引には貢献できない" },
+        mountain: { pro: "山岳・山頂フィニッシュ区間で牽引力を発揮。平坦区間は温存できる", con: "平坦・丘陵中心のコースでは牽引せず、実質的に消耗するだけの手駒になる" },
+        flat: { pro: "平坦・丘陵区間の牽引に強く、山岳の少ないコースで安定して働く", con: "山岳区間に入ると牽引せず自然に遅れていく（そこから先は温存扱い）" },
+        breakaway: { pro: "序盤に飛び出して逃げ集団を形成。エースの脚を使わずに得点機会を作れる", con: "メイン集団に吸収されるとポイントに繋がらないリスクがある" },
+      };
+      const CHASE_PROS_CONS = {
+        push: { pro: "ローテーション頻度を上げてペースアップできる", con: "牽引役の脚の消耗が早まる" },
+        hold: { pro: "牽引役の脚を温存できる", con: "ギャップの拡大を許容することになる" },
+        ace_early: { pro: "エースが単独アタックし、一気にタイム差を作れる可能性がある", con: "エネルギー切れで終盤に大失速するリスクがある（1レース1回限り）" },
+      };
+      const benchAbility = 80;
+      body = (
+        <div style={{ display: "grid", gap: 14 }}>
+          <div>
+            <Eyebrow color={C.green}>役割の得意・弱点</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              {roleRows.map(r => (
+                <div key={r.key} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}` }}>
+                  <div style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13.5 }}>{r.label}</div>
+                  <div style={{ fontSize: 11.5, color: C.green, marginTop: 3 }}>◎ {ROLE_PROS_CONS[r.key].pro}</div>
+                  <div style={{ fontSize: 11.5, color: C.red, marginTop: 2 }}>▲ {ROLE_PROS_CONS[r.key].con}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Eyebrow color={C.blue}>無線指示の得意・弱点</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              {Object.entries(CHASE_MODES).map(([k, v]) => (
+                <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}` }}>
+                  <div style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13.5 }}>📻 {v.label}</div>
+                  <div style={{ fontSize: 11.5, color: C.green, marginTop: 3 }}>◎ {CHASE_PROS_CONS[k].pro}</div>
+                  <div style={{ fontSize: 11.5, color: C.red, marginTop: 2 }}>▲ {CHASE_PROS_CONS[k].con}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Eyebrow color={C.yellow}>能力値のクラス別ベンチマーク</Eyebrow>
+            <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4, lineHeight: 1.7 }}>
+              新人の能力値は「クラスの基準値±11」＋「専門種目+14」で決まり、22〜94の範囲でばらつきます。
+              同じ能力値でも、所属クラスが上がるほど相対的な希少価値は下がります（PROの80は「まずまずの主力」、B1の80は「相当な逸材」）。
+            </div>
+            <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+              {CLASSES.map((c, i) => {
+                const lo = c.scout - 11 + 14, hi = Math.min(94, c.scout + 11 + 14);
+                const pct = Math.max(0, Math.min(100, Math.round(((hi - benchAbility) / (hi - lo)) * 100)));
+                return (
+                  <div key={c.id} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13 }}>{c.label}</span>
+                    <span style={{ fontSize: 11.5, color: C.sub }}>専門種目の新人レンジ 約{Math.round(lo)}〜{Math.round(hi)}</span>
+                    <span style={{ fontSize: 11.5, color: C.yellow }}>能力{benchAbility}は新人の上位約{pct}%相当</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <Eyebrow color={C.purple}>難易度・スコアリングの目安</Eyebrow>
+            <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                レースの★（グレード）は賞金・獲得ポイントの倍率です：★1=×1.0／★2=×1.5／★3=×2.0。
+              </div>
+              {CLASSES.map(c => {
+                const perRace = (c.need / 11).toFixed(1);
+                return (
+                  <div key={c.id} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub }}>
+                    <span style={{ color: C.text, fontFamily: FONT_D, fontWeight: 700 }}>{c.label}</span>：昇格に必要{c.need}pt ÷ シーズン11レース ＝ 平均<span style={{ color: C.yellow, fontFamily: FONT_M }}> {perRace}pt/レース</span>が目安（★1のレースなら概ね6〜7位以内の成績）
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       );
     }
@@ -2070,6 +2185,8 @@ function App() {
               const t = TYPES[r.type];
               const dis = r.injury > 0;
               const on = sel.starters.includes(r.id);
+              const fitKey = FAVORS_TO_DISCIPLINE[race.tmpl.favors];
+              const fitScore = disciplineScore(r, fitKey);
               return (
                 <div key={r.id} onClick={() => !dis && toggle(r.id)}
                   style={{
@@ -2082,7 +2199,10 @@ function App() {
                       {dis && <span style={{ marginLeft: 6, fontSize: 10.5, color: C.red }}>🏥故障中</span>}
                       {r.streak >= 1 && !dis && <span style={{ marginLeft: 6, fontSize: 10.5, color: r.streak >= 2 ? C.red : "#e8a13c" }}>連闘{r.streak}{r.streak >= 2 ? "（出すと故障）" : ""}</span>}
                     </span>
-                    <span style={{ fontFamily: FONT_M, fontSize: 12, color: COND_COLOR[r.cond - 1] }}>{COND_ARROW[r.cond - 1]} <span style={{ color: C.yellow }}>{overall(r)}</span></span>
+                    <span style={{ fontFamily: FONT_M, fontSize: 12, color: COND_COLOR[r.cond - 1] }}>
+                      {COND_ARROW[r.cond - 1]} <span style={{ color: C.yellow }}>{overall(r)}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
+                    </span>
                   </div>
                   <TraitLine trait={r.trait} />
                   <FatigueBar v={r.fatigue} />
