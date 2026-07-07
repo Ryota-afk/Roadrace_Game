@@ -1127,12 +1127,12 @@ const MAP_W = 660, TOP_H = 120, SIDE_H = 80, MAP_PAD = 18;
 // v10: 俯瞰マップ・側面マップを「先頭集団を追従してズームするカメラ」方式に変更。
 // 全コースを常時表示するのではなく、まだゴールしていない選手たちの広がりに合わせて
 // ズーム幅を自動調整する（競馬のトラッキングシステムのような大きな表示を再現）
-const MIN_VIEW_FRAC = 0.05;  // 最大ズーム時に見えるコース幅（集団が固まっている時。v11でさらに拡大）
+const MIN_VIEW_FRAC = 0.035;  // 最大ズーム時に見えるコース幅（集団が固まっている時。v11でさらに拡大）
 const MAX_VIEW_FRAC = 0.4;   // 最大ズームアウト時に見えるコース幅（逃げ等で大きく広がった時）
 const VIEW_LEAD_BIAS = 0.42;  // 集団の中心を画面の何%の位置に置くか（0.5=中央、小さいほど前方の余白が広がる）
 // v11: ゴール直前（最終区間突入後）の演出。カメラを先頭集団だけに絞ってさらに拡大し、
 // 時間の進行を遅くしてスプリント勝負を細かく見られるようにする
-const SPRINT_MIN_VIEW_FRAC = 0.035; // 最終区間突入後のズーム上限（通常のMIN_VIEW_FRACよりさらに狭い）
+const SPRINT_MIN_VIEW_FRAC = 0.018; // 最終区間突入後のズーム上限（通常のMIN_VIEW_FRACよりさらに狭い）
 const SPRINT_SLOWDOWN = 0.4;        // 最終区間突入後、clock進行に掛ける追加の減速係数
 function mapX(f, start, end) { return MAP_PAD + ((f - start) / (end - start)) * (MAP_W - MAP_PAD * 2); }
 function buildTopPath(course, start, end) {
@@ -1167,7 +1167,14 @@ const ATTACK_EXAGGERATION = 0.014; // アタック演出の最大frac誇張量
 // 前後に連なって見えるようにする。牽引中(slot=0)が最前列、待機順が増えるほど後方
 const ROT_X_PER_SLOT_RATIO = 0.045; // 待ち順1つあたりの前後オフセット（現在のカメラ幅spanに対する比率）
 const ROT_X_MAX_SLOTS = 5;          // 前後オフセットが頭打ちになる待ち順の上限
-const SLOT_EASE = 0.15;             // 待ち順の表示位置を滑らかに追従させるイージング係数（毎フレーム）
+// v11: ローテーション交代の見た目を「毎フレーム15%ずつ追従」から「交代検知のたびに固定時間の
+// スワップアニメを起動」する方式に変更。前者は交代周期（実質再生では0.1〜0.3秒間隔）より
+// イージングの収束が遅く、常に追いつけないまま次の交代が来て瞬間移動・ジッターに見えていた。
+// 後者は各交代を必ず一定時間かけて滑らかに見せる。選手ごとに開始をわずかにずらし、
+// 集団全体が機械的に一斉スイッチする不自然さも緩和する
+const SWAP_DURATION_MS = 550;   // 1回のスワップアニメの所要時間（実時間ミリ秒）
+const SWAP_STAGGER_MS = 140;    // 選手ごとの開始ズレの最大幅（同時スイッチ感を減らす）
+function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
 function RaceView({ sim, onFinish }) {
   const [hud, setHud] = useState({ top: [], seg: "", clock: 0, done: false, comment: "", gap: null });
   const [ridersUi, setRidersUi] = useState([]);
@@ -1225,6 +1232,7 @@ function RaceView({ sim, onFinish }) {
     const riders = sim.entrants.map((e) => ({
       e, lane: teamLane[e.team], frac: 0, mode: "draft", gid: e.id, slot: 0, dispSlot: 0, dropStreak: 0, attackStreak: 0,
       color: e.team === "PLAYER" && e.isAce ? C.yellow : e.color,
+      swapFrom: 0, swapTarget: 0, swapStartAt: -Infinity, swapStagger: (e.id * 53) % SWAP_STAGGER_MS,
     }));
 
     totalRef.current = Math.max(...sim.entrants.map(e => e.finishTime));
@@ -1255,9 +1263,22 @@ function RaceView({ sim, onFinish }) {
         r.gid = groupAt(r.e, rt);
         r.mode = modeAt(r.e, rt);
         r.slot = slotAt(r.e, rt);
-        // v11: 待ち順の表示位置をイージングで滑らかに追従させる（ローテーション交代の瞬間に
-        // 前後の位置が急に切り替わらず、なめらかに入れ替わって見えるようにする）
-        r.dispSlot += (r.slot - r.dispSlot) * SLOT_EASE;
+        // v11: 待ち順の変化を検知するたび、選手ごとに少しずらした開始タイミングで固定時間の
+        // スワップアニメを起動する（「毎フレーム追従」方式だと交代周期の方が速く、常に
+        // 追いつけないまま次の交代が来て瞬間移動・ジッターに見えていたための対策）
+        if (r.slot !== r.swapTarget) {
+          r.swapFrom = r.dispSlot;
+          r.swapTarget = r.slot;
+          r.swapStartAt = now + r.swapStagger;
+        }
+        {
+          const elapsed = now - r.swapStartAt;
+          if (elapsed <= 0) r.dispSlot = r.swapFrom;
+          else {
+            const t = Math.min(1, elapsed / SWAP_DURATION_MS);
+            r.dispSlot = r.swapFrom + (r.swapTarget - r.swapFrom) * easeInOutCubic(t);
+          }
+        }
         r.dropStreak = modeStreakAt(r.e, rt, "solo", DROP_TRANSITION_TICKS);
         r.attackStreak = modeStreakAt(r.e, rt, "attack", ATTACK_VISUAL_TICKS);
         if (r.frac > leadFrac) leadFrac = r.frac;
@@ -1308,7 +1329,11 @@ function RaceView({ sim, onFinish }) {
       // 最終区間ロック判定
       if (!lockedRef.current) {
         const anyInFinal = riders.some(r => course.segTypeAt(r.frac * course.length).idx >= course.finalIdx);
-        if (anyInFinal) { lockedRef.current = true; setLocked(true); }
+        if (anyInFinal) {
+          lockedRef.current = true; setLocked(true);
+          // v11: 最終区間突入をはっきり体感できるよう、切り替わりの瞬間にバナー表示する
+          liveRef.current = { text: "🏁 ラストスパート突入！カメラをズームして追跡します", until: now + 3000 };
+        }
       }
       setRidersUi(riders.map(r => ({
         id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: r.e.team === "PLAYER", lane: r.lane,
@@ -1380,8 +1405,8 @@ function RaceView({ sim, onFinish }) {
         ))}
       </div>
       <div>
-        <Eyebrow color={C.sub}>俯瞰マップ（コースの左右の揺れ）</Eyebrow>
-        <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 120, background: "#3f5a3a", borderRadius: 8, marginTop: 4 }}>
+        <Eyebrow color={locked ? C.red : C.sub}>{locked ? "🏁 ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</Eyebrow>
+        <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 120, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: locked ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
           <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="9" strokeLinecap="round" />
           <circle cx={mapX(1, cam.start, cam.end)} cy={topYAt(1)} r="4" fill={C.red} />
           {ridersUi.map(r => {
@@ -1406,8 +1431,8 @@ function RaceView({ sim, onFinish }) {
         </svg>
       </div>
       <div>
-        <Eyebrow color={C.sub}>側面マップ（コースの上下の起伏）</Eyebrow>
-        <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 80, background: "#232a20", borderRadius: 8, marginTop: 4 }}>
+        <Eyebrow color={locked ? C.red : C.sub}>{locked ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
+        <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 80, background: "#232a20", borderRadius: 8, marginTop: 4, border: locked ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
           <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
           <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="2" />
           {ridersUi.map(r => {
