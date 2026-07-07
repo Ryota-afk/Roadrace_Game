@@ -879,11 +879,14 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
       { name: "ヴェロチタ京都", color: "#9a6be0" }, { name: "ウィンドミル北海道", color: "#e08a3f" },
     ];
     const power = 52 + classIdx * 9 + (raceMeta.grade - 1) * 4 + (raceMeta.championship ? 6 : 0);
-    const squadN = squad.length;
+    // v12: 相手チームの出走人数は自チームの選択人数に連動させず、レース規定の範囲内で
+    // チームごとに独立して決める（毎回同じ人数になる不自然さを解消）
+    const { squadMin, squadMax } = raceMeta.tmpl;
     aiTeamsUsed = aiDefs.map(d => {
+      const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
       const members = [];
-      for (let i = 0; i < squadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng));
-      const aiRoles = assignAIRoles(members, squadN);
+      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng));
+      const aiRoles = assignAIRoles(members, aiSquadN);
       return members.map((r, i) => ({
         id: r.id, name: r.name, type: r.type, trait: r.trait,
         flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
@@ -1520,6 +1523,17 @@ function saveGame(g) {
 function hasSaveGame() {
   try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
 }
+// v12: initGame()がダミーのロースター/スカウト生成でRID（グローバル選手ID採番）を
+// 消費した後にセーブデータで上書きされるため、ロード後のRIDが実際の最大IDより
+// 低いまま取り残されていた。これにより次回のスカウト/FA生成が既存選手とIDが衝突し、
+// Reactのkey衝突で能力値表示が古い選手のまま残る不具合が発生していた（要修正済み）
+function resyncRid(state) {
+  let max = RID;
+  (state.roster || []).forEach(r => { if (r.id >= max) max = r.id + 1; });
+  (state.scouts || []).forEach(sc => { if (sc.rider.id >= max) max = sc.rider.id + 1; });
+  (state.faMarket || []).forEach(fa => { if (fa.rider.id >= max) max = fa.rider.id + 1; });
+  RID = max;
+}
 function loadGame() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -1527,6 +1541,7 @@ function loadGame() {
     const parsed = JSON.parse(raw);
     if (parsed.version !== SAVE_VERSION || !parsed.state) return null;
     const base = initGame();
+    resyncRid(parsed.state);
     return {
       ...base, ...parsed.state,
       screen: "main", tab: "home",
@@ -1541,6 +1556,7 @@ function clearSaveGame() {
 // ---------- メインアプリ ----------
 function App() {
   const [g, setG] = useState(initGame);
+  const stage2LockRef = useRef(false);
   const cls = CLASSES[g.classIdx];
   const healthy = g.roster.filter(r => r.injury === 0);
   const equipMax = 3 + g.classIdx;
@@ -1711,6 +1727,7 @@ function App() {
 
   // ---- レース ----
   function startRace(watch) {
+    stage2LockRef.current = false;
     const race = g.races.find(r => r.id === g.sel.raceId);
     const squad = g.roster.filter(r => g.sel.starters.includes(r.id));
     const aceId = g.sel.starters.length === 1 ? g.sel.starters[0] : g.sel.ace;
@@ -1725,17 +1742,27 @@ function App() {
     if (!watch) setTimeout(() => finishRace(sim, race, race.stageRace ? 1 : undefined), 0);
   }
 
+  // v12: 以前はg（renderクロージャのstale値）からroster2/simを計算した後にsetGへ渡していたため、
+  // 何らかの理由でgが更新される前に呼ばれる／連打で二重発火すると2日目のシミュレーションが
+  // 食い違う・実行されない不具合があった。setGのfunctional updater内で毎回最新のsから
+  // 計算するよう変更し、連打防止のロックも追加
   function startStage2() {
-    const gc = g.gc;
-    const roster2 = g.roster.map(r => gc.starters.includes(r.id) ? { ...r, fatigue: Math.max(0, r.fatigue - 20) } : r);
-    const squad = roster2.filter(r => gc.starters.includes(r.id));
-    const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, g.equip, { wheel: false, suit: false }, g.classIdx, gc.aiTeams, "day2");
-    setG(s => ({
-      ...s, roster: roster2, result: sim,
-      gc: { ...s.gc, stage: 2 },
-      screen: gc.watch ? "race" : "result_pending",
-    }));
-    if (!gc.watch) setTimeout(() => finishRace(sim, gc.race, 2), 0);
+    if (stage2LockRef.current) return;
+    stage2LockRef.current = true;
+    let simResult = null, watchFlag = false, raceRef = null;
+    setG(s => {
+      const gc = s.gc;
+      const roster2 = s.roster.map(r => gc.starters.includes(r.id) ? { ...r, fatigue: Math.max(0, r.fatigue - 20) } : r);
+      const squad = roster2.filter(r => gc.starters.includes(r.id));
+      const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, "day2");
+      simResult = sim; watchFlag = gc.watch; raceRef = gc.race;
+      return {
+        ...s, roster: roster2, result: sim,
+        gc: { ...s.gc, stage: 2 },
+        screen: gc.watch ? "race" : "result_pending",
+      };
+    });
+    if (!watchFlag) setTimeout(() => finishRace(simResult, raceRef, 2), 0);
   }
 
   // stageOverride: skip経路（結果だけ見る）はステージ番号を明示で渡し、
