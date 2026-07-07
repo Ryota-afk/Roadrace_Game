@@ -690,7 +690,7 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
   if (fromTick === 0) {
     riders.forEach(en => {
       en.pos = 0; en.energy = 100; en.finished = false; en.finishTime = null; en.attackLeft = 0;
-      en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = [];
+      en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
     });
   } else {
     riders.forEach(en => {
@@ -698,6 +698,7 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
       en.pos = en.posHist[idx]; en.energy = en.energyHist[idx];
       en.posHist = en.posHist.slice(0, fromTick); en.energyHist = en.energyHist.slice(0, fromTick);
       en.modeHist = en.modeHist.slice(0, fromTick); en.groupHist = en.groupHist.slice(0, fromTick);
+      en.slotHist = en.slotHist.slice(0, fromTick);
       if (directive.aceEarly && en.isAce) { en.attackLeft = ATTACK_TICKS; }
     });
   }
@@ -724,6 +725,7 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
       if (members.length === 1) {
         const en = members[0];
         en.mode = en.attackLeft > 0 ? "attack" : "solo";
+        en.slot = 0;
         if (en.attackLeft > 0) en.attackLeft--;
         return;
       }
@@ -734,9 +736,13 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
       if (directive.chaseMode === "hold") rotSpan = ROTATION_PERIOD_TICKS + 3;
       const rotIdx = Math.floor(tick / rotSpan);
       const puller = eligible.length ? eligible[rotIdx % eligible.length] : null;
+      // v10: 見た目専用のローテーション待ち順（0=牽引中、1,2,...=次に牽引予定、
+      // ローテーションに参加しない選手は集団後方扱い）。finishTime等の実データには無関係
       members.forEach(en => {
-        if (en.attackLeft > 0) { en.mode = "attack"; en.attackLeft--; return; }
+        if (en.attackLeft > 0) { en.mode = "attack"; en.slot = 0; en.attackLeft--; return; }
         en.mode = (puller && en === puller) ? "pull" : "draft";
+        const eIdx = eligible.indexOf(en);
+        en.slot = eIdx === -1 ? eligible.length : ((eIdx - rotIdx) % eligible.length + eligible.length) % eligible.length;
       });
     });
     // 3. 移動：先にpull/solo/attackを確定、その後draftが「ついていけるか」を判定
@@ -765,7 +771,7 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
     // 4. 履歴記録・ゴール判定
     active.forEach(en => {
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
-      en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId;
+      en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
       if (en.pos >= course.length && !en.finished) { en.finished = true; en.finishTime = tick * TICK_SEC; }
     });
     tick++;
@@ -1059,12 +1065,33 @@ function groupAt(en, rt) {
   const idx = Math.min(en.groupHist.length - 1, Math.floor(rt / TICK_SEC));
   return idx >= 0 ? en.groupHist[idx] : en.id;
 }
+// v10: ローテーション待ち順（見た目専用。0=牽引中、大きいほど集団後方）
+function slotAt(en, rt) {
+  const idx = Math.min((en.slotHist || []).length - 1, Math.floor(rt / TICK_SEC));
+  return idx >= 0 ? (en.slotHist[idx] || 0) : 0;
+}
+// v10: 現在のtickまで同じmodeが何tick連続しているか（見た目専用の演出に使う。
+// 千切れ始め・アタック開始からの経過を判定するため、modeHistを遡ってカウントするだけで
+// シミュレーション本体には手を加えない）
+function modeStreakAt(en, rt, mode, cap) {
+  const idx = Math.min(en.modeHist.length - 1, Math.floor(rt / TICK_SEC));
+  if (idx < 0 || en.modeHist[idx] !== mode) return 0;
+  let n = 0;
+  for (let i = idx; i >= 0 && i > idx - cap && en.modeHist[i] === mode; i--) n++;
+  return n;
+}
 
 // v9: コース形状（横揺れ）・標高から、俯瞰マップ用のY座標・側面マップ用のY座標を計算
 function topLateral(course, frac) {
   return Math.sin(frac * Math.PI * course.f1 + course.ph1) * course.amp1 + Math.sin(frac * course.f2 + course.ph2) * course.amp2;
 }
 const MAP_W = 660, TOP_H = 120, SIDE_H = 80, MAP_PAD = 18;
+// v10: 見た目専用の演出パラメータ（実際のレース結果には一切影響しない）
+const SLOT_LANE_SPACING = 2.4;   // ローテーション待ち順1つあたりの横オフセット
+const DROP_TRANSITION_TICKS = 6; // 千切れ直後、集団後方へ寄っていく演出の長さ（tick数）
+const DROP_EXTRA_LANE = 7;       // 千切れ演出の最大オフセット
+const ATTACK_VISUAL_TICKS = 8;   // アタック開始直後、前方への誇張演出の長さ（tick数）
+const ATTACK_EXAGGERATION = 0.014; // アタック演出の最大frac誇張量
 function RaceView({ sim, onFinish }) {
   const [hud, setHud] = useState({ top: [], seg: "", clock: 0, done: false, comment: "", gap: null });
   const [ridersUi, setRidersUi] = useState([]);
@@ -1125,7 +1152,7 @@ function RaceView({ sim, onFinish }) {
     const teamNames = [...new Set(sim.entrants.map(e => e.team))];
     const teamLane = {}; teamNames.forEach((t, i) => { teamLane[t] = (i - (teamNames.length - 1) / 2) * 5; });
     const riders = sim.entrants.map((e) => ({
-      e, lane: teamLane[e.team], frac: 0, mode: "draft", gid: e.id,
+      e, lane: teamLane[e.team], frac: 0, mode: "draft", gid: e.id, slot: 0, dropStreak: 0, attackStreak: 0,
       color: e.team === "PLAYER" && e.isAce ? C.yellow : e.color,
     }));
 
@@ -1152,6 +1179,9 @@ function RaceView({ sim, onFinish }) {
         r.frac = interpFrac(r.e, rt, course);
         r.gid = groupAt(r.e, rt);
         r.mode = modeAt(r.e, rt);
+        r.slot = slotAt(r.e, rt);
+        r.dropStreak = modeStreakAt(r.e, rt, "solo", DROP_TRANSITION_TICKS);
+        r.attackStreak = modeStreakAt(r.e, rt, "attack", ATTACK_VISUAL_TICKS);
         if (r.frac > leadFrac) leadFrac = r.frac;
       });
       // 最終区間ロック判定
@@ -1159,7 +1189,10 @@ function RaceView({ sim, onFinish }) {
         const anyInFinal = riders.some(r => course.segTypeAt(r.frac * course.length).idx >= course.finalIdx);
         if (anyInFinal) { lockedRef.current = true; setLocked(true); }
       }
-      setRidersUi(riders.map(r => ({ id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: r.e.team === "PLAYER", lane: r.lane })));
+      setRidersUi(riders.map(r => ({
+        id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: r.e.team === "PLAYER", lane: r.lane,
+        slot: r.slot, dropStreak: r.dropStreak, attackStreak: r.attackStreak,
+      })));
       if (now - lastHud > 300 || clock >= PLAY_DUR) {
         lastHud = now;
         const sorted = [...riders].sort((a, b) => b.frac - a.frac);
@@ -1220,13 +1253,20 @@ function RaceView({ sim, onFinish }) {
         <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 120, background: "#3f5a3a", borderRadius: 8, marginTop: 4 }}>
           <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="9" strokeLinecap="round" />
           <circle cx={MAP_W - MAP_PAD} cy={topYAt(1)} r="4" fill={C.red} />
-          {ridersUi.map(r => (
-            <g key={r.id} transform={`translate(${MAP_PAD + r.frac * (MAP_W - MAP_PAD * 2)},${topYAt(r.frac) + r.lane})`}>
-              {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
-              <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
-              {r.isPlayer && <circle r="1.5" fill="#14171d" />}
-            </g>
-          ))}
+          {ridersUi.map(r => {
+            // v10: ローテーション待ち順・千切れ演出・アタック誇張（見た目専用、実データには無関係）
+            const dropOffset = r.dropStreak > 0 ? (r.dropStreak / DROP_TRANSITION_TICKS) * DROP_EXTRA_LANE : 0;
+            const laneOffset = r.lane + r.slot * SLOT_LANE_SPACING + dropOffset;
+            const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
+            const drawFrac = Math.min(1, r.frac + attackBonus);
+            return (
+              <g key={r.id} transform={`translate(${MAP_PAD + drawFrac * (MAP_W - MAP_PAD * 2)},${topYAt(drawFrac) + laneOffset})`}>
+                {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
+                <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
+                {r.isPlayer && <circle r="1.5" fill="#14171d" />}
+              </g>
+            );
+          })}
         </svg>
       </div>
       <div>
@@ -1234,16 +1274,23 @@ function RaceView({ sim, onFinish }) {
         <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 80, background: "#232a20", borderRadius: 8, marginTop: 4 }}>
           <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
           <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="2" />
-          {ridersUi.map(r => (
-            <g key={r.id} transform={`translate(${MAP_PAD + r.frac * (MAP_W - MAP_PAD * 2)},${sideYAt(r.frac) - Math.abs(r.lane) * 0.6})`}>
-              {r.mode === "attack" && <circle r="7" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
-              <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
-            </g>
-          ))}
+          {ridersUi.map(r => {
+            const dropOffset = r.dropStreak > 0 ? (r.dropStreak / DROP_TRANSITION_TICKS) * DROP_EXTRA_LANE : 0;
+            const laneOffset = r.lane + r.slot * SLOT_LANE_SPACING + dropOffset;
+            const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
+            const drawFrac = Math.min(1, r.frac + attackBonus);
+            return (
+              <g key={r.id} transform={`translate(${MAP_PAD + drawFrac * (MAP_W - MAP_PAD * 2)},${sideYAt(drawFrac) - Math.abs(laneOffset) * 0.6})`}>
+                {r.mode === "attack" && <circle r="7" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
+                <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
+              </g>
+            );
+          })}
         </svg>
       </div>
       <div style={{ fontSize: 10, color: C.sub, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <span>● 黄色＝エース</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
+        <span>集団内で外側に離れているほどローテーション待ち／千切れかけ</span>
       </div>
       {hud.comment && (
         <div style={{ background: C.panel2, borderRadius: 6, padding: "6px 10px", fontSize: 13, color: C.text }}>
