@@ -1141,6 +1141,13 @@ const VIEW_LEAD_BIAS = 0.42;  // 集団の中心を画面の何%の位置に置�
 const SPRINT_MIN_VIEW_FRAC = 0.018; // 最終区間突入後のズーム上限（通常のMIN_VIEW_FRACよりさらに狭い）
 // v12: 最終区間突入の時間ベース判定（優勝者の確定タイムの残り何%を「最終区間」とみなすか）
 const FINAL_SEG_TIME_RATIO = 0.045;
+// v12: シネマティック切り替えの時間ベース判定（最終区間突入よりさらに遅く、ゴール直前に発動）
+const CINEMATIC_TIME_RATIO = 0.012;
+// v12（簡易リードアウト演出）：エース「発射」の光るリングを見せる時間ベース判定。
+// 実際のmode（牽引/ドラフト/単独）は集団のままの一斉スプリントでは終始draftのままなので、
+// それとは独立に、最終区間中盤〜シネマティック直前の間を「発射」演出のタイミングとして扱う
+// （見た目専用。finishTime等の実データやモード判定には一切影響しない）
+const LAUNCH_TIME_RATIO = 0.02;
 const SPRINT_SLOWDOWN = 0.4;        // 最終区間突入後、clock進行に掛ける追加の減速係数
 function mapX(f, start, end) { return MAP_PAD + ((f - start) / (end - start)) * (MAP_W - MAP_PAD * 2); }
 function buildTopPath(course, start, end) {
@@ -1262,6 +1269,9 @@ function RaceView({ sim, onFinish }) {
   const rtRef = useRef(0);
   const totalRef = useRef(1);
   const finalSegRef = useRef(false);
+  const cinematicRef = useRef(false);
+  const [launching, setLaunching] = useState(false); // v12（簡易リードアウト演出）：エース発射の光るリング表示フラグ
+  const launchingRef = useRef(false);
   const liveRef = useRef({ text: "", until: 0 });
   const PLAY_DUR = 40;
   const course = sim.course;
@@ -1311,6 +1321,21 @@ function RaceView({ sim, onFinish }) {
     dy = dy * (1 - dropRatio) + dropRatio * DROP_EXTRA_LANE;
     packShape[r.id] = { dx, dy };
   });
+  // v12: 俯瞰マップ上の実際の画面座標（簡易リードアウト演出の牽引線描画に使う）
+  const packPoint = (r) => {
+    const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
+    const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
+    const drawFrac = Math.min(1, r.frac + attackBonus);
+    return { x: mapX(drawFrac + dx, cam.start, cam.end), y: topYAt(drawFrac) + dy };
+  };
+  // v12（簡易リードアウト演出）：自チームのエースを、同じ集団内で牽引中の自チームアシストが
+  // いれば「牽引中」として線で結び、牽引が外れた瞬間（エースがdraft以外になった瞬間）に
+  // 最終区間内であれば「発射」の光るリングを出す。実データ（finishTime等）には無関係の
+  // 見た目専用演出
+  const playerAce = ridersUi.find(r => r.isPlayer && r.isAce);
+  const playerLeadout = playerAce && playerAce.mode === "draft"
+    ? ridersUi.find(r => r.isPlayer && !r.isAce && r.mode === "pull" && r.gid === playerAce.gid)
+    : null;
 
   useEffect(() => {
     const riders = sim.entrants.map((e) => ({
@@ -1414,6 +1439,23 @@ function RaceView({ sim, onFinish }) {
           finalSegRef.current = true; setFinalSeg(true);
           // v11: 最終区間突入をはっきり体感できるよう、切り替わりの瞬間にバナー表示する
           liveRef.current = { text: "🏁 ラストスパート突入！カメラをズームして追跡します", until: now + 3000 };
+        }
+      }
+      // v12: シネマティックへの切り替えは最終区間突入よりさらに後（ゴール直前）に遅らせる。
+      // 同時に発火させると、通常の俯瞰マップで見えるリードアウト演出（牽引線・エース発射）が
+      // 表示される間もなくシネマティックに切り替わってしまうため
+      // v12（簡易リードアウト演出）：エース発射の光るリング。実際のmodeは一斉スプリントだと
+      // 終始draftのままなので、mode変化ではなく時間ベースでこのタイミングを演出する
+      if (finalSegRef.current && !launchingRef.current) {
+        const winnerFinishTime = Math.min(...riders.map(r => r.e.finishTime));
+        if (rt >= winnerFinishTime * (1 - LAUNCH_TIME_RATIO)) {
+          launchingRef.current = true; setLaunching(true);
+        }
+      }
+      if (finalSegRef.current && !cinematicRef.current) {
+        const winnerFinishTime = Math.min(...riders.map(r => r.e.finishTime));
+        if (rt >= winnerFinishTime * (1 - CINEMATIC_TIME_RATIO)) {
+          cinematicRef.current = true;
           // v12: 最終直線シネマティック演出用に、結果が既に確定済みの着順・着差をスナップショットする
           // （実際のfinishTimeから逆算するだけで、シミュレーション自体には一切手を加えない）
           const sortedByFinish = [...riders].sort((a, b) => a.e.finishTime - b.e.finishTime);
@@ -1509,15 +1551,33 @@ function RaceView({ sim, onFinish }) {
               <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="42" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
               <circle cx={mapX(1, cam.start, cam.end)} cy={topYAt(1)} r="4" fill={C.red} />
+              {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
+              {playerLeadout && (() => {
+                const p1 = packPoint(playerLeadout), p2 = packPoint(playerAce);
+                return <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={C.yellow} strokeWidth="1.2" strokeDasharray="3,2" opacity="0.65" />;
+              })()}
               {ridersUi.map(r => {
                 // v12: 隊列シェイプ（楕円軌道）由来の2次元オフセット。千切れ演出・アタック誇張は
                 // packShape計算に統合済み（アタック中はdx=dy=0で、前方誇張はdrawFrac側で処理）
                 const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
                 const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
                 const drawFrac = Math.min(1, r.frac + attackBonus);
+                // v12（簡易リードアウト演出）：最終区間の終盤（シネマティック直前）を
+                // 自チームエース「発射」の瞬間として光らせる。一斉スプリントだと実際の
+                // modeは終始draftのままなので、mode変化ではなく時間ベースの演出にしている。
+                // ただし、エースが千切れて先頭集団のカメラ枠外にいる場合は「発射」の意味がない
+                // （画面外に光るリングが出てしまう）ため、現在の表示範囲内にいる時だけ光らせる
+                const isLaunching = launching && r.isPlayer && r.isAce
+                  && drawFrac >= cam.start - 0.01 && drawFrac <= cam.end + 0.01;
                 return (
                   <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${topYAt(drawFrac) + dy})`}>
                     {camMode === r.id && <circle r="10" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
+                    {isLaunching && (
+                      <circle r="9" fill="none" stroke={C.yellow} strokeWidth="2" opacity="0.9">
+                        <animate attributeName="r" values="7;11;7" dur="0.8s" repeatCount="indefinite" />
+                        <animate attributeName="opacity" values="0.9;0.3;0.9" dur="0.8s" repeatCount="indefinite" />
+                      </circle>
+                    )}
                     {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
                     {r.slot === 1 && r.mode === "draft" && <circle r={r.isAce ? 7.5 : 6} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
                     <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
@@ -1551,6 +1611,7 @@ function RaceView({ sim, onFinish }) {
           <div style={{ fontSize: 10, color: C.sub, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <span>● 黄色＝エース</span><span>○ 白＝自チームのアシスト</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
             <span style={{ color: C.yellow }}>点線＝次に牽引予定</span><span style={{ color: C.green }}>◎ 緑丸＝カメラで追跡中の選手</span>
+            <span style={{ color: C.yellow }}>黄線＝アシストがエースを牽引中</span><span style={{ color: C.yellow }}>点滅リング＝エース発射</span>
             <span>選手はそれぞれ独立して集団内を漂う（巡航時は団子状、高強度区間ほど縦に伸びる）／中心から離れて動かなくなったら千切れかけ</span>
           </div>
         </>
