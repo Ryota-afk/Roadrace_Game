@@ -1061,6 +1061,35 @@ function topLateral(course, frac) {
   return Math.sin(frac * Math.PI * course.f1 + course.ph1) * course.amp1 + Math.sin(frac * course.f2 + course.ph2) * course.amp2;
 }
 const MAP_W = 660, TOP_H = 120, SIDE_H = 80, MAP_PAD = 18;
+// v10: 俯瞰マップ・側面マップを「先頭集団を追従してズームするカメラ」方式に変更。
+// 全コースを常時表示するのではなく、まだゴールしていない選手たちの広がりに合わせて
+// ズーム幅を自動調整する（競馬のトラッキングシステムのような大きな表示を再現）
+const MIN_VIEW_FRAC = 0.07;  // 最大ズーム時に見えるコース幅（集団が固まっている時）
+const MAX_VIEW_FRAC = 0.4;   // 最大ズームアウト時に見えるコース幅（逃げ等で大きく広がった時）
+const VIEW_LEAD_BIAS = 0.42;  // 集団の中心を画面の何%の位置に置くか（0.5=中央、小さいほど前方の余白が広がる）
+function mapX(f, start, end) { return MAP_PAD + ((f - start) / (end - start)) * (MAP_W - MAP_PAD * 2); }
+function buildTopPath(course, start, end) {
+  const pts = [];
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60;
+    const f = start + t * (end - start);
+    const range = course.amp1 + course.amp2 || 1;
+    const y = TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 14);
+    pts.push(`${(MAP_PAD + t * (MAP_W - MAP_PAD * 2)).toFixed(1)},${y.toFixed(1)}`);
+  }
+  return pts.join(" ");
+}
+function buildSidePath(course, start, end) {
+  const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev));
+  const pts = [];
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60;
+    const f = start + t * (end - start);
+    const y = SIDE_H - 12 - (course.yAt(f) / maxElev) * (SIDE_H - 24);
+    pts.push(`${(MAP_PAD + t * (MAP_W - MAP_PAD * 2)).toFixed(1)},${y.toFixed(1)}`);
+  }
+  return pts.join(" ");
+}
 // v10: 見た目専用の演出パラメータ（実際のレース結果には一切影響しない）
 const SLOT_LANE_SPACING = 2.4;   // ローテーション待ち順1つあたりの横オフセット
 const DROP_TRANSITION_TICKS = 6; // 千切れ直後、集団後方へ寄っていく演出の長さ（tick数）
@@ -1070,6 +1099,7 @@ const ATTACK_EXAGGERATION = 0.014; // アタック演出の最大frac誇張量
 function RaceView({ sim, onFinish }) {
   const [hud, setHud] = useState({ top: [], seg: "", clock: 0, done: false, comment: "", gap: null });
   const [ridersUi, setRidersUi] = useState([]);
+  const [cam, setCam] = useState({ start: 0, end: MIN_VIEW_FRAC });
   const [chaseUi, setChaseUi] = useState("normal");
   const [aceEarlyUsed, setAceEarlyUsed] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -1102,24 +1132,8 @@ function RaceView({ sim, onFinish }) {
     totalRef.current = Math.max(...sim.entrants.map(e => e.finishTime));
   };
 
-  const topPath = useMemo(() => {
-    const pts = [];
-    for (let i = 0; i <= 60; i++) {
-      const f = i / 60;
-      const range = course.amp1 + course.amp2 || 1;
-      const y = TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 14);
-      pts.push(`${MAP_PAD + f * (MAP_W - MAP_PAD * 2)},${y.toFixed(1)}`);
-    }
-    return pts.join(" ");
-  }, [sim]);
-  const sidePath = useMemo(() => {
-    const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev));
-    return course.elevationProfile.map(p => {
-      const x = MAP_PAD + p.frac * (MAP_W - MAP_PAD * 2);
-      const y = SIDE_H - 12 - (p.elev / maxElev) * (SIDE_H - 24);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-  }, [sim]);
+  const topPath = useMemo(() => buildTopPath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
+  const sidePath = useMemo(() => buildSidePath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
   const topYAt = (f) => { const range = course.amp1 + course.amp2 || 1; return TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 14); };
   const sideYAt = (f) => { const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev)); return SIDE_H - 12 - (course.yAt(f) / maxElev) * (SIDE_H - 24); };
 
@@ -1159,6 +1173,21 @@ function RaceView({ sim, onFinish }) {
         r.attackStreak = modeStreakAt(r.e, rt, "attack", ATTACK_VISUAL_TICKS);
         if (r.frac > leadFrac) leadFrac = r.frac;
       });
+      // v10: カメラズーム。ゴール済みの選手は枠決めの対象から外し、まだ走っている選手の
+      // 広がりに合わせてズーム幅を自動調整する（先頭に少し前方の余白を持たせる）
+      {
+        const unfinished = riders.filter(r => !r.e.finished);
+        const framing = unfinished.length > 0 ? unfinished : riders;
+        const fracs = framing.map(r => r.frac);
+        const maxF = Math.max(...fracs), minF = Math.min(...fracs);
+        const center = (maxF + minF) / 2;
+        let span = Math.min(MAX_VIEW_FRAC, Math.max(MIN_VIEW_FRAC, (maxF - minF) * 1.6));
+        let start = center - span * VIEW_LEAD_BIAS;
+        let end = start + span;
+        if (start < 0) { start = 0; end = Math.min(1, span); }
+        if (end > 1) { end = 1; start = Math.max(0, end - span); }
+        setCam({ start, end });
+      }
       // 最終区間ロック判定
       if (!lockedRef.current) {
         const anyInFinal = riders.some(r => course.segTypeAt(r.frac * course.length).idx >= course.finalIdx);
@@ -1227,7 +1256,7 @@ function RaceView({ sim, onFinish }) {
         <Eyebrow color={C.sub}>俯瞰マップ（コースの左右の揺れ）</Eyebrow>
         <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 120, background: "#3f5a3a", borderRadius: 8, marginTop: 4 }}>
           <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="9" strokeLinecap="round" />
-          <circle cx={MAP_W - MAP_PAD} cy={topYAt(1)} r="4" fill={C.red} />
+          <circle cx={mapX(1, cam.start, cam.end)} cy={topYAt(1)} r="4" fill={C.red} />
           {ridersUi.map(r => {
             // v10: ローテーション待ち順・千切れ演出・アタック誇張（見た目専用、実データには無関係）
             const dropOffset = r.dropStreak > 0 ? (r.dropStreak / DROP_TRANSITION_TICKS) * DROP_EXTRA_LANE : 0;
@@ -1235,7 +1264,7 @@ function RaceView({ sim, onFinish }) {
             const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
             const drawFrac = Math.min(1, r.frac + attackBonus);
             return (
-              <g key={r.id} transform={`translate(${MAP_PAD + drawFrac * (MAP_W - MAP_PAD * 2)},${topYAt(drawFrac) + laneOffset})`}>
+              <g key={r.id} transform={`translate(${mapX(drawFrac, cam.start, cam.end)},${topYAt(drawFrac) + laneOffset})`}>
                 {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
                 <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
                 {r.isPlayer && <circle r="1.5" fill="#14171d" />}
@@ -1255,7 +1284,7 @@ function RaceView({ sim, onFinish }) {
             const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
             const drawFrac = Math.min(1, r.frac + attackBonus);
             return (
-              <g key={r.id} transform={`translate(${MAP_PAD + drawFrac * (MAP_W - MAP_PAD * 2)},${sideYAt(drawFrac) - Math.abs(laneOffset) * 0.6})`}>
+              <g key={r.id} transform={`translate(${mapX(drawFrac, cam.start, cam.end)},${sideYAt(drawFrac) - Math.abs(laneOffset) * 0.6})`}>
                 {r.mode === "attack" && <circle r="7" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
                 <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
               </g>
