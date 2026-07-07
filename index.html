@@ -1195,21 +1195,32 @@ const DROP_EXTRA_DX_RATIO = 0.03; // 千切れ演出の最大オフセット（�
 const ATTACK_VISUAL_TICKS = 8;   // アタック開始直後、前方への誇張演出の長さ（tick数）
 const ATTACK_EXAGGERATION = 0.014; // アタック演出の最大frac誇張量
 // v12: 俯瞰マップの隊列表現を「slotに応じた1次元的なレーン+前後オフセット」から、
-// 実際のロードレースの隊列力学（巡航時は団子状、高強度時は縦一列、ローテーションは
-// 閉じたループ状の周回運動）に基づく2次元の楕円軌道モデルへ刷新。
-// タイムとローテーションの速さはリンクさせず、実時間の一定角速度で常に滑らかに周回させる
-// （シミュレーション内部の交代タイミングを検知して個別にスワップさせる方式は瞬間移動的で
-// 不自然だったため撤廃。誰が今pull中かの色分け表現はslot/modeの実データのまま変更なし）
-const PACK_ROTATION_CYCLE_MS = 3600; // 集団が1周する基準の実時間（ミリ秒）
-const PACK_LEN_BASE = 0.028;      // 楕円の縦半径の基準値（現在のカメラ幅spanに対する比率）
-const PACK_LEN_PER_MEMBER = 0.003; // 縦半径：グループの人数1人あたりの増分（比率）
-const PACK_WIDTH_BASE = 6;       // 楕円の横半径の基準値（SVG px）
-const PACK_WIDTH_PER_MEMBER = 1.1; // 横半径：グループの人数1人あたりの増分（SVG px）
-const PACK_MAX_MEMBERS_FOR_SCALE = 10; // 楕円サイズの拡大が頭打ちになる人数
+// 実際のロードレースの隊列力学（巡航時は団子状、高強度時は縦一列、横風時はエシュロン）に
+// 基づく2次元モデルへ刷新。当初は全選手が同じ楕円軌道を位相だけずらして回る方式にしたが、
+// 「ビーズが同じ線路を周回しているようで不自然」というフィードバックを受け、
+// 各選手が完全に独立した固有の揺らぎ（周波数・位相とも選手ごとに異なる）で
+// 集団の中を漂うモデルに変更。誰が今pull中かのだいたいの前後バイアスだけはslotから
+// 緩やかに追従させるが、全員が同じ経路をなぞることは一切ない
+const PACK_LEN_BASE = 0.028;      // 縦方向の広がりの基準値（現在のカメラ幅spanに対する比率）
+const PACK_LEN_PER_MEMBER = 0.003; // 縦方向の広がり：グループの人数1人あたりの増分（比率）
+const PACK_WIDTH_BASE = 6;       // 横方向の広がりの基準値（SVG px）
+const PACK_WIDTH_PER_MEMBER = 1.1; // 横方向の広がり：グループの人数1人あたりの増分（SVG px）
+const PACK_MAX_MEMBERS_FOR_SCALE = 10; // 広がりの拡大が頭打ちになる人数
 // 区間タイプごとの「伸縮度」（0=団子状に横に広がる、1=縦に伸びた単騎列）
 const ELONGATION_BY_SEG = { flat: 0.15, hill: 0.45, climb: 0.7, mtn: 0.8, sprint: 0.85, tt: 0.6 };
 const PACK_TILT_MAX_RAD = 0.7; // 横風エシュロン時の隊列の傾き（約40度）
-function packPhase0(riderId) { return (riderId * 0.6180339887) % 1; } // 選手固有・安定した位相オフセット（黄金比ハッシュ）
+const PACK_BIAS_EASE = 0.06;    // 前後バイアス（誰が前寄りか）が新しいslotへ追従する速さ（毎フレーム）
+const PACK_WANDER_FREQ_X = 0.16; // 独立揺らぎの基準周波数（Hz、前後方向）
+const PACK_WANDER_FREQ_Y = 0.12; // 独立揺らぎの基準周波数（Hz、左右方向）
+function riderHash01(id, salt) { return ((id * 2654435761 + salt * 40503) % 100000) / 100000; }
+// 選手固有の周波数・位相で滑らかに漂う疑似ランダム波形（他の選手とは同期しない）
+function riderWander(id, salt, tSec, baseFreq) {
+  const h1 = riderHash01(id, salt), h2 = riderHash01(id, salt + 1);
+  const f1 = baseFreq * (0.6 + h1 * 0.8);
+  const f2 = f1 * (1.7 + h2 * 0.6);
+  return 0.65 * Math.sin(tSec * f1 * Math.PI * 2 + h1 * Math.PI * 2)
+       + 0.35 * Math.sin(tSec * f2 * Math.PI * 2 + h2 * Math.PI * 2);
+}
 
 // v12: 最終直線の高完成度2Dシネマティック演出。結果（着順・着差）は既に確定済みなので、
 // 実際のtickデータを逐次描画するのではなく、確定済みの着差から逆算して滑らかな
@@ -1291,10 +1302,10 @@ function RaceView({ sim, onFinish }) {
   const topYAt = (f) => { const range = course.amp1 + course.amp2 || 1; return TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 14); };
   const sideYAt = (f) => { const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev)); return SIDE_H - 12 - (course.yAt(f) / maxElev) * (SIDE_H - 24); };
 
-  // v12: 集団の隊列シェイプ（楕円軌道モデル）を毎レンダー計算する。実時間の連続角速度で
-  // 周回させ、シミュレーション内部の交代タイミングとは意図的に非連動にする（タイムと
-  // ローテーションの速さをリンクさせない、という方針。動きの滑らかさ・自然さを優先）
-  const packNow = performance.now();
+  // v12: 集団の隊列シェイプを毎レンダー計算する。各選手は共有の軌道をなぞるのではなく、
+  // 選手ごとに周波数・位相が異なる独立した揺らぎで集団の中を漂う（他の選手と同期しない）。
+  // 前後のだいたいの位置取り（誰が前寄りか）だけはslotから緩やかに追従するbiasXに従う
+  const packTSec = performance.now() / 1000;
   const packGroupSize = {};
   ridersUi.forEach(r => { packGroupSize[r.gid] = (packGroupSize[r.gid] || 0) + 1; });
   const packShape = {};
@@ -1311,13 +1322,14 @@ function RaceView({ sim, onFinish }) {
     const nCap = Math.min(n, PACK_MAX_MEMBERS_FOR_SCALE);
     const L = (PACK_LEN_BASE + nCap * PACK_LEN_PER_MEMBER) * (1 + elong * 2.2) * span;
     const W = (PACK_WIDTH_BASE + nCap * PACK_WIDTH_PER_MEMBER) * (1 - elong * 0.5);
-    const cycleMs = PACK_ROTATION_CYCLE_MS - elong * 1200;
-    const u = (packNow / cycleMs + packPhase0(r.id)) % 1;
-    const theta = u * Math.PI * 2;
-    const ex = L * Math.cos(theta), ey = W * Math.sin(theta);
+    // 選手固有の独立した揺らぎ（前後・左右とも他の選手とは違う周波数・位相）
+    const wanderX = riderWander(r.id, 1, packTSec, PACK_WANDER_FREQ_X);
+    const wanderY = riderWander(r.id, 5, packTSec, PACK_WANDER_FREQ_Y);
+    const ex = L * Math.max(-1, Math.min(1, r.biasX * 0.55 + wanderX * 0.6));
+    const ey = W * wanderY;
     let dx = ex * Math.cos(tilt) - ey * Math.sin(tilt);
     let dy = ex * Math.sin(tilt) + ey * Math.cos(tilt);
-    // 千切れかけの選手は軌道運動を徐々にフェードアウトしつつ後方へドリフトし、単独走に見せる
+    // 千切れかけの選手は揺らぎを徐々にフェードアウトしつつ後方へドリフトし、単独走に見せる
     dx = dx * (1 - dropRatio) - dropRatio * DROP_EXTRA_DX_RATIO * span;
     dy = dy * (1 - dropRatio) + dropRatio * DROP_EXTRA_LANE;
     packShape[r.id] = { dx, dy };
@@ -1327,7 +1339,7 @@ function RaceView({ sim, onFinish }) {
     const riders = sim.entrants.map((e) => ({
       e, frac: 0, mode: "draft", gid: e.id, slot: 0, dropStreak: 0, attackStreak: 0,
       color: e.team === "PLAYER" && e.isAce ? C.yellow : e.color,
-      packDx: 0, packDy: 0,
+      biasX: -0.3, // v12: 前後バイアス（誰が前寄りか）。slotに応じて緩やかに追従する永続値
     }));
 
     totalRef.current = Math.max(...sim.entrants.map(e => e.finishTime));
@@ -1358,6 +1370,10 @@ function RaceView({ sim, onFinish }) {
         r.gid = groupAt(r.e, rt);
         r.mode = modeAt(r.e, rt);
         r.slot = slotAt(r.e, rt);
+        // v12: 前後バイアス（誰が前寄りか）はslot/modeから決まる目標値へ毎フレーム緩やかに
+        // 追従させる（瞬間移動を避けるため）。実際に集団の中を漂う揺らぎは描画時に加える
+        const targetBiasX = r.mode === "pull" ? 0.85 : Math.max(-0.85, 0.7 - r.slot * 0.4);
+        r.biasX += (targetBiasX - r.biasX) * PACK_BIAS_EASE;
         r.dropStreak = modeStreakAt(r.e, rt, "solo", DROP_TRANSITION_TICKS);
         r.attackStreak = modeStreakAt(r.e, rt, "attack", ATTACK_VISUAL_TICKS);
         if (r.frac > leadFrac) leadFrac = r.frac;
@@ -1425,7 +1441,7 @@ function RaceView({ sim, onFinish }) {
       }
       setRidersUi(riders.map(r => ({
         id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: r.e.team === "PLAYER",
-        gid: r.gid, slot: r.slot, dropStreak: r.dropStreak, attackStreak: r.attackStreak,
+        gid: r.gid, slot: r.slot, dropStreak: r.dropStreak, attackStreak: r.attackStreak, biasX: r.biasX,
       })));
       if (now - lastHud > 300 || clock >= PLAY_DUR) {
         lastHud = now;
@@ -1546,7 +1562,7 @@ function RaceView({ sim, onFinish }) {
           <div style={{ fontSize: 10, color: C.sub, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <span>● 黄色＝エース</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
             <span style={{ color: C.yellow }}>点線＝次に牽引予定</span>
-            <span>集団は楕円状に周回（巡航時は団子状、高強度区間ほど縦に伸びる）／中心から離れて動かなくなったら千切れかけ</span>
+            <span>選手はそれぞれ独立して集団内を漂う（巡航時は団子状、高強度区間ほど縦に伸びる）／中心から離れて動かなくなったら千切れかけ</span>
           </div>
         </>
       )}
