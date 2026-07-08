@@ -731,6 +731,12 @@ const ROTATION_PERIOD_TICKS = 20; // 20秒ごとに先頭交代
 // aggressive=push相当・conservative=hold相当のローテーションペースになる
 const AI_STYLES = ["aggressive", "balanced", "conservative"];
 const DRAIN_K = 1.15;
+// v12バグ修正: エネルギーは減る一方で回復する仕組みがなく、下限も無かったため、
+// 長いレースでは選手のエネルギーが際限なく（-1000を超えるほど）マイナスに膨らみ続けていた。
+// energyPenaltyMul()はenergy<=-90あたりで既に速度低下が頭打ち（0.55倍）になるため、
+// それより下はゲーム的な意味を持たない数値の暴走に過ぎない。下限を設けて無意味な
+// 桁あふれを防ぐ（energyPenaltyMulの頭打ち地点より十分下なので、既存の速度・結果には影響しない）
+const ENERGY_FLOOR = -100;
 const BASE_TICK_DIST = 0.26;      // 能力70・エネルギー満タン時の基準移動量/tick
 const ATTACK_TICKS = 25;          // アタック持続（25秒）
 const MAX_TICKS = 2500;
@@ -759,15 +765,29 @@ function tickSpeedFactor(en, segType, mode, steepness) {
 function tickDistance(en, segType, mode, steepness) {
   return BASE_TICK_DIST * tickSpeedFactor(en, segType, mode, steepness) * terrainSpeedMul(segType, steepness);
 }
+// v12バグ修正: 平坦アシストが山岳区間に入っても、能力値による速度低下以外は何も起きず、
+// 千切れるとしても唐突に見えた。役割と地形が合っていない選手は消耗が早まるようにし、
+// 能力不足による減速と合わさって「じわじわ垂れて千切れていく」自然な挙動にする
+function roleTerrainMismatchMul(role, segType) {
+  if (role === "flat" && (segType === "climb" || segType === "mtn")) return 1.6;
+  if (role === "mountain" && (segType === "flat" || segType === "sprint")) return 1.3;
+  return 1;
+}
 function energyDrain(en, mode, segType, steepness) {
-  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness);
+  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType);
 }
 // 役割ごとに「今この地形で牽引役になれるか」
+// v12バグ修正: エネルギーが尽きているかどうかは"sub"ロールしかチェックしておらず、
+// 他のロール（lead/flat/mountain/breakaway）は消耗しきっていてもローテーションの
+// 牽引順が回ってくると牽引を続けてしまっていた（エネルギーが際限なく大きくマイナスに
+// なる・スタミナ切れの選手がずるずる千切れず牽引を続ける不自然な挙動の原因）。
+// 役割に関わらず、エネルギーが尽きたら牽引適性を失うようにする
 function canPull(en, segType) {
   if (en.isAce) return false;
+  if (en.energy <= 0) return false;
   if (en.role === "breakaway") return true;
   if (en.role === "lead") return true;
-  if (en.role === "sub") return en.energy > 0;
+  if (en.role === "sub") return true;
   if (en.role === "mountain") return ["climb", "mtn"].includes(segType);
   if (en.role === "flat") return ["flat", "hill"].includes(segType);
   return false;
@@ -860,7 +880,15 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
         if (domStyle === "conservative") rotSpan = ROTATION_PERIOD_TICKS + 3;
       }
       const rotIdx = Math.floor(tick / rotSpan);
-      const puller = eligible.length ? eligible[rotIdx % eligible.length] : null;
+      let puller = eligible.length ? eligible[rotIdx % eligible.length] : null;
+      // v12バグ修正: canPullにエネルギー切れの判定を追加したことで、集団全員が消耗しきっている
+      // 極端な状況では牽引適性者が誰もいなくなり得る。誰も牽引しないと集団全体がそのtickで
+      // 完全に停止してしまうため、非常時のフォールバックとして（エースを除く）最もエネルギーが
+      // 残っている選手に牽引を任せる（消耗はするが、集団が立ち止まるよりは自然）
+      if (!puller) {
+        const fallbackPool = members.filter(en => !en.isAce);
+        if (fallbackPool.length > 0) puller = fallbackPool.reduce((best, en) => (en.energy > best.energy ? en : best), fallbackPool[0]);
+      }
       // v10: 見た目専用のローテーション待ち順（0=牽引中、1,2,...=次に牽引予定、
       // ローテーションに参加しない選手は集団後方扱い）。finishTime等の実データには無関係
       members.forEach(en => {
@@ -877,7 +905,7 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
       const dist = tickDistance(en, segType, en.mode, course.steepness);
       en.lastOwnDist = dist;
       en.pos = Math.min(course.length, en.pos + dist);
-      en.energy -= energyDrain(en, en.mode, segType, course.steepness);
+      en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode, segType, course.steepness));
     });
     Object.values(groups).forEach(members => {
       const puller = members.find(en => en.mode === "pull");
@@ -907,7 +935,7 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
         }
         else { dist = ownCapable; en.mode = "solo"; }
         en.pos = Math.min(course.length, en.pos + dist);
-        en.energy -= energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * (windActive && en.mode === "draft" ? 1.25 : 1);
+        en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * (windActive && en.mode === "draft" ? 1.25 : 1));
       });
     });
     // 4. 履歴記録・ゴール判定
@@ -1292,6 +1320,10 @@ const PACK_MAX_MEMBERS_FOR_SCALE = 10; // 広がりの拡大が頭打ちにな�
 const ELONGATION_BY_SEG = { flat: 0.15, hill: 0.45, climb: 0.7, mtn: 0.8, sprint: 0.85, tt: 0.6 };
 const PACK_TILT_MAX_RAD = 0.7; // 横風エシュロン時の隊列の傾き（約40度）
 const PACK_BIAS_EASE = 0.06;    // 前後バイアス（誰が前寄りか）が新しいslotへ追従する速さ（毎フレーム）
+// v12バグ修正: 山岳突入など地形（区間タイプ）が切り替わった瞬間、隊列の伸び・傾きが
+// 即座に新しい値へ飛んでしまい、選手が急にワープしたように見えるバグがあった。
+// biasXと同様に毎フレーム緩やかに追従させることで、区間の変わり目でも滑らかに変化させる
+const PACK_ELONG_EASE = 0.035;
 const PACK_WANDER_FREQ_X = 0.16; // 独立揺らぎの基準周波数（Hz、前後方向）
 const PACK_WANDER_FREQ_Y = 0.12; // 独立揺らぎの基準周波数（Hz、左右方向）
 function riderHash01(id, salt) { return ((id * 2654435761 + salt * 40503) % 100000) / 100000; }
@@ -1398,11 +1430,10 @@ function RaceView({ sim, onFinish }) {
     const n = packGroupSize[r.gid] || 1;
     const dropRatio = r.dropStreak > 0 ? Math.min(1, r.dropStreak / DROP_TRANSITION_TICKS) : 0;
     if (n <= 1 || r.mode === "attack" || r.frac >= 1) { packShape[r.id] = { dx: 0, dy: 0 }; return; }
-    const segInfo = course.segTypeAt(r.frac * course.length);
-    const segType = segInfo.type;
-    // v12: 横風区間は隊列がより伸びて（エシュロン化）斜めに傾く
-    const elong = Math.min(1, (ELONGATION_BY_SEG[segType] ?? 0.15) + (segInfo.wind ? 0.25 : 0));
-    const tilt = segInfo.wind ? segInfo.windDir * PACK_TILT_MAX_RAD : 0;
+    // v12バグ修正: 区間タイプから生で計算するのではなく、tickループ側で毎フレーム緩やかに
+    // 追従させたr.elong/r.tiltを使う（山岳突入などの瞬間にワープしないようにするため）
+    const elong = r.elong ?? ELONGATION_BY_SEG.flat;
+    const tilt = r.tilt ?? 0;
     const span = cam.end - cam.start;
     const nCap = Math.min(n, PACK_MAX_MEMBERS_FOR_SCALE);
     const L = (PACK_LEN_BASE + nCap * PACK_LEN_PER_MEMBER) * (1 + elong * 2.2) * span;
@@ -1450,6 +1481,7 @@ function RaceView({ sim, onFinish }) {
       // 自チームのアシストは白系（他チームは赤/青/紫/橙）で「自分のチーム」だと一目でわかるようにする
       color: e.team === "PLAYER" ? (e.isAce ? C.yellow : "#eef1f6") : e.color,
       biasX: -0.3, // v12: 前後バイアス（誰が前寄りか）。slotに応じて緩やかに追従する永続値
+      elong: ELONGATION_BY_SEG.flat, tilt: 0, // v12バグ修正: 隊列の伸び・傾きも同様に緩やかに追従させる
     }));
 
     totalRef.current = Math.max(...sim.entrants.map(e => e.finishTime));
@@ -1484,6 +1516,13 @@ function RaceView({ sim, onFinish }) {
         // 追従させる（瞬間移動を避けるため）。実際に集団の中を漂う揺らぎは描画時に加える
         const targetBiasX = r.mode === "pull" ? 0.85 : Math.max(-0.85, 0.7 - r.slot * 0.4);
         r.biasX += (targetBiasX - r.biasX) * PACK_BIAS_EASE;
+        // v12バグ修正: 隊列の伸び・傾きも地形の変わり目でワープしないよう、目標値へ
+        // 毎フレーム緩やかに追従させる（描画側では生の区間タイプから直接計算しない）
+        const segInfoNow = course.segTypeAt(r.frac * course.length);
+        const targetElong = Math.min(1, (ELONGATION_BY_SEG[segInfoNow.type] ?? 0.15) + (segInfoNow.wind ? 0.25 : 0));
+        const targetTilt = segInfoNow.wind ? segInfoNow.windDir * PACK_TILT_MAX_RAD : 0;
+        r.elong += (targetElong - r.elong) * PACK_ELONG_EASE;
+        r.tilt += (targetTilt - r.tilt) * PACK_ELONG_EASE;
         r.dropStreak = modeStreakAt(r.e, rt, "solo", DROP_TRANSITION_TICKS);
         r.attackStreak = modeStreakAt(r.e, rt, "attack", ATTACK_VISUAL_TICKS);
         if (r.frac > leadFrac) leadFrac = r.frac;
@@ -1583,6 +1622,7 @@ function RaceView({ sim, onFinish }) {
       setRidersUi(riders.map(r => ({
         id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: r.e.team === "PLAYER",
         gid: r.gid, slot: r.slot, dropStreak: r.dropStreak, attackStreak: r.attackStreak, biasX: r.biasX,
+        elong: r.elong, tilt: r.tilt,
       })));
       if (now - lastHud > 300 || clock >= PLAY_DUR) {
         lastHud = now;
