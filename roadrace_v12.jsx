@@ -310,7 +310,8 @@ function mulberry(seed) {
   };
 }
 // v12バグ修正: 名前のバリエーションが少なく被って見えるとの指摘を受け、大幅に語彙を増やした
-// （80姓×60名＝4800通り）
+// （180姓×100名＝18000通り）。前半は既存の演出寄りの姓、後半は実際によくある姓を追加し、
+// 母集団を広げてかぶりにくくしている
 const SURNAMES = [
   "相馬", "桐生", "白鳥", "早瀬", "神楽", "水城", "燕", "嵐山", "灰原", "東雲",
   "氷室", "真壁", "夏目", "御堂", "九条", "橘", "篝", "斑鳩", "黒崎", "鏡",
@@ -320,6 +321,16 @@ const SURNAMES = [
   "紅葉", "桜井", "藤崎", "藤宮", "神代", "天海", "蒼月", "蒼樹", "朝倉", "夕凪",
   "冬木", "秋月", "秋山", "五十嵐", "百瀬", "千葉", "常盤", "若宮", "大鷹", "小鳥遊",
   "南雲", "東條", "高杉", "高階", "桜小路", "藤枝", "天音", "夜久", "春日井", "夏川",
+  "佐藤", "鈴木", "高橋", "田中", "渡辺", "伊藤", "山本", "中村", "小林", "加藤",
+  "吉田", "山田", "佐々木", "山口", "松本", "井上", "木村", "林", "斎藤", "清水",
+  "山崎", "森", "池田", "橋本", "阿部", "石川", "山下", "中島", "石井", "小川",
+  "前田", "岡田", "長谷川", "藤田", "後藤", "近藤", "村上", "遠藤", "青木", "坂本",
+  "福田", "太田", "西村", "藤井", "金子", "岡本", "松田", "中川", "中野", "原田",
+  "小野", "田村", "竹内", "和田", "中山", "石田", "上田", "森田", "柴田", "酒井",
+  "工藤", "横山", "宮崎", "宮本", "内田", "高木", "安藤", "島田", "谷口", "大野",
+  "高田", "丸山", "今井", "河野", "藤原", "新井", "松井", "木下", "川口", "大塚",
+  "小島", "田口", "平野", "菅原", "久保", "松岡", "野口", "中田", "大西", "竹田",
+  "白石", "岩崎", "荒木", "鈴村", "三浦", "西田", "北村", "南田", "春日", "東野",
 ];
 const GIVEN = [
   "蓮", "岳", "走", "迅", "颯", "翼", "剛", "凌", "駆", "峻",
@@ -328,6 +339,10 @@ const GIVEN = [
   "燦", "耀", "煌", "皓", "昂", "漣", "澪", "渚", "洸", "汐",
   "雷", "焔", "陣", "塁", "魁", "羽", "律", "尊", "崚", "岬",
   "朝", "暁", "昇", "昌", "明", "央", "心", "淳", "敦", "慧",
+  "碧", "凪", "宙", "龍", "天", "空", "海", "舜", "駿", "豪",
+  "猛", "進", "学", "勉", "潔", "実", "修", "治", "仁", "卓",
+  "巧", "拓", "創", "想", "志", "元", "直", "正", "賢", "聡",
+  "亮", "諒", "爽", "快", "康", "保", "守", "護", "勝", "優",
 ];
 let RID = 100;
 // v7: OVRは上位加重（特化型を正しく評価）
@@ -349,6 +364,20 @@ function disciplineScore(r, key) { return Math.round(DISCIPLINES[key].calc(r)); 
 const FAVORS_TO_DISCIPLINE = { SPR: "sprint", CLM: "climb", PUN: "hill", TT: "solo" };
 function fmtTime(sec) { const m = Math.floor(sec / 60), s = Math.floor(sec % 60); return `${m}:${String(s).padStart(2, "0")}`; }
 function fmtGap(sec) { return sec < 0.5 ? "TOP" : `+${fmtTime(sec)}`; }
+
+// v12バグ修正: 母集団を広げても「同じ画面に同じ名前が2人」現れる確率はゼロにはならないため、
+// 呼び出し側から渡された「使用済み名前」の集合を避けて選ぶようにし、同じレース・同じ
+// スカウト一覧・同じFA一覧の中では確実にかぶらないようにする（bannedはミュータブルに
+// 追記していくので、同じSetをリレーしながらnewRiderを複数回呼べば呼び出し間でも重複しない）
+function pickRiderName(rng, banned) {
+  let name, tries = 0;
+  do {
+    name = SURNAMES[Math.floor(rng() * SURNAMES.length)] + " " + GIVEN[Math.floor(rng() * GIVEN.length)];
+    tries++;
+  } while (banned && banned.has(name) && tries < 200);
+  if (banned) banned.add(name);
+  return name;
+}
 
 function randPow(rng, dist) {
   const d = dist || [0.05, 0.25, 0.60];
@@ -391,7 +420,7 @@ function newRider(power, rng, opts = {}) {
   if (opts.forceProdigy) { personality = "genius"; growthPowVal = "S"; }
   const rider = {
     id: RID++,
-    name: SURNAMES[Math.floor(rng() * SURNAMES.length)] + " " + GIVEN[Math.floor(rng() * GIVEN.length)],
+    name: pickRiderName(rng, opts.banned),
     type, ...r, age, growth, growthPow: growthPowVal, trait, personality,
     fatigue: 20 + Math.floor(rng() * 20), cond: 3, injury: 0, streak: 0,
     focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
@@ -415,14 +444,8 @@ function initRoster() {
   // 毎回同じ名前になってしまうと気になるとのフィードバックを受け、能力値・年齢・役割の
   // バランスはそのまま維持しつつ、名前だけを新規ゲームのたびにランダム生成するようにした
   const rng = mulberry(Date.now() % 999983);
-  const usedNames = new Set();
-  const randName = () => {
-    let name;
-    do { name = SURNAMES[Math.floor(rng() * SURNAMES.length)] + " " + GIVEN[Math.floor(rng() * GIVEN.length)]; }
-    while (usedNames.has(name));
-    usedNames.add(name);
-    return name;
-  };
+  const banned = new Set();
+  const randName = () => pickRiderName(rng, banned);
   return [
     mk(randName(), "SPR", 66, 38, 82, 60, 48, 25, "normal", "A", "closer", "hotblood"),
     mk(randName(), "CLM", 52, 80, 34, 72, 58, 27, "late", "B", "mount", "seeker"),
@@ -443,7 +466,7 @@ function scoutSpecs(policy, count) {
   for (let i = 5; i < count; i++) extra.push({ age: 20 + (i % 6), mul: 0.9 + (i % 4) * 0.05, priceMul: 0.85 + (i % 4) * 0.1 });
   return [...base5, ...extra];
 }
-function genScouts(classIdx, seed, policy = "balance") {
+function genScouts(classIdx, seed, policy = "balance", existingNames) {
   const rng = mulberry(seed);
   const base = CLASSES[classIdx].scout;
   const count = SCOUT_COUNT_BY_CLASS[classIdx];
@@ -451,8 +474,11 @@ function genScouts(classIdx, seed, policy = "balance") {
   const prodigyRng = mulberry(seed + 999);
   const hasProdigy = prodigyRng() < PRODIGY_CHANCE_BY_CLASS[classIdx];
   const prodigyIdx = hasProdigy ? Math.floor(prodigyRng() * count) : -1;
+  // v12バグ修正: 候補一覧の中で名前が被らないよう、既存ロースターの名前も避けつつ
+  // 同じバッチ内で使った名前を集合に積み上げていく
+  const nameBanned = new Set(existingNames || []);
   return specs.map((s, i) => {
-    const opts = { age: s.age, powDist: s.powDist };
+    const opts = { age: s.age, powDist: s.powDist, banned: nameBanned };
     if (policy === "sprint" && i < Math.ceil(count * 0.6)) { opts.type = "SPR"; opts.abBonus = { sprint: 8 }; }
     if (policy === "climb" && i < Math.ceil(count * 0.6)) { opts.type = "CLM"; opts.abBonus = { climb: 8 }; }
     if (i === prodigyIdx) opts.forceProdigy = true;
@@ -473,15 +499,16 @@ function genScouts(classIdx, seed, policy = "balance") {
 // v11: FA移籍市場。genScoutsと異なり、既に完成している23〜30歳の即戦力〜中堅選手を
 // 能力を伏せずに（ブレ幅なしで）即決購入方式で提示する。月1回、月送り時に全入れ替え
 const FA_POOL_COUNT_BY_CLASS = [4, 5, 7];
-function genFaPool(classIdx, seed) {
+function genFaPool(classIdx, seed, existingNames) {
   const rng = mulberry(seed);
   const base = CLASSES[classIdx].scout;
   const count = FA_POOL_COUNT_BY_CLASS[classIdx];
+  const nameBanned = new Set(existingNames || []);
   const out = [];
   for (let i = 0; i < count; i++) {
     const age = 23 + Math.floor(rng() * 8); // 23〜30歳
     const mul = 0.85 + rng() * 0.45; // 新人スカウトよりブレ幅を広く（即戦力〜掘り出し物まで）
-    const r = newRider(base * mul, rng, { age });
+    const r = newRider(base * mul, rng, { age, banned: nameBanned });
     const ageFactor = age <= 25 ? 1.2 : age <= 28 ? 1.0 : age <= 30 ? 0.85 : 0.65;
     const price = Math.max(20, Math.round(overall(r) * 1.6 * ageFactor));
     out.push({ rider: r, age, price });
@@ -950,10 +977,13 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
     // v12: 相手チームの出走人数は自チームの選択人数に連動させず、レース規定の範囲内で
     // チームごとに独立して決める（毎回同じ人数になる不自然さを解消）
     const { squadMin, squadMax } = raceMeta.tmpl;
+    // v12バグ修正: 同じレース内で自チーム・他チームの選手が名前被りしないよう、
+    // 自チームの名前を最初に登録した「使用済み」集合を全チームで共有しながら生成する
+    const nameBanned = new Set(squad.map(r => r.name));
     aiTeamsUsed = aiDefs.map(d => {
       const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
       const members = [];
-      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng));
+      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
       const aiRoles = assignAIRoles(members, aiSquadN);
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
@@ -1694,10 +1724,12 @@ function RaceView({ sim, onFinish }) {
 // ---------- 初期状態 ----------
 function initGame() {
   RID = 100;
+  const roster = initRoster();
+  const rosterNames = roster.map(r => r.name);
   return {
     screen: "intro", tab: "home",
     year: 1, month: 0, classIdx: 0, points: 0, budget: 300,
-    roster: initRoster(),
+    roster,
     equip: { frame: 0, wheels: 0, facility: 0 },
     staff: { manager: 0, trainer: 0, doctor: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
@@ -1707,9 +1739,10 @@ function initGame() {
     sponsorOffers: genSponsors(0, 1),
     scoutPolicy: "balance",
     // v12バグ修正: 初回のスカウト候補・FA候補が固定シードで毎回同じ顔ぶれになっていたため、
-    // 新規ゲームのたびに変わるようDate.now()由来のシードに変更
-    scouts: genScouts(0, Date.now() % 999983, "balance"),
-    faMarket: genFaPool(0, (Date.now() + 12345) % 999983),
+    // 新規ゲームのたびに変わるようDate.now()由来のシードに変更。
+    // 自チームの初期ロースターの名前とも被らないよう渡す
+    scouts: genScouts(0, Date.now() % 999983, "balance", rosterNames),
+    faMarket: genFaPool(0, (Date.now() + 12345) % 999983, rosterNames),
     races: genMonthRaces(1, 0, 0, 0, null),
     sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
     result: null, prizeInfo: null,
@@ -1911,8 +1944,8 @@ function App() {
           ...s, roster: survivors, classIdx, points: 0, year, month: 0,
           budget: s.budget + income + delta - upkeep - staffSalary,
           sponsor: null, sponsorOffers: nextOffers,
-          scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy),
-          faMarket: genFaPool(classIdx, year * 613 + 29),
+          scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name)),
+          faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
           races: genMonthRaces(year, 0, classIdx, 0, null),
           camp: false, campCooldown: 0, champBest: null, gc: null,
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
@@ -1927,7 +1960,7 @@ function App() {
         ...s, roster, month, camp: false, campCooldown: Math.max(0, s.campCooldown - 1),
         budget: s.budget + income - upkeep - staffSalary,
         sponsor,
-        faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7),
+        faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7, roster.map(r => r.name)),
         races: genMonthRaces(s.year, month, s.classIdx, s.points, sponsor),
         sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
         gc: null,
@@ -2206,7 +2239,7 @@ function App() {
       {/* v12バグ修正: initGame()の初期スカウト候補を先にランダム化しても、ここで固定シード4001を
           使ってgenScoutsを呼び直し上書きしていたため、方針決定ボタンを押すと結局毎回同じ顔ぶれに
           戻ってしまっていた。ここも新規ゲームのたびに変わる乱数シードを使うよう修正 */}
-      <Btn onClick={() => setG(s => ({ ...s, scouts: genScouts(0, Date.now() % 999983, s.scoutPolicy), screen: "sponsor" }))}>この方針で決定 → スポンサー選択へ</Btn>
+      <Btn onClick={() => setG(s => ({ ...s, scouts: genScouts(0, Date.now() % 999983, s.scoutPolicy, s.roster.map(r => r.name)), screen: "sponsor" }))}>この方針で決定 → スポンサー選択へ</Btn>
     </div>
   );
 
