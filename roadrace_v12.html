@@ -161,6 +161,8 @@ function groupModeFor(squadN) {
   return "full";
 }
 const VENUES = ["房総", "飛騨", "阿蘇", "蔵王", "琵琶湖", "瀬戸内", "津軽", "日光", "富士", "美濃", "丹波", "石鎚"];
+// v13: グランツール・海外遠征テーマ用の海外venue名（VENUESとは別枠で使用）
+const OVERSEAS_VENUES = ["アルプス", "ピレネー", "ドロミテ", "フランドル", "ロンバルディア", "アンダルシア", "トスカーナ", "プロヴァンス"];
 const SEG_LABEL = { flat: "平坦", hill: "丘陵", climb: "山岳", sprint: "ゴールスプリント", mtn: "山頂フィニッシュ", tt: "TT区間" };
 const SEG_COLOR = { flat: C.blue, hill: C.purple, climb: C.red, sprint: C.green, mtn: C.red, tt: "#e8a13c" };
 const SEG_AB = { flat: "flat", hill: "climb", climb: "climb", sprint: "sprint", mtn: "climb", tt: "solo" };
@@ -686,6 +688,18 @@ function genMonthRaces(year, month, classIdx, points, sponsor) {
       lockReason: (!open || cls !== classIdx) ? `${CLASSES[cls].id}限定` : null,
     });
   }
+  // v13: グランツール・海外遠征。7月（month===3）に年1回、その年のクラスに開かれた
+  // 3日間の海外遠征ステージレースを追加する。stageTmplsで日ごとに丘陵→山岳→ヒルクライムと
+  // コース性格を変え、通常のクラス別カレンダーとは独立に毎年必ず出走できる
+  if (month === 3) {
+    const venue = OVERSEAS_VENUES[Math.floor(rng() * OVERSEAS_VENUES.length)];
+    races.unshift({
+      id: `grandtour-${year}-${classIdx}`, grandTour: true, stageRace: true, stageCount: 3,
+      name: `${venue}グランツール（3日間・総合タイム）`,
+      tmpl: TEMPLATES[2], stageTmpls: [TEMPLATES[2], TEMPLATES[3], TEMPLATES[4]],
+      grade: 3, cls: classIdx, locked: false, lockReason: null,
+    });
+  }
   if (sponsor && sponsor.mandateMonths && sponsor.mandateMonths.includes(month)) {
     const target = races.find(r => !r.locked);
     if (target) target.sponsorMandate = true;
@@ -730,7 +744,10 @@ function abilityFor(segType, e) {
 // ---------- v7: コース生成（3D表示とシミュレーションで共有） ----------
 // 現実の勾配(%)は使わず、区間タイプ＋レースごとの「急峻さ乱数」で近似する（簡易だが十分にドラマが出る）
 function generateCourse(raceMeta, dayTag) {
-  const tmpl = raceMeta.tmpl;
+  // v13: グランツールなど、日ごとに異なるコース性格を持つステージレース用に
+  // stageTmpls（日別テンプレート配列）があればそちらを優先して使う
+  const stageMatch = dayTag && /^day(\d+)$/.exec(dayTag);
+  const tmpl = (raceMeta.stageTmpls && stageMatch) ? raceMeta.stageTmpls[Number(stageMatch[1]) - 1] || raceMeta.tmpl : raceMeta.tmpl;
   // v8: dayTagを混ぜることで、2日間ステージレースの各日で別コースになるようにする（同一レースIDの使い回し対策）
   const crng = mulberry(strHash(raceMeta.id + raceMeta.name + (dayTag || "")));
   const LEN = 300 + crng() * 120;
@@ -2202,7 +2219,7 @@ function App() {
     const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive);
     setG(s => ({
       ...s, result: sim,
-      gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive } : s.gc,
+      gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {} } : s.gc,
       inv: { ...s.inv, wheel: s.inv.wheel - (itemBoost.wheel ? 1 : 0), suit: s.inv.suit - (itemBoost.suit ? 1 : 0) },
       screen: watch ? "race" : "result_pending",
     }));
@@ -2213,31 +2230,35 @@ function App() {
   // 何らかの理由でgが更新される前に呼ばれる／連打で二重発火すると2日目のシミュレーションが
   // 食い違う・実行されない不具合があった。setGのfunctional updater内で毎回最新のsから
   // 計算するよう変更し、連打防止のロックも追加
-  function startStage2() {
+  // v13: 2日間固定だったステージレースを任意日数（race.stageCount）に一般化。
+  // 「2日目」だけを特別扱いしていたstartStage2を、現在のgc.stageから次の日を
+  // 割り出すstartNextStageに置き換えた
+  function startNextStage() {
     if (stage2LockRef.current) return;
     stage2LockRef.current = true;
     // v12バグ修正: watchFlagをsetGのfunctional updater内で代入し、その直後（同期的に）
     // if(!watchFlag)で参照していたため、Reactがupdaterをこの行より後（バッチ処理の
     // 反映時）に呼ぶ場合、常にwatchFlag=falseの初期値のまま判定されてしまい、観戦モードで
-    // 開始したはずの2日目が毎回「結果だけ見る」経路に落ちて即座に確定してしまっていた
-    // （2日目が実行されないように見えるバグの原因）。gc.watchはステージレース開始時に
+    // 開始したはずの次の日が毎回「結果だけ見る」経路に落ちて即座に確定してしまっていた
+    // （日程が実行されないように見えるバグの原因）。gc.watchはステージレース開始時に
     // 一度決まったら変わらない値なので、setGを呼ぶ前に外側のgから同期的に読んで安全に使う
     const watchFlag = g.gc.watch;
+    const nextStage = g.gc.stage + 1;
     let simResult = null, raceRef = null;
     setG(s => {
       const gc = s.gc;
       const roster2 = s.roster.map(r => gc.starters.includes(r.id) ? { ...r, fatigue: Math.max(0, r.fatigue - 20) } : r);
       const squad = roster2.filter(r => gc.starters.includes(r.id));
-      // v12: 2日目もステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-      const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, "day2", gc.directive);
+      // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
+      const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive);
       simResult = sim; raceRef = gc.race;
       return {
         ...s, roster: roster2, result: sim,
-        gc: { ...s.gc, stage: 2 },
+        gc: { ...s.gc, stage: nextStage },
         screen: watchFlag ? "race" : "result_pending",
       };
     });
-    if (!watchFlag) setTimeout(() => finishRace(simResult, raceRef, 2), 0);
+    if (!watchFlag) setTimeout(() => finishRace(simResult, raceRef, nextStage), 0);
   }
 
   // stageOverride: skip経路（結果だけ見る）はステージ番号を明示で渡し、
@@ -2268,20 +2289,29 @@ function App() {
   function finishStage(sim, race, stageOverride) {
     const times = {}; sim.entrants.forEach(en => { times[en.id] = en.finishTime; });
     const stage = stageOverride || (g.gc ? g.gc.stage : 1);
-    if (stage === 1) {
-      setG(s => ({ ...s, gc: { ...s.gc, stage1Times: times }, screen: "gc_stage1" }));
+    const totalStages = race.stageCount || 2;
+    if (stage < totalStages) {
+      stage2LockRef.current = false;
+      setG(s => ({ ...s, gc: { ...s.gc, stageTimes: { ...s.gc.stageTimes, [stage]: times } }, screen: "gc_stage" }));
     } else {
       setG(s => {
+        const allStageTimes = { ...s.gc.stageTimes, [stage]: times };
         const gcTimes = {};
-        Object.keys(times).forEach(id => { gcTimes[id] = (s.gc.stage1Times[id] || 0) + times[id]; });
+        Object.keys(times).forEach(id => {
+          gcTimes[id] = Object.values(allStageTimes).reduce((sum2, st) => sum2 + (st[id] || 0), 0);
+        });
         const order = Object.entries(gcTimes).sort((a, b) => a[1] - b[1]);
         const idToEntrant = {}; sim.entrants.forEach(en => { idToEntrant[en.id] = en; });
         const playerRanks = order.map(([id], i) => ({ id, rank: i + 1 })).filter(o => idToEntrant[o.id]?.team === "PLAYER");
         const bestRank = playerRanks.length ? Math.min(...playerRanks.map(o => o.rank)) : order.length;
         const prize = Math.round((PRIZES[bestRank - 1] || 1) * CLASSES[s.classIdx].prizeMul * 2.2);
+        // v13: 昇格戦（championship）は年度末に近くポイントがどのみちリセットされるため対象外。
+        // グランツールなど通常カレンダー上のステージレースは、複数日にわたる大会である
+        // ことを踏まえ通常レースよりポイント倍率を優遇する
+        const pts = race.championship ? 0 : Math.round((PTS[bestRank - 1] || 0) * GRADE_MUL[race.grade] * 1.3);
         return {
-          ...s, budget: s.budget + prize, champBest: bestRank,
-          gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize },
+          ...s, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
+          gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize, pts },
           screen: "gc_final",
         };
       });
@@ -2513,12 +2543,12 @@ function App() {
             const squadLabel = r.tmpl.squadMin === r.tmpl.squadMax ? `${r.tmpl.squadMin}名` : `${r.tmpl.squadMin}〜${r.tmpl.squadMax}名`;
             return (
               <div key={r.id} style={{
-                background: r.championship ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
-                border: `1.5px solid ${r.sponsorMandate ? C.red : r.championship ? C.purple : C.line}`, opacity: r.locked ? 0.55 : 1,
+                background: (r.championship || r.grandTour) ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
+                border: `1.5px solid ${r.sponsorMandate ? C.red : (r.championship || r.grandTour) ? C.purple : C.line}`, opacity: r.locked ? 0.55 : 1,
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>
-                    {r.championship ? "👑 " : ""}{r.sponsorMandate ? "🎯 " : ""}{r.name}
+                    {r.championship ? "👑 " : ""}{r.grandTour ? "🌍 " : ""}{r.sponsorMandate ? "🎯 " : ""}{r.name}
                   </div>
                   <div style={{ fontFamily: FONT_M, fontSize: 12, color: C.yellow }}>{"★".repeat(r.grade)}</div>
                 </div>
@@ -2528,7 +2558,7 @@ function App() {
                 <div style={{ fontSize: 11.5, color: C.sub }}>
                   {r.tmpl.kind}・出走{squadLabel}・{TYPES[r.tmpl.favors].label}有利／優勝 約{Math.round(PRIZES[0] * mul)}万・{Math.round(PTS[0] * GRADE_MUL[r.grade])}pt
                   {r.sponsorMandate && <span style={{ color: C.red }}>／スポンサー指定レース</span>}
-                  {r.stageRace && <span style={{ color: C.purple }}>／2日間ステージレース(総合)</span>}
+                  {r.stageRace && <span style={{ color: C.purple }}>／{r.stageCount || 2}日間ステージレース(総合)</span>}
                 </div>
                 <div style={{ marginTop: 8 }}>
                   {r.locked
@@ -3151,16 +3181,18 @@ function App() {
     );
   }
 
-  if (g.screen === "gc_stage1" && g.result && g.gc) {
+  if (g.screen === "gc_stage" && g.result && g.gc) {
     const res = g.result;
     const sorted = [...res.entrants].sort((a, b) => a.finishTime - b.finishTime);
     const bestIdx = sorted.findIndex(e => e.team === "PLAYER");
+    const stageNo = g.gc.stage;
+    const totalStages = g.gc.race.stageCount || 2;
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
-          <Eyebrow color={C.purple}>STAGE 1 完了 — {g.gc.race.name}</Eyebrow>
-          <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>1日目 自チーム最高位：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestIdx + 1}位</span></div>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>総合成績は2日目終了後に確定します。まずは休息・疲労回復（-20）をしてから2日目へ。</div>
+          <Eyebrow color={C.purple}>STAGE {stageNo} 完了 — {g.gc.race.name}</Eyebrow>
+          <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>{stageNo}日目 自チーム最高位：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestIdx + 1}位</span></div>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>総合成績は{totalStages}日目終了後に確定します。まずは休息・疲労回復（-20）をしてから{stageNo + 1}日目へ。</div>
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
           {sorted.slice(0, 10).map((e, i) => (
@@ -3170,20 +3202,20 @@ function App() {
             </div>
           ))}
         </div>
-        <Btn onClick={startStage2}>2日目のレースへ →</Btn>
+        <Btn onClick={startNextStage}>{stageNo + 1}日目のレースへ →</Btn>
       </div>
     );
   }
 
   if (g.screen === "gc_final" && g.gc && g.gc.gcOrder) {
-    const { gcOrder, idToEntrant, bestRank, prize } = g.gc;
+    const { gcOrder, idToEntrant, bestRank, prize, pts } = g.gc;
     const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))];
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
           <Eyebrow>GC FINAL — {g.gc.race.name}</Eyebrow>
           <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>総合成績：自チーム最高位 <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestRank}位</span></div>
-          <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円</div>
+          <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{!g.gc.race.championship ? ` ／ ポイント +${pts || 0}pt` : ""}</div>
           <div style={{ marginTop: 6, fontSize: 13, color: bestRank <= 3 ? C.yellow : C.red }}>
             {bestRank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
           </div>
