@@ -120,23 +120,30 @@ const bumpRosterAbAll = (state, amount) => ({
 });
 const bumpEquipLv = (state, amount) => ({
   ...state,
-  equip: { ...state.equip, frame: state.equip.frame + amount, wheels: state.equip.wheels + amount },
+  // B1スタート時点のequipMax（3+classIdx=3+0）を超えないよう安全のためクランプ
+  equip: { ...state.equip, frame: Math.min(3, state.equip.frame + amount), wheels: Math.min(3, state.equip.wheels + amount) },
 });
 const addProdigyRookie = (state) => {
-  const rng = mulberry(Date.now() % 999983);
+  const rng = mulberry(Date.now() % 999983 + state.roster.length * 7919);
   const banned = new Set(state.roster.map(r => r.name));
   const rookie = newRider(70, rng, { banned, forceProdigy: true });
   return { ...state, roster: [...state.roster, rookie] };
 };
+// v13.3: 内容が弱いというフィードバックを受け、ラダーの間隔を広げて本数を増やし、
+// キリのいい数字（10/25/50/75/100pt）に大幅強化の「ジャックポット」を配置。
+// 間の半端な数字（5/15/35/65/90pt）には控えめな中間ボーナスを挟み、
+// 周回を重ねるほど明確に強くなっていく実感を出す
 const CP_MILESTONES = [
-  { cp: 5, label: "開幕資金 +150万円", desc: "初期資金+150万円", apply: s => ({ ...s, budget: s.budget + 150 }) },
-  { cp: 10, label: "初期選手 能力+3", desc: "初期ロースター全員の能力値+3", apply: s => bumpRosterAbAll(s, 3) },
-  { cp: 16, label: "開幕資金 さらに+150万円", desc: "初期資金にもう+150万円（累計+300万円）", apply: s => ({ ...s, budget: s.budget + 150 }) },
-  { cp: 24, label: "チーム設備 Lv1底上げ", desc: "フレーム・ホイールの強化レベルが+1された状態でスタート", apply: s => bumpEquipLv(s, 1) },
-  { cp: 32, label: "初期選手 能力さらに+3", desc: "初期ロースター全員の能力値がさらに+3（累計+6）", apply: s => bumpRosterAbAll(s, 3) },
-  { cp: 42, label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持", apply: s => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + 2, suit: s.inv.suit + 2, supp: s.inv.supp + 2, tune: s.inv.tune + 2 } }) },
-  { cp: 55, label: "チーム設備 もうLv1底上げ", desc: "フレーム・ホイールの強化レベルがさらに+1（累計+2）", apply: s => bumpEquipLv(s, 1) },
-  { cp: 70, label: "逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入した状態でスタート", apply: s => addProdigyRookie(s) },
+  { cp: 5, label: "開幕資金 +100万円", desc: "初期資金+100万円", apply: s => ({ ...s, budget: s.budget + 100 }) },
+  { cp: 10, label: "★ 初期選手 全員能力+8", desc: "初期ロースター全員の能力値+8してスタート（大幅強化）", apply: s => bumpRosterAbAll(s, 8) },
+  { cp: 15, label: "チーム設備 Lv1底上げ", desc: "フレーム・ホイールの強化レベルが+1された状態でスタート", apply: s => bumpEquipLv(s, 1) },
+  { cp: 25, label: "★ 開幕資金 +400万円", desc: "初期資金にさらに+400万円（大幅強化）", apply: s => ({ ...s, budget: s.budget + 400 }) },
+  { cp: 35, label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持", apply: s => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + 2, suit: s.inv.suit + 2, supp: s.inv.supp + 2, tune: s.inv.tune + 2 } }) },
+  { cp: 50, label: "★★ 逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入（大幅強化）", apply: s => addProdigyRookie(s) },
+  { cp: 65, label: "初期選手 全員能力+5", desc: "初期ロースター全員の能力値がさらに+5", apply: s => bumpRosterAbAll(s, 5) },
+  { cp: 75, label: "★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2（大幅強化）", apply: s => bumpEquipLv(s, 2) },
+  { cp: 90, label: "開幕資金 +300万円", desc: "初期資金にさらに+300万円", apply: s => ({ ...s, budget: s.budget + 300 }) },
+  { cp: 100, label: "★★★ 逸材新人をもう1名確保＋全員能力+10", desc: "成長ランクS確定の逸材がもう1名加入し、ロースター全員の能力値も+10（集大成）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 10) },
 ];
 function applyCpMilestones(state, totalEarnedCP) {
   return CP_MILESTONES.filter(m => totalEarnedCP >= m.cp).reduce((s, m) => m.apply(s), state);
@@ -2580,14 +2587,16 @@ function App() {
           <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
             {CP_MILESTONES.map((m, i) => {
               const unlocked = meta.totalEarnedCP >= m.cp;
+              const jackpot = m.label.startsWith("★");
+              const accent = jackpot ? C.yellow : C.green;
               return (
                 <div key={i} style={{
-                  padding: "9px 12px", borderRadius: 10,
-                  background: unlocked ? "rgba(125,208,160,0.1)" : C.panel,
-                  border: `1.5px solid ${unlocked ? C.green : C.line}`, opacity: unlocked ? 1 : 0.6,
+                  padding: jackpot ? "11px 12px" : "9px 12px", borderRadius: 10,
+                  background: unlocked ? (jackpot ? "rgba(255,210,63,0.12)" : "rgba(125,208,160,0.1)") : C.panel,
+                  border: `${jackpot ? 2 : 1.5}px solid ${unlocked ? accent : C.line}`, opacity: unlocked ? 1 : (jackpot ? 0.75 : 0.6),
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: unlocked ? C.green : C.text, fontSize: 13.5 }}>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: unlocked ? accent : C.text, fontSize: jackpot ? 14.5 : 13.5 }}>
                       {unlocked ? "✔ " : "🔒 "}{m.label}
                     </span>
                     <span style={{ fontFamily: FONT_M, fontSize: 11.5, color: C.sub }}>累計{m.cp}pt</span>
