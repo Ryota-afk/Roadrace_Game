@@ -730,7 +730,10 @@ const ROTATION_PERIOD_TICKS = 20; // 20秒ごとに先頭交代
 // v12: AIチームごとの隠しの戦略スタイル（プレイヤーの事前作戦とは独立）。
 // aggressive=push相当・conservative=hold相当のローテーションペースになる
 const AI_STYLES = ["aggressive", "balanced", "conservative"];
-const DRAIN_K = 1.15;
+// v12バグ修正: 消耗ペースを全体的に緩和（1.15→0.85）。集団サイズによる消耗軽減・
+// 集団後方での回復を導入したこととあわせ、長いレースで役割が合っている選手まで
+// 早々にスタミナを使い切ってしまい、役割ミスマッチとの対比が埋もれてしまう問題に対応
+const DRAIN_K = 0.85;
 // v12バグ修正: エネルギーは減る一方で回復する仕組みがなく、下限も無かったため、
 // 長いレースでは選手のエネルギーが際限なく（-1000を超えるほど）マイナスに膨らみ続けていた。
 // energyPenaltyMul()はenergy<=-90あたりで既に速度低下が頭打ち（0.55倍）になるため、
@@ -773,6 +776,12 @@ function roleTerrainMismatchMul(role, segType) {
   if (role === "mountain" && (segType === "flat" || segType === "sprint")) return 1.3;
   return 1;
 }
+// v12: 集団の人数が多いほど風除け効果で消耗が緩む（独走=1.0、大集団ほど下がり0.55が下限）。
+// 牽引中の選手はこの恩恵を受けない（風除けの外にいるため。呼び出し側でdraft時のみ掛ける）
+function groupShelterMul(n) {
+  return Math.max(0.55, 1 - Math.min(1, (n - 1) / 14) * 0.45);
+}
+const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこない位置）での基礎回復量/tick
 function energyDrain(en, mode, segType, steepness) {
   return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType);
 }
@@ -935,7 +944,15 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
         }
         else { dist = ownCapable; en.mode = "solo"; }
         en.pos = Math.min(course.length, en.pos + dist);
-        en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * (windActive && en.mode === "draft" ? 1.25 : 1));
+        // v12: 集団の人数が多いほどドラフト勢の消耗が緩み（風除け効果）、ローテーションの
+        // 牽引順が回ってこない集団後方の位置にいるほど少しずつスタミナが回復する。
+        // 千切れて単独走になった選手（en.mode==="solo"）はこの恩恵を受けない
+        const sheltered = en.mode === "draft";
+        const shelterMul = sheltered ? groupShelterMul(members.length) : 1;
+        const backRatio = sheltered ? Math.min(1, (en.slot || 0) / Math.max(1, members.length - 1)) : 0;
+        const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * (windActive && en.mode === "draft" ? 1.25 : 1) * shelterMul;
+        en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
       });
     });
     // 4. 履歴記録・ゴール判定
