@@ -418,13 +418,25 @@ function initRoster() {
     };
     r.joinOvr = overall(r); return r;
   };
+  // v12バグ修正: 初期メンバー6名の名前が完全固定されており、新しくゲームを始めても
+  // 毎回同じ名前になってしまうと気になるとのフィードバックを受け、能力値・年齢・役割の
+  // バランスはそのまま維持しつつ、名前だけを新規ゲームのたびにランダム生成するようにした
+  const rng = mulberry(Date.now() % 999983);
+  const usedNames = new Set();
+  const randName = () => {
+    let name;
+    do { name = SURNAMES[Math.floor(rng() * SURNAMES.length)] + " " + GIVEN[Math.floor(rng() * GIVEN.length)]; }
+    while (usedNames.has(name));
+    usedNames.add(name);
+    return name;
+  };
   return [
-    mk("佐伯 蓮", "SPR", 66, 38, 82, 60, 48, 25, "normal", "A", "closer", "hotblood"),
-    mk("高梨 岳", "CLM", 52, 80, 34, 72, 58, 27, "late", "B", "mount", "seeker"),
-    mk("三浦 走", "RUL", 76, 56, 52, 76, 64, 28, "normal", "C", "domestique", "artisan"),
-    mk("綾瀬 迅", "PUN", 62, 67, 64, 62, 56, 23, "early", "A", null, "normal"),
-    mk("氷室 圭", "TT", 64, 46, 44, 64, 76, 26, "normal", "B", null, "free"),
-    mk("燕 翔太", "RUL", 48, 42, 44, 52, 46, 19, "late", "S", "iron", "genius"),
+    mk(randName(), "SPR", 66, 38, 82, 60, 48, 25, "normal", "A", "closer", "hotblood"),
+    mk(randName(), "CLM", 52, 80, 34, 72, 58, 27, "late", "B", "mount", "seeker"),
+    mk(randName(), "RUL", 76, 56, 52, 76, 64, 28, "normal", "C", "domestique", "artisan"),
+    mk(randName(), "PUN", 62, 67, 64, 62, 56, 23, "early", "A", null, "normal"),
+    mk(randName(), "TT", 64, 46, 44, 64, 76, 26, "normal", "B", null, "free"),
+    mk(randName(), "RUL", 48, 42, 44, 52, 46, 19, "late", "S", "iron", "genius"),
   ];
 }
 
@@ -1701,8 +1713,10 @@ function initGame() {
     sponsor: null,
     sponsorOffers: genSponsors(0, 1),
     scoutPolicy: "balance",
-    scouts: genScouts(0, 4001, "balance"),
-    faMarket: genFaPool(0, 6001),
+    // v12バグ修正: 初回のスカウト候補・FA候補が固定シードで毎回同じ顔ぶれになっていたため、
+    // 新規ゲームのたびに変わるようDate.now()由来のシードに変更
+    scouts: genScouts(0, Date.now() % 999983, "balance"),
+    faMarket: genFaPool(0, (Date.now() + 12345) % 999983),
     races: genMonthRaces(1, 0, 0, 0, null),
     sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
     result: null, prizeInfo: null,
