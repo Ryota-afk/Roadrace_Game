@@ -148,8 +148,8 @@ const CHASE_MODES = {
 
 // v9: 出走人数を固定値からsquadMin〜squadMaxの幅に変更（編成画面で選択）
 const TEMPLATES = [
-  { kind: "クリテリウム", favors: "SPR", squadMin: 1, squadMax: 5, segs: [["flat", 480, 26], ["flat", 480, 26], ["sprint", 130, 4]] },
-  { kind: "サーキットレース", favors: "SPR", squadMin: 1, squadMax: 5, segs: [["flat", 440, 24], ["flat", 440, 24], ["flat", 400, 20], ["sprint", 130, 4]] },
+  { kind: "クリテリウム", favors: "SPR", squadMin: 1, squadMax: 5, laps: 6, segs: [["flat", 300, 18], ["flat", 260, 15], ["sprint", 90, 4]] },
+  { kind: "サーキットレース", favors: "SPR", squadMin: 1, squadMax: 5, laps: 4, segs: [["flat", 380, 20], ["hill", 260, 12], ["flat", 320, 16], ["sprint", 110, 4]] },
   { kind: "丘陵ロード", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 480, 26], ["hill", 450, 17], ["hill", 450, 17], ["sprint", 130, 4]] },
   { kind: "山岳ロード", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["flat", 460, 26], ["climb", 600, 13], ["climb", 640, 12], ["mtn", 190, 4]] },
   { kind: "ヒルクライム", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["climb", 560, 14], ["climb", 600, 12], ["mtn", 190, 4]] },
@@ -737,7 +737,10 @@ function generateCourse(raceMeta, dayTag) {
   const amp1 = 20 + crng() * 26, f1 = 2.2 + crng() * 2.2, ph1 = crng() * Math.PI * 2;
   const amp2 = 4 + crng() * 9, f2 = 8 + crng() * 8, ph2 = crng() * Math.PI * 2;
   const steepness = 0.75 + crng() * 0.6; // 0.75〜1.35：この山/丘がきついかどうか
-  const segs = tmpl.segs.map(([type, base, dist]) => ({ type, base, dist, label: SEG_LABEL[type] }));
+  // v13: 周回コース（laps指定時、1周分のsegsをそのままlaps回繰り返して全体コースを構成する）
+  const laps = tmpl.laps || 1;
+  const lapSegDefs = laps > 1 ? Array.from({ length: laps }, () => tmpl.segs).flat() : tmpl.segs;
+  const segs = lapSegDefs.map(([type, base, dist]) => ({ type, base, dist, label: SEG_LABEL[type] }));
   // v12: 天候・横風エシュロン。平坦・丘陵区間の一部にランダムで横風フラグを立てる
   segs.forEach(s => {
     s.wind = (s.type === "flat" || s.type === "hill") && crng() < 0.28;
@@ -776,6 +779,7 @@ function generateCourse(raceMeta, dayTag) {
     segTypeAt: (pos) => segTypeAtFrac(pos / LEN),
     yAt, elevationProfile, totalElevationGain, climbCount, raceDifficultyRating,
     amp1, f1, ph1, amp2, f2, ph2,
+    laps, lapAtFrac: (frac) => Math.min(laps, Math.floor(Math.max(0, Math.min(1, frac)) * laps) + 1),
   };
 }
 function climbWeightFor(segType, steepness) {
@@ -1311,6 +1315,7 @@ function ElevationChart({ course }) {
         <span>獲得標高目安 {Math.round(course.totalElevationGain)}</span>
         <span>山岳区間 {course.climbCount}</span>
         <span>難易度指数 {course.raceDifficultyRating}</span>
+        {course.laps > 1 && <span style={{ color: C.yellow }}>周回コース 全{course.laps}周</span>}
       </div>
     </div>
   );
@@ -1775,7 +1780,8 @@ function RaceView({ sim, onFinish }) {
           if (chaseR) gapText = `逃げとメインのギャップ：約${Math.max(0, Math.round((sorted[0].frac - chaseR.frac) * totalRef.current))}秒`;
         }
         const isDone = clock >= PLAY_DUR;
-        setHud({ top, seg: segLabel, clock: rt, done: isDone, comment, gap: gapText });
+        const lap = course.laps > 1 ? course.lapAtFrac(leadFrac) : null;
+        setHud({ top, seg: segLabel, clock: rt, done: isDone, comment, gap: gapText, lap });
         if (isDone && !done) { done = true; if (intervalId) clearInterval(intervalId); return; }
       }
     };
@@ -1796,7 +1802,7 @@ function RaceView({ sim, onFinish }) {
     <div style={{ display: "grid", gap: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <div style={{ background: C.panel2, borderLeft: `4px solid ${C.yellow}`, borderRadius: 6, padding: "6px 10px" }}>
-          <div style={{ fontFamily: FONT_D, fontSize: 12, color: C.yellow }}>{hud.seg}</div>
+          <div style={{ fontFamily: FONT_D, fontSize: 12, color: C.yellow }}>{hud.seg}{hud.lap ? `（${hud.lap}/${sim.course.laps}周）` : ""}</div>
           <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.text }}>{fmtTime(hud.clock)}</div>
           {hud.gap && <div style={{ fontFamily: FONT_M, fontSize: 10.5, color: C.green, marginTop: 2 }}>{hud.gap}</div>}
         </div>
