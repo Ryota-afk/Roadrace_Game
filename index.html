@@ -126,28 +126,40 @@ const CLASSES = [
 // v13: 周回プレイ（クリアポイント）＋難易度テーマ。難易度は他チームの強さ（aiMul）と
 // 選手成長のソフトキャップ閾値（growthCap、softFactorのしきい値）に反映する。
 // needCPは「これまでの生涯獲得クリアポイント合計」で解禁するため、後でポイントを
-// 使い切っても一度解禁した難易度が再ロックされることはない
+// 使い切っても一度解禁した難易度が再ロックされることはない。
+// v13.1: フィードバックを受け、難易度間の差をより大きく。成長上限は難易度が上がるほど
+// 「インフレ」して選手も強くなる代わりに、他チームはそれ以上のペースで強くなる設計に変更
 const DIFFICULTIES = [
-  { id: "easy", label: "イージー", desc: "他チームのレベルは控えめ、選手の成長上限も高め。まずはここでクリアを目指そう", aiMul: 0.90, growthCap: 92, needCP: 0 },
-  { id: "normal", label: "ノーマル", desc: "標準的な強さ。歯応えのある本来のバランス", aiMul: 1.0, growthCap: 88, needCP: 3 },
-  { id: "hard", label: "ハード", desc: "他チームは強豪揃いで、選手の成長も頭打ちが早い。真の挑戦者向け", aiMul: 1.12, growthCap: 84, needCP: 8 },
+  { id: "easy", label: "イージー", desc: "他チームはかなり控えめ。まずはここでクリアを目指そう", aiMul: 0.80, growthCap: 88, needCP: 0 },
+  { id: "normal", label: "ノーマル", desc: "標準的な強さ。歯応えのある本来のバランス", aiMul: 1.0, growthCap: 94, needCP: 4 },
+  { id: "hard", label: "ハード", desc: "他チームは強豪揃い。選手の成長上限も上がるが、相手はさらに本気を出してくる", aiMul: 1.25, growthCap: 102, needCP: 10 },
+  { id: "oni", label: "鬼", desc: "完全な無理ゲー。成長上限は大幅に上がるが、他チームは化け物揃い。生半可な覚悟でクリアできると思うな", aiMul: 1.55, growthCap: 112, needCP: 20 },
 ];
-// v13: クリアポイントで購入できる開幕特典（複数選択可・都度消費）
+// v13.1: クリアポイント特典が弱いというフィードバックを受け、種類を増やし効果も大幅強化
 const CP_PERKS = {
-  budget: { label: "開幕資金 +200万円", desc: "初期資金を200万円上乗せしてスタート", cost: 2 },
-  roster: { label: "初期選手 能力+4", desc: "初期ロースター全員の能力値を+4してスタート", cost: 4 },
-  equip:  { label: "チーム設備Lv1供与", desc: "エアロフレーム・軽量ホイールが最初からLv1", cost: 3 },
+  budget: { label: "開幕資金 +500万円", desc: "初期資金を500万円上乗せしてスタート", cost: 4 },
+  roster: { label: "初期選手 全員能力+10", desc: "初期ロースター全員の能力値を+10してスタート", cost: 8 },
+  equip2: { label: "チーム設備 Lv2供与", desc: "エアロフレーム・軽量ホイールが最初からLv2の状態でスタート", cost: 7 },
+  prodigy: { label: "逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入した状態でスタート", cost: 12 },
+  itemstock: { label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持してスタート", cost: 6 },
 };
 function applyCpPerk(state, key) {
-  if (key === "budget") return { ...state, budget: state.budget + 200 };
-  if (key === "roster") return { ...state, roster: state.roster.map(r => ({ ...r, ...Object.fromEntries(AB_KEYS.map(k => [k, Math.min(94, Math.round(r[k] + 4))])) })) };
-  if (key === "equip") return { ...state, equip: { ...state.equip, frame: 1, wheels: 1 } };
+  if (key === "budget") return { ...state, budget: state.budget + 500 };
+  if (key === "roster") return { ...state, roster: state.roster.map(r => ({ ...r, ...Object.fromEntries(AB_KEYS.map(k => [k, Math.min(94, Math.round(r[k] + 10))])) })) };
+  if (key === "equip2") return { ...state, equip: { ...state.equip, frame: 2, wheels: 2 } };
+  if (key === "prodigy") {
+    const rng = mulberry(Date.now() % 999983);
+    const banned = new Set(state.roster.map(r => r.name));
+    const rookie = newRider(70, rng, { banned, forceProdigy: true });
+    return { ...state, roster: [...state.roster, rookie] };
+  }
+  if (key === "itemstock") return { ...state, inv: { ...state.inv, wheel: state.inv.wheel + 2, suit: state.inv.suit + 2, supp: state.inv.supp + 2, tune: state.inv.tune + 2 } };
   return state;
 }
 // v13: 周回ボーナス。速くクリアするほど、難易度が高いほどクリアポイントが増える
 function computeClearPoints(year, difficultyId) {
   const speedBonus = Math.max(0, 15 - Math.max(0, year - 2) * 2);
-  const diffBonus = { easy: 0, normal: 4, hard: 10 }[difficultyId] || 0;
+  const diffBonus = { easy: 0, normal: 4, hard: 10, oni: 22 }[difficultyId] || 0;
   return 5 + speedBonus + diffBonus;
 }
 const META_KEY = "roadrace_v12_meta";
