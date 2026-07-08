@@ -255,6 +255,44 @@ const EFFECT_APPLIERS = {
     if (!s.sponsor) return s;
     return { ...s, sponsor: { ...s.sponsor, mandatesMissed: Math.max(0, s.sponsor.mandatesMissed + v) } };
   },
+  // v12: イベントの種類を増やすにあたり追加した「個人」targetの効果。誰が対象になったか
+  // プレイヤーに伝わるよう、__eventNoteに選手名入りの一言をしのばせておき、
+  // resolveEvent側でchoice.resultの末尾に添える
+  boostRandomRiderAbilities: (s, v) => {
+    if (!s.roster.length) return s;
+    const pick = s.roster[Math.floor(Math.random() * s.roster.length)];
+    const roster = s.roster.map(r => r.id === pick.id
+      ? { ...r, ...Object.fromEntries(AB_KEYS.map(k => [k, Math.max(22, Math.min(94, Math.round(r[k] + v)))])) }
+      : r);
+    return { ...s, roster, __eventNote: `📈 ${pick.name}の能力が一段伸びた！` };
+  },
+  condRandomRider: (s, v) => {
+    if (!s.roster.length) return s;
+    const pick = s.roster[Math.floor(Math.random() * s.roster.length)];
+    const roster = s.roster.map(r => r.id === pick.id ? { ...r, cond: Math.max(1, Math.min(5, r.cond + v)) } : r);
+    return { ...s, roster, __eventNote: v > 0 ? `😊 ${pick.name}のコンディションが上向いた。` : `😔 ${pick.name}のコンディションが優れない…` };
+  },
+  growthPowUpgradeRandom: (s, v) => {
+    if (v <= 0 || !s.roster.length) return s;
+    const order = ["C", "B", "A", "S"];
+    const candidates = s.roster.filter(r => order.indexOf(r.growthPow) < order.length - 1);
+    if (!candidates.length) return s;
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const nextPow = order[order.indexOf(pick.growthPow) + 1];
+    const roster = s.roster.map(r => r.id === pick.id ? { ...r, growthPow: nextPow } : r);
+    return { ...s, roster, __eventNote: `🌟 ${pick.name}の成長力が「${nextPow}」に上がった！` };
+  },
+  // v12: 起きる確率自体をここに埋め込む（v=万一発生した場合の離脱月数）。選択肢の分岐は
+  // 「安全に休む（発生しない）」か「無理をする（一定確率で発生）」かで表現する
+  injuryRiskRandom: (s, v) => {
+    if (Math.random() >= 0.4) return s;
+    const healthy = s.roster.filter(r => r.injury === 0);
+    if (!healthy.length) return s;
+    const pick = healthy[Math.floor(Math.random() * healthy.length)];
+    const roster = s.roster.map(r => r.id === pick.id ? { ...r, injury: v, fatigue: Math.min(100, r.fatigue + 20) } : r);
+    return { ...s, roster, __eventNote: `🤕 ${pick.name}が無理がたたって故障してしまった…` };
+  },
+  wheelGrant: (s, v) => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + v } }),
 };
 function applyEventEffects(s, effects) {
   let ns = s;
@@ -321,6 +359,48 @@ const EVENTS = [
     choices: [
       { label: "予備日を使って調整する", result: "余裕を持って体を休めることができた。", effects: { rosterFatigueAll: -6 } },
       { label: "強行日程で乗り切る", result: "多少の疲労と引き換えに、日程通りの活動費が浮いた。", effects: { budget: 12, rosterFatigueAll: 12 } },
+    ] },
+  // v12: イベントの種類を増やしてほしいという要望を受けて追加（栄冠ナイン風の「覚醒」
+  // 「スランプ」など、選手個人にフォーカスするイベントを中心に拡充）
+  { id: "awakening", title: "練習中に選手が覚醒？", text: "いつもの練習中、ある選手が今までにない動きを見せた。手応えを感じているようだ。",
+    choices: [
+      { label: "そのままとことん追い込ませる", result: "本人の勢いに任せてとことん追い込んだ。", effects: { boostRandomRiderAbilities: 6, rosterFatigueAll: 5 } },
+      { label: "無理はさせず切り上げる", result: "興奮を落ち着かせ、無理のない範囲で切り上げた。", effects: { boostRandomRiderAbilities: 3 } },
+    ] },
+  { id: "slump", title: "選手がスランプ気味に", text: "ある選手が、最近どうも本来の動きができていない様子だ。",
+    choices: [
+      { label: "とことん話を聞く", result: "じっくり話を聞き、気持ちの整理を手伝った。", effects: { condRandomRider: 1, rosterFatigueAll: -2 } },
+      { label: "そっとしておく", result: "本人のペースに任せることにした。", effects: { condRandomRider: -1 } },
+    ] },
+  { id: "veteranAdvice", title: "伝説のOBがふらりと顔を出す", text: "かつて名を馳せたOBが練習場にふらりと立ち寄り、若手に直接指導してくれた。",
+    choices: [
+      { label: "指導を仰ぐ", result: "貴重な指導を受け、才能が開花する予感がする。", effects: { growthPowUpgradeRandom: 1, rosterFatigueAll: 4 } },
+      { label: "自分たちのやり方を貫く", result: "ありがたい申し出だったが、今のチームの方針を貫いた。", effects: { rosterCondAll: 1 } },
+    ] },
+  { id: "injuryOmen", title: "きしむ体、無理はできない兆候", text: "練習量が積み重なり、選手の一人が体の張りを訴えている。",
+    choices: [
+      { label: "様子を見ながら続ける", result: "無理をさせず、負荷を落として乗り切った。", effects: { rosterFatigueAll: -10 } },
+      { label: "気にせず追い込む", result: "本人の意志を尊重し、通常通りのメニューを続けた。", effects: { rosterFatigueAll: 6, injuryRiskRandom: 1 } },
+    ] },
+  { id: "teamConflict", title: "選手間でちょっとした衝突", text: "練習方針をめぐって、選手同士でちょっとした言い合いになった。",
+    choices: [
+      { label: "仲裁に入る", result: "話し合いの場を設け、わだかまりを解消した。", effects: { budget: -10, rosterCondAll: 1 } },
+      { label: "本人たちに任せる", result: "干渉せず、当人同士の解決に委ねた。", effects: { rosterCondAll: -1 } },
+    ] },
+  { id: "wheelMonitor", title: "新型ホイールのモニター依頼", text: "用具メーカーから、開発中の新型ホイールを試してほしいと依頼が来た。",
+    choices: [
+      { label: "モニターを引き受ける", result: "試作品を受け取った。感触を確かめるのに少し時間を要した。", effects: { wheelGrant: 1, rosterFatigueAll: 3 } },
+      { label: "今回は見送る", result: "丁重にお断りしたところ、御礼の品が届いた。", effects: { budget: 10 } },
+    ] },
+  { id: "teamBonding", title: "選手会主催の親睦会", text: "選手会が主催する食事会が開かれ、チームの雰囲気作りに一役買った。",
+    choices: [
+      { label: "参加して盛り上げる", result: "和やかな時間を過ごし、チームの結束が深まった。", effects: { rosterCondAll: 1, budget: -8 } },
+      { label: "差し入れだけ済ませる", result: "顔は出さず、差し入れだけ届けておいた。", effects: { budget: -3 } },
+    ] },
+  { id: "hardCamp", title: "有志だけの追加合宿", text: "有志を募っての追加合宿の話が持ち上がった。",
+    choices: [
+      { label: "実施を後押しする", result: "気合の入った合宿になり、参加した選手たちの動きが良くなった。", effects: { boostRandomRiderAbilities: 4, rosterFatigueAll: 10 } },
+      { label: "通常メニューに留める", result: "無理のない範囲での調整に留めた。", effects: { rosterFatigueAll: -5 } },
     ] },
 ];
 
@@ -2063,7 +2143,11 @@ function App() {
       if (!ev) return s;
       const choice = ev.choices[choiceIdx];
       const applied = applyEventEffects(s, choice.effects);
-      return { ...applied, pendingEvent: null, eventResult: { title: ev.title, text: choice.result }, screen: "event_result" };
+      // v12: 個人targetの効果は誰が対象だったかを__eventNoteに乗せて返してくるので、
+      // 結果テキストの末尾に添えてから消す（保存対象にも含まれない一時フィールド）
+      const { __eventNote, ...rest } = applied;
+      const text = __eventNote ? `${choice.result}\n\n${__eventNote}` : choice.result;
+      return { ...rest, pendingEvent: null, eventResult: { title: ev.title, text }, screen: "event_result" };
     });
   }
 
@@ -2769,7 +2853,7 @@ function App() {
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 18, borderTop: `4px solid ${C.purple}` }}>
           <Eyebrow color={C.purple}>{g.eventResult.title}</Eyebrow>
-          <p style={{ color: C.text, fontSize: 14, lineHeight: 1.8, margin: "8px 0 0" }}>{g.eventResult.text}</p>
+          <p style={{ color: C.text, fontSize: 14, lineHeight: 1.8, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{g.eventResult.text}</p>
         </div>
         <Btn onClick={() => setG(s => ({ ...s, eventResult: null, screen: "main" }))}>続ける →</Btn>
       </div>
