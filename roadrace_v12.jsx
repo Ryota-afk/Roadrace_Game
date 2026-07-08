@@ -85,8 +85,10 @@ const PERSONALITIES = {
 };
 const persMul = (r, k) => (PERSONALITIES[r.personality]?.mul[k]) || 1;
 // v8: 収束・インフレ対策でソフトキャップを強化（90→88から発動、減衰も急に）
-const softFactor = (v) => (v < 88 ? 1 : Math.exp(-(v - 88) / 4));
-const addAb = (r, k, amount) => { r[k] = r[k] + amount * softFactor(r[k]); };
+// v13: 難易度ごとの成長上限（DIFFICULTIES.growthCap）をしきい値として渡せるように変更。
+// 呼び出し側が省略した場合は既存バランス通り88のまま
+const softFactor = (v, cap = 88) => (v < cap ? 1 : Math.exp(-(v - cap) / 4));
+const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * softFactor(r[k], cap); };
 const COND_ARROW = ["↓↓", "↘", "→", "↗", "↑↑"];
 const COND_COLOR = ["#7a8296", "#8fa0b8", "#9aa3b5", "#7dd0a0", "#35c07e"];
 const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];
@@ -96,6 +98,45 @@ const CLASSES = [
   { id: "A",  label: "クラス A",  prizeMul: 2.0, need: 50, scout: 66 },
   { id: "PRO", label: "PRO", prizeMul: 3.5, need: 60, scout: 74 },
 ];
+// v13: 周回プレイ（クリアポイント）＋難易度テーマ。難易度は他チームの強さ（aiMul）と
+// 選手成長のソフトキャップ閾値（growthCap、softFactorのしきい値）に反映する。
+// needCPは「これまでの生涯獲得クリアポイント合計」で解禁するため、後でポイントを
+// 使い切っても一度解禁した難易度が再ロックされることはない
+const DIFFICULTIES = [
+  { id: "easy", label: "イージー", desc: "他チームのレベルは控えめ、選手の成長上限も高め。まずはここでクリアを目指そう", aiMul: 0.90, growthCap: 92, needCP: 0 },
+  { id: "normal", label: "ノーマル", desc: "標準的な強さ。歯応えのある本来のバランス", aiMul: 1.0, growthCap: 88, needCP: 3 },
+  { id: "hard", label: "ハード", desc: "他チームは強豪揃いで、選手の成長も頭打ちが早い。真の挑戦者向け", aiMul: 1.12, growthCap: 84, needCP: 8 },
+];
+// v13: クリアポイントで購入できる開幕特典（複数選択可・都度消費）
+const CP_PERKS = {
+  budget: { label: "開幕資金 +200万円", desc: "初期資金を200万円上乗せしてスタート", cost: 2 },
+  roster: { label: "初期選手 能力+4", desc: "初期ロースター全員の能力値を+4してスタート", cost: 4 },
+  equip:  { label: "チーム設備Lv1供与", desc: "エアロフレーム・軽量ホイールが最初からLv1", cost: 3 },
+};
+function applyCpPerk(state, key) {
+  if (key === "budget") return { ...state, budget: state.budget + 200 };
+  if (key === "roster") return { ...state, roster: state.roster.map(r => ({ ...r, ...Object.fromEntries(AB_KEYS.map(k => [k, Math.min(94, Math.round(r[k] + 4))])) })) };
+  if (key === "equip") return { ...state, equip: { ...state.equip, frame: 1, wheels: 1 } };
+  return state;
+}
+// v13: 周回ボーナス。速くクリアするほど、難易度が高いほどクリアポイントが増える
+function computeClearPoints(year, difficultyId) {
+  const speedBonus = Math.max(0, 15 - Math.max(0, year - 2) * 2);
+  const diffBonus = { easy: 0, normal: 4, hard: 10 }[difficultyId] || 0;
+  return 5 + speedBonus + diffBonus;
+}
+const META_KEY = "roadrace_v12_meta";
+function loadMeta() {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    if (!raw) return { clearPoints: 0, totalEarnedCP: 0 };
+    const m = JSON.parse(raw);
+    return { clearPoints: m.clearPoints || 0, totalEarnedCP: m.totalEarnedCP || 0 };
+  } catch (e) { return { clearPoints: 0, totalEarnedCP: 0 }; }
+}
+function saveMeta(meta) {
+  try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* noop */ }
+}
 const MONTHS = ["4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
 const RELEGATE_LINE = 15;
 // v8: クラス連動の恩恵（ロースター上限・スカウト人数・逸材確率）
@@ -1114,7 +1155,9 @@ function rankSim(sim) {
 // ---------- buildSim：選手構築＋コース生成＋ティックシミュレーション実行 ----------
 // fixedAiTeams を渡すとAI選手を再利用する（GCステージレースの2日目用）
 // dayTag を渡すとコース生成のシードに反映される（同じraceMetaでも日ごとに別コースにする）
-function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive) {
+function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId) {
+  // v13: 難易度による他チームの強さ補正（aiMul）。省略時はnormal相当
+  const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
   const groupMode = groupModeFor(squad.length);
   const riders = [];
@@ -1137,7 +1180,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
       { name: "レッドサンダー山陽", color: "#d9484a" }, { name: "クレディ・ブルー", color: "#3f7fd9" },
       { name: "ヴェロチタ京都", color: "#9a6be0" }, { name: "ウィンドミル北海道", color: "#e08a3f" },
     ];
-    const power = 52 + classIdx * 9 + (raceMeta.grade - 1) * 4 + (raceMeta.championship ? 6 : 0);
+    const power = (52 + classIdx * 9 + (raceMeta.grade - 1) * 4 + (raceMeta.championship ? 6 : 0)) * diffAiMul;
     // v12: 相手チームの出走人数は自チームの選択人数に連動させず、レース規定の範囲内で
     // チームごとに独立して決める（毎回同じ人数になる不自然さを解消）
     const { squadMin, squadMax } = raceMeta.tmpl;
@@ -1367,7 +1410,14 @@ function modeStreakAt(en, rt, mode, cap) {
 function topLateral(course, frac) {
   return Math.sin(frac * Math.PI * course.f1 + course.ph1) * course.amp1 + Math.sin(frac * course.f2 + course.ph2) * course.amp2;
 }
-const MAP_W = 660, TOP_H = 200, SIDE_H = 120, MAP_PAD = 18;
+// v13バグ修正: 俯瞰マップがviewBoxの縦横比とCSS上の実表示サイズの比率が
+// 食い違っていたため（デフォルトのpreserveAspectRatio="xMidYMid meet"）、
+// 上下に大きな余白（レターボックス）ができて画面を有効に使えておらず、
+// 選手の横移動とコース背景の湾曲の連動もその分弱く見えていた。
+// マップ自体の縦幅を拡大し、preserveAspectRatio="none"と画面端までの
+// ブリード表示を組み合わせてレターボックスを解消する
+const MAP_W = 660, TOP_H = 280, SIDE_H = 150, MAP_PAD = 18;
+const MAP_BLEED = { width: "calc(100% + 28px)", marginLeft: -14, marginRight: -14 };
 // v10: 俯瞰マップ・側面マップを「先頭集団を追従してズームするカメラ」方式に変更。
 // 全コースを常時表示するのではなく、まだゴールしていない選手たちの広がりに合わせて
 // ズーム幅を自動調整する（競馬のトラッキングシステムのような大きな表示を再現）
@@ -1836,7 +1886,7 @@ function RaceView({ sim, onFinish }) {
         <>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 200, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, height: 280, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               {/* v12: 集団の2次元的な広がり（団子状〜エシュロン時の斜め隊列）に対して
                   道幅が狭すぎて選手がはみ出て見える問題を修正するため大幅に拡張。
                   さらに拡張してほしいという追加フィードバックを繰り返し受け再拡大 */}
@@ -1881,7 +1931,7 @@ function RaceView({ sim, onFinish }) {
           </div>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 120, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, height: 150, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
               <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="16" />
               {ridersUi.map(r => {
@@ -1954,6 +2004,8 @@ function initGame() {
     // v13: キャリア統計・歴史記録テーマ。通算成績と年度ごとの結果履歴を保持する
     careerStats: { totalRaces: 0, totalWins: 0, totalPodiums: 0, totalPrize: 0, bestFinish: null },
     careerHistory: [],
+    // v13: 難易度（周回プレイでクリアポイントを貯めて上位難易度を解禁する）
+    difficulty: "easy",
   };
 }
 
@@ -1966,7 +2018,7 @@ const SAVE_VERSION = "v12";
 const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
-  "champBest", "log", "cleared", "careerStats", "careerHistory",
+  "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty",
 ];
 function serializeState(g) {
   const out = {};
@@ -2023,6 +2075,10 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const askConfirm = (message, onConfirm) => setConfirmDialog({ message, onConfirm });
   const stage2LockRef = useRef(false);
+  // v13: 新規ゲーム開始時の難易度・クリアポイント特典選択（newgame_setup画面用）
+  const [diffChoice, setDiffChoice] = useState("easy");
+  const [perkChoice, setPerkChoice] = useState([]);
+  const clearAwardedRef = useRef(false);
   const cls = CLASSES[g.classIdx];
   const healthy = g.roster.filter(r => r.injury === 0);
   const equipMax = 3 + g.classIdx;
@@ -2034,12 +2090,27 @@ function App() {
     if (g.screen === "main") saveGame(g);
   }, [g]);
 
+  // v13: グランファイナル制覇でクリアポイントを付与（周回プレイの起点）。
+  // 通常のセーブデータとは別のlocalStorageキーに保存し、「最初から」でリセットしても
+  // 消えない永続的な進行度にする。re-render時に重複加算しないようrefでガードする
+  useEffect(() => {
+    if (g.screen === "clear" && !clearAwardedRef.current) {
+      clearAwardedRef.current = true;
+      const earned = computeClearPoints(g.year, g.difficulty);
+      const meta = loadMeta();
+      saveMeta({ clearPoints: meta.clearPoints + earned, totalEarnedCP: meta.totalEarnedCP + earned });
+    }
+    if (g.screen !== "clear") clearAwardedRef.current = false;
+  }, [g.screen]);
+
   const equippedCount = (pid) => g.roster.reduce((s, r) => s + (PART_SLOTS.reduce((n, sl) => n + (r.parts[sl] === pid ? 1 : 0), 0)), 0);
   const availParts = (pid) => (g.partsInv[pid] || 0) - equippedCount(pid);
 
   // ---- 月次更新 ----
   function monthlyUpdate(state, raceInfo) {
     const starterIds = raceInfo ? raceInfo.starters : null;
+    // v13: 難易度別の成長ソフトキャップ閾値（易しいほど高い閾値まで伸びる）
+    const growthCap = (DIFFICULTIES.find(d => d.id === state.difficulty) || DIFFICULTIES[0]).growthCap;
     const roster = state.roster.map(r => {
       const n = { ...r, parts: { ...r.parts } };
       const injMul = n.trait === "glass" ? 2 : n.trait === "tough" ? 0.5 : 1;
@@ -2061,8 +2132,8 @@ function App() {
             * (1 + (state.staff?.trainer || 0) * 0.12)
             * (n.trait === "trainer" ? 1.2 : 1);
           // 指定能力の成長にトレードオフ（×0.9）。指定外はさらに絞って14%
-          addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus));
-          AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k)));
+          addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus), growthCap);
+          AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k), growthCap));
           n.fatigue = Math.min(100, n.fatigue + 6);
         }
         const ph2 = growthPhase(n);
@@ -2072,7 +2143,7 @@ function App() {
         n.fatigue = Math.min(100, n.fatigue + (n.trait === "iron" ? 32 : 45));
         n.streak += 1;
         const ph = growthPhase(n);
-        raceInfo.expKeys.forEach(k => addAb(n, k, 0.6 * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k)));
+        raceInfo.expKeys.forEach(k => addAb(n, k, 0.6 * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k), growthCap));
         // v11: ドクター（staff.doctor）は故障の発生率を下げ、発生した場合も期間を短縮する
         const doctorLv = state.staff?.doctor || 0;
         if (n.streak >= 3) {
@@ -2210,7 +2281,7 @@ function App() {
     const itemBoost = { wheel: g.sel.useWheel, suit: g.sel.useSuit };
     // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
     const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
-    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive);
+    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty);
     setG(s => ({
       ...s, result: sim,
       gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {} } : s.gc,
@@ -2244,7 +2315,7 @@ function App() {
       const roster2 = s.roster.map(r => gc.starters.includes(r.id) ? { ...r, fatigue: Math.max(0, r.fatigue - 20) } : r);
       const squad = roster2.filter(r => gc.starters.includes(r.id));
       // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-      const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive);
+      const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty);
       simResult = sim; raceRef = gc.race;
       return {
         ...s, roster: roster2, result: sim,
@@ -2441,7 +2512,7 @@ function App() {
         <Btn onClick={() => { const loaded = loadGame(); if (loaded) setG(loaded); }}>💾 続きから</Btn>
       )}
       <Btn outline={hasSaveGame()} onClick={() => {
-        const doReset = () => { clearSaveGame(); setG(s => ({ ...initGame(), screen: "scoutpolicy_initial" })); };
+        const doReset = () => { clearSaveGame(); setG(s => ({ ...initGame(), screen: "newgame_setup" })); };
         if (hasSaveGame()) askConfirm("保存データを消して最初から始めます。よろしいですか？", doReset);
         else doReset();
       }}>
@@ -2449,6 +2520,74 @@ function App() {
       </Btn>
     </div>
   );
+
+  if (g.screen === "newgame_setup") {
+    const meta = loadMeta();
+    const togglePerk = (k) => setPerkChoice(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k]);
+    const totalCost = perkChoice.reduce((s2, k) => s2 + CP_PERKS[k].cost, 0);
+    const afford = totalCost <= meta.clearPoints;
+    return wrap(
+      <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
+          <Eyebrow color={C.yellow}>クリアポイント：{meta.clearPoints}pt</Eyebrow>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>過去のプレイでクリアするたびに貯まるポイントです。難易度の解禁や開幕特典と交換できます（累計{meta.totalEarnedCP}pt獲得）。</div>
+        </div>
+        <div>
+          <Eyebrow>難易度を選択</Eyebrow>
+          <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+            {DIFFICULTIES.map(d => {
+              const locked = meta.totalEarnedCP < d.needCP;
+              return (
+                <button key={d.id} disabled={locked} onClick={() => setDiffChoice(d.id)}
+                  style={{
+                    textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: locked ? "default" : "pointer",
+                    background: diffChoice === d.id ? "rgba(255,210,63,0.12)" : C.panel,
+                    border: `1.5px solid ${diffChoice === d.id ? C.yellow : C.line}`, opacity: locked ? 0.5 : 1,
+                  }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 14 }}>{d.label}</span>
+                    {locked && <span style={{ fontSize: 11, color: C.red }}>🔒 累計{d.needCP}pt必要</span>}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{d.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <Eyebrow>開幕特典（クリアポイント消費・複数選択可）</Eyebrow>
+          <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+            {Object.entries(CP_PERKS).map(([k, perk]) => {
+              const active = perkChoice.includes(k);
+              const wouldExceed = !active && totalCost + perk.cost > meta.clearPoints;
+              return (
+                <button key={k} disabled={wouldExceed} onClick={() => togglePerk(k)}
+                  style={{
+                    textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: wouldExceed ? "default" : "pointer",
+                    background: active ? "rgba(255,210,63,0.12)" : C.panel,
+                    border: `1.5px solid ${active ? C.yellow : C.line}`, opacity: wouldExceed ? 0.5 : 1,
+                  }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13.5 }}>{active ? "✔ " : ""}{perk.label}</span>
+                    <span style={{ fontFamily: FONT_M, fontSize: 12, color: C.yellow }}>{perk.cost}pt</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{perk.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 6 }}>消費予定：{totalCost}pt ／ 残り{meta.clearPoints - totalCost}pt</div>
+        </div>
+        <Btn disabled={!afford} onClick={() => {
+          let base = { ...initGame(), difficulty: diffChoice, screen: "scoutpolicy_initial" };
+          perkChoice.forEach(k => { base = applyCpPerk(base, k); });
+          saveMeta({ ...meta, clearPoints: meta.clearPoints - totalCost });
+          setPerkChoice([]);
+          setG(base);
+        }}>この内容でゲーム開始 →</Btn>
+      </div>
+    );
+  }
 
   if (g.screen === "scoutpolicy_initial") return wrap(
     <div style={{ display: "grid", gap: 12 }}>
@@ -3212,20 +3351,44 @@ function App() {
     const bestIdx = sorted.findIndex(e => e.team === "PLAYER");
     const stageNo = g.gc.stage;
     const totalStages = g.gc.race.stageCount || 2;
+    // v13バグ修正: 中間ステージ画面はその日単独の着順しか表示しておらず、
+    // 総合タイムがどこにも出ていなかった（計算はされていたが表示がなかったため
+    // 「総合タイムが計算されていない」ように見えていた）。stageTimesの累積から
+    // ここでも総合順位・総合タイム差を算出して表示する
+    const idToEntrant = {}; res.entrants.forEach(en => { idToEntrant[en.id] = en; });
+    const gcTimesSoFar = {};
+    Object.keys(idToEntrant).forEach(id => {
+      gcTimesSoFar[id] = Object.values(g.gc.stageTimes).reduce((sum, st) => sum + (st[id] || 0), 0);
+    });
+    const gcOrderSoFar = Object.entries(gcTimesSoFar).sort((a, b) => a[1] - b[1]);
+    const gcBestIdx = gcOrderSoFar.findIndex(([id]) => idToEntrant[id].team === "PLAYER");
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
           <Eyebrow color={C.purple}>STAGE {stageNo} 完了 — {g.gc.race.name}</Eyebrow>
           <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>{stageNo}日目 自チーム最高位：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestIdx + 1}位</span></div>
+          <div style={{ fontSize: 13.5, color: C.text, marginTop: 3 }}>
+            総合成績（{stageNo}日目終了時点）：自チーム最高
+            <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}> {gcBestIdx + 1}位</span>
+            {gcBestIdx >= 0 && (
+              <span style={{ fontFamily: FONT_M, color: C.sub, marginLeft: 6 }}>
+                {gcBestIdx === 0 ? fmtTime(gcOrderSoFar[0][1]) : fmtGap(gcOrderSoFar[gcBestIdx][1] - gcOrderSoFar[0][1])}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>総合成績は{totalStages}日目終了後に確定します。まずは休息・疲労回復（-20）をしてから{stageNo + 1}日目へ。</div>
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
-          {sorted.slice(0, 10).map((e, i) => (
-            <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
-              <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}</span>
-              <span style={{ fontFamily: FONT_M, color: C.sub }}>{i === 0 ? fmtTime(e.finishTime) : fmtGap(e.finishTime - sorted[0].finishTime)}</span>
-            </div>
-          ))}
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>総合順位（{stageNo}日目終了時点）</div>
+          {gcOrderSoFar.map(([id, t], i) => {
+            const e = idToEntrant[id];
+            return (
+              <div key={id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
+                <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}</span>
+                <span style={{ fontFamily: FONT_M, color: C.sub }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrderSoFar[0][1])}</span>
+              </div>
+            );
+          })}
         </div>
         <Btn onClick={startNextStage}>{stageNo + 1}日目のレースへ →</Btn>
       </div>
@@ -3235,18 +3398,30 @@ function App() {
   if (g.screen === "gc_final" && g.gc && g.gc.gcOrder) {
     const { gcOrder, idToEntrant, bestRank, prize, pts } = g.gc;
     const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))];
+    // v13バグ修正: 上位10名までしか一覧に出しておらず、自チームが11位以下だと
+    // 総合タイムがどこにも表示されないまま終わっていた。ヘッダーに自チームの
+    // 総合タイム（差）を明示し、一覧も全員表示にスクロールで対応する
+    const leaderTime = gcOrder[0][1];
+    const bestEntry = gcOrder[bestRank - 1];
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
           <Eyebrow>GC FINAL — {g.gc.race.name}</Eyebrow>
-          <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>総合成績：自チーム最高位 <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestRank}位</span></div>
+          <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>
+            総合成績：自チーム最高位 <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestRank}位</span>
+            {bestEntry && (
+              <span style={{ fontFamily: FONT_M, color: C.sub, marginLeft: 8 }}>
+                総合タイム {bestRank === 1 ? fmtTime(bestEntry[1]) : fmtGap(bestEntry[1] - leaderTime)}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{!g.gc.race.championship ? ` ／ ポイント +${pts || 0}pt` : ""}</div>
           <div style={{ marginTop: 6, fontSize: 13, color: bestRank <= 3 ? C.yellow : C.red }}>
             {bestRank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
           </div>
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
-          {gcOrder.slice(0, 10).map(([id, t], i) => {
+          {gcOrder.map(([id, t], i) => {
             const e = idToEntrant[id];
             return (
               <div key={id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
@@ -3294,16 +3469,22 @@ function App() {
     );
   }
 
-  if (g.screen === "clear") return wrap(
-    <div style={{ display: "grid", gap: 14 }}>
-      <div style={{ background: C.panel, borderRadius: 12, padding: 22, borderTop: `4px solid ${C.yellow}`, textAlign: "center" }}>
-        <div style={{ fontSize: 44 }}>🏆</div>
-        <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 26, margin: "8px 0" }}>グランファイナル制覇！</h2>
-        <p style={{ color: C.text, fontSize: 14, lineHeight: 1.8 }}>B1から始まったチームが、{g.year - 1}年の歳月をかけてPROの頂点に立ちました。おめでとうございます！</p>
+  if (g.screen === "clear") {
+    const earnedCP = computeClearPoints(g.year, g.difficulty);
+    const diffLabel = (DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label;
+    return wrap(
+      <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ background: C.panel, borderRadius: 12, padding: 22, borderTop: `4px solid ${C.yellow}`, textAlign: "center" }}>
+          <div style={{ fontSize: 44 }}>🏆</div>
+          <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 26, margin: "8px 0" }}>グランファイナル制覇！</h2>
+          <p style={{ color: C.text, fontSize: 14, lineHeight: 1.8 }}>B1から始まったチームが、{g.year - 1}年の歳月（難易度：{diffLabel}）をかけてPROの頂点に立ちました。おめでとうございます！</p>
+          <div style={{ marginTop: 10, fontSize: 15, color: C.yellow, fontFamily: FONT_M }}>🎁 クリアポイント +{earnedCP}pt 獲得！</div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>次回以降の新規ゲームで、難易度の解禁や開幕特典と交換できます</div>
+        </div>
+        <Btn onClick={() => { clearSaveGame(); setG(initGame()); }}>新たなチームで最初から</Btn>
       </div>
-      <Btn onClick={() => { clearSaveGame(); setG(initGame()); }}>新たなチームで最初から</Btn>
-    </div>
-  );
+    );
+  }
 
   return wrap(<div style={{ color: C.sub }}>読み込み中…</div>);
 }
