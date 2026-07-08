@@ -2191,7 +2191,10 @@ function App() {
         ))}
       </div>
       <div style={{ fontSize: 12.5, color: C.text }}>方針：{SCOUT_POLICIES[g.scoutPolicy].desc}</div>
-      <Btn onClick={() => setG(s => ({ ...s, scouts: genScouts(0, 4001, s.scoutPolicy), screen: "sponsor" }))}>この方針で決定 → スポンサー選択へ</Btn>
+      {/* v12バグ修正: initGame()の初期スカウト候補を先にランダム化しても、ここで固定シード4001を
+          使ってgenScoutsを呼び直し上書きしていたため、方針決定ボタンを押すと結局毎回同じ顔ぶれに
+          戻ってしまっていた。ここも新規ゲームのたびに変わる乱数シードを使うよう修正 */}
+      <Btn onClick={() => setG(s => ({ ...s, scouts: genScouts(0, Date.now() % 999983, s.scoutPolicy), screen: "sponsor" }))}>この方針で決定 → スポンサー選択へ</Btn>
     </div>
   );
 
