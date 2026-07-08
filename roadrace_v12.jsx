@@ -1346,16 +1346,41 @@ const CINEMATIC_TIME_RATIO = 0.012;
 const LAUNCH_TIME_RATIO = 0.02;
 const SPRINT_SLOWDOWN = 0.4;        // 最終区間突入後、clock進行に掛ける追加の減速係数
 function mapX(f, start, end) { return MAP_PAD + ((f - start) / (end - start)) * (MAP_W - MAP_PAD * 2); }
+// v12: 俯瞰マップの再設計。以前は道自体がS字カーブの絶対座標として描かれ、選手もその
+// 曲がりをなぞって斜めに進んでいるように見えた。選手の見た目の移動は常に真横固定にし
+// （下のridersUi描画側でTOP_H/2の固定水平帯を使う）、代わりに背景の道をコースの
+// 曲がり具合に応じて回転させることで「曲がっている感じ」を表現する。
+// topLateral()の値をそのまま「その地点での進行方向の角度」とみなし、frac方向に
+// 一定歩幅で歩きながら向きを変えていく（タートルグラフィックス方式）ことで、
+// 道自体が回転・カーブするリボンとして描かれる（選手の位置とは独立）
+const TOP_CURVE_MAX_ANGLE = 0.5; // 道の見た目上の最大傾き（ラジアン）
+function courseAngleAt(course, frac) {
+  const range = course.amp1 + course.amp2 || 1;
+  return (topLateral(course, frac) / range) * TOP_CURVE_MAX_ANGLE;
+}
 function buildTopPath(course, start, end) {
-  const pts = [];
-  for (let i = 0; i <= 60; i++) {
-    const t = i / 60;
-    const f = start + t * (end - start);
-    const range = course.amp1 + course.amp2 || 1;
-    const y = TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 20);
-    pts.push(`${(MAP_PAD + t * (MAP_W - MAP_PAD * 2)).toFixed(1)},${y.toFixed(1)}`);
+  const N = 60;
+  const step = (end - start) / N;
+  const pxPerStep = (MAP_W - MAP_PAD * 2) / N;
+  const raw = [{ x: 0, y: 0 }];
+  let x = 0, y = 0;
+  for (let i = 1; i <= N; i++) {
+    const f = start + i * step;
+    const angle = courseAngleAt(course, f);
+    x += Math.cos(angle) * pxPerStep;
+    y += Math.sin(angle) * pxPerStep;
+    raw.push({ x, y });
   }
-  return pts.join(" ");
+  // 画面中央（表示範囲の中点）を基準点とし、そこが選手たちの固定水平帯（TOP_H/2）の
+  // ちょうど画面中央に来るよう全体を平行移動する
+  const anchorIdx = Math.round(N / 2);
+  const anchor = raw[anchorIdx];
+  const anchorScreenX = mapX((start + end) / 2, start, end);
+  // 縦方向の累積が表示枠からはみ出さないよう、必要な場合のみ一様に縮めて収める
+  const allowedY = TOP_H / 2 - 20;
+  const maxAbsY = Math.max(1, ...raw.map(p => Math.abs(p.y - anchor.y)));
+  const yScale = Math.min(1, allowedY / maxAbsY);
+  return raw.map(p => `${(anchorScreenX + (p.x - anchor.x)).toFixed(1)},${(TOP_H / 2 + (p.y - anchor.y) * yScale).toFixed(1)}`).join(" ");
 }
 function buildSidePath(course, start, end) {
   const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev));
@@ -1486,7 +1511,7 @@ function RaceView({ sim, onFinish }) {
 
   const topPath = useMemo(() => buildTopPath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
   const sidePath = useMemo(() => buildSidePath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
-  const topYAt = (f) => { const range = course.amp1 + course.amp2 || 1; return TOP_H / 2 - (topLateral(course, f) / range) * (TOP_H / 2 - 20); };
+  // v12: 選手・フィニッシュフラグは道の曲がりとは独立に、常に固定の水平帯（TOP_H/2）上に描く
   const sideYAt = (f) => { const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev)); return SIDE_H - 16 - (course.yAt(f) / maxElev) * (SIDE_H - 32); };
 
   // v12: 集団の隊列シェイプを毎レンダー計算する。各選手は共有の軌道をなぞるのではなく、
@@ -1533,7 +1558,7 @@ function RaceView({ sim, onFinish }) {
     const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
     const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
     const drawFrac = Math.min(1, r.frac + attackBonus);
-    return { x: mapX(drawFrac + dx, cam.start, cam.end), y: topYAt(drawFrac) + dy };
+    return { x: mapX(drawFrac + dx, cam.start, cam.end), y: TOP_H / 2 + dy };
   };
   // v12（簡易リードアウト演出）：自チームのエースを、同じ集団内で牽引中の自チームアシストが
   // いれば「牽引中」として線で結び、牽引が外れた瞬間（エースがdraft以外になった瞬間）に
@@ -1774,7 +1799,7 @@ function RaceView({ sim, onFinish }) {
                   さらに拡張してほしいという追加フィードバックを受け再拡大 */}
               <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="60" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
-              <circle cx={mapX(1, cam.start, cam.end)} cy={topYAt(1)} r="4" fill={C.red} />
+              <circle cx={mapX(1, cam.start, cam.end)} cy={TOP_H / 2} r="4" fill={C.red} />
               {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
               {playerLeadout && (() => {
                 const p1 = packPoint(playerLeadout), p2 = packPoint(playerAce);
@@ -1794,7 +1819,7 @@ function RaceView({ sim, onFinish }) {
                 const isLaunching = launching && r.isPlayer && r.isAce
                   && drawFrac >= cam.start - 0.01 && drawFrac <= cam.end + 0.01;
                 return (
-                  <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${topYAt(drawFrac) + dy})`}>
+                  <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${TOP_H / 2 + dy})`}>
                     {camMode === r.id && <circle r="10" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
                     {isLaunching && (
                       <circle r="9" fill="none" stroke={C.yellow} strokeWidth="2" opacity="0.9">
