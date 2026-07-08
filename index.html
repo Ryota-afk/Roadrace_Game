@@ -654,21 +654,19 @@ function genMonthRaces(year, month, classIdx, points, sponsor) {
   const races = [];
   if (month === 11) {
     const qualified = points >= CLASSES[classIdx].need;
-    if (classIdx === 0) {
-      races.push({
-        id: `champ-${year}-${classIdx}`, championship: true, locked: !qualified, stageRace: true, stageCount: 2,
-        name: "A昇格ステージレース（2日間・総合タイム）",
-        tmpl: TEMPLATES[3], grade: 3, cls: classIdx,
-        lockReason: qualified ? null : `出場権なし（${CLASSES[classIdx].need}pt必要）`,
-      });
-    } else {
-      races.push({
-        id: `champ-${year}-${classIdx}`, championship: true, locked: !qualified,
-        name: classIdx === 2 ? "グランファイナル" : `${CLASSES[classIdx].id}昇格チャンピオンシップ`,
-        tmpl: TEMPLATES[3], grade: 3, cls: classIdx,
-        lockReason: qualified ? null : `出場権なし（${CLASSES[classIdx].need}pt必要）`,
-      });
-    }
+    // v12: 以前はB1→Aの昇格戦だけが2日間ステージレースで、A→PRO・PROグランファイナルは
+    // 1日のとばしレースだった（1日目を観戦してもすぐ結果に飛ぶように見え、2日目が
+    // 行われないバグと誤解されていた）。全クラスのチャンピオンシップを統一して
+    // 2日間ステージレースにする
+    const stageName = classIdx === 0 ? "A昇格ステージレース（2日間・総合タイム）"
+      : classIdx === 1 ? "PRO昇格ステージレース（2日間・総合タイム）"
+      : "グランファイナル（2日間・総合タイム）";
+    races.push({
+      id: `champ-${year}-${classIdx}`, championship: true, locked: !qualified, stageRace: true, stageCount: 2,
+      name: stageName,
+      tmpl: TEMPLATES[3], grade: 3, cls: classIdx,
+      lockReason: qualified ? null : `出場権なし（${CLASSES[classIdx].need}pt必要）`,
+    });
     const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
     races.push({ id: `r-${year}-${month}-x`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}ファイナルロード`, tmpl: t, grade: 2, cls: classIdx, locked: false });
     return races;
