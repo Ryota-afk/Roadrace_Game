@@ -989,7 +989,17 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
     active.forEach(en => {
       if (en.mode === "draft") return;
       const segType = course.segTypeAt(en.pos).type;
-      const dist = tickDistance(en, segType, en.mode, course.steepness);
+      let dist = tickDistance(en, segType, en.mode, course.steepness);
+      // v12バグ修正: 牽引中の選手が自チームのエースと同じ集団にいる場合でも、
+      // 牽引ペースは牽引者自身の最大出力（自然な走力）で決まっていたため、
+      // 脚力の強いアシストがエース本人が付いていけるペースより速く牽引してしまい、
+      // 「アシストがエースを置いていく」形でエースだけ千切れてしまうことがあった。
+      // エースが同じ集団にいる時は、エースが牽引した場合の到達距離を上限にして
+      // ペースを合わせる（エースを守るための牽引、という前提に合わせる）
+      if (en.mode === "pull") {
+        const ace = active.find(o => o.team === en.team && o.isAce && o.groupId === en.groupId);
+        if (ace) dist = Math.min(dist, tickDistance(ace, segType, "pull", course.steepness));
+      }
       en.lastOwnDist = dist;
       en.pos = Math.min(course.length, en.pos + dist);
       en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode, segType, course.steepness));
@@ -1350,7 +1360,7 @@ function modeStreakAt(en, rt, mode, cap) {
 function topLateral(course, frac) {
   return Math.sin(frac * Math.PI * course.f1 + course.ph1) * course.amp1 + Math.sin(frac * course.f2 + course.ph2) * course.amp2;
 }
-const MAP_W = 660, TOP_H = 150, SIDE_H = 96, MAP_PAD = 18;
+const MAP_W = 660, TOP_H = 200, SIDE_H = 120, MAP_PAD = 18;
 // v10: 俯瞰マップ・側面マップを「先頭集団を追従してズームするカメラ」方式に変更。
 // 全コースを常時表示するのではなく、まだゴールしていない選手たちの広がりに合わせて
 // ズーム幅を自動調整する（競馬のトラッキングシステムのような大きな表示を再現）
@@ -1818,11 +1828,11 @@ function RaceView({ sim, onFinish }) {
         <>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 150, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} style={{ width: "100%", height: 200, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               {/* v12: 集団の2次元的な広がり（団子状〜エシュロン時の斜め隊列）に対して
                   道幅が狭すぎて選手がはみ出て見える問題を修正するため大幅に拡張。
-                  さらに拡張してほしいという追加フィードバックを受け再拡大 */}
-              <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="60" strokeLinecap="round" />
+                  さらに拡張してほしいという追加フィードバックを繰り返し受け再拡大 */}
+              <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="100" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
               <circle cx={mapX(1, cam.start, cam.end)} cy={TOP_H / 2} r="4" fill={C.red} />
               {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
@@ -1863,9 +1873,9 @@ function RaceView({ sim, onFinish }) {
           </div>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 96, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} style={{ width: "100%", height: 120, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
-              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="9" />
+              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="16" />
               {ridersUi.map(r => {
                 const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
                 const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
