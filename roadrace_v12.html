@@ -1783,6 +1783,13 @@ function clearSaveGame() {
 // ---------- メインアプリ ----------
 function App() {
   const [g, setG] = useState(initGame);
+  // v12バグ修正: window.confirm()はモバイル端末（特にホーム画面追加時のPWA表示や
+  // 一部のアプリ内ブラウザ）で表示されない・即falseを返すことがあり、その場合
+  // 「最初から」等のボタンを押しても確認ダイアログがブロックされて何も起きない
+  // （リセットできていないように見える）。ブラウザ標準のconfirm()に頼らず、
+  // アプリ内で完結する確認モーダルに置き換える
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const askConfirm = (message, onConfirm) => setConfirmDialog({ message, onConfirm });
   const stage2LockRef = useRef(false);
   const cls = CLASSES[g.classIdx];
   const healthy = g.roster.filter(r => r.injury === 0);
@@ -2146,6 +2153,18 @@ function App() {
         {withNav && <Nav />}
         {children}
       </div>
+      {/* v12バグ修正: window.confirm()に頼らない、アプリ内完結の確認モーダル */}
+      {confirmDialog && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", border: `1px solid ${C.line}` }}>
+            <div style={{ color: C.text, fontSize: 14, lineHeight: 1.7, marginBottom: 16, whiteSpace: "pre-wrap" }}>{confirmDialog.message}</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn small outline color={C.sub} onClick={() => setConfirmDialog(null)}>キャンセル</Btn>
+              <Btn small color={C.red} onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); fn(); }}>OK</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -2165,9 +2184,9 @@ function App() {
         <Btn onClick={() => { const loaded = loadGame(); if (loaded) setG(loaded); }}>💾 続きから</Btn>
       )}
       <Btn outline={hasSaveGame()} onClick={() => {
-        if (hasSaveGame() && !window.confirm("保存データを消して最初から始めます。よろしいですか？")) return;
-        clearSaveGame();
-        setG(s => ({ ...initGame(), screen: "scoutpolicy_initial" }));
+        const doReset = () => { clearSaveGame(); setG(s => ({ ...initGame(), screen: "scoutpolicy_initial" })); };
+        if (hasSaveGame()) askConfirm("保存データを消して最初から始めます。よろしいですか？", doReset);
+        else doReset();
       }}>
         {hasSaveGame() ? "最初から（保存データは消えます）" : "スカウト方針の確認へ"}
       </Btn>
@@ -2301,9 +2320,9 @@ function App() {
               setG(s => ({ ...s, log: [...s.log, ok ? `【${MONTHS[s.month]}】セーブしました` : "セーブに失敗しました（ブラウザの保存領域を確認してください）"] }));
             }}>💾 セーブ</Btn>
             <Btn small outline color={C.sub} onClick={() => {
-              if (window.confirm("タイトルに戻ります。セーブ済みのデータは消えません。よろしいですか？")) {
+              askConfirm("タイトルに戻ります。セーブ済みのデータは消えません。よろしいですか？", () => {
                 setG(s => ({ ...s, screen: "intro" }));
-              }
+              });
             }}>🏠 タイトルに戻る</Btn>
           </div>
           {g.log.length > 0 && (
@@ -2337,7 +2356,7 @@ function App() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
-                    {g.month === 0 && <Btn small outline color={C.red} onClick={() => { if (window.confirm(`${r.name}を解雇しますか？`)) releaseRider(r.id); }}>解雇</Btn>}
+                    {g.month === 0 && <Btn small outline color={C.red} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id))}>解雇</Btn>}
                   </div>
                 </div>
                 <PersonaLine p={r.personality} />
@@ -2531,7 +2550,7 @@ function App() {
               </div>
             )}
           </section>
-          <Btn outline color={C.sub} onClick={() => { if (window.confirm("最初からやり直しますか？セーブデータも消えます。")) { clearSaveGame(); setG(initGame()); } }}>ゲームをリセット</Btn>
+          <Btn outline color={C.sub} onClick={() => askConfirm("最初からやり直しますか？セーブデータも消えます。", () => { clearSaveGame(); setG(initGame()); })}>ゲームをリセット</Btn>
         </div>
       );
     }
