@@ -110,26 +110,36 @@ const DIFFICULTIES = [
   { id: "hard", label: "ハード", desc: "他チームは強豪揃い。選手の成長上限も上がるが、相手はさらに本気を出してくる", aiMul: 1.25, growthCap: 102, needCP: 10 },
   { id: "oni", label: "鬼", desc: "完全な無理ゲー。成長上限は大幅に上がるが、他チームは化け物揃い。生半可な覚悟でクリアできると思うな", aiMul: 1.55, growthCap: 112, needCP: 20 },
 ];
-// v13.1: クリアポイント特典が弱いというフィードバックを受け、種類を増やし効果も大幅強化
-const CP_PERKS = {
-  budget: { label: "開幕資金 +500万円", desc: "初期資金を500万円上乗せしてスタート", cost: 4 },
-  roster: { label: "初期選手 全員能力+10", desc: "初期ロースター全員の能力値を+10してスタート", cost: 8 },
-  equip2: { label: "チーム設備 Lv2供与", desc: "エアロフレーム・軽量ホイールが最初からLv2の状態でスタート", cost: 7 },
-  prodigy: { label: "逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入した状態でスタート", cost: 12 },
-  itemstock: { label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持してスタート", cost: 6 },
+// v13.2: 消費型の特典は「だんだん強くなる実感」が薄いというフィードバックを受け、
+// 累積型（一度到達した閾値の特典は以後ずっと有効・使っても減らない）に作り直した。
+// 難易度解禁と同じ「生涯獲得クリアポイント合計」で判定するため、しきい値を超えた
+// ボーナスは重ね掛けで全て自動適用される（都度の選択・消費は発生しない）
+const bumpRosterAbAll = (state, amount) => ({
+  ...state,
+  roster: state.roster.map(r => ({ ...r, ...Object.fromEntries(AB_KEYS.map(k => [k, Math.min(94, Math.round(r[k] + amount))])) })),
+});
+const bumpEquipLv = (state, amount) => ({
+  ...state,
+  equip: { ...state.equip, frame: state.equip.frame + amount, wheels: state.equip.wheels + amount },
+});
+const addProdigyRookie = (state) => {
+  const rng = mulberry(Date.now() % 999983);
+  const banned = new Set(state.roster.map(r => r.name));
+  const rookie = newRider(70, rng, { banned, forceProdigy: true });
+  return { ...state, roster: [...state.roster, rookie] };
 };
-function applyCpPerk(state, key) {
-  if (key === "budget") return { ...state, budget: state.budget + 500 };
-  if (key === "roster") return { ...state, roster: state.roster.map(r => ({ ...r, ...Object.fromEntries(AB_KEYS.map(k => [k, Math.min(94, Math.round(r[k] + 10))])) })) };
-  if (key === "equip2") return { ...state, equip: { ...state.equip, frame: 2, wheels: 2 } };
-  if (key === "prodigy") {
-    const rng = mulberry(Date.now() % 999983);
-    const banned = new Set(state.roster.map(r => r.name));
-    const rookie = newRider(70, rng, { banned, forceProdigy: true });
-    return { ...state, roster: [...state.roster, rookie] };
-  }
-  if (key === "itemstock") return { ...state, inv: { ...state.inv, wheel: state.inv.wheel + 2, suit: state.inv.suit + 2, supp: state.inv.supp + 2, tune: state.inv.tune + 2 } };
-  return state;
+const CP_MILESTONES = [
+  { cp: 5, label: "開幕資金 +150万円", desc: "初期資金+150万円", apply: s => ({ ...s, budget: s.budget + 150 }) },
+  { cp: 10, label: "初期選手 能力+3", desc: "初期ロースター全員の能力値+3", apply: s => bumpRosterAbAll(s, 3) },
+  { cp: 16, label: "開幕資金 さらに+150万円", desc: "初期資金にもう+150万円（累計+300万円）", apply: s => ({ ...s, budget: s.budget + 150 }) },
+  { cp: 24, label: "チーム設備 Lv1底上げ", desc: "フレーム・ホイールの強化レベルが+1された状態でスタート", apply: s => bumpEquipLv(s, 1) },
+  { cp: 32, label: "初期選手 能力さらに+3", desc: "初期ロースター全員の能力値がさらに+3（累計+6）", apply: s => bumpRosterAbAll(s, 3) },
+  { cp: 42, label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持", apply: s => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + 2, suit: s.inv.suit + 2, supp: s.inv.supp + 2, tune: s.inv.tune + 2 } }) },
+  { cp: 55, label: "チーム設備 もうLv1底上げ", desc: "フレーム・ホイールの強化レベルがさらに+1（累計+2）", apply: s => bumpEquipLv(s, 1) },
+  { cp: 70, label: "逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入した状態でスタート", apply: s => addProdigyRookie(s) },
+];
+function applyCpMilestones(state, totalEarnedCP) {
+  return CP_MILESTONES.filter(m => totalEarnedCP >= m.cp).reduce((s, m) => m.apply(s), state);
 }
 // v13: 周回ボーナス。速くクリアするほど、難易度が高いほどクリアポイントが増える
 function computeClearPoints(year, difficultyId) {
@@ -137,14 +147,16 @@ function computeClearPoints(year, difficultyId) {
   const diffBonus = { easy: 0, normal: 4, hard: 10, oni: 22 }[difficultyId] || 0;
   return 5 + speedBonus + diffBonus;
 }
+// v13.2: 特典が消費式ではなくなったため、保持する値は「生涯獲得クリアポイント合計」の
+// 1つだけになった（難易度解禁・永続ボーナスのどちらもこの値だけで判定する）
 const META_KEY = "roadrace_v12_meta";
 function loadMeta() {
   try {
     const raw = localStorage.getItem(META_KEY);
-    if (!raw) return { clearPoints: 0, totalEarnedCP: 0 };
+    if (!raw) return { totalEarnedCP: 0 };
     const m = JSON.parse(raw);
-    return { clearPoints: m.clearPoints || 0, totalEarnedCP: m.totalEarnedCP || 0 };
-  } catch (e) { return { clearPoints: 0, totalEarnedCP: 0 }; }
+    return { totalEarnedCP: m.totalEarnedCP || 0 };
+  } catch (e) { return { totalEarnedCP: 0 }; }
 }
 function saveMeta(meta) {
   try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* noop */ }
@@ -2087,9 +2099,8 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const askConfirm = (message, onConfirm) => setConfirmDialog({ message, onConfirm });
   const stage2LockRef = useRef(false);
-  // v13: 新規ゲーム開始時の難易度・クリアポイント特典選択（newgame_setup画面用）
+  // v13: 新規ゲーム開始時の難易度選択（newgame_setup画面用。永続ボーナスは選択不要で自動適用）
   const [diffChoice, setDiffChoice] = useState("easy");
-  const [perkChoice, setPerkChoice] = useState([]);
   const clearAwardedRef = useRef(false);
   const cls = CLASSES[g.classIdx];
   const healthy = g.roster.filter(r => r.injury === 0);
@@ -2110,7 +2121,7 @@ function App() {
       clearAwardedRef.current = true;
       const earned = computeClearPoints(g.year, g.difficulty);
       const meta = loadMeta();
-      saveMeta({ clearPoints: meta.clearPoints + earned, totalEarnedCP: meta.totalEarnedCP + earned });
+      saveMeta({ totalEarnedCP: meta.totalEarnedCP + earned });
     }
     if (g.screen !== "clear") clearAwardedRef.current = false;
   }, [g.screen]);
@@ -2535,14 +2546,12 @@ function App() {
 
   if (g.screen === "newgame_setup") {
     const meta = loadMeta();
-    const togglePerk = (k) => setPerkChoice(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k]);
-    const totalCost = perkChoice.reduce((s2, k) => s2 + CP_PERKS[k].cost, 0);
-    const afford = totalCost <= meta.clearPoints;
+    const nextMilestone = CP_MILESTONES.find(m => meta.totalEarnedCP < m.cp);
     return wrap(
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
-          <Eyebrow color={C.yellow}>クリアポイント：{meta.clearPoints}pt</Eyebrow>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>過去のプレイでクリアするたびに貯まるポイントです。難易度の解禁や開幕特典と交換できます（累計{meta.totalEarnedCP}pt獲得）。</div>
+          <Eyebrow color={C.yellow}>累計クリアポイント：{meta.totalEarnedCP}pt</Eyebrow>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>過去のプレイでクリアするたびに貯まっていく生涯合計値です。一度到達した永続ボーナス・難易度は消費しても失われません。</div>
         </div>
         <div>
           <Eyebrow>難易度を選択</Eyebrow>
@@ -2567,35 +2576,32 @@ function App() {
           </div>
         </div>
         <div>
-          <Eyebrow>開幕特典（クリアポイント消費・複数選択可）</Eyebrow>
-          <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-            {Object.entries(CP_PERKS).map(([k, perk]) => {
-              const active = perkChoice.includes(k);
-              const wouldExceed = !active && totalCost + perk.cost > meta.clearPoints;
+          <Eyebrow>永続ボーナス（累計クリアポイントで自動解禁・消費なし）</Eyebrow>
+          <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+            {CP_MILESTONES.map((m, i) => {
+              const unlocked = meta.totalEarnedCP >= m.cp;
               return (
-                <button key={k} disabled={wouldExceed} onClick={() => togglePerk(k)}
-                  style={{
-                    textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: wouldExceed ? "default" : "pointer",
-                    background: active ? "rgba(255,210,63,0.12)" : C.panel,
-                    border: `1.5px solid ${active ? C.yellow : C.line}`, opacity: wouldExceed ? 0.5 : 1,
-                  }}>
+                <div key={i} style={{
+                  padding: "9px 12px", borderRadius: 10,
+                  background: unlocked ? "rgba(125,208,160,0.1)" : C.panel,
+                  border: `1.5px solid ${unlocked ? C.green : C.line}`, opacity: unlocked ? 1 : 0.6,
+                }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13.5 }}>{active ? "✔ " : ""}{perk.label}</span>
-                    <span style={{ fontFamily: FONT_M, fontSize: 12, color: C.yellow }}>{perk.cost}pt</span>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: unlocked ? C.green : C.text, fontSize: 13.5 }}>
+                      {unlocked ? "✔ " : "🔒 "}{m.label}
+                    </span>
+                    <span style={{ fontFamily: FONT_M, fontSize: 11.5, color: C.sub }}>累計{m.cp}pt</span>
                   </div>
-                  <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{perk.desc}</div>
-                </button>
+                  <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{m.desc}</div>
+                </div>
               );
             })}
           </div>
-          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 6 }}>消費予定：{totalCost}pt ／ 残り{meta.clearPoints - totalCost}pt</div>
+          {nextMilestone && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 6 }}>次のボーナスまであと{nextMilestone.cp - meta.totalEarnedCP}pt</div>}
         </div>
-        <Btn disabled={!afford} onClick={() => {
-          let base = { ...initGame(), difficulty: diffChoice, screen: "scoutpolicy_initial" };
-          perkChoice.forEach(k => { base = applyCpPerk(base, k); });
-          saveMeta({ ...meta, clearPoints: meta.clearPoints - totalCost });
-          setPerkChoice([]);
-          setG(base);
+        <Btn onClick={() => {
+          const base = applyCpMilestones({ ...initGame(), difficulty: diffChoice }, meta.totalEarnedCP);
+          setG({ ...base, screen: "scoutpolicy_initial" });
         }}>この内容でゲーム開始 →</Btn>
       </div>
     );
@@ -3491,7 +3497,7 @@ function App() {
           <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 26, margin: "8px 0" }}>グランファイナル制覇！</h2>
           <p style={{ color: C.text, fontSize: 14, lineHeight: 1.8 }}>B1から始まったチームが、{g.year - 1}年の歳月（難易度：{diffLabel}）をかけてPROの頂点に立ちました。おめでとうございます！</p>
           <div style={{ marginTop: 10, fontSize: 15, color: C.yellow, fontFamily: FONT_M }}>🎁 クリアポイント +{earnedCP}pt 獲得！</div>
-          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>次回以降の新規ゲームで、難易度の解禁や開幕特典と交換できます</div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>次回以降の新規ゲームで、難易度の解禁や永続ボーナスに自動反映されます</div>
         </div>
         <Btn onClick={() => { clearSaveGame(); setG(initGame()); }}>新たなチームで最初から</Btn>
       </div>
