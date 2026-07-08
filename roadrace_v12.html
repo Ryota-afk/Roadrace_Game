@@ -799,6 +799,16 @@ function generateCourse(raceMeta, dayTag) {
     laps, lapAtFrac: (frac) => Math.min(laps, Math.floor(Math.max(0, Math.min(1, frac)) * laps) + 1),
   };
 }
+// v13: キャリア統計の通算値更新（レース1件確定するたびに呼ぶ）
+function bumpCareerStats(cs, rank, prize) {
+  return {
+    totalRaces: cs.totalRaces + 1,
+    totalWins: cs.totalWins + (rank === 1 ? 1 : 0),
+    totalPodiums: cs.totalPodiums + (rank <= 3 ? 1 : 0),
+    totalPrize: cs.totalPrize + prize,
+    bestFinish: cs.bestFinish === null ? rank : Math.min(cs.bestFinish, rank),
+  };
+}
 function climbWeightFor(segType, steepness) {
   const base = { flat: 0, hill: 0.4, climb: 0.85, mtn: 0.9, sprint: 0, tt: 0 }[segType] || 0;
   return Math.min(1, base * steepness);
@@ -1966,6 +1976,9 @@ function initGame() {
     result: null, prizeInfo: null,
     champBest: null, gc: null, pendingEvent: null, eventResult: null,
     yearendInfo: null, log: [], cleared: false,
+    // v13: キャリア統計・歴史記録テーマ。通算成績と年度ごとの結果履歴を保持する
+    careerStats: { totalRaces: 0, totalWins: 0, totalPodiums: 0, totalPrize: 0, bestFinish: null },
+    careerHistory: [],
   };
 }
 
@@ -1978,7 +1991,7 @@ const SAVE_VERSION = "v12";
 const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
-  "champBest", "log", "cleared",
+  "champBest", "log", "cleared", "careerStats", "careerHistory",
 ];
 function serializeState(g) {
   const out = {};
@@ -2158,6 +2171,12 @@ function App() {
           monthly: Math.round(o.monthly * (1 + managerLv * 0.06)),
           norma: Math.max(5, Math.round(o.norma * (1 - managerLv * 0.04))),
         }));
+        // v13: 年度の総括を歴史記録として1件積む（クラス・最終ポイント・昇格/降格・
+        // チャンピオンシップ最高位）
+        const careerHistory = [...s.careerHistory, {
+          year: s.year, classLabel: CLASSES[s.classIdx].label, points: s.points,
+          promoted: info.promoted, relegated: info.relegated, champBest: s.champBest,
+        }];
         return {
           ...s, roster: survivors, classIdx, points: 0, year, month: 0,
           budget: s.budget + income + delta - upkeep - staffSalary,
@@ -2167,7 +2186,7 @@ function App() {
           races: genMonthRaces(year, 0, classIdx, 0, null),
           camp: false, campCooldown: 0, champBest: null, gc: null,
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
-          yearendInfo: info, cleared: info.cleared, log,
+          yearendInfo: info, cleared: info.cleared, log, careerHistory,
           screen: info.cleared ? "clear" : "yearend", tab: "home",
         };
       }
@@ -2281,6 +2300,7 @@ function App() {
       points: race.championship ? s.points : s.points + pts,
       champBest: race.championship ? best.rank : s.champBest,
       sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
+      careerStats: bumpCareerStats(s.careerStats, best.rank, prize),
       prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak },
       screen: "result",
     }));
@@ -2311,6 +2331,7 @@ function App() {
         const pts = race.championship ? 0 : Math.round((PTS[bestRank - 1] || 0) * GRADE_MUL[race.grade] * 1.3);
         return {
           ...s, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
+          careerStats: bumpCareerStats(s.careerStats, bestRank, prize),
           gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize, pts },
           screen: "gc_final",
         };
@@ -2397,7 +2418,7 @@ function App() {
   );
   const Nav = () => (
     <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-      {[["home", "🏁 レース"], ["riders", "👥 選手・練習"], ["shop", "🛒 ショップ"], ["help", "📖 ヘルプ"]].map(([k, l]) => (
+      {[["home", "🏁 レース"], ["riders", "👥 選手・練習"], ["shop", "🛒 ショップ"], ["career", "📜 記録"], ["help", "📖 ヘルプ"]].map(([k, l]) => (
         <button key={k} onClick={() => setG(s => ({ ...s, tab: k }))}
           style={{
             flex: 1, padding: "9px 4px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: FONT_D, cursor: "pointer",
@@ -2812,6 +2833,35 @@ function App() {
             )}
           </section>
           <Btn outline color={C.sub} onClick={() => askConfirm("最初からやり直しますか？セーブデータも消えます。", () => { clearSaveGame(); setG(initGame()); })}>ゲームをリセット</Btn>
+        </div>
+      );
+    }
+    if (g.tab === "career") {
+      const cs = g.careerStats;
+      const history = [...g.careerHistory].reverse();
+      body = (
+        <div style={{ display: "grid", gap: 12 }}>
+          <Eyebrow color={C.yellow}>キャリア通算成績</Eyebrow>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><div style={{ fontSize: 11, color: C.sub }}>通算出走レース</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.text }}>{cs.totalRaces}</div></div>
+            <div><div style={{ fontSize: 11, color: C.sub }}>通算優勝</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.yellow }}>{cs.totalWins}</div></div>
+            <div><div style={{ fontSize: 11, color: C.sub }}>通算表彰台（3位以内）</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.green }}>{cs.totalPodiums}</div></div>
+            <div><div style={{ fontSize: 11, color: C.sub }}>自己ベスト着順</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.text }}>{cs.bestFinish ? `${cs.bestFinish}位` : "—"}</div></div>
+            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, color: C.sub }}>通算獲得賞金</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.text }}>{cs.totalPrize}万円</div></div>
+          </div>
+          <Eyebrow color={C.sub}>年度別記録</Eyebrow>
+          {history.length === 0 && <div style={{ fontSize: 12.5, color: C.sub }}>まだ年度を終えていません。3月のチャンピオンシップを終えると記録が積み重なります。</div>}
+          <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", display: "grid", gap: 6 }}>
+            {history.map((h, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 4px", borderBottom: i < history.length - 1 ? `1px solid ${C.line}` : "none", fontSize: 12.5 }}>
+                <span style={{ color: C.text }}>{h.year}年目・{h.classLabel}</span>
+                <span style={{ color: C.sub, fontFamily: FONT_M }}>{h.points}pt{h.champBest ? `／CS ${h.champBest}位` : ""}</span>
+                <span style={{ color: h.promoted ? C.green : h.relegated ? C.red : C.sub, fontWeight: 700 }}>
+                  {h.promoted ? "🎉 昇格" : h.relegated ? "😞 降格" : "残留"}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
