@@ -507,7 +507,16 @@ function overall(r) {
 // v13: 選手名鑑・殿堂入り演出用の二つ名・フレーバーテキスト生成。
 // パワプロの選手名鑑／ウイニングポストの殿堂入りをイメージし、戦績（raceLog）を
 // 優先しつつ、まだ実績のない選手には脚質・性格ベースの二つ名を割り当てる
+// v13.2: 二つ名は無条件で全選手に付与せず、ある程度の実績（勝利・表彰台・出場数など）を
+// 残した選手だけに与える。実績が無ければ二つ名なし（呼び出し側はnullを想定して表示を省く）
+function hasEarnedNickname(r) {
+  const log = r.raceLog || [];
+  const wins = log.filter(e => e.rank === 1).length;
+  const podiums = log.filter(e => e.rank <= 3).length;
+  return wins >= 1 || podiums >= 2 || log.length >= 5 || !!r.prodigy;
+}
 function riderNickname(r) {
+  if (!hasEarnedNickname(r)) return null;
   const log = r.raceLog || [];
   const wins = log.filter(e => e.rank === 1).length;
   const podiums = log.filter(e => e.rank <= 3).length;
@@ -2914,7 +2923,7 @@ function App() {
                     {g.month === 0 && <Btn small outline color={C.red} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id))}>解雇</Btn>}
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>
+                {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
                 <PersonaLine p={r.personality} />
                 <TraitLine trait={r.trait} />
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
@@ -3176,7 +3185,7 @@ function App() {
                   </div>
                   {r.signedTeam && <div style={{ fontSize: 11, color: C.red, marginTop: 1 }}>🔀 解雇後、{r.signedTeam}に拾われて現役を続けた</div>}
                   {r.favorite && <div style={{ fontSize: 10.5, color: C.yellow, marginTop: 1 }}>★ お気に入り登録選手</div>}
-                  <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>
+                  {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
                   <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
                   <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>通算{(r.raceLog || []).length}戦・{wins}勝・表彰台{podiums}回</div>
                   <Btn small outline color={C.sub} style={{ marginTop: 6 }} onClick={() => setExpandedRiderId(expandedRiderId === rid ? null : rid)}>
