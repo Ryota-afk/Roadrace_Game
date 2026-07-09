@@ -235,6 +235,13 @@ function groupModeFor(squadN) {
 const VENUES = ["房総", "飛騨", "阿蘇", "蔵王", "琵琶湖", "瀬戸内", "津軽", "日光", "富士", "美濃", "丹波", "石鎚"];
 // v13: グランツール・海外遠征テーマ用の海外venue名（VENUESとは別枠で使用）
 const OVERSEAS_VENUES = ["アルプス", "ピレネー", "ドロミテ", "フランドル", "ロンバルディア", "アンダルシア", "トスカーナ", "プロヴァンス"];
+// v14.8: グランツールを年3戦（春・夏・秋）に増設。PROクラスのグランファイナル出場には
+// この3戦すべての総合優勝（全制覇）が必要になる。コース性格も戦ごとに変えて個性を出す
+const GRAND_TOURS = [
+  { month: 1, season: "春季", stageTmpls: [TEMPLATES[0], TEMPLATES[1], TEMPLATES[2]] },
+  { month: 3, season: "夏季", stageTmpls: [TEMPLATES[2], TEMPLATES[3], TEMPLATES[4]] },
+  { month: 5, season: "秋季", stageTmpls: [TEMPLATES[3], TEMPLATES[4], TEMPLATES[1]] },
+];
 const SEG_LABEL = { flat: "平坦", hill: "丘陵", climb: "山岳", sprint: "ゴールスプリント", mtn: "山頂フィニッシュ", tt: "TT区間" };
 const SEG_COLOR = { flat: C.blue, hill: C.purple, climb: C.red, sprint: C.green, mtn: C.red, tt: "#e8a13c" };
 const SEG_AB = { flat: "flat", hill: "climb", climb: "climb", sprint: "sprint", mtn: "climb", tt: "solo" };
@@ -687,6 +694,26 @@ const FLAVOR_BREAKAWAY_ARCHETYPE = [
   () => "集団任せにせず自ら仕掛け続ける、逃げ屋としての矜持を持つ選手。",
   () => "番狂わせを演出する逃げの名手として、レースを何度も面白くしてきた。",
 ];
+// v14.8: ステージレースは日ごとに役割を変更できるようになったため、そのレースの
+// notable判定に使われた1件が「日ごとの内訳（stageBreakdown）」を持っていれば、
+// 総合順位だけでなく「〇日目はエースで〇位」という日替わりの物語を優先して語る
+const STAGE_DAY_ROLE_LABEL = {
+  ace: "エース", lead: "第一アシスト", sub: "第二アシスト", mountain: "山岳アシスト", flat: "平坦アシスト", breakaway: "逃げ要員",
+};
+function stageDayPhrase(d) {
+  const roleLabel = STAGE_DAY_ROLE_LABEL[d.role] || "アシスト";
+  const rankLabel = d.rank === 1 ? "優勝" : `${d.rank}位`;
+  return `${d.day}日目は${roleLabel}で${rankLabel}`;
+}
+function stageOverallPhrase(e) {
+  return e.rank === 1 ? "見事総合優勝を飾った" : e.rank <= 3 ? `総合${e.rank}位で表彰台に上がった` : `総合${e.rank}位でフィニッシュした`;
+}
+const FLAVOR_STAGE_TEMPLATES = [
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では、${e.stageBreakdown.map(stageDayPhrase).join("、")}という走りを見せ、${stageOverallPhrase(e)}。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}を振り返ると——${e.stageBreakdown.map(stageDayPhrase).join("、")}。最終的には${stageOverallPhrase(e)}。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}、その道のりは${e.stageBreakdown.map(stageDayPhrase).join("、")}というものだった。結果は${stageOverallPhrase(e)}。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}では日替わりで役割を変えながら${e.stageBreakdown.map(stageDayPhrase).join("、")}。${stageOverallPhrase(e)}。`,
+];
 function riderFlavorText(r) {
   const log = r.raceLog || [];
   if (log.length >= 3 && log.every(e => e.rank === 1)) {
@@ -723,6 +750,10 @@ function riderFlavorText(r) {
     if (!notable || e.rank < notable.rank || (e.rank === notable.rank && (e.year > notable.year || (e.year === notable.year && e.month > notable.month)))) notable = e;
   });
   if (notable) {
+    if (notable.stageBreakdown && notable.stageBreakdown.length) {
+      const idx = Math.floor(mulberry((r.id || 0) * 719 + notable.year * 13 + notable.month)() * FLAVOR_STAGE_TEMPLATES.length);
+      return FLAVOR_STAGE_TEMPLATES[idx](notable);
+    }
     const pool = notable.rank === 1 ? FLAVOR_EPISODE_WIN : notable.rank <= 3 ? FLAVOR_EPISODE_PODIUM : FLAVOR_EPISODE_OTHER;
     const idx = Math.floor(mulberry((r.id || 0) * 131 + notable.year * 37 + notable.month * 11 + notable.rank * 5)() * pool.length);
     return pool[idx](notable);
@@ -1085,11 +1116,15 @@ function strHash(s) {
 }
 
 // v7: month===11でclassIdx===0(B1)ならA昇格戦を2日間ステージレースとして生成
-function genMonthRaces(year, month, classIdx, points, sponsor) {
+// v14.8: gtWins（そのクラスでその年に総合優勝したグランツールのgtIndex配列）を追加引数に取り、
+// PROクラスのグランファイナルだけは出場条件がポイントではなくグランツール全制覇になる
+function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
   const rng = mulberry(year * 1000 + month * 37 + 5);
   const races = [];
   if (month === 11) {
-    const qualified = points >= CLASSES[classIdx].need;
+    const isProFinal = classIdx === 2;
+    const gtWinCount = (gtWins || []).length;
+    const qualified = isProFinal ? gtWinCount >= GRAND_TOURS.length : points >= CLASSES[classIdx].need;
     // v12: 以前はB1→Aの昇格戦だけが2日間ステージレースで、A→PRO・PROグランファイナルは
     // 1日のとばしレースだった（1日目を観戦してもすぐ結果に飛ぶように見え、2日目が
     // 行われないバグと誤解されていた）。全クラスのチャンピオンシップを統一して
@@ -1101,7 +1136,9 @@ function genMonthRaces(year, month, classIdx, points, sponsor) {
       id: `champ-${year}-${classIdx}`, championship: true, locked: !qualified, stageRace: true, stageCount: 2,
       name: stageName,
       tmpl: TEMPLATES[3], grade: 3, cls: classIdx,
-      lockReason: qualified ? null : `出場権なし（${CLASSES[classIdx].need}pt必要）`,
+      lockReason: qualified ? null : (isProFinal
+        ? `出場権なし（年間グランツール全${GRAND_TOURS.length}戦制覇が必要・現在${gtWinCount}/${GRAND_TOURS.length}勝）`
+        : `出場権なし（${CLASSES[classIdx].need}pt必要）`),
     });
     const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
     races.push({ id: `r-${year}-${month}-x`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}ファイナルロード`, tmpl: t, grade: 2, cls: classIdx, locked: false });
@@ -1122,16 +1159,20 @@ function genMonthRaces(year, month, classIdx, points, sponsor) {
       lockReason: (!open || cls !== classIdx) ? `${CLASSES[cls].id}限定` : null,
     });
   }
-  // v13: グランツール・海外遠征。7月（month===3）に年1回、その年のクラスに開かれた
-  // 3日間の海外遠征ステージレースを追加する。stageTmplsで日ごとに丘陵→山岳→ヒルクライムと
-  // コース性格を変え、通常のクラス別カレンダーとは独立に毎年必ず出走できる
+  // v13: グランツール・海外遠征。年3戦（春・夏・秋）、その年のクラスに開かれた
+  // 3日間の海外遠征ステージレースを追加する。stageTmplsで日ごとにコース性格を変え、
+  // 通常のクラス別カレンダーとは独立に毎年必ず出走できる
   // v14.7: グランツールはPROクラス限定の大会に変更（B1・Aでは開催されない）
-  if (month === 3 && classIdx === 2) {
+  // v14.8: 1戦だったグランツールを年3戦に増設。gtIndexで個別に勝敗を追跡し、
+  // 3戦すべての総合優勝がグランファイナル出場の条件になる
+  const gtDef = classIdx === 2 ? GRAND_TOURS.find(g => g.month === month) : null;
+  if (gtDef) {
+    const gtIndex = GRAND_TOURS.indexOf(gtDef);
     const venue = OVERSEAS_VENUES[Math.floor(rng() * OVERSEAS_VENUES.length)];
     races.unshift({
-      id: `grandtour-${year}-${classIdx}`, grandTour: true, stageRace: true, stageCount: 3,
-      name: `${venue}グランツール（3日間・総合タイム）`,
-      tmpl: TEMPLATES[2], stageTmpls: [TEMPLATES[2], TEMPLATES[3], TEMPLATES[4]],
+      id: `grandtour-${year}-${gtIndex}`, grandTour: true, gtIndex, stageRace: true, stageCount: 3,
+      name: `${venue}${gtDef.season}グランツール（3日間・総合タイム）`,
+      tmpl: gtDef.stageTmpls[0], stageTmpls: gtDef.stageTmpls,
       grade: 3, cls: classIdx, locked: false, lockReason: null,
     });
   }
@@ -2477,7 +2518,7 @@ function initGame() {
     // 自チームの初期ロースターの名前とも被らないよう渡す
     scouts: genScouts(0, Date.now() % 999983, "balance", rosterNames),
     faMarket: genFaPool(0, (Date.now() + 12345) % 999983, rosterNames),
-    races: genMonthRaces(1, 0, 0, 0, null),
+    races: genMonthRaces(1, 0, 0, 0, null, []),
     sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
     result: null, prizeInfo: null,
     champBest: null, gc: null, pendingEvent: null, eventResult: null,
@@ -2492,6 +2533,9 @@ function initGame() {
     // v13.1: 解雇後にライバルチームへ拾われた元自チーム選手（signedTeamで所属先を管理）。
     // 出走のたびraceLogが伸び、年度末に引退すると殿堂入り条件次第でhallOfFameへ移る
     rivalAlumni: [],
+    // v14.8: その年に総合優勝したグランツールのgtIndex一覧（年度末にリセット）。
+    // PROクラスのグランファイナル出場条件（全戦制覇）の判定に使う
+    gtWins: [],
   };
 }
 
@@ -2505,6 +2549,7 @@ const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
+  "gtWins",
 ];
 function serializeState(g) {
   const out = {};
@@ -2849,9 +2894,11 @@ function App() {
           sponsor: null, sponsorOffers: nextOffers,
           scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name)),
           faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
-          races: genMonthRaces(year, 0, classIdx, 0, null),
+          races: genMonthRaces(year, 0, classIdx, 0, null, []),
           camp: false, campCooldown: 0, champBest: null, gc: null,
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
+          // v14.8: 年が変わるのでグランツール制覇状況もリセットする
+          gtWins: [],
           yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame, rivalAlumni: survivingAlumni,
           screen: info.cleared ? "clear" : "yearend", tab: "home",
         };
@@ -2864,7 +2911,7 @@ function App() {
         budget: s.budget + income - upkeep - staffSalary,
         sponsor,
         faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7, roster.map(r => r.name)),
-        races: genMonthRaces(s.year, month, s.classIdx, s.points, sponsor),
+        races: genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins),
         sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
         gc: null,
         screen: "main", log,
@@ -2904,7 +2951,7 @@ function App() {
     const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni);
     setG(s => ({
       ...s, result: sim,
-      gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {} } : s.gc,
+      gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,
       inv: { ...s.inv, wheel: s.inv.wheel - (itemBoost.wheel ? 1 : 0), suit: s.inv.suit - (itemBoost.suit ? 1 : 0) },
       screen: watch ? "race" : "result_pending",
     }));
@@ -2934,12 +2981,17 @@ function App() {
       const gc = s.gc;
       const roster2 = s.roster.map(r => gc.starters.includes(r.id) ? { ...r, fatigue: Math.max(0, r.fatigue - 20) } : r);
       const squad = roster2.filter(r => gc.starters.includes(r.id));
+      // v14.8: ステージごとに役割を変更できるようにしたため、初日から固定のgc.aceId/gc.rolesではなく、
+      // 直前の「作戦変更」画面（gc_role_setup）で更新したg.sel.ace/g.sel.rolesを都度反映する。
+      // 出走人数1名（solo）の場合は再設定画面自体を経由しないため、従来通りgc.aceIdを使う
+      const aceId = gc.starters.length === 1 ? gc.starters[0] : (s.sel.ace || gc.aceId);
+      const roles = s.sel.roles || gc.roles;
       // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-      const { sim } = buildSim(gc.race, squad, gc.aceId, gc.roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty);
+      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty);
       simResult = sim; raceRef = gc.race;
       return {
         ...s, roster: roster2, result: sim,
-        gc: { ...s.gc, stage: nextStage },
+        gc: { ...s.gc, stage: nextStage, aceId, roles },
         screen: watchFlag ? "race" : "result_pending",
       };
     });
@@ -2992,11 +3044,18 @@ function App() {
     const times = {}; sim.entrants.forEach(en => { times[en.id] = en.finishTime; });
     const stage = stageOverride || (g.gc ? g.gc.stage : 1);
     const totalStages = race.stageCount || 2;
+    // v14.8: ステージごとに役割を変更できるようになったため、フレーバーテキスト用に
+    // 「その日単独の着順・役割」もdayLogとして日ごとに記録しておく（GC総合成績とは別枠）
+    const dayOrder = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
+    const dayRankById = {}; dayOrder.forEach((en, i) => { dayRankById[en.id] = i + 1; });
+    const dayRoleById = {}; sim.entrants.forEach(en => { dayRoleById[en.id] = en.isAce ? "ace" : en.role; });
+    const dayLog = { day: stage, rankById: dayRankById, roleById: dayRoleById };
     if (stage < totalStages) {
       stage2LockRef.current = false;
-      setG(s => ({ ...s, gc: { ...s.gc, stageTimes: { ...s.gc.stageTimes, [stage]: times } }, screen: "gc_stage" }));
+      setG(s => ({ ...s, gc: { ...s.gc, stageTimes: { ...s.gc.stageTimes, [stage]: times }, dayLogs: [...(s.gc.dayLogs || []), dayLog] }, screen: "gc_stage" }));
     } else {
       setG(s => {
+        const dayLogs = [...(s.gc.dayLogs || []), dayLog];
         const allStageTimes = { ...s.gc.stageTimes, [stage]: times };
         const gcTimes = {};
         Object.keys(times).forEach(id => {
@@ -3014,22 +3073,30 @@ function App() {
         // v13: 選手名鑑用に、ステージレース全体の総合着順を各選手のraceLogへ記録する
         // （各日のステージ結果ではなく、最終確定した総合成績のみを1件記録する）
         const rankById = {}; playerRanks.forEach(o => { rankById[o.id] = o.rank; });
-        // v14.6: フレーバーテキストでの役割参照用。役割自体はステージを通して固定
-        // （gc.aceId/gc.rolesは初日決定後に変わらない）ため、最終日のentrantから引ける
+        // v14.6: フレーバーテキストでの役割参照用（最終日時点の役割を代表値として使う）
         const roleOf = (id) => { const en = idToEntrant[id]; return en ? (en.isAce ? "ace" : en.role) : undefined; };
+        // v14.8: ステージレースなら日ごとの内訳（役割・その日の着順）もraceLogに添えて記録する
+        const stageBreakdownFor = (id) => race.stageRace
+          ? dayLogs.map(dl => ({ day: dl.day, role: dl.roleById[id], rank: dl.rankById[id] })).filter(d => d.rank != null)
+          : undefined;
         const roster = s.roster.map(r => rankById[r.id] != null
-          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleOf(r.id) }] }
+          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id) }] }
           : r);
         // v13.1: ライバルチームに拾われた元選手のGC総合成績もraceLogへ記録する
         const alumniRanks = order.map(([id], i) => ({ id, rank: i + 1 })).filter(o => idToEntrant[o.id]?.isAlumnus);
         const alumniRankById = {}; alumniRanks.forEach(o => { alumniRankById[o.id] = o.rank; });
         const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
-          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: roleOf(r.id) }] }
+          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id) }] }
           : r);
+        // v14.8: グランツールで自チーム総合優勝ならそのgtIndexを勝利記録に加える（重複防止）
+        const gtWins = (race.grandTour && bestRank === 1 && race.gtIndex != null && !(s.gtWins || []).includes(race.gtIndex))
+          ? [...(s.gtWins || []), race.gtIndex]
+          : (s.gtWins || []);
         return {
           ...s, roster, rivalAlumni, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
           careerStats: bumpCareerStats(s.careerStats, bestRank, prize),
           gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize, pts },
+          gtWins,
           screen: "gc_final",
         };
       });
@@ -3772,9 +3839,8 @@ function App() {
         <Eyebrow>SEASON MODE v12</Eyebrow>
         <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 23, margin: "6px 0 10px" }}>B1からPROの頂点へ</h2>
         <p style={{ color: C.sub, fontSize: 13.5, lineHeight: 1.8, margin: 0 }}>
-          1年＝1シーズン、出場は月1回。3月のチャンピオンシップ3位以内で昇格、PROのグランファイナル優勝でクリア。
-          v12新要素：無線指示を事前作戦選択に変更・ローテーション/隊列表現を刷新（2次元化）・
-          天候エシュロン・AIチーム戦略バリエーション・最終直線シネマティック演出を追加しました。
+          1年＝1シーズン、出場は月1回。3月のチャンピオンシップ3位以内で昇格。PROクラスのみ年3戦のグランツール
+          （春・夏・秋）が開催され、その全戦制覇がグランファイナルへの出場条件。グランファイナル優勝でクリア。
         </p>
       </div>
       {hasSaveGame() && (
@@ -4435,7 +4501,7 @@ function App() {
         <Eyebrow color={C.blue}>年間レースプログラム（{g.year}年目・{cls.label}）</Eyebrow>
         <div style={{ fontSize: 11.5, color: C.sub }}>会場・グレードは月初に確定するため、先の月は目安です。</div>
         {MONTHS.map((m, mi) => {
-          const races = genMonthRaces(g.year, mi, g.classIdx, mi === 11 ? 9999 : 0, g.sponsor);
+          const races = genMonthRaces(g.year, mi, g.classIdx, mi === 11 ? 9999 : 0, g.sponsor, g.gtWins);
           const isMandate = g.sponsor && g.sponsor.mandateMonths.includes(mi);
           return (
             <div key={mi} style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${mi === g.month ? C.yellow : C.line}` }}>
@@ -4730,7 +4796,76 @@ function App() {
             );
           })}
         </div>
-        <Btn onClick={startNextStage}>{stageNo + 1}日目のレースへ →</Btn>
+        <Btn onClick={() => {
+          // v14.8: 出走1名（solo）は役割自体が存在しないため再設定画面を経由せず直接次日程へ
+          if (g.gc.starters.length === 1) startNextStage();
+          else setG(s => ({ ...s, screen: "gc_role_setup" }));
+        }}>{stageNo + 1}日目へ進む →</Btn>
+      </div>
+    );
+  }
+
+  // v14.8: ステージレースは日ごとに役割（エース・アシスト種別）を変更できるようにした。
+  // 出走メンバー自体（starters）は初日のまま固定し、誰がエースでどの役割かだけを
+  // 次のステージに向けてここで選び直せる（lineup画面の役割選択UIと同じ操作感）
+  if (g.screen === "gc_role_setup" && g.gc) {
+    const gc = g.gc;
+    const groupMode = groupModeFor(gc.starters.length);
+    const roleOptions = groupMode === "pelotonOnly"
+      ? Object.entries(ROLES).filter(([k]) => k !== "breakaway")
+      : Object.entries(ROLES);
+    const sel = g.sel;
+    const squad = g.roster.filter(r => gc.starters.includes(r.id));
+    const nextStageNo = gc.stage + 1;
+    return wrap(
+      <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.purple}` }}>
+          <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{nextStageNo}日目に向けて作戦変更</div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>コース性格に合わせて、エース・役割をこの日だけ変更できます（出走メンバー自体は変更できません）。</div>
+        </div>
+        <section>
+          <Eyebrow color={C.yellow}>エース指名</Eyebrow>
+          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+            {squad.map(r => (
+              <button key={r.id} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, ace: r.id } }))}
+                style={{
+                  fontFamily: FONT_D, fontWeight: 700, fontSize: 14, padding: "9px 13px", borderRadius: 8, cursor: "pointer",
+                  background: sel.ace === r.id ? C.yellow : C.panel, color: sel.ace === r.id ? "#14171d" : C.text,
+                  border: `1.5px solid ${sel.ace === r.id ? C.yellow : C.line}`,
+                }}>{sel.ace === r.id ? "👑 " : ""}{r.name}</button>
+            ))}
+          </div>
+        </section>
+        <section>
+          <Eyebrow color={C.green}>役割指定（エースを支える残りのメンバーのみ）</Eyebrow>
+          <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+            {squad.filter(r => r.id !== sel.ace).map(r => {
+              const role = sel.roles[r.id] || "lead";
+              const mismatch = (role === "mountain" || role === "flat") && TYPE_ROLE_FIT[role] && !TYPE_ROLE_FIT[role].includes(r.type);
+              return (
+                <div key={r.id} style={{ background: C.panel, borderRadius: 8, padding: "6px 10px", border: `1px solid ${C.line}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+                    <span style={{ fontFamily: FONT_D, fontSize: 13, color: C.text }}>{r.name}</span>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {roleOptions.map(([k, rl]) => (
+                        <button key={k} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, roles: { ...s.sel.roles, [r.id]: k } } }))}
+                          title={rl.desc}
+                          style={{
+                            fontFamily: FONT_D, fontSize: 10.5, fontWeight: 700, padding: "4px 7px", borderRadius: 6, cursor: "pointer",
+                            background: role === k ? (k === "breakaway" ? C.red : C.blue) : C.panel2,
+                            color: role === k ? "#14171d" : C.sub,
+                            border: `1px solid ${role === k ? (k === "breakaway" ? C.red : C.blue) : C.line}`,
+                          }}>{rl.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {mismatch && <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>⚠ {t_label(r.type)}には不向きな役割（適性ボーナスなし）</div>}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        <Btn onClick={startNextStage}>{nextStageNo}日目のレースへ →</Btn>
       </div>
     );
   }
