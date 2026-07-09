@@ -1302,6 +1302,9 @@ const DRAIN_K = 0.85;
 const ENERGY_FLOOR = -100;
 const BASE_TICK_DIST = 0.26;      // 能力70・エネルギー満タン時の基準移動量/tick
 const ATTACK_TICKS = 25;          // アタック持続（25秒）
+// v14.10: 逃げ要員（breakaway）ロールの選手が実際に飛び出すための持続時間。
+// エースの早期発射（ATTACK_TICKS）よりやや長めにし、集団から確実に離れる間合いを作る
+const BREAKAWAY_ATTACK_TICKS = 30;
 const MAX_TICKS = 2500;
 
 function effortCost(mode, segType, steepness) {
@@ -1392,7 +1395,11 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
       en.pos = 0; en.energy = 100; en.finished = false; en.finishTime = null;
       // v12: エース早期発射は無線指示の廃止に伴い出走前の作戦選択になったため、
       // レース開始（fromTick===0）の時点から適用する
-      en.attackLeft = (directive.aceEarly && en.isAce) ? ATTACK_TICKS : 0;
+      // v14.10: 逃げ要員ロールは牽引適性が上がるだけで実際に飛び出す処理が無く、
+      // 「逃げてくれない」不具合になっていた。ロールを持つ選手はレース開始と同時に
+      // 自動でアタック（attackモード）に入り、実際に集団から離れる動きをするようにする
+      en.attackLeft = (directive.aceEarly && en.isAce) ? ATTACK_TICKS
+        : (en.role === "breakaway" ? BREAKAWAY_ATTACK_TICKS : 0);
       en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
     });
   } else {
@@ -4812,11 +4819,21 @@ function App() {
     const sel = g.sel;
     const squad = g.roster.filter(r => gc.starters.includes(r.id));
     const nextStageNo = gc.stage + 1;
+    // v14.10: 作戦変更画面でもその日のコース（区間バー・標高グラフ）を見られるようにする。
+    // 日ごとにコース性格が変わるグランツールでは特に、次の日がどんなコースかを
+    // 確認した上でエース・役割を選び直せる方が理にかなっている
+    const dayTmpl = gc.race.stageTmpls ? gc.race.stageTmpls[nextStageNo - 1] : gc.race.tmpl;
+    const dayCourse = generateCourse(gc.race, `day${nextStageNo}`);
     return wrap(
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.purple}` }}>
           <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{nextStageNo}日目に向けて作戦変更</div>
           <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>コース性格に合わせて、エース・役割をこの日だけ変更できます（出走メンバー自体は変更できません）。</div>
+          <div style={{ display: "flex", gap: 3, margin: "8px 0 3px" }}>
+            {dayTmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.sub }}>{nextStageNo}日目・{dayTmpl.kind}・{TYPES[dayTmpl.favors].label}有利</div>
+          <div style={{ marginTop: 6 }}><ElevationChart course={dayCourse} /></div>
         </div>
         <section>
           <Eyebrow color={C.yellow}>エース指名</Eyebrow>
