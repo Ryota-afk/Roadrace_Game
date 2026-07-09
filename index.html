@@ -597,35 +597,51 @@ const FLAVOR_PERSONA = [
   "普段は物静かだが、レースになると人が変わったように闘志を燃やす。",
   "新しい土地でのレースを何より楽しみにしている旅好き。",
 ];
+// v14.6: エピソードのフレーバーに、そのレースで実際に担っていた役割
+// （シーズンモードのROLES＋isAce、マイライフの監督指示）を織り込む一言を差し込む。
+// raceLogにroleが記録されていない古いデータ（このアップデート以前のセーブ等）では
+// 静かに空文字を返し、これまで通りの文面にフォールバックする
+const ROLE_CLAUSE = {
+  ace: "エースとして先頭に立ち、",
+  lead: "第一アシストとして脚を使いながらも、",
+  sub: "第二アシストの立場ながら、",
+  mountain: "山岳アシストとして山を駆け上がりながら、",
+  flat: "平坦アシストとして集団を牽引しながら、",
+  breakaway: "逃げ要員として早々に飛び出し、",
+  breakthrough: "自由な走りを許され、",
+  support: "アシスト役に徹しながらも、",
+  experience: "経験を積む一戦の中で、",
+};
+function roleClause(role) { return ROLE_CLAUSE[role] || ""; }
 const FLAVOR_EPISODE_WIN = [
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}で圧巻の逃げ切りを見せ、今も語り草になっている。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}制覇は、本人いわく会心の走りだったという。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}のゴールスプリントを制した瞬間はチーム内でも語り継がれている。`,
-  e => `${e.year}年目${MONTHS[e.month]}に${e.name}で初優勝を飾って以来、勝負どころでの強さに定評がある。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}で見せた独走勝利は、今も本人の自信の源になっている。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}で終盤の集団を突き放し、そのまま押し切った。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}制覇を境に、周囲の見る目が変わったという。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での勝利は本人にとって忘れられない一戦。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}で圧巻の逃げ切りを見せ、今も語り草になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}を制した走りは、本人いわく会心の一戦だったという。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}のゴールスプリントを制した瞬間はチーム内でも語り継がれている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}で初優勝を飾って以来、勝負どころでの強さに定評がある。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}で見せた独走勝利は、今も本人の自信の源になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}で終盤の集団を突き放し、そのまま押し切った。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}制覇を境に、周囲の見る目が変わったという。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}での勝利は本人にとって忘れられない一戦。`,
 ];
 const FLAVOR_EPISODE_PODIUM = [
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}で表彰台に上がり、確かな手応えをつかんだ。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では終盤まで優勝争いに加わり、僅差で表彰台に踏みとどまった。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での表彰台は本人にとって大きな自信になっている。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}で見せた粘りの走りが、表彰台という結果につながった。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}のラストで踏ん張り、表彰台をつかみ取った。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では、最後まで諦めない走りで表彰台に食い込んだ。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での好走は今もチーム内で話題に上る。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}、あと一歩及ばず優勝は逃したが、表彰台という結果を残した。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}で表彰台に上がり、確かな手応えをつかんだ。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}では終盤まで優勝争いに加わり、僅差で表彰台に踏みとどまった。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}での表彰台は本人にとって大きな自信になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}で見せた粘りの走りが、表彰台という結果につながった。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}のラストで踏ん張り、表彰台をつかみ取った。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}では、最後まで諦めない走りで表彰台に食い込んだ。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}での好走は今もチーム内で話題に上る。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}、あと一歩及ばず優勝は逃したが、表彰台という結果を残した。`,
 ];
 const FLAVOR_EPISODE_OTHER = [
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}では先頭集団に食らいつき、力の片鱗を見せた。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では終盤まで粘り、確かな成長を感じさせた。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での走りは結果以上に評価されている。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}で見せた積極的な仕掛けは、今後への期待を抱かせた。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}では苦しい展開ながらも最後まで足を止めなかった。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}を経て、レース勘を着実に磨いている最中だ。`,
-  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での経験は今の走りの土台になっている。`,
-  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では悔しい結果に終わったが、その後の糧にしている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}では先頭集団に食らいつき、力の片鱗を見せた。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}では終盤まで粘り、確かな成長を感じさせた。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}での走りは結果以上に評価されている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}で見せた積極的な仕掛けは、今後への期待を抱かせた。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}では苦しい展開ながらも最後まで足を止めなかった。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}を経て、レース勘を着実に磨いている最中だ。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}での経験は今の走りの土台になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}では悔しい結果に終わったが、その後の糧にしている。`,
 ];
 function riderFlavorText(r) {
   const log = r.raceLog || [];
@@ -1695,6 +1711,64 @@ function ElevationChart({ course }) {
     </div>
   );
 }
+// v14.5: ステージレース（昇格戦・グランツール）は日ごとにコースが変わるが、
+// 出走前プレビューは1日分（実質day1相当）しか見えず「本当に日ごとに違うのか」
+// 分かりにくいという指摘を受け、全日程の区間バー・標高グラフを横に並べて
+// 縦の区切り線で分割した「通し」ビューに差し替える
+function MultiStageCourseView({ race }) {
+  const stageCount = race.stageCount || (race.stageTmpls ? race.stageTmpls.length : 2);
+  const days = Array.from({ length: stageCount }, (_, i) => i + 1);
+  const dayCourses = days.map(d => ({
+    day: d,
+    tmpl: race.stageTmpls ? race.stageTmpls[d - 1] : race.tmpl,
+    course: generateCourse(race, `day${d}`),
+  }));
+  const maxE = Math.max(1, ...dayCourses.flatMap(dc => dc.course.elevationProfile.map(p => p.elev)));
+  const W = 520, H = 70, pad = 4;
+  const dayW = (W - pad * 2) / stageCount;
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 3, margin: "6px 0 3px" }}>
+        {dayCourses.map(dc => (
+          <div key={dc.day} style={{ flex: 1, display: "flex", gap: 2 }}>
+            {dc.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", fontSize: 10, color: C.sub, marginBottom: 2 }}>
+        {dayCourses.map(dc => (
+          <div key={dc.day} style={{ flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {dc.day}日目・{dc.tmpl.kind}
+          </div>
+        ))}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 56, display: "block" }}>
+        {dayCourses.map(dc => {
+          const x0 = pad + (dc.day - 1) * dayW;
+          const pts = dc.course.elevationProfile.map(p => {
+            const x = x0 + p.frac * dayW;
+            const y = H - pad - (p.elev / maxE) * (H - pad * 2);
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          }).join(" ");
+          return (
+            <g key={dc.day}>
+              <polyline points={`${x0.toFixed(1)},${H - pad} ${pts} ${(x0 + dayW).toFixed(1)},${H - pad}`} fill="rgba(255,210,63,0.18)" stroke="none" />
+              <polyline points={pts} fill="none" stroke={C.yellow} strokeWidth="2" />
+            </g>
+          );
+        })}
+        {days.slice(1).map(d => {
+          const x = pad + (d - 1) * dayW;
+          return <line key={d} x1={x} y1="0" x2={x} y2={H} stroke="#5b6272" strokeWidth="1.5" strokeDasharray="3,3" opacity="0.8" />;
+        })}
+      </svg>
+      <div style={{ display: "flex", gap: 10, fontSize: 10.5, color: C.sub, marginTop: 2, flexWrap: "wrap" }}>
+        <span>全{stageCount}日間ステージレース（縦線＝日の区切り）</span>
+        <span>獲得標高目安 {Math.round(dayCourses.reduce((s, dc) => s + dc.course.totalElevationGain, 0))}（総合）</span>
+      </div>
+    </div>
+  );
+}
 
 // ---------- 3Dレース観戦（v7：ティック履歴を実時間で補間して再生） ----------
 function interpFrac(en, rt, course) {
@@ -2266,7 +2340,7 @@ function RaceView({ sim, onFinish }) {
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
             <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${SIDE_H}`, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
-              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="26" />
+              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="16" />
               {ridersUi.map(r => {
                 const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
                 const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
@@ -2806,14 +2880,18 @@ function App() {
     if (mandateHit) pts = Math.round(pts * 1.3);
     // v13: 選手名鑑用に、出走した自チーム選手それぞれの着順を各選手のraceLogへ記録する
     const rankById = {}; playerRs.forEach(e => { rankById[e.id] = e.rank; });
+    // v14.6: フレーバーテキストで「そのレースでどんな役割だったか」を語れるよう、
+    // 着順と一緒に役割（エースならace、それ以外はROLESのキー）も記録する
+    const roleById = {}; playerRs.forEach(e => { roleById[e.id] = e.isAce ? "ace" : e.role; });
     // v13.1: ライバルチームに拾われた元選手が出走していれば、そちらのraceLogも伸ばす
     const alumniRankById = {}; sim.ranked.filter(e => e.isAlumnus).forEach(e => { alumniRankById[e.id] = e.rank; });
+    const alumniRoleById = {}; sim.ranked.filter(e => e.isAlumnus).forEach(e => { alumniRoleById[e.id] = e.isAce ? "ace" : e.role; });
     setG(s => {
       const roster = s.roster.map(r => rankById[r.id] != null
-        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id] }] }
+        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleById[r.id] }] }
         : r);
       const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
-        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id] }] }
+        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: alumniRoleById[r.id] }] }
         : r);
       return {
         ...s, roster, rivalAlumni, budget: s.budget + prize,
@@ -2853,14 +2931,17 @@ function App() {
         // v13: 選手名鑑用に、ステージレース全体の総合着順を各選手のraceLogへ記録する
         // （各日のステージ結果ではなく、最終確定した総合成績のみを1件記録する）
         const rankById = {}; playerRanks.forEach(o => { rankById[o.id] = o.rank; });
+        // v14.6: フレーバーテキストでの役割参照用。役割自体はステージを通して固定
+        // （gc.aceId/gc.rolesは初日決定後に変わらない）ため、最終日のentrantから引ける
+        const roleOf = (id) => { const en = idToEntrant[id]; return en ? (en.isAce ? "ace" : en.role) : undefined; };
         const roster = s.roster.map(r => rankById[r.id] != null
-          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id] }] }
+          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleOf(r.id) }] }
           : r);
         // v13.1: ライバルチームに拾われた元選手のGC総合成績もraceLogへ記録する
         const alumniRanks = order.map(([id], i) => ({ id, rank: i + 1 })).filter(o => idToEntrant[o.id]?.isAlumnus);
         const alumniRankById = {}; alumniRanks.forEach(o => { alumniRankById[o.id] = o.rank; });
         const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
-          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id] }] }
+          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: roleOf(r.id) }] }
           : r);
         return {
           ...s, roster, rivalAlumni, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
@@ -2927,9 +3008,11 @@ function App() {
     const evalDelta = directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0;
     const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + ml.classIdx * 0.25));
     setMl(s => {
+      // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
+      const role = directive ? directive.key : (me.isAce ? "ace" : "support");
       const player = {
         ...s.player,
-        raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank }],
+        raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role }],
       };
       return {
         ...s, player, points: s.points + pts,
@@ -4313,10 +4396,12 @@ function App() {
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.yellow}` }}>
           <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{race.championship ? "👑 " : ""}{race.sponsorMandate ? "🎯 " : ""}{race.name} {"★".repeat(race.grade)}</div>
-          <div style={{ display: "flex", gap: 3, margin: "6px 0 3px" }}>
-            {race.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
-          </div>
-          <div style={{ fontSize: 11.5, color: C.sub }}>{race.tmpl.kind}・<span style={{ color: C.yellow }}>出走{N}名</span>・{TYPES[race.tmpl.favors].label}有利</div>
+          {!race.stageRace && (
+            <div style={{ display: "flex", gap: 3, margin: "6px 0 3px" }}>
+              {race.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: C.sub }}>{race.stageRace && race.stageTmpls ? "日替わりコース" : race.tmpl.kind}・<span style={{ color: C.yellow }}>出走{N}名</span>・{TYPES[race.tmpl.favors].label}有利</div>
           {squadChoices.length > 1 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>出走人数（少人数ほど手持ちの疲労を温存できるが、ローテーションや逃げの選択肢は減る）</div>
@@ -4335,7 +4420,9 @@ function App() {
               </div>
             </div>
           )}
-          <div style={{ marginTop: 6 }}><ElevationChart course={previewCourse} /></div>
+          <div style={{ marginTop: 6 }}>
+            {race.stageRace ? <MultiStageCourseView race={race} /> : <ElevationChart course={previewCourse} />}
+          </div>
         </div>
         <section>
           <Eyebrow>出走{N}名を選択（{sel.starters.length}/{N}）</Eyebrow>
