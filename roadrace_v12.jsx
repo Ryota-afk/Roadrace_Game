@@ -4950,6 +4950,34 @@ function App() {
           <div style={{ marginTop: 6 }}><ElevationChart course={dayCourse} /></div>
         </div>
         <section>
+          {/* v14.14: 作戦変更画面でも選手の能力を見た上でエース・役割を決められるよう、
+              その日のコース適性（disciplineScore）と能力グリッドを一覧表示する */}
+          <Eyebrow color={C.sub}>出走メンバーの能力（{nextStageNo}日目のコース適性）</Eyebrow>
+          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+            {squad.map(r => {
+              const t = TYPES[r.type];
+              const fitKey = FAVORS_TO_DISCIPLINE[dayTmpl.favors];
+              const fitScore = disciplineScore(r, fitKey);
+              return (
+                <div key={r.id} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1.5px solid ${sel.ace === r.id ? C.yellow : C.line}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{sel.ace === r.id ? "👑 " : ""}{r.name}
+                      <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
+                    </span>
+                    <span style={{ fontFamily: FONT_M, fontSize: 12, color: COND_COLOR[r.cond - 1] }}>
+                      {COND_ARROW[r.cond - 1]} <span style={{ color: C.yellow }}>{overall(r)}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
+                    </span>
+                  </div>
+                  <TraitLine trait={r.trait} />
+                  <FatigueBar v={r.fatigue} />
+                  <AbilityGrid r={r} cap={growthCap} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        <section>
           <Eyebrow color={C.yellow}>エース指名</Eyebrow>
           <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
             {squad.map(r => (
