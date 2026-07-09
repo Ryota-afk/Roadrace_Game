@@ -529,6 +529,35 @@ function overall(r) {
   const vals = AB_KEYS.map(k => r[k]).sort((a, b) => b - a);
   return Math.round(vals[0] * 0.5 + vals[1] * 0.3 + (vals[2] + vals[3] + vals[4]) / 3 * 0.2);
 }
+// v13: 選手名鑑・殿堂入り演出用の二つ名・フレーバーテキスト生成。
+// パワプロの選手名鑑／ウイニングポストの殿堂入りをイメージし、戦績（raceLog）を
+// 優先しつつ、まだ実績のない選手には脚質・性格ベースの二つ名を割り当てる
+function riderNickname(r) {
+  const log = r.raceLog || [];
+  const wins = log.filter(e => e.rank === 1).length;
+  const podiums = log.filter(e => e.rank <= 3).length;
+  const races = log.length;
+  if (wins >= 8) return "伝説の勝ち師";
+  if (wins >= 5) return "常勝の帝王";
+  if (wins >= 3) return "勝利の申し子";
+  if (podiums >= 12) return "表彰台の主";
+  if (podiums >= 6) return "表彰台の常連";
+  if (races >= 12 && podiums === 0) return "苦労人";
+  if (r.prodigy) return "将来を嘱望された逸材";
+  const abs = { flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo };
+  const top = Object.entries(abs).sort((a, b) => b[1] - a[1])[0][0];
+  const byType = {
+    flat: "巡航の職人", climb: "山岳の覇者", sprint: "ゴールハンター", stamina: "鉄の脚", solo: "独走の求道者",
+  };
+  return byType[top] || "無名の挑戦者";
+}
+function riderFlavorText(r) {
+  const typeText = { SPR: "生粋のスプリンター", CLM: "生粋のクライマー", RUL: "オールラウンダー", PUN: "パンチャー気質", TT: "タイムトライアリスト" }[r.type] || "";
+  const persText = PERSONALITIES[r.personality]?.desc && PERSONALITIES[r.personality].desc !== "クセなし"
+    ? `性格は${PERSONALITIES[r.personality].label}タイプ（${PERSONALITIES[r.personality].desc}）。` : "";
+  const traitText = r.trait ? `${TRAITS[r.trait].label}（${TRAITS[r.trait].desc}）の持ち主。` : "";
+  return `${typeText}。${persText}${traitText}`.trim();
+}
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
   flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
@@ -604,6 +633,7 @@ function newRider(power, rng, opts = {}) {
     fatigue: 20 + Math.floor(rng() * 20), cond: 3, injury: 0, streak: 0,
     focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
     prodigy: !!opts.forceProdigy,
+    raceLog: [], // v13: 選手名鑑用の出走履歴（{year, month, name, rank}）
   };
   rider.joinOvr = overall(rider);
   return rider;
@@ -616,6 +646,7 @@ function initRoster() {
       age, growth, growthPow: pow, trait: trait || null, personality: pers,
       fatigue: 20, cond: 3, injury: 0, streak: 0,
       focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
+      raceLog: [],
     };
     r.joinOvr = overall(r); return r;
   };
@@ -2062,6 +2093,8 @@ function initGame() {
     careerHistory: [],
     // v13: 難易度（周回プレイでクリアポイントを貯めて上位難易度を解禁する）
     difficulty: "easy",
+    // v13: 選手名鑑・殿堂入り。引退・解雇した選手のスナップショット（raceLog含む）を保持する
+    hallOfFame: [],
   };
 }
 
@@ -2074,7 +2107,7 @@ const SAVE_VERSION = "v12";
 const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
-  "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty",
+  "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame",
 ];
 function serializeState(g) {
   const out = {};
@@ -2134,6 +2167,8 @@ function App() {
   // v13: 新規ゲーム開始時の難易度選択（newgame_setup画面用。永続ボーナスは選択不要で自動適用）
   const [diffChoice, setDiffChoice] = useState("easy");
   const clearAwardedRef = useRef(false);
+  // v13: 選手名鑑（戦績一覧）の展開状態。選手カードのトグルボタンで開閉する
+  const [expandedRiderId, setExpandedRiderId] = useState(null);
   const cls = CLASSES[g.classIdx];
   const healthy = g.roster.filter(r => r.injury === 0);
   const equipMax = 3 + g.classIdx;
@@ -2239,7 +2274,7 @@ function App() {
       }
       if (s.month === 11) {
         let classIdx = s.classIdx;
-        const info = { promoted: false, relegated: false, retired: [], cleared: false, champBest: s.champBest, sponsorResult: null };
+        const info = { promoted: false, relegated: false, retired: [], retiredRiders: [], cleared: false, champBest: s.champBest, sponsorResult: null };
         if (s.champBest !== null && s.champBest <= 3) {
           if (s.classIdx === 2 && s.champBest === 1) info.cleared = true;
           else { classIdx = Math.min(2, s.classIdx + 1); info.promoted = true; }
@@ -2260,7 +2295,7 @@ function App() {
         roster.forEach(r => {
           const n = { ...r, age: r.age + 1 };
           const retire = n.age >= 36 || (n.age >= 33 && overall(n) < n.joinOvr * 0.8);
-          if (retire) info.retired.push(`${n.name}（${n.age}歳）が引退`);
+          if (retire) { info.retired.push(`${n.name}（${n.age}歳）が引退`); info.retiredRiders.push(n); }
           else survivors.push(n);
         });
         const year = s.year + 1;
@@ -2278,6 +2313,8 @@ function App() {
           year: s.year, classLabel: CLASSES[s.classIdx].label, points: s.points,
           promoted: info.promoted, relegated: info.relegated, champBest: s.champBest,
         }];
+        // v13: 引退した選手を殿堂入り（選手名鑑）として記録に残す
+        const hallOfFame = [...s.hallOfFame, ...info.retiredRiders.map(n => ({ ...n, farewellYear: s.year, farewellReason: "retired" }))];
         return {
           ...s, roster: survivors, classIdx, points: 0, year, month: 0,
           budget: s.budget + income + delta - upkeep - staffSalary,
@@ -2287,7 +2324,7 @@ function App() {
           races: genMonthRaces(year, 0, classIdx, 0, null),
           camp: false, campCooldown: 0, champBest: null, gc: null,
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
-          yearendInfo: info, cleared: info.cleared, log, careerHistory,
+          yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame,
           screen: info.cleared ? "clear" : "yearend", tab: "home",
         };
       }
@@ -2396,15 +2433,22 @@ function App() {
     const mandateHit = !race.championship && !!race.sponsorMandate;
     let pts = Math.round((PTS[best.rank - 1] || 0) * GRADE_MUL[race.grade]);
     if (mandateHit) pts = Math.round(pts * 1.3);
-    setG(s => ({
-      ...s, budget: s.budget + prize,
-      points: race.championship ? s.points : s.points + pts,
-      champBest: race.championship ? best.rank : s.champBest,
-      sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
-      careerStats: bumpCareerStats(s.careerStats, best.rank, prize),
-      prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak },
-      screen: "result",
-    }));
+    // v13: 選手名鑑用に、出走した自チーム選手それぞれの着順を各選手のraceLogへ記録する
+    const rankById = {}; playerRs.forEach(e => { rankById[e.id] = e.rank; });
+    setG(s => {
+      const roster = s.roster.map(r => rankById[r.id] != null
+        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id] }] }
+        : r);
+      return {
+        ...s, roster, budget: s.budget + prize,
+        points: race.championship ? s.points : s.points + pts,
+        champBest: race.championship ? best.rank : s.champBest,
+        sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
+        careerStats: bumpCareerStats(s.careerStats, best.rank, prize),
+        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak },
+        screen: "result",
+      };
+    });
   }
 
   function finishStage(sim, race, stageOverride) {
@@ -2430,8 +2474,14 @@ function App() {
         // グランツールなど通常カレンダー上のステージレースは、複数日にわたる大会である
         // ことを踏まえ通常レースよりポイント倍率を優遇する
         const pts = race.championship ? 0 : Math.round((PTS[bestRank - 1] || 0) * GRADE_MUL[race.grade] * 1.3);
+        // v13: 選手名鑑用に、ステージレース全体の総合着順を各選手のraceLogへ記録する
+        // （各日のステージ結果ではなく、最終確定した総合成績のみを1件記録する）
+        const rankById = {}; playerRanks.forEach(o => { rankById[o.id] = o.rank; });
+        const roster = s.roster.map(r => rankById[r.id] != null
+          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id] }] }
+          : r);
         return {
-          ...s, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
+          ...s, roster, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
           careerStats: bumpCareerStats(s.careerStats, bestRank, prize),
           gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize, pts },
           screen: "gc_final",
@@ -2493,7 +2543,9 @@ function App() {
       if (s.roster.length <= 1) return s;
       const r = s.roster.find(x => x.id === rid);
       if (!r) return s;
-      return { ...s, roster: s.roster.filter(x => x.id !== rid), log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇した`] };
+      // v13: 解雇した選手も選手名鑑・殿堂入りの記録として残す
+      const hallOfFame = [...s.hallOfFame, { ...r, farewellYear: s.year, farewellReason: "released" }];
+      return { ...s, roster: s.roster.filter(x => x.id !== rid), hallOfFame, log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇した`] };
     });
   };
 
@@ -2807,8 +2859,10 @@ function App() {
                     {g.month === 0 && <Btn small outline color={C.red} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id))}>解雇</Btn>}
                   </div>
                 </div>
+                <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>
                 <PersonaLine p={r.personality} />
                 <TraitLine trait={r.trait} />
+                <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
                 <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
                   <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
                   <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span></span>
@@ -2843,6 +2897,22 @@ function App() {
                     </span>
                   ))}
                 </div>
+                <Btn small outline color={C.sub} onClick={() => setExpandedRiderId(expandedRiderId === r.id ? null : r.id)}
+                  style={{ marginTop: 8 }}>
+                  {expandedRiderId === r.id ? "▲ 戦績を閉じる" : `▼ 戦績を見る（${(r.raceLog || []).length}戦）`}
+                </Btn>
+                {expandedRiderId === r.id && (
+                  <div style={{ marginTop: 6, background: C.panel2, borderRadius: 8, padding: "6px 10px", maxHeight: 200, overflowY: "auto" }}>
+                    {(!r.raceLog || r.raceLog.length === 0) && <div style={{ fontSize: 11.5, color: C.sub }}>まだ出走記録がありません。</div>}
+                    {[...(r.raceLog || [])].reverse().map((e, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, padding: "3px 0", borderBottom: i < r.raceLog.length - 1 ? `1px solid ${C.line}` : "none" }}>
+                        <span style={{ color: C.sub }}>{e.year}年目 {MONTHS[e.month]}</span>
+                        <span style={{ color: C.text, flex: 1, margin: "0 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
+                        <span style={{ fontFamily: FONT_M, color: e.rank === 1 ? C.yellow : e.rank <= 3 ? C.green : C.sub, fontWeight: 700 }}>{e.rank}位</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -3005,6 +3075,7 @@ function App() {
     if (g.tab === "career") {
       const cs = g.careerStats;
       const history = [...g.careerHistory].reverse();
+      const hof = [...g.hallOfFame].reverse();
       body = (
         <div style={{ display: "grid", gap: 12 }}>
           <Eyebrow color={C.yellow}>キャリア通算成績</Eyebrow>
@@ -3027,6 +3098,44 @@ function App() {
                 </span>
               </div>
             ))}
+          </div>
+          <Eyebrow color={C.purple}>🏛 殿堂入り選手名鑑</Eyebrow>
+          {hof.length === 0 && <div style={{ fontSize: 12.5, color: C.sub }}>引退・退団した選手はまだいません。</div>}
+          <div style={{ display: "grid", gap: 8 }}>
+            {hof.map((r, i) => {
+              const wins = (r.raceLog || []).filter(e => e.rank === 1).length;
+              const podiums = (r.raceLog || []).filter(e => e.rank <= 3).length;
+              const rid = `hof-${r.id}-${i}`;
+              return (
+                <div key={rid} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.purple}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
+                    <div>
+                      <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 14.5 }}>{r.name}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10.5, color: TYPES[r.type].color }}>{TYPES[r.type].label}</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: C.sub }}>{r.farewellReason === "retired" ? `${r.farewellYear}年目 引退` : `${r.farewellYear}年目 退団`}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
+                  <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>通算{(r.raceLog || []).length}戦・{wins}勝・表彰台{podiums}回</div>
+                  <Btn small outline color={C.sub} style={{ marginTop: 6 }} onClick={() => setExpandedRiderId(expandedRiderId === rid ? null : rid)}>
+                    {expandedRiderId === rid ? "▲ 戦績を閉じる" : "▼ 戦績を見る"}
+                  </Btn>
+                  {expandedRiderId === rid && (
+                    <div style={{ marginTop: 6, background: C.panel2, borderRadius: 8, padding: "6px 10px", maxHeight: 200, overflowY: "auto" }}>
+                      {(!r.raceLog || r.raceLog.length === 0) && <div style={{ fontSize: 11.5, color: C.sub }}>出走記録がありません。</div>}
+                      {[...(r.raceLog || [])].reverse().map((e, j) => (
+                        <div key={j} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, padding: "3px 0", borderBottom: j < r.raceLog.length - 1 ? `1px solid ${C.line}` : "none" }}>
+                          <span style={{ color: C.sub }}>{e.year}年目 {MONTHS[e.month]}</span>
+                          <span style={{ color: C.text, flex: 1, margin: "0 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
+                          <span style={{ fontFamily: FONT_M, color: e.rank === 1 ? C.yellow : e.rank <= 3 ? C.green : C.sub, fontWeight: 700 }}>{e.rank}位</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       );
