@@ -2189,6 +2189,7 @@ function RaceView({ sim, onFinish }) {
   const totalRef = useRef(1);
   const finalSegRef = useRef(false);
   const cinematicRef = useRef(false);
+  const cameraFramingRef = useRef(null); // v14.13: 直近のカメラ枠決めで実際に映していた選手集団（シネマティックの対象選手選定に再利用）
   const [launching, setLaunching] = useState(false); // v12（簡易リードアウト演出）：エース発射の光るリング表示フラグ
   const launchingRef = useRef(false);
   const liveRef = useRef({ text: "", until: 0 });
@@ -2326,6 +2327,11 @@ function RaceView({ sim, onFinish }) {
       // 広がりに合わせてズーム幅を自動調整する（先頭に少し前方の余白を持たせる）
       // v11: 「ゴール済み」は静的なen.finished（precompute直後は常にtrue）ではなく、
       // 現在の再生時刻rtがfinishTimeを過ぎたかどうかで判定する（実際にライブで通過したか）
+      // v14.13: このブロックで決めた「今カメラが映している集団」をcameraFramingRefに
+      // 保存し、後段のシネマティック演出（下のfinalSegRef.current && !cinematicRef.current）
+      // が同じ集団を参照できるようにする。以前はシネマティック側が全選手からタイム差だけで
+      // 独自に対象選手を選び直していたため、俯瞰マップで追っていた選手（先頭集団や
+      // フィーチャー中の選手の集団）と、切り替わった演出に映る選手が食い違うことがあった
       {
         const liveFinished = (en) => rt >= en.finishTime;
         const unfinished = riders.filter(r => !liveFinished(r.e));
@@ -2371,6 +2377,7 @@ function RaceView({ sim, onFinish }) {
         // 実際の先頭選手とゴールフラッグの間に不自然な空白ができてしまう。end>1のままにしておけば
         // フラッグは（実際の先頭選手との距離に応じて）自然に画面の内側寄りに表示される
         setCam({ start, end });
+        cameraFramingRef.current = framing;
       }
       // 最終区間突入判定
       // v12: 位置ベース（最終区間に実際に入ったか）に加えて時間ベースの判定もOR条件で追加。
@@ -2405,7 +2412,12 @@ function RaceView({ sim, onFinish }) {
           cinematicRef.current = true;
           // v12: 最終直線シネマティック演出用に、結果が既に確定済みの着順・着差をスナップショットする
           // （実際のfinishTimeから逆算するだけで、シミュレーション自体には一切手を加えない）
-          const sortedByFinish = [...riders].sort((a, b) => a.e.finishTime - b.e.finishTime);
+          // v14.13: 対象選手は全選手からタイム差で選び直すのではなく、直前まで俯瞰マップの
+          // カメラが実際に映していた集団（cameraFramingRef）に限定する。これにより、
+          // 先頭集団を追っていればその先頭集団のまま、選手フィーチャー中ならその選手の
+          // 集団のまま、演出に切り替わっても顔ぶれが変わらなくなる
+          const pool = (cameraFramingRef.current && cameraFramingRef.current.length > 0) ? cameraFramingRef.current : riders;
+          const sortedByFinish = [...pool].sort((a, b) => a.e.finishTime - b.e.finishTime);
           const winnerTime = sortedByFinish[0].e.finishTime;
           const contenders = sortedByFinish
             .filter(r => r.e.finishTime - winnerTime < SPRINT_CONTENDER_GAP_SEC)
