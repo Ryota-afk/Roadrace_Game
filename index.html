@@ -1969,6 +1969,10 @@ function courseAngleAt(course, frac) {
   const range = course.amp1 + course.amp2 || 1;
   return (topLateral(course, frac) / range) * TOP_CURVE_MAX_ANGLE;
 }
+// v14.9: 選手が常に真横（TOP_H/2固定）に動く一方、道自体は最大±0.5ラジアンも
+// 回転するため、道が曲がっているのに選手だけ直線的に横切って見える違和感があった。
+// pathの文字列に加えて、任意のfracにおける「その地点の道のY座標」を返すyAt()も
+// 一緒に返すようにし、選手の描画位置をこの道のY座標に軽く追従させられるようにする
 function buildTopPath(course, start, end) {
   const N = 60;
   const step = (end - start) / N;
@@ -1991,7 +1995,17 @@ function buildTopPath(course, start, end) {
   const allowedY = TOP_H / 2 - 20;
   const maxAbsY = Math.max(1, ...raw.map(p => Math.abs(p.y - anchor.y)));
   const yScale = Math.min(1, allowedY / maxAbsY);
-  return raw.map(p => `${(anchorScreenX + (p.x - anchor.x)).toFixed(1)},${(TOP_H / 2 + (p.y - anchor.y) * yScale).toFixed(1)}`).join(" ");
+  const path = raw.map(p => `${(anchorScreenX + (p.x - anchor.x)).toFixed(1)},${(TOP_H / 2 + (p.y - anchor.y) * yScale).toFixed(1)}`).join(" ");
+  const yAt = (frac) => {
+    const clamped = Math.min(end, Math.max(start, frac));
+    const idxF = (clamped - start) / step;
+    const i0 = Math.max(0, Math.min(N, Math.floor(idxF)));
+    const i1 = Math.min(N, i0 + 1);
+    const t = idxF - i0;
+    const yInterp = raw[i0].y + (raw[i1].y - raw[i0].y) * t;
+    return TOP_H / 2 + (yInterp - anchor.y) * yScale;
+  };
+  return { path, yAt };
 }
 function buildSidePath(course, start, end) {
   const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev));
@@ -2120,9 +2134,15 @@ function RaceView({ sim, onFinish }) {
     setCamMode(mode);
   };
 
-  const topPath = useMemo(() => buildTopPath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
+  const { path: topPath, yAt: topRoadYAt } = useMemo(() => buildTopPath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
   const sidePath = useMemo(() => buildSidePath(course, cam.start, cam.end), [sim, cam.start, cam.end]);
-  // v12: 選手・フィニッシュフラグは道の曲がりとは独立に、常に固定の水平帯（TOP_H/2）上に描く
+  // v14.9: 選手を道のカーブに軽く追従させ、道が曲がっているのに選手が直線的に
+  // 横切って見える違和感を緩和する。1.0にすると道の曲がりに完全一致するが、
+  // それだと以前（v11以前）の「選手が斜めに動いて不自然」という問題が再発するため、
+  // 控えめな追従量に留める
+  const RIDER_CURVE_FOLLOW = 0.4;
+  const riderTopY = (frac, dy) => TOP_H / 2 + (topRoadYAt(frac) - TOP_H / 2) * RIDER_CURVE_FOLLOW + dy;
+  // v12: フィニッシュフラグは道の曲がりとは独立に、常に固定の水平帯（TOP_H/2）上に描く
   const sideYAt = (f) => { const maxElev = Math.max(1, ...course.elevationProfile.map(p => p.elev)); return SIDE_H - 16 - (course.yAt(f) / maxElev) * (SIDE_H - 32); };
 
   // v12: 集団の隊列シェイプを毎レンダー計算する。各選手は共有の軌道をなぞるのではなく、
@@ -2169,7 +2189,7 @@ function RaceView({ sim, onFinish }) {
     const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
     const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
     const drawFrac = Math.min(1, r.frac + attackBonus);
-    return { x: mapX(drawFrac + dx, cam.start, cam.end), y: TOP_H / 2 + dy };
+    return { x: mapX(drawFrac + dx, cam.start, cam.end), y: riderTopY(drawFrac + dx, dy) };
   };
   // v12（簡易リードアウト演出）：自チームのエースを、同じ集団内で牽引中の自チームアシストが
   // いれば「牽引中」として線で結び、牽引が外れた瞬間（エースがdraft以外になった瞬間）に
@@ -2414,7 +2434,7 @@ function RaceView({ sim, onFinish }) {
                   でviewBoxと同じ比率を強制する形に修正（あわせて道幅もさらに拡大） */}
               <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="190" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
-              <circle cx={mapX(1, cam.start, cam.end)} cy={TOP_H / 2} r="4" fill={C.red} />
+              <circle cx={mapX(1, cam.start, cam.end)} cy={riderTopY(1, 0)} r="4" fill={C.red} />
               {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
               {playerLeadout && (() => {
                 const p1 = packPoint(playerLeadout), p2 = packPoint(playerAce);
@@ -2434,7 +2454,7 @@ function RaceView({ sim, onFinish }) {
                 const isLaunching = launching && r.isPlayer && r.isAce
                   && drawFrac >= cam.start - 0.01 && drawFrac <= cam.end + 0.01;
                 return (
-                  <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${TOP_H / 2 + dy})`}>
+                  <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${riderTopY(drawFrac + dx, dy)})`}>
                     {camMode === r.id && <circle r="10" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
                     {isLaunching && (
                       <circle r="9" fill="none" stroke={C.yellow} strokeWidth="2" opacity="0.9">
