@@ -689,6 +689,60 @@ const FLAVOR_STAGE_TEMPLATES = [
   e => `${e.year}年目${MONTHS[e.month]}の${e.name}、その道のりは${e.stageBreakdown.map(stageDayPhrase).join("、")}というものだった。結果は${stageOverallPhrase(e)}。`,
   e => `${e.year}年目${MONTHS[e.month]}、${e.name}では日替わりで役割を変えながら${e.stageBreakdown.map(stageDayPhrase).join("、")}。${stageOverallPhrase(e)}。`,
 ];
+// v14.12: raceLogの傾向からさらに読み取れる6種のアーキタイプ・エピソードを追加。
+// 「スランプ脱出」は直近の1戦だけでなく、その直前の不振期があってこそ成立する物語なので
+// 単発エピソード（FLAVOR_EPISODE_*）より優先し、逆に得意コース・GT巧者・早熟／ベテラン・
+// ムラ気質はキャリア全体の傾向を語るため、単発エピソードより優先するが役割アーキタイプよりは後にする
+function raceLogSlumpBeforeLast(log) {
+  if (log.length < 3) return 0;
+  let n = 0;
+  for (let i = log.length - 2; i >= 0; i--) { if (log[i].rank >= 5) n++; else break; }
+  return n;
+}
+const FLAVOR_COMEBACK = [
+  e => `一時は${roleClause(e.role)}不振に沈んだが、${e.year}年目${MONTHS[e.month]}の${e.name}で見事な復活を遂げた。`,
+  e => `苦しい時期を乗り越え、${e.year}年目${MONTHS[e.month]}の${e.name}では${roleClause(e.role)}会心の走りでカムバックを果たした。`,
+  e => `不調の連鎖を断ち切ったのが、${e.year}年目${MONTHS[e.month]}の${e.name}。${roleClause(e.role)}這い上がる走りで存在感を示した。`,
+  e => `低迷期を経て、${e.year}年目${MONTHS[e.month]}の${e.name}で${roleClause(e.role)}見違えるような走りを取り戻した。`,
+];
+function findCourseSpecialty(log) {
+  const groups = {};
+  log.forEach(e => { (groups[e.name] = groups[e.name] || []).push(e); });
+  let best = null;
+  Object.keys(groups).forEach(name => {
+    const arr = groups[name];
+    if (arr.length >= 2 && arr.every(e => e.rank <= 3)) {
+      if (!best || arr.length > best.arr.length) best = { name, arr };
+    }
+  });
+  return best;
+}
+const FLAVOR_COURSE_SPECIALTY = [
+  (name, n) => `${name}には${n}度出走して${n}度とも表彰台に上がっている、勝手知ったる得意のコース。`,
+  (name, n) => `${name}となると俄然強さを増すタイプで、${n}戦${n}回とも表彰台を外していない。`,
+  (name, n) => `${name}の道筋を知り尽くしているのか、${n}度の出走すべてで表彰台に食い込んでいる。`,
+  (name, n) => `${name}との相性は抜群で、出走した${n}戦すべてで好結果を残している。`,
+];
+const FLAVOR_GT_SPECIALIST = [
+  n => `グランツールとなるとひときわ輝きを増す選手で、これまで${n}度表彰台に上っている。`,
+  n => `長丁場のグランツールを得意とし、${n}度の総合表彰台がその適性を物語っている。`,
+  n => `グランツール巧者として知られ、通算${n}度の総合表彰台を築き上げてきた。`,
+];
+const FLAVOR_PRODIGY = [
+  () => "若くしてすでに複数の勝利を手にしている、将来を嘱望される逸材。",
+  () => "同年代を大きく引き離す結果を残し続ける、早熟の才能の持ち主。",
+  () => "デビューから間もないながら勝ち方を知っている、期待の若手。",
+];
+const FLAVOR_VETERAN = [
+  () => "ベテランと呼ばれる年齢になってもなお、第一線で結果を残し続けている。",
+  () => "年齢を感じさせない走りで、若手相手にも一歩も引かない意地を見せる。",
+  () => "長いキャリアを積みながら衰えを知らず、今も好走を重ねている。",
+];
+const FLAVOR_MURA = [
+  () => "絶好調かと思えば急失速もある、振れ幅の大きさが持ち味の選手。",
+  () => "波に乗ればどこまでも強いが、崩れる時は大きく崩れる読めないタイプ。",
+  () => "会心の走りと不本意な結果が同居する、良くも悪くもムラのある選手。",
+];
 function riderFlavorText(r) {
   const log = r.raceLog || [];
   if (log.length >= 3 && log.every(e => e.rank === 1)) {
@@ -699,6 +753,12 @@ function riderFlavorText(r) {
   if (streak >= 3) {
     const idx = Math.floor(mulberry((r.id || 0) * 311 + streak)() * FLAVOR_STREAK.length);
     return FLAVOR_STREAK[idx](streak);
+  }
+  const last = log[log.length - 1];
+  const slump = raceLogSlumpBeforeLast(log);
+  if (last && last.rank <= 3 && slump >= 2) {
+    const idx = Math.floor(mulberry((r.id || 0) * 823 + slump)() * FLAVOR_COMEBACK.length);
+    return FLAVOR_COMEBACK[idx](last);
   }
   const roled = log.filter(e => e.role);
   if (log.length >= 5 && roled.length / log.length >= 0.6) {
@@ -718,6 +778,33 @@ function riderFlavorText(r) {
     if (breakawayCount / roled.length >= 0.5) {
       const idx = Math.floor(mulberry((r.id || 0) * 617 + breakawayCount)() * FLAVOR_BREAKAWAY_ARCHETYPE.length);
       return FLAVOR_BREAKAWAY_ARCHETYPE[idx]();
+    }
+  }
+  const spec = findCourseSpecialty(log);
+  if (spec) {
+    const idx = Math.floor(mulberry((r.id || 0) * 929 + spec.arr.length)() * FLAVOR_COURSE_SPECIALTY.length);
+    return FLAVOR_COURSE_SPECIALTY[idx](spec.name, spec.arr.length);
+  }
+  const gtPodiums = log.filter(e => e.name.includes("グランツール") && e.rank <= 3).length;
+  if (gtPodiums >= 2) {
+    const idx = Math.floor(mulberry((r.id || 0) * 1031 + gtPodiums)() * FLAVOR_GT_SPECIALIST.length);
+    return FLAVOR_GT_SPECIALIST[idx](gtPodiums);
+  }
+  const totalWins = log.filter(e => e.rank === 1).length;
+  if (r.age <= 22 && totalWins >= 2) {
+    const idx = Math.floor(mulberry((r.id || 0) * 1129 + totalWins)() * FLAVOR_PRODIGY.length);
+    return FLAVOR_PRODIGY[idx]();
+  }
+  if (r.age >= 32 && log.length >= 5 && log.slice(-3).some(e => e.rank <= 3)) {
+    const idx = Math.floor(mulberry((r.id || 0) * 1237 + r.age)() * FLAVOR_VETERAN.length);
+    return FLAVOR_VETERAN[idx]();
+  }
+  if (log.length >= 5) {
+    const bestRank = Math.min(...log.map(e => e.rank));
+    const worstRank = Math.max(...log.map(e => e.rank));
+    if (bestRank <= 3 && worstRank - bestRank >= 6) {
+      const idx = Math.floor(mulberry((r.id || 0) * 1327 + worstRank)() * FLAVOR_MURA.length);
+      return FLAVOR_MURA[idx]();
     }
   }
   let notable = null;
