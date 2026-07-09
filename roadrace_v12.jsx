@@ -535,12 +535,86 @@ function riderNickname(r) {
   };
   return byType[top] || "無名の挑戦者";
 }
+// v13.3: 以前はフレーバーテキストが脚質・性格・特性をそのまま言い換えるだけで、
+// ロースターカード上のバッジ／PersonaLine／TraitLineと内容が丸かぶりしていた。
+// 実績があれば「特筆すべき1戦」を物語調に語るエピソード方式、まだ実績がなければ
+// 能力値と無関係な人物エピソードを語る方式に差し替える。選手ID（＋該当レースの
+// 年月・順位）を種にした決定論的選択のため、再レンダリングのたびに文言が変わらない
+const FLAVOR_PERSONA = [
+  "オフの日は決まって近所の定食屋に顔を出す、気さくな一面を持つ。",
+  "移動中のバスや車内では誰よりも早く眠りに落ちるタイプ。",
+  "自転車以外にも将棋を嗜み、盤面を読む集中力には定評がある。",
+  "機材の整備は人任せにせず、隅々まで自分の手で行う几帳面な性格。",
+  "地元の後輩たちからは兄貴分・姉御肌として慕われている。",
+  "レース前は決まって同じルーティンで気持ちを整える。",
+  "甘いものに目がなく、補給食のストックはいつも自前で用意している。",
+  "寡黙だが、チームメイトの誕生日は必ず覚えている。",
+  "オフシーズンは登山に出かけ、脚力よりも景色を楽しむ派。",
+  "SNSでの発信はほとんどせず、黙々と練習に打ち込む職人肌。",
+  "移動中の車内ではいつも同じプレイリストを聴いている。",
+  "地元では意外にも人見知りとして知られている。",
+  "インタビューでは飾らない本音がついつい出てしまう。",
+  "雨の日のレースでも表情ひとつ変えない胆力の持ち主。",
+  "練習後のストレッチには人一倍時間をかける。",
+  "実は大の猫好きで、遠征先でも野良猫を見つけると必ず声をかける。",
+  "料理が趣味で、遠征中も自炊にこだわっている。",
+  "幼い頃からこの土地で育ち、地元愛は人一倍。",
+  "几帳面な性格で、練習ノートを欠かさずつけている。",
+  "案外な負けず嫌いで、練習の順位付けにも本気になる。",
+  "チーム内のムードメーカーとして、重い空気を和ませる存在。",
+  "高校時代は別競技をしていたが、この道に転向してきた変わり種。",
+  "早起きが得意で、誰よりも早く練習に出てくる。",
+  "実は方向音痴で、遠征先ではよく道に迷うと本人談。",
+  "声援を受けると急に力が湧いてくるタイプ。",
+  "自分の走りを分析するのが好きで、映像を何度も見返す。",
+  "家族思いで、レースの合間にはよく実家に連絡を入れている。",
+  "意外にも手先が器用で、機材の細かい調整も自分でこなす。",
+  "普段は物静かだが、レースになると人が変わったように闘志を燃やす。",
+  "新しい土地でのレースを何より楽しみにしている旅好き。",
+];
+const FLAVOR_EPISODE_WIN = [
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}で圧巻の逃げ切りを見せ、今も語り草になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}制覇は、本人いわく会心の走りだったという。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}のゴールスプリントを制した瞬間はチーム内でも語り継がれている。`,
+  e => `${e.year}年目${MONTHS[e.month]}に${e.name}で初優勝を飾って以来、勝負どころでの強さに定評がある。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}で見せた独走勝利は、今も本人の自信の源になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}で終盤の集団を突き放し、そのまま押し切った。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}制覇を境に、周囲の見る目が変わったという。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での勝利は本人にとって忘れられない一戦。`,
+];
+const FLAVOR_EPISODE_PODIUM = [
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}で表彰台に上がり、確かな手応えをつかんだ。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では終盤まで優勝争いに加わり、僅差で表彰台に踏みとどまった。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での表彰台は本人にとって大きな自信になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}で見せた粘りの走りが、表彰台という結果につながった。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}のラストで踏ん張り、表彰台をつかみ取った。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では、最後まで諦めない走りで表彰台に食い込んだ。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での好走は今もチーム内で話題に上る。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}、あと一歩及ばず優勝は逃したが、表彰台という結果を残した。`,
+];
+const FLAVOR_EPISODE_OTHER = [
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}では先頭集団に食らいつき、力の片鱗を見せた。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では終盤まで粘り、確かな成長を感じさせた。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での走りは結果以上に評価されている。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}で見せた積極的な仕掛けは、今後への期待を抱かせた。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}では苦しい展開ながらも最後まで足を止めなかった。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}を経て、レース勘を着実に磨いている最中だ。`,
+  e => `${e.year}年目${MONTHS[e.month]}、${e.name}での経験は今の走りの土台になっている。`,
+  e => `${e.year}年目${MONTHS[e.month]}の${e.name}では悔しい結果に終わったが、その後の糧にしている。`,
+];
 function riderFlavorText(r) {
-  const typeText = { SPR: "生粋のスプリンター", CLM: "生粋のクライマー", RUL: "オールラウンダー", PUN: "パンチャー気質", TT: "タイムトライアリスト" }[r.type] || "";
-  const persText = PERSONALITIES[r.personality]?.desc && PERSONALITIES[r.personality].desc !== "クセなし"
-    ? `性格は${PERSONALITIES[r.personality].label}タイプ（${PERSONALITIES[r.personality].desc}）。` : "";
-  const traitText = r.trait ? `${TRAITS[r.trait].label}（${TRAITS[r.trait].desc}）の持ち主。` : "";
-  return `${typeText}。${persText}${traitText}`.trim();
+  const log = r.raceLog || [];
+  let notable = null;
+  log.forEach(e => {
+    if (!notable || e.rank < notable.rank || (e.rank === notable.rank && (e.year > notable.year || (e.year === notable.year && e.month > notable.month)))) notable = e;
+  });
+  if (notable) {
+    const pool = notable.rank === 1 ? FLAVOR_EPISODE_WIN : notable.rank <= 3 ? FLAVOR_EPISODE_PODIUM : FLAVOR_EPISODE_OTHER;
+    const idx = Math.floor(mulberry((r.id || 0) * 131 + notable.year * 37 + notable.month * 11 + notable.rank * 5)() * pool.length);
+    return pool[idx](notable);
+  }
+  const idx = Math.floor(mulberry((r.id || 0) * 977 + 3)() * FLAVOR_PERSONA.length);
+  return FLAVOR_PERSONA[idx];
 }
 // v13.2: 殿堂入り選手専用の「軌跡」テキスト。riderFlavorText（脚質・性格などの固定プロフィール）
 // とは別枠で、raceLogや離脱理由から実際のキャリアの歩みを物語調に組み立てる
