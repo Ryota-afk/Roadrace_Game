@@ -618,6 +618,12 @@ const RIVAL_TEAMS = [
   { name: "レッドサンダー山陽", color: "#d9484a" }, { name: "クレディ・ブルー", color: "#3f7fd9" },
   { name: "ヴェロチタ京都", color: "#9a6be0" }, { name: "ウィンドミル北海道", color: "#e08a3f" },
 ];
+// v14: マイライフモード用のチームプール（6チーム）。プレイヤーは新人としてこの中の
+// 1チームに加入し、残り5チームは全て純粋なライバルAIチームとしてレースに登場する
+const MYLIFE_TEAMS = [
+  ...RIVAL_TEAMS,
+  { name: "サンライズ静岡", color: "#4fd1c5" }, { name: "北斗プロサイクル", color: "#c084fc" },
+];
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
   flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
@@ -2218,9 +2224,102 @@ function clearSaveGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* noop */ }
 }
 
+// ---------- v14: マイライフモード（選手1人のキャリア） ----------
+// v9〜v13のシーズンモード（チーム運営）とは完全に別のセーブ・状態を持つ、
+// 選手1人の視点でB1からのキャリアを歩む新モード。既存のTYPES/TRAITS/PERSONALITIES/
+// GROWTH/newRider/generateCourse/simulateTicks/rankSim/riderNickname等はそのまま再利用する
+function initMyLife() {
+  return {
+    screen: "mylife_create", typeChoice: "RUL",
+    year: 1, month: 0, classIdx: 0, points: 0,
+    player: null, team: null,
+    races: [], sel: { raceId: null },
+    result: null, resultInfo: null,
+    log: [], retired: false,
+  };
+}
+const ML_SAVE_KEY = "roadrace_v12_mylife_save";
+const ML_SAVE_VERSION = "v12ml";
+const ML_SAVE_FIELDS = [
+  "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
+];
+function saveMyLife(ml) {
+  try {
+    const out = {}; ML_SAVE_FIELDS.forEach(k => { out[k] = ml[k]; });
+    localStorage.setItem(ML_SAVE_KEY, JSON.stringify({ version: ML_SAVE_VERSION, savedAt: Date.now(), state: out }));
+    return true;
+  } catch (e) { return false; }
+}
+function hasMyLifeSave() {
+  try { return !!localStorage.getItem(ML_SAVE_KEY); } catch (e) { return false; }
+}
+function loadMyLifeGame() {
+  try {
+    const raw = localStorage.getItem(ML_SAVE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.version !== ML_SAVE_VERSION || !parsed.state) return null;
+    const base = initMyLife();
+    if (parsed.state.player && parsed.state.player.id >= RID) RID = parsed.state.player.id + 1;
+    return { ...base, ...parsed.state, sel: base.sel, result: null, resultInfo: null };
+  } catch (e) { return null; }
+}
+function clearMyLifeSave() {
+  try { localStorage.removeItem(ML_SAVE_KEY); } catch (e) { /* noop */ }
+}
+// v14: マイライフのレースは6チーム全部をAI生成し、プレイヤーの選手だけを
+// 「PLAYER」チームタグ付きの1名として混ぜる（RaceView等の既存カメラ・強調表示ロジックを
+// そのまま再利用するため）。プレイヤー自身のチームメイトは実際のチーム名で登場する
+function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag) {
+  const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
+  const course = generateCourse(raceMeta, dayTag);
+  const rng = mulberry(Date.now() % 999983);
+  const power = (50 + classIdx * 9 + (raceMeta.grade - 1) * 4) * diffAiMul;
+  const { squadMin, squadMax } = raceMeta.tmpl;
+  const nameBanned = new Set([player.name]);
+  const riders = [];
+  const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade);
+  MYLIFE_TEAMS.forEach(d => {
+    const isMyTeam = d.name === myTeamName;
+    const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
+    const members = [];
+    for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
+    const aiRoles = assignAIRoles(members, aiSquadN);
+    const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
+    const teamEntrants = members.map((r, i) => ({
+      id: r.id, name: r.name, type: r.type, trait: r.trait,
+      flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
+      team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
+    }));
+    if (isMyTeam) {
+      // v14: 自チームの中で、プレイヤーが最も能力が高ければエース扱い、そうでなければ
+      // 既存のassignAIRoles相当の考え方でアシスト役を割り当てる（簡易版：先頭以外はlead固定）
+      const topAbility = Math.max(...teamEntrants.map(e => e.flat + e.climb + e.sprint + e.stamina + e.solo));
+      const playerTotal = playerEff.flat + playerEff.climb + playerEff.sprint + playerEff.stamina + playerEff.solo;
+      const playerIsAce = playerTotal >= topAbility;
+      if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
+      riders.push({
+        id: player.id, name: player.name, type: player.type, trait: player.trait, ...playerEff,
+        team: "PLAYER", teamName: myTeamName, color: C.yellow,
+        isAce: playerIsAce, role: playerIsAce ? "lead" : "sub", isPlayerChar: true,
+      });
+    }
+    teamEntrants.forEach(en => riders.push(en));
+  });
+  const sim = { entrants: riders, riders, course, groupMode: "full", raceMeta, breakSurvived: false };
+  simulateTicks(course, riders, 0, { chaseMode: "normal", aceEarly: false }, false);
+  rankSim(sim);
+  return sim;
+}
+
 // ---------- メインアプリ ----------
 function App() {
   const [g, setG] = useState(initGame);
+  // v14: マイライフモードはシーズンモードとは完全に別の状態を持つ（タイトル画面で選択）。
+  // superMode: null=モード未選択（タイトル）／"season"=既存のチーム運営／"mylife"=新モード
+  const [superMode, setSuperMode] = useState(null);
+  const [ml, setMl] = useState(initMyLife);
+  const mlRaceLockRef = useRef(false);
   // v12バグ修正: window.confirm()はモバイル端末（特にホーム画面追加時のPWA表示や
   // 一部のアプリ内ブラウザ）で表示されない・即falseを返すことがあり、その場合
   // 「最初から」等のボタンを押しても確認ダイアログがブロックされて何も起きない
@@ -2244,6 +2343,11 @@ function App() {
   useEffect(() => {
     if (g.screen === "main") saveGame(g);
   }, [g]);
+
+  // v14: マイライフモードも同様にmylife_main到達時点で自動保存（別のセーブキー）
+  useEffect(() => {
+    if (superMode === "mylife" && ml.screen === "mylife_main") saveMyLife(ml);
+  }, [ml, superMode]);
 
   // v13: グランファイナル制覇でクリアポイントを付与（周回プレイの起点）。
   // 通常のセーブデータとは別のlocalStorageキーに保存し、「最初から」でリセットしても
@@ -2586,6 +2690,105 @@ function App() {
     else finishRace(g.result, g.result.raceMeta);
   };
 
+  // ==== v14: マイライフモード専用ハンドラ ====
+  function mlGenRace(year, month, classIdx) {
+    const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
+    const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
+    const grade = month === 11 ? 3 : 1 + Math.floor(rng() * 3);
+    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx };
+  }
+  function mlCreateChar(type) {
+    const rng = mulberry(Date.now() % 999983);
+    const team = MYLIFE_TEAMS[Math.floor(Math.random() * MYLIFE_TEAMS.length)];
+    const player = newRider(46, rng, { type, age: 18, banned: new Set() });
+    player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
+    setMl(s => ({
+      ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
+      races: [mlGenRace(1, 0, 0)],
+      log: [`【1年目 4月】${team.name}に新人選手として加入`],
+      screen: "mylife_main",
+    }));
+  }
+  function mlSetFocus(key) {
+    setMl(s => ({ ...s, player: { ...s.player, focus: key } }));
+  }
+  function mlStartRace() {
+    if (mlRaceLockRef.current) return;
+    mlRaceLockRef.current = true;
+    const race = ml.races[0];
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy");
+    setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
+  }
+  function mlRaceFinish() {
+    mlRaceLockRef.current = false;
+    const sim = ml.result;
+    const me = sim.ranked.find(e => e.isPlayerChar);
+    const race = ml.races[0];
+    const pts = Math.round((PTS[me.rank - 1] || 0) * GRADE_MUL[race.grade]);
+    setMl(s => {
+      const player = {
+        ...s.player,
+        raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank }],
+      };
+      return {
+        ...s, player, points: s.points + pts,
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts },
+        screen: "mylife_result",
+      };
+    });
+  }
+  function mlAdvanceMonth(raced) {
+    setMl(s => {
+      let player = { ...s.player };
+      if (raced) {
+        player.fatigue = Math.min(100, player.fatigue + 40);
+        player.streak = (player.streak || 0) + 1;
+      } else {
+        const ph = growthPhase(player);
+        const gain = 1.5 * ph.gain * POW[player.growthPow].mul;
+        addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus));
+        AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k)));
+        const ph2 = growthPhase(player);
+        if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
+        player.fatigue = Math.max(0, player.fatigue - 15);
+        player.streak = 0;
+      }
+      const log = [...s.log];
+      if (s.month === 11) {
+        player.age += 1;
+        const retire = player.age >= 36 || (player.age >= 33 && overall(player) < player.joinOvr * 0.8);
+        if (retire) {
+          return { ...s, player, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
+        }
+        const qualified = s.points >= CLASSES[s.classIdx].need;
+        const classIdx = qualified ? Math.min(2, s.classIdx + 1) : s.classIdx;
+        if (qualified && classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
+        // v14: 好成績を残すと移籍オファーが来る（簡易な移籍システム）
+        const interest = s.points / Math.max(1, CLASSES[s.classIdx].need);
+        if (interest >= 0.8 && Math.random() < 0.6) {
+          const others = MYLIFE_TEAMS.filter(t => t.name !== s.team);
+          const offerTeams = [...others].sort(() => Math.random() - 0.5).slice(0, 2).map(t => t.name);
+          return {
+            ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
+            races: [mlGenRace(s.year + 1, 0, classIdx)],
+            contractOffers: [s.team, ...offerTeams],
+            screen: "mylife_contract", log,
+          };
+        }
+        return {
+          ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
+          races: [mlGenRace(s.year + 1, 0, classIdx)],
+          screen: "mylife_main", log,
+        };
+      }
+      const month = s.month + 1;
+      return { ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)], screen: "mylife_main", log };
+    });
+  }
+  function mlChooseTeam(teamName) {
+    setMl(s => ({ ...s, team: teamName, contractOffers: null, screen: "mylife_main" }));
+  }
+
   // ---- 購入・装備・アイテム ----
   const buyItem = (k) => { if (g.budget < ITEMS[k].price) return; setG(s => ({ ...s, budget: s.budget - ITEMS[k].price, inv: { ...s.inv, [k]: s.inv[k] + 1 } })); };
   const buyPart = (pid) => {
@@ -2712,7 +2915,189 @@ function App() {
     </div>
   );
 
-  // ================= 画面 =================
+  // ================= v14: モード選択（タイトル） =================
+  const mlWrap = (children) => (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT_B }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: "6px 14px 40px" }}>
+        {ml.player && (
+          <div style={{ padding: "10px 0", borderBottom: `1px solid ${C.line}`, marginBottom: 12 }}>
+            <Eyebrow>MY LIFE — {CLASSES[ml.classIdx].label} {ml.year}年目 {MONTHS[ml.month]}</Eyebrow>
+            <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{ml.player.name}（{ml.team}）</div>
+            <div style={{ fontSize: 11, color: C.sub }}>{ml.points}pt / 昇格権{CLASSES[ml.classIdx].need}pt</div>
+          </div>
+        )}
+        {children}
+      </div>
+      {confirmDialog && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", border: `1px solid ${C.line}` }}>
+            <div style={{ color: C.text, fontSize: 14, lineHeight: 1.7, marginBottom: 16, whiteSpace: "pre-wrap" }}>{confirmDialog.message}</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn small outline color={C.sub} onClick={() => setConfirmDialog(null)}>キャンセル</Btn>
+              <Btn small color={C.red} onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); fn(); }}>OK</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (superMode === null) return wrap(
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
+        <Eyebrow>MODE SELECT — v14</Eyebrow>
+        <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 21, margin: "6px 0 10px" }}>プレイモードを選んでください</h2>
+        <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.7, margin: 0 }}>
+          シーズンモードは6名のロースターを率いるチーム運営、マイライフモードは選手1人のキャリアをB1から歩む新モードです。
+        </p>
+      </div>
+      <Btn onClick={() => setSuperMode("season")}>🏢 シーズンモード（チーム運営）</Btn>
+      <Btn outline onClick={() => setSuperMode("mylife")}>🚴 マイライフモード（選手キャリア）</Btn>
+    </div>
+  );
+
+  // ================= v14: マイライフモード 画面群 =================
+  if (superMode === "mylife") {
+    if (ml.screen === "mylife_create") {
+      const typeOpts = Object.entries(TYPES);
+      return mlWrap(
+        <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
+            <Eyebrow>MY LIFE — キャラクター作成</Eyebrow>
+            <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.7, margin: "6px 0 0" }}>
+              脚質を選んでB1のいずれかのチームに新人選手として加入します。18歳からのキャリアスタートです。
+            </p>
+          </div>
+          {hasMyLifeSave() && (
+            <Btn onClick={() => { const loaded = loadMyLifeGame(); if (loaded) setMl(loaded); }}>💾 続きから</Btn>
+          )}
+          <div style={{ display: "grid", gap: 8 }}>
+            {typeOpts.map(([k, t]) => (
+              <button key={k} onClick={() => setMl(s => ({ ...s, typeChoice: k }))}
+                style={{
+                  textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                  background: ml.typeChoice === k ? "rgba(255,210,63,0.12)" : C.panel,
+                  border: `1.5px solid ${ml.typeChoice === k ? C.yellow : C.line}`,
+                }}>
+                <span style={{ fontFamily: FONT_D, fontWeight: 700, color: t.color }}>{t.label}</span>
+              </button>
+            ))}
+          </div>
+          <Btn onClick={() => {
+            const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice); };
+            if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate);
+            else doCreate();
+          }}>この脚質でデビュー →</Btn>
+          <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_main" && ml.player) {
+      const r = ml.player;
+      const race = ml.races[0];
+      const ph = growthPhase(r);
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}</span>
+              <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
+            </div>
+            {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
+            <PersonaLine p={r.personality} />
+            <TraitLine trait={r.trait} />
+            <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
+            <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
+              <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
+              <span>成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></span>
+            </div>
+            <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
+            <FatigueBar v={r.fatigue} />
+            <AbilityGrid r={r} />
+          </div>
+          <div>
+            <Eyebrow>今月の練習メニュー</Eyebrow>
+            <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
+              style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, marginTop: 6 }}>
+              {AB_KEYS.map(k => <option key={k} value={k}>{AB_LABEL[k]}強化</option>)}
+            </select>
+          </div>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+            <Eyebrow color={C.green}>今月のレース</Eyebrow>
+            <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0" }}>{race.name}</div>
+            <div style={{ fontSize: 11.5, color: C.sub }}>{race.tmpl.kind}・{"★".repeat(race.grade)}・{TYPES[race.tmpl.favors].label}有利</div>
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
+            <Btn outline color={C.sub} onClick={() => mlAdvanceMonth(false)}>この月は練習に専念する（レース見送り）</Btn>
+          </div>
+          <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_race" && ml.result) return mlWrap(
+      <div>
+        <div style={{ marginBottom: 8 }}><Eyebrow color={C.red}>LIVE — {ml.result.raceMeta.name}</Eyebrow></div>
+        <RaceView sim={ml.result} onFinish={mlRaceFinish} />
+        <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>● 印＝あなた。位置が近い選手同士が自然にグループを作ります。</div>
+      </div>
+    );
+
+    if (ml.screen === "mylife_result" && ml.resultInfo) {
+      const { race, rank, total, pts } = ml.resultInfo;
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
+            <Eyebrow>RESULT — {race.name}</Eyebrow>
+            <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
+            <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt</div>
+          </div>
+          <Btn onClick={() => mlAdvanceMonth(true)}>翌月へ進む →</Btn>
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_contract" && ml.contractOffers) return mlWrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "10px 14px" }}>
+          <Eyebrow color={C.purple}>CONTRACT — 移籍オファー</Eyebrow>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>好成績を残したあなたに、複数チームから声がかかっています。来季どのチームで走りますか？</div>
+        </div>
+        {ml.contractOffers.map((teamName, i) => (
+          <Btn key={i} outline={i > 0} onClick={() => mlChooseTeam(teamName)}>
+            {i === 0 ? `${teamName}に残留` : `${teamName}へ移籍`}
+          </Btn>
+        ))}
+      </div>
+    );
+
+    if (ml.screen === "mylife_retired" && ml.player) {
+      const r = ml.player;
+      const wins = (r.raceLog || []).filter(e => e.rank === 1).length;
+      const podiums = (r.raceLog || []).filter(e => e.rank <= 3).length;
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 18, borderTop: `4px solid ${C.yellow}`, textAlign: "center" }}>
+            <div style={{ fontSize: 40 }}>🏁</div>
+            <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 22, margin: "8px 0" }}>{r.name} 引退</h2>
+            {riderNickname(r) && <div style={{ fontSize: 13, color: C.purple, fontStyle: "italic" }}>「{riderNickname(r)}」</div>}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.purple}`, lineHeight: 1.6 }}>
+            {riderCareerSummary({ ...r, farewellYear: ml.year, farewellReason: "retired" })}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.sub }}>通算{(r.raceLog || []).length}戦・{wins}勝・表彰台{podiums}回</div>
+          <Btn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</Btn>
+          <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
+        </div>
+      );
+    }
+
+    return mlWrap(<div style={{ color: C.sub }}>読み込み中…</div>);
+  }
+
+  // ================= 画面（シーズンモード） =================
   if (g.screen === "intro") return wrap(
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
