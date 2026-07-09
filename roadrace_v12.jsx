@@ -1724,12 +1724,12 @@ function PersonaLine({ p }) {
     </div>
   );
 }
-function AbilityGrid({ r }) {
+function AbilityGrid({ r, cap = 88 }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, marginTop: 6 }}>
       {AB_KEYS.map(k => {
         const partBonus = r.parts ? PART_SLOTS.reduce((s, sl) => s + ((r.parts[sl] && PARTS[r.parts[sl]].ab[k]) || 0), 0) : 0;
-        const broke = r[k] >= 95;
+        const broke = r[k] >= cap;
         return (
           <div key={k}>
             <div style={{ fontSize: 9.5, color: C.sub }}>{AB_LABEL[k]}</div>
@@ -2720,6 +2720,10 @@ function App() {
   const equipMax = 3 + g.classIdx;
   const rosterMax = ROSTER_MAX_BY_CLASS[g.classIdx];
   const staffMax = STAFF_MAX_BY_CLASS[g.classIdx];
+  // v14.11: 「限界突破」表示のしきい値は難易度ごとの成長上限（growthCap）と
+  // 一致させる（以前は難易度に関わらず固定95だったため、上位難易度で実際の
+  // ソフトキャップ〈102/112〉と表示上のしきい値〈95〉がズレていた）
+  const growthCap = (DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).growthCap;
 
   // v10: main画面に到達するたびに自動保存
   useEffect(() => {
@@ -3919,6 +3923,16 @@ function App() {
           const base = applyCpMilestones({ ...initGame(), difficulty: diffChoice }, meta.totalEarnedCP);
           setG({ ...base, screen: "scoutpolicy_initial" });
         }}>この内容でゲーム開始 →</Btn>
+        <Btn outline color={C.red} onClick={() => {
+          // v14.11: 生涯合計値の消去は取り消せないため、二重確認（2段階の確認モーダル）を挟む
+          askConfirm(
+            `累計クリアポイント（${meta.totalEarnedCP}pt）と、それに紐づく永続ボーナス・難易度解禁をすべて消去します。この操作は取り消せません。よろしいですか？`,
+            () => askConfirm(
+              "本当によろしいですか？もう一度確認します。クリアポイントは元に戻せません。",
+              () => { saveMeta({ totalEarnedCP: 0 }); setDiffChoice("easy"); setG(s => ({ ...s })); }
+            )
+          );
+        }}>クリアポイントをリセット（累計{meta.totalEarnedCP}pt消去）</Btn>
       </div>
     );
   }
@@ -4068,7 +4082,7 @@ function App() {
       body = (
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontSize: 12, color: C.sub }}>
-            所属 {g.roster.length}/{rosterMax}名。<span style={{ color: C.yellow }}>能力95以上＝限界突破</span>（金色表示・成長が大幅に鈍化）。練習指定能力の伸びはトレードオフ（×0.9）で指定外に一部融通されます。
+            所属 {g.roster.length}/{rosterMax}名。<span style={{ color: C.yellow }}>能力{growthCap}以上＝限界突破</span>（金色表示・成長が大幅に鈍化。難易度「{(DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label}」の成長上限）。練習指定能力の伸びはトレードオフ（×0.9）で指定外に一部融通されます。
           </div>
           {g.inv.camp > 0 && !g.camp && g.campCooldown === 0 && <Btn small outline color={C.purple} onClick={useCamp}>⛺ キャンプ券を使う（今月の練習効果×2）</Btn>}
           {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ キャンプ券は連続使用できません（来月から使用可）</div>}
@@ -4105,7 +4119,7 @@ function App() {
                 </div>
                 <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
                 <FatigueBar v={r.fatigue} />
-                <AbilityGrid r={r} />
+                <AbilityGrid r={r} cap={growthCap} />
                 <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>種目別適性</div>
                 <DisciplineGrid r={r} />
                 <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -4209,7 +4223,7 @@ function App() {
                     <div style={{ fontSize: 11.5, color: C.sub, margin: "3px 0" }}>{fa.age}歳・{GROWTH[r.growth].label}型・成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></div>
                     <PersonaLine p={r.personality} />
                     <TraitLine trait={r.trait} />
-                    <AbilityGrid r={r} />
+                    <AbilityGrid r={r} cap={growthCap} />
                     <div style={{ marginTop: 8 }}>
                       <Btn small color={C.green} disabled={g.budget < fa.price || full} onClick={() => signFa(fa)}>
                         {full ? "ロースター満員（4月に解雇で空き作成）" : `${fa.price}万円で獲得`}
@@ -4603,7 +4617,7 @@ function App() {
                   </div>
                   <TraitLine trait={r.trait} />
                   <FatigueBar v={r.fatigue} />
-                  <AbilityGrid r={r} />
+                  <AbilityGrid r={r} cap={growthCap} />
                 </div>
               );
             })}
