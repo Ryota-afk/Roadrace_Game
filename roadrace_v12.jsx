@@ -634,8 +634,8 @@ const ML_EVENTS = [
     ] },
   { title: "監督との面談", text: "監督に呼ばれ、今後の起用方針について話をした。",
     choices: [
-      { label: "エースを目指したいと伝える", result: "強い意欲を評価された一方、気合が入りすぎて少し力んでしまった。", effects: { abBoost: 2, fatigueDelta: 6 } },
-      { label: "チームのために尽くすと伝える", result: "誠実な姿勢が信頼につながった。", effects: { fatigueDelta: -6 } },
+      { label: "エースを目指したいと伝える", result: "強い意欲を評価された一方、気合が入りすぎて少し力んでしまった。", effects: { abBoost: 2, fatigueDelta: 6, managerEvalDelta: 4 } },
+      { label: "チームのために尽くすと伝える", result: "誠実な姿勢が信頼につながった。", effects: { fatigueDelta: -6, managerEvalDelta: 6 } },
     ] },
   { title: "違和感のある一日", text: "練習中、脚に軽い張りを感じた。",
     choices: [
@@ -643,6 +643,61 @@ const ML_EVENTS = [
       { label: "気にせず追い込む", result: "その日は乗り切ったが、疲労が蓄積した。", effects: { abBoost: 2, fatigueDelta: 18 } },
     ] },
 ];
+// v14.3: 監督指示（レースごとの役割指示）。全うすると監督評価（マスクデータ）が上がり、
+// 評価が高いほどエースなど重要な役割の指示が出やすくなる好循環にする
+const MANAGER_DIRECTIVES = {
+  ace: { key: "ace", label: "エースとして表彰台を狙え", desc: "チームの主力として3位以内でフィニッシュせよ",
+    evalGain: 7, evalPenalty: 5, check: (rank) => rank <= 3 },
+  breakthrough: { key: "breakthrough", label: "積極的な走りで上位進出せよ", desc: "上位30%以内でのフィニッシュを目指せ",
+    evalGain: 5, evalPenalty: 2, check: (rank, total) => rank <= Math.max(3, Math.ceil(total * 0.3)) },
+  support: { key: "support", label: "アシストとしてチームを支えよ", desc: "先頭集団に食らいついて完走せよ",
+    evalGain: 3, evalPenalty: 1, check: (rank, total) => rank <= Math.max(5, Math.ceil(total * 0.6)) },
+  experience: { key: "experience", label: "経験を積むために出走せよ", desc: "とにかく最後まで走り切れ",
+    evalGain: 2, evalPenalty: 0, check: () => true },
+};
+// managerEvalが高いほど「エース」指示の抽選比重が上がり、低いうちは「経験」指示が出やすい
+function mlGenDirective(year, month, classIdx, managerEval) {
+  const rng = mulberry(year * 4001 + month * 131 + classIdx * 23 + 9007);
+  const w = {
+    ace: managerEval >= 65 ? 34 : managerEval >= 40 ? 12 : 2,
+    breakthrough: 28,
+    support: 26,
+    experience: managerEval < 25 ? 30 : 8,
+  };
+  const totalW = Object.values(w).reduce((a, b) => a + b, 0);
+  let roll = rng() * totalW;
+  for (const k of Object.keys(w)) { if (roll < w[k]) return MANAGER_DIRECTIVES[k]; roll -= w[k]; }
+  return MANAGER_DIRECTIVES.experience;
+}
+// v14.3: 監督評価はマスクデータのため選手には数値を見せず、大まかな評価ラベルのみ表示する
+function managerEvalTier(v) {
+  if (v >= 80) return { label: "絶大な信頼", color: C.yellow };
+  if (v >= 60) return { label: "高い評価", color: C.green };
+  if (v >= 40) return { label: "順調な評価", color: C.blue };
+  if (v >= 20) return { label: "様子見", color: C.sub };
+  return { label: "信頼不足", color: C.red };
+}
+// v14.3: 年俸で得た資金を使うショップ群（パーツはPARTSを流用、それ以外はマイライフ専用）
+const ML_HOUSES = [
+  { label: "賃貸アパート", price: 80, fatigueBonus: 5, desc: "毎月の疲労回復+5（恒常）" },
+  { label: "分譲マンション", price: 220, fatigueBonus: 12, desc: "毎月の疲労回復+12（恒常）" },
+  { label: "郊外の一戸建て", price: 480, fatigueBonus: 22, desc: "毎月の疲労回復+22。私生活が安定し監督評価もやや上がりやすくなる" },
+];
+const ML_CARS = [
+  { label: "中古の軽自動車", price: 60, raceFatigueCut: 0.10, desc: "レース参加による疲労蓄積-10%" },
+  { label: "国産セダン", price: 160, raceFatigueCut: 0.20, desc: "レース参加による疲労蓄積-20%" },
+  { label: "輸入スポーツカー", price: 400, raceFatigueCut: 0.30, desc: "レース参加による疲労蓄積-30%" },
+];
+const ML_GEAR = {
+  roller: { label: "自主トレ用スマートローラー", price: 90, desc: "練習の成長効果+15%（恒常）" },
+  monitor: { label: "パワーメーター一式", price: 70, desc: "狙った能力の伸びがさらに+10%（恒常）" },
+  chef: { label: "専属コンディショニングシェフ", price: 150, desc: "レース参加による疲労蓄積が10%軽減される（恒常）" },
+};
+const ML_STOCK_ITEMS = {
+  drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
+  supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },
+  tune:  { label: "コンディション調整", desc: "調子を1段階アップ", price: 20, condDelta: 1 },
+};
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
   flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
@@ -2257,12 +2312,18 @@ function initMyLife() {
     races: [], sel: { raceId: null },
     result: null, resultInfo: null,
     log: [], retired: false,
+    // v14.3: 監督指示・監督評価（マスクデータ）・年俸・ショップ用の資産
+    directive: null, managerEval: 30, salary: 0, money: 0,
+    partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
+    gear: { roller: false, monitor: false, chef: false },
+    houseLv: -1, carLv: -1,
   };
 }
 const ML_SAVE_KEY = "roadrace_v12_mylife_save";
 const ML_SAVE_VERSION = "v12ml";
 const ML_SAVE_FIELDS = [
   "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
+  "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
 ];
 function saveMyLife(ml) {
   try {
@@ -2291,7 +2352,7 @@ function clearMyLifeSave() {
 // v14: マイライフのレースは6チーム全部をAI生成し、プレイヤーの選手だけを
 // 「PLAYER」チームタグ付きの1名として混ぜる（RaceView等の既存カメラ・強調表示ロジックを
 // そのまま再利用するため）。プレイヤー自身のチームメイトは実際のチーム名で登場する
-function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag) {
+function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey) {
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
@@ -2313,11 +2374,14 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
       team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
     }));
     if (isMyTeam) {
-      // v14: 自チームの中で、プレイヤーが最も能力が高ければエース扱い、そうでなければ
-      // 既存のassignAIRoles相当の考え方でアシスト役を割り当てる（簡易版：先頭以外はlead固定）
+      // v14.3: 監督指示が「エース」「アシスト／経験」であれば役割はそれに従って強制する。
+      // 指示のない特別な区分（積極的な走り等）の場合のみ、従来通り能力比較で自動判定する
       const topAbility = Math.max(...teamEntrants.map(e => e.flat + e.climb + e.sprint + e.stamina + e.solo));
       const playerTotal = playerEff.flat + playerEff.climb + playerEff.sprint + playerEff.stamina + playerEff.solo;
-      const playerIsAce = playerTotal >= topAbility;
+      let playerIsAce;
+      if (directiveKey === "ace") playerIsAce = true;
+      else if (directiveKey === "support" || directiveKey === "experience") playerIsAce = false;
+      else playerIsAce = playerTotal >= topAbility;
       if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
       riders.push({
         id: player.id, name: player.name, type: player.type, trait: player.trait, ...playerEff,
@@ -2725,9 +2789,16 @@ function App() {
     const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set() });
     player.background = background;
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
+    // v14.3: 経歴ごとの初任給（万円/年）。年俸・監督評価・資産はキャリア開始時に初期化する
+    const initialSalary = { highschool: 220, university: 280, corporate: 360 }[background] || 260;
     setMl(s => ({
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
+      directive: mlGenDirective(1, 0, 0, 30),
+      managerEval: 30, salary: initialSalary, money: 0,
+      partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
+      gear: { roller: false, monitor: false, chef: false },
+      houseLv: -1, carLv: -1,
       log: [`【1年目 4月】${bg.label}として${team.name}に新人選手加入`],
       screen: "mylife_main",
     }));
@@ -2739,7 +2810,7 @@ function App() {
     if (mlRaceLockRef.current) return;
     mlRaceLockRef.current = true;
     const race = ml.races[0];
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy");
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null);
     setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
   }
   function mlRaceFinish() {
@@ -2748,6 +2819,11 @@ function App() {
     const me = sim.ranked.find(e => e.isPlayerChar);
     const race = ml.races[0];
     const pts = Math.round((PTS[me.rank - 1] || 0) * GRADE_MUL[race.grade]);
+    // v14.3: 監督指示を全うできたかどうかで監督評価が増減する。賞金はクラス倍率に応じて即時支給
+    const directive = ml.directive;
+    const fulfilled = directive ? directive.check(me.rank, sim.ranked.length) : false;
+    const evalDelta = directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0;
+    const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + ml.classIdx * 0.25));
     setMl(s => {
       const player = {
         ...s.player,
@@ -2755,22 +2831,32 @@ function App() {
       };
       return {
         ...s, player, points: s.points + pts,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts },
+        managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
+        money: s.money + prize,
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize },
         screen: "mylife_result",
       };
     });
   }
   // v14.2: 月次アクションを「レース／練習」の2択から拡張。練習・休養・イベントで
-  // 選手への効果を出し分ける（レースは既にmlRaceFinish側で反映済みのためここでは疲労のみ）
-  function mlApplyMonthEffect(player0, mode) {
+  // 選手への効果を出し分ける（レースは既にmlRaceFinish側で反映済みのためここでは疲労のみ）。
+  // v14.3: 永続トレーニング用品（ローラー台・パワーメーター）と車（レース疲労軽減）の
+  // 恒常効果もここで反映する
+  function mlApplyMonthEffect(player0, mode, ctx) {
     const player = { ...player0 };
+    const gear = (ctx && ctx.gear) || {};
+    const carLv = ctx ? ctx.carLv : -1;
+    const houseLv = ctx ? ctx.houseLv : -1;
     if (mode === "race") {
-      player.fatigue = Math.min(100, player.fatigue + 40);
+      const carCut = carLv >= 0 ? (1 - ML_CARS[carLv].raceFatigueCut) : 1;
+      const chefCut = gear.chef ? 0.9 : 1;
+      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut);
       player.streak = (player.streak || 0) + 1;
     } else if (mode === "train") {
       const ph = growthPhase(player);
-      const gain = 1.5 * ph.gain * POW[player.growthPow].mul;
-      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus));
+      const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1);
+      const focusMul = gear.monitor ? 1.10 : 1;
+      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul);
       AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k)));
       const ph2 = growthPhase(player);
       if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
@@ -2782,21 +2868,35 @@ function App() {
     } else if (mode === "event") {
       player.fatigue = Math.max(0, player.fatigue - 5);
     }
+    if (houseLv >= 0) player.fatigue = Math.max(0, player.fatigue - ML_HOUSES[houseLv].fatigueBonus);
     return player;
   }
   function mlAdvanceMonth(mode) {
     setMl(s => {
-      let player = mlApplyMonthEffect(s.player, mode);
+      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv };
+      let player = mlApplyMonthEffect(s.player, mode, ctx);
       const log = [...s.log];
+      // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
+      // 年俸は毎月1/12ずつ資金として振り込まれる
+      const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0);
+      const managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
+      const money = s.money + Math.round(s.salary / 12);
       if (s.month === 11) {
         player.age += 1;
         const retire = player.age >= 36 || (player.age >= 33 && overall(player) < player.joinOvr * 0.8);
         if (retire) {
-          return { ...s, player, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
+          return { ...s, player, money, managerEval, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
         }
         const qualified = s.points >= CLASSES[s.classIdx].need;
         const classIdx = qualified ? Math.min(2, s.classIdx + 1) : s.classIdx;
         if (qualified && classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
+        // v14.3: 年俸改定。その年のポイント・勝利・表彰台に応じて年俸が上がる
+        const yearRaces = (player.raceLog || []).filter(e => e.year === s.year);
+        const yearWins = yearRaces.filter(e => e.rank === 1).length;
+        const yearPodiums = yearRaces.filter(e => e.rank <= 3).length;
+        const salaryGain = Math.round(s.points * 2.2 + yearWins * 18 + yearPodiums * 7);
+        const salary = s.salary + salaryGain;
+        if (salaryGain > 0) log.push(`【${s.year}年目 3月】戦績が評価され年俸+${salaryGain}万円（年俸${salary}万円に）`);
         // v14: 好成績を残すと移籍オファーが来る（簡易な移籍システム）
         const interest = s.points / Math.max(1, CLASSES[s.classIdx].need);
         if (interest >= 0.8 && Math.random() < 0.6) {
@@ -2805,18 +2905,27 @@ function App() {
           return {
             ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
             races: [mlGenRace(s.year + 1, 0, classIdx)],
+            directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
             contractOffers: [s.team, ...offerTeams],
+            salary, money, managerEval,
             screen: "mylife_contract", log,
           };
         }
         return {
           ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
           races: [mlGenRace(s.year + 1, 0, classIdx)],
+          directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
+          salary, money, managerEval,
           screen: "mylife_main", log,
         };
       }
       const month = s.month + 1;
-      return { ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)], screen: "mylife_main", log };
+      return {
+        ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)],
+        directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
+        money, managerEval,
+        screen: "mylife_main", log,
+      };
     });
   }
   function mlChooseTeam(teamName) {
@@ -2839,7 +2948,58 @@ function App() {
       if (!ev) return s;
       const choice = ev.choices[choiceIdx];
       const player = mlApplyEventEffects(s.player, choice.effects);
-      return { ...s, player, pendingEvent: null, eventResultText: choice.result, screen: "mylife_event_result" };
+      const managerEval = Math.max(0, Math.min(100, s.managerEval + (choice.effects.managerEvalDelta || 0)));
+      return { ...s, player, managerEval, pendingEvent: null, eventResultText: choice.result, screen: "mylife_event_result" };
+    });
+  }
+  // v14.3: マイライフ専用ショップ（年俸で得た資金を使う）。パーツはPARTS/PART_SLOTSを
+  // 選手1名向けに流用し、それ以外（消耗品・トレーニング用品・車・家）はマイライフ専用データを使う
+  function mlBuyPart(pid) {
+    setMl(s => {
+      const p = PARTS[pid];
+      if (!p || s.money < p.price || p.tier > s.classIdx + 1) return s;
+      return { ...s, money: s.money - p.price, partsInv: { ...s.partsInv, [pid]: (s.partsInv[pid] || 0) + 1 } };
+    });
+  }
+  function mlSetPart(slot, pid) {
+    setMl(s => ({ ...s, player: { ...s.player, parts: { ...s.player.parts, [slot]: pid || null } } }));
+  }
+  function mlBuyGear(k) {
+    setMl(s => {
+      const it = ML_GEAR[k];
+      if (!it || s.gear[k] || s.money < it.price) return s;
+      return { ...s, money: s.money - it.price, gear: { ...s.gear, [k]: true } };
+    });
+  }
+  function mlBuyStock(k) {
+    setMl(s => {
+      const it = ML_STOCK_ITEMS[k];
+      if (!it || s.money < it.price) return s;
+      return { ...s, money: s.money - it.price, stock: { ...s.stock, [k]: (s.stock[k] || 0) + 1 } };
+    });
+  }
+  function mlUseStock(k) {
+    setMl(s => {
+      if ((s.stock[k] || 0) <= 0) return s;
+      const it = ML_STOCK_ITEMS[k];
+      const player = { ...s.player };
+      if (it.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + it.fatigueDelta));
+      if (it.condDelta) player.cond = Math.max(1, Math.min(5, player.cond + it.condDelta));
+      return { ...s, player, stock: { ...s.stock, [k]: s.stock[k] - 1 } };
+    });
+  }
+  function mlBuyCar() {
+    setMl(s => {
+      const next = s.carLv + 1;
+      if (next >= ML_CARS.length || s.money < ML_CARS[next].price) return s;
+      return { ...s, money: s.money - ML_CARS[next].price, carLv: next };
+    });
+  }
+  function mlBuyHouse() {
+    setMl(s => {
+      const next = s.houseLv + 1;
+      if (next >= ML_HOUSES.length || s.money < ML_HOUSES[next].price) return s;
+      return { ...s, money: s.money - ML_HOUSES[next].price, houseLv: next };
     });
   }
 
@@ -2978,6 +3138,7 @@ function App() {
             <Eyebrow>MY LIFE — {CLASSES[ml.classIdx].label} {ml.year}年目 {MONTHS[ml.month]}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{ml.player.name}（{ml.team}）</div>
             <div style={{ fontSize: 11, color: C.sub }}>{ml.points}pt / 昇格権{CLASSES[ml.classIdx].need}pt</div>
+            <div style={{ fontSize: 11, color: C.sub }}>所持金{ml.money}万円・年俸{ml.salary}万円</div>
           </div>
         )}
         {children}
@@ -3092,7 +3253,24 @@ function App() {
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
             <FatigueBar v={r.fatigue} />
             <AbilityGrid r={r} />
+            {(ml.stock.drink > 0 || ml.stock.supp > 0 || ml.stock.tune > 0) && (
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStock("drink")}>{ML_STOCK_ITEMS.drink.label}(-30) ×{ml.stock.drink}</Btn>}
+                {ml.stock.supp > 0 && <Btn small outline color={C.green} onClick={() => mlUseStock("supp")}>{ML_STOCK_ITEMS.supp.label}(-60) ×{ml.stock.supp}</Btn>}
+                {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStock("tune")}>{ML_STOCK_ITEMS.tune.label}(調子+1) ×{ml.stock.tune}</Btn>}
+              </div>
+            )}
           </div>
+          {ml.directive && (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+              <Eyebrow color={C.blue}>監督指示</Eyebrow>
+              <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.directive.label}</div>
+              <div style={{ fontSize: 11.5, color: C.sub }}>{ml.directive.desc}</div>
+              <div style={{ fontSize: 11, color: C.sub, marginTop: 5 }}>
+                監督評価: <span style={{ color: managerEvalTier(ml.managerEval).color, fontWeight: 700 }}>{managerEvalTier(ml.managerEval).label}</span>
+              </div>
+            </div>
+          )}
           <div>
             <Eyebrow>今月の練習メニュー</Eyebrow>
             <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
@@ -3110,6 +3288,7 @@ function App() {
             <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習する（能力強化・疲労+）</Btn>
             <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養する（疲労回復のみ）</Btn>
             <Btn outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活のイベントを受ける</Btn>
+            <Btn outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップに行く</Btn>
           </div>
           <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
         </div>
@@ -3125,15 +3304,131 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
             <Eyebrow>RESULT — {race.name}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
-            <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt</div>
+            <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt ／ 賞金 +{prize}万円</div>
           </div>
+          {directive && (
+            <div style={{ background: fulfilled ? "#16241c" : "#241818", border: `1px solid ${fulfilled ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
+              <Eyebrow color={fulfilled ? C.green : C.red}>監督指示 — {fulfilled ? "達成" : "未達成"}</Eyebrow>
+              <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{directive.label}</div>
+              <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>監督評価 {evalDelta >= 0 ? "+" : ""}{evalDelta}</div>
+            </div>
+          )}
           <Btn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</Btn>
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_shop" && ml.player) {
+      const r = ml.player;
+      const availPartsMl = (pid) => (ml.partsInv[pid] || 0) - (Object.values(r.parts || {}).includes(pid) ? 1 : 0);
+      return mlWrap(
+        <div style={{ display: "grid", gap: 16 }}>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+            <Eyebrow color={C.green}>SHOP — 所持金 {ml.money}万円</Eyebrow>
+            <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます）</div>
+          </div>
+          <section>
+            <Eyebrow color={C.purple}>マシンパーツ（クラス昇格で上位解禁）</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+              {Object.entries(PARTS).map(([pid, p]) => {
+                const lockedByClass = p.tier > ml.classIdx + 1;
+                return (
+                  <div key={pid} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, opacity: lockedByClass ? 0.5 : 1 }}>
+                    <div>
+                      <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>
+                        {p.label} <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.purple }}>所持{ml.partsInv[pid] || 0}（空き{Math.max(0, availPartsMl(pid))}）</span>
+                      </div>
+                      <div style={{ color: C.sub, fontSize: 11 }}>[{SLOT_LABEL[p.slot]}] {Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}</div>
+                    </div>
+                    {lockedByClass
+                      ? <span style={{ fontSize: 11, color: C.red, whiteSpace: "nowrap" }}>🔒 {CLASSES[p.tier - 1].id}で解禁</span>
+                      : <Btn small color={C.purple} disabled={ml.money < p.price} onClick={() => mlBuyPart(pid)}>{p.price}万</Btn>}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+              {PART_SLOTS.map(slot => (
+                <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ fontSize: 11, color: C.purple }}>{SLOT_LABEL[slot]}:</span>
+                  <select value={r.parts[slot] || ""} onChange={e => mlSetPart(slot, e.target.value)}
+                    style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "3px 5px", fontSize: 11.5, maxWidth: 140 }}>
+                    <option value="">— なし —</option>
+                    {Object.entries(PARTS).filter(([pid, p]) => p.slot === slot && (availPartsMl(pid) > 0 || r.parts[slot] === pid))
+                      .map(([pid, p]) => <option key={pid} value={pid}>{p.label}</option>)}
+                  </select>
+                </span>
+              ))}
+            </div>
+          </section>
+          <section>
+            <Eyebrow color={C.green}>疲労回復グッズ（在庫制）</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+              {Object.entries(ML_STOCK_ITEMS).map(([k, it]) => (
+                <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div>
+                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{it.label} <span style={{ fontFamily: FONT_M, color: C.green }}>×{ml.stock[k] || 0}</span></div>
+                    <div style={{ color: C.sub, fontSize: 11 }}>{it.desc}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <Btn small outline color={C.green} disabled={ml.money < it.price} onClick={() => mlBuyStock(k)}>{it.price}万で購入</Btn>
+                    <Btn small color={C.green} disabled={(ml.stock[k] || 0) <= 0} onClick={() => mlUseStock(k)}>使う</Btn>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section>
+            <Eyebrow color={C.blue}>永続トレーニング用品（買い切り）</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+              {Object.entries(ML_GEAR).map(([k, it]) => (
+                <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div>
+                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{it.label}</div>
+                    <div style={{ color: C.sub, fontSize: 11 }}>{it.desc}</div>
+                  </div>
+                  {ml.gear[k]
+                    ? <span style={{ fontSize: 11, color: C.green, whiteSpace: "nowrap" }}>✔ 購入済み</span>
+                    : <Btn small color={C.blue} disabled={ml.money < it.price} onClick={() => mlBuyGear(k)}>{it.price}万</Btn>}
+                </div>
+              ))}
+            </div>
+          </section>
+          <section>
+            <Eyebrow color={"#e8a13c"}>車（レース参加の疲労蓄積を軽減）</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+              {ML_CARS.map((c, i) => (
+                <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ml.carLv === i ? "#e8a13c" : C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div>
+                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{c.label}{ml.carLv === i && <span style={{ marginLeft: 6, fontSize: 10.5, color: "#e8a13c" }}>（所有中）</span>}</div>
+                    <div style={{ color: C.sub, fontSize: 11 }}>{c.desc}</div>
+                  </div>
+                  {ml.carLv >= i ? null : <Btn small color={"#e8a13c"} disabled={ml.money < c.price || ml.carLv !== i - 1} onClick={mlBuyCar}>{c.price}万</Btn>}
+                </div>
+              ))}
+            </div>
+          </section>
+          <section>
+            <Eyebrow color={C.red}>家（毎月の疲労回復を底上げ）</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+              {ML_HOUSES.map((h, i) => (
+                <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ml.houseLv === i ? C.red : C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div>
+                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{h.label}{ml.houseLv === i && <span style={{ marginLeft: 6, fontSize: 10.5, color: C.red }}>（所有中）</span>}</div>
+                    <div style={{ color: C.sub, fontSize: 11 }}>{h.desc}</div>
+                  </div>
+                  {ml.houseLv >= i ? null : <Btn small color={C.red} disabled={ml.money < h.price || ml.houseLv !== i - 1} onClick={mlBuyHouse}>{h.price}万</Btn>}
+                </div>
+              ))}
+            </div>
+          </section>
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
         </div>
       );
     }
