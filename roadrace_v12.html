@@ -2216,11 +2216,14 @@ function RaceView({ sim, onFinish }) {
         <>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, height: 280, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${TOP_H}`, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               {/* v12: 集団の2次元的な広がり（団子状〜エシュロン時の斜め隊列）に対して
                   道幅が狭すぎて選手がはみ出て見える問題を修正するため大幅に拡張。
-                  さらに拡張してほしいという追加フィードバックを繰り返し受け再拡大 */}
-              <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="100" strokeLinecap="round" />
+                  さらに拡張してほしいという追加フィードバックを繰り返し受け再拡大。
+                  v14.4: 固定height指定とviewBoxの縦横比が食い違い、画面幅次第で
+                  横方向に伸縮するアスペクト比崩れが発生していたため、CSSのaspect-ratio
+                  でviewBoxと同じ比率を強制する形に修正（あわせて道幅もさらに拡大） */}
+              <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="190" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
               <circle cx={mapX(1, cam.start, cam.end)} cy={TOP_H / 2} r="4" fill={C.red} />
               {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
@@ -2261,9 +2264,9 @@ function RaceView({ sim, onFinish }) {
           </div>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, height: 150, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${SIDE_H}`, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
               <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
-              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="16" />
+              <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="26" />
               {ridersUi.map(r => {
                 const { dx, dy } = packShape[r.id] || { dx: 0, dy: 0 };
                 const attackBonus = r.attackStreak > 0 ? (1 - r.attackStreak / ATTACK_VISUAL_TICKS) * ATTACK_EXAGGERATION : 0;
@@ -3528,6 +3531,7 @@ function App() {
             </div>
           </section>
           <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
+          <Btn outline color={C.red} onClick={() => askConfirm("マイライフを最初からやり直しますか？保存データも消えます。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>マイライフをリセット</Btn>
         </div>
       );
     }
