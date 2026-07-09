@@ -558,6 +558,33 @@ function riderFlavorText(r) {
   const traitText = r.trait ? `${TRAITS[r.trait].label}（${TRAITS[r.trait].desc}）の持ち主。` : "";
   return `${typeText}。${persText}${traitText}`.trim();
 }
+// v13.1: 殿堂入りの条件。「所属したことがある全選手」を無条件で殿堂入りさせるとキリがないため、
+// 一定の実績（出走数・勝利・表彰台・能力）かお気に入り登録のいずれかを満たした選手だけを
+// 選手名鑑に永久保存する。基準未満の選手はチームを離れた時点で記録から静かに消える
+function isHallOfFameWorthy(r) {
+  if (r.favorite) return true;
+  const log = r.raceLog || [];
+  const wins = log.filter(e => e.rank === 1).length;
+  const podiums = log.filter(e => e.rank <= 3).length;
+  return log.length >= 8 || wins >= 1 || podiums >= 3 || overall(r) >= 70 || !!r.prodigy;
+}
+// v13.1: 解雇された選手が能力・将来性次第でライバルチームに拾われる確率。
+// 高OVR・高成長ランク・逸材ほど声がかかりやすい
+function computePickupChance(r) {
+  const ovr = overall(r);
+  let chance = 0.05;
+  if (ovr >= 75) chance += 0.5;
+  else if (ovr >= 65) chance += 0.25;
+  else if (ovr >= 55) chance += 0.1;
+  if (r.growthPow === "S") chance += 0.3;
+  else if (r.growthPow === "A") chance += 0.15;
+  if (r.prodigy) chance += 0.2;
+  return Math.min(0.9, chance);
+}
+const RIVAL_TEAMS = [
+  { name: "レッドサンダー山陽", color: "#d9484a" }, { name: "クレディ・ブルー", color: "#3f7fd9" },
+  { name: "ヴェロチタ京都", color: "#9a6be0" }, { name: "ウィンドミル北海道", color: "#e08a3f" },
+];
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
   flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
@@ -634,6 +661,7 @@ function newRider(power, rng, opts = {}) {
     focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
     prodigy: !!opts.forceProdigy,
     raceLog: [], // v13: 選手名鑑用の出走履歴（{year, month, name, rank}）
+    favorite: false, // v13.1: お気に入り登録（殿堂入り条件を満たさなくても必ず記録に残す）
   };
   rider.joinOvr = overall(rider);
   return rider;
@@ -646,7 +674,7 @@ function initRoster() {
       age, growth, growthPow: pow, trait: trait || null, personality: pers,
       fatigue: 20, cond: 3, injury: 0, streak: 0,
       focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
-      raceLog: [],
+      raceLog: [], favorite: false,
     };
     r.joinOvr = overall(r); return r;
   };
@@ -1242,7 +1270,7 @@ function rankSim(sim) {
 // ---------- buildSim：選手構築＋コース生成＋ティックシミュレーション実行 ----------
 // fixedAiTeams を渡すとAI選手を再利用する（GCステージレースの2日目用）
 // dayTag を渡すとコース生成のシードに反映される（同じraceMetaでも日ごとに別コースにする）
-function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId) {
+function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni) {
   // v13: 難易度による他チームの強さ補正（aiMul）。省略時はnormal相当
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
@@ -1263,10 +1291,6 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
     fixedAiTeams.forEach(list => list.forEach(en => riders.push({ ...en })));
   } else {
     const rng = mulberry(Date.now() % 999983);
-    const aiDefs = [
-      { name: "レッドサンダー山陽", color: "#d9484a" }, { name: "クレディ・ブルー", color: "#3f7fd9" },
-      { name: "ヴェロチタ京都", color: "#9a6be0" }, { name: "ウィンドミル北海道", color: "#e08a3f" },
-    ];
     const power = (52 + classIdx * 9 + (raceMeta.grade - 1) * 4 + (raceMeta.championship ? 6 : 0)) * diffAiMul;
     // v12: 相手チームの出走人数は自チームの選択人数に連動させず、レース規定の範囲内で
     // チームごとに独立して決める（毎回同じ人数になる不自然さを解消）
@@ -1274,10 +1298,14 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
     // v12バグ修正: 同じレース内で自チーム・他チームの選手が名前被りしないよう、
     // 自チームの名前を最初に登録した「使用済み」集合を全チームで共有しながら生成する
     const nameBanned = new Set(squad.map(r => r.name));
-    aiTeamsUsed = aiDefs.map(d => {
+    aiTeamsUsed = RIVAL_TEAMS.map(d => {
       const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
-      const members = [];
-      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
+      // v13.1: 解雇後にこのチームへ拾われた元自チーム選手がいれば、実際の能力のまま
+      // 優先的に出走させる（フルの新規生成ではなく実データを引き継ぐ）
+      const alumni = (rivalAlumni || []).filter(a => a.signedTeam === d.name).slice(0, aiSquadN);
+      const alumniIds = new Set(alumni.map(a => a.id));
+      const members = alumni.map(a => ({ ...a }));
+      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
       const aiRoles = assignAIRoles(members, aiSquadN);
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
@@ -1285,6 +1313,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
         id: r.id, name: r.name, type: r.type, trait: r.trait,
         flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
         team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
+        isAlumnus: alumniIds.has(r.id),
       }));
     });
     aiTeamsUsed.forEach(list => list.forEach(en => riders.push({ ...en })));
@@ -2095,6 +2124,9 @@ function initGame() {
     difficulty: "easy",
     // v13: 選手名鑑・殿堂入り。引退・解雇した選手のスナップショット（raceLog含む）を保持する
     hallOfFame: [],
+    // v13.1: 解雇後にライバルチームへ拾われた元自チーム選手（signedTeamで所属先を管理）。
+    // 出走のたびraceLogが伸び、年度末に引退すると殿堂入り条件次第でhallOfFameへ移る
+    rivalAlumni: [],
   };
 }
 
@@ -2107,7 +2139,7 @@ const SAVE_VERSION = "v12";
 const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
-  "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame",
+  "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
 ];
 function serializeState(g) {
   const out = {};
@@ -2313,8 +2345,23 @@ function App() {
           year: s.year, classLabel: CLASSES[s.classIdx].label, points: s.points,
           promoted: info.promoted, relegated: info.relegated, champBest: s.champBest,
         }];
-        // v13: 引退した選手を殿堂入り（選手名鑑）として記録に残す
-        const hallOfFame = [...s.hallOfFame, ...info.retiredRiders.map(n => ({ ...n, farewellYear: s.year, farewellReason: "retired" }))];
+        // v13.1: ライバルチームに拾われた元選手も年齢を重ね、同じ引退条件を満たせば
+        // 殿堂入り判定（実績かお気に入りがあれば記録に残る）を経て名鑑へ、
+        // 満たさなければ静かに記録から外れる。生き残った選手はrivalAlumniに残り続ける
+        const survivingAlumni = [];
+        const retiredAlumniHof = [];
+        (s.rivalAlumni || []).forEach(r => {
+          const n = { ...r, age: r.age + 1 };
+          const retire = n.age >= 36 || (n.age >= 33 && overall(n) < n.joinOvr * 0.8);
+          if (retire) { if (isHallOfFameWorthy(n)) retiredAlumniHof.push({ ...n, farewellYear: year, farewellReason: "rival_retired" }); }
+          else survivingAlumni.push(n);
+        });
+        // v13.1: 引退した選手は、殿堂入り条件（実績かお気に入り）を満たした場合のみ記録に残す
+        const hallOfFame = [
+          ...s.hallOfFame,
+          ...info.retiredRiders.filter(isHallOfFameWorthy).map(n => ({ ...n, farewellYear: s.year, farewellReason: "retired" })),
+          ...retiredAlumniHof,
+        ];
         return {
           ...s, roster: survivors, classIdx, points: 0, year, month: 0,
           budget: s.budget + income + delta - upkeep - staffSalary,
@@ -2324,7 +2371,7 @@ function App() {
           races: genMonthRaces(year, 0, classIdx, 0, null),
           camp: false, campCooldown: 0, champBest: null, gc: null,
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
-          yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame,
+          yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame, rivalAlumni: survivingAlumni,
           screen: info.cleared ? "clear" : "yearend", tab: "home",
         };
       }
@@ -2373,7 +2420,7 @@ function App() {
     const itemBoost = { wheel: g.sel.useWheel, suit: g.sel.useSuit };
     // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
     const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
-    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty);
+    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni);
     setG(s => ({
       ...s, result: sim,
       gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {} } : s.gc,
@@ -2435,12 +2482,17 @@ function App() {
     if (mandateHit) pts = Math.round(pts * 1.3);
     // v13: 選手名鑑用に、出走した自チーム選手それぞれの着順を各選手のraceLogへ記録する
     const rankById = {}; playerRs.forEach(e => { rankById[e.id] = e.rank; });
+    // v13.1: ライバルチームに拾われた元選手が出走していれば、そちらのraceLogも伸ばす
+    const alumniRankById = {}; sim.ranked.filter(e => e.isAlumnus).forEach(e => { alumniRankById[e.id] = e.rank; });
     setG(s => {
       const roster = s.roster.map(r => rankById[r.id] != null
         ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id] }] }
         : r);
+      const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
+        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id] }] }
+        : r);
       return {
-        ...s, roster, budget: s.budget + prize,
+        ...s, roster, rivalAlumni, budget: s.budget + prize,
         points: race.championship ? s.points : s.points + pts,
         champBest: race.championship ? best.rank : s.champBest,
         sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
@@ -2480,8 +2532,14 @@ function App() {
         const roster = s.roster.map(r => rankById[r.id] != null
           ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id] }] }
           : r);
+        // v13.1: ライバルチームに拾われた元選手のGC総合成績もraceLogへ記録する
+        const alumniRanks = order.map(([id], i) => ({ id, rank: i + 1 })).filter(o => idToEntrant[o.id]?.isAlumnus);
+        const alumniRankById = {}; alumniRanks.forEach(o => { alumniRankById[o.id] = o.rank; });
+        const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
+          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id] }] }
+          : r);
         return {
-          ...s, roster, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
+          ...s, roster, rivalAlumni, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
           careerStats: bumpCareerStats(s.careerStats, bestRank, prize),
           gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize, pts },
           screen: "gc_final",
@@ -2537,15 +2595,33 @@ function App() {
     if (g.inv.camp <= 0 || g.camp || g.campCooldown > 0) return;
     setG(s => ({ ...s, camp: true, campCooldown: 1, inv: { ...s.inv, camp: s.inv.camp - 1 } }));
   };
+  // v13.1: お気に入り登録した選手は、殿堂入り条件（実績）を満たしていなくても必ず記録に残る
+  const toggleFavorite = (rid) => {
+    setG(s => ({ ...s, roster: s.roster.map(r => r.id === rid ? { ...r, favorite: !r.favorite } : r) }));
+  };
   const releaseRider = (rid) => {
     if (g.month !== 0) return;
     setG(s => {
       if (s.roster.length <= 1) return s;
       const r = s.roster.find(x => x.id === rid);
       if (!r) return s;
-      // v13: 解雇した選手も選手名鑑・殿堂入りの記録として残す
-      const hallOfFame = [...s.hallOfFame, { ...r, farewellYear: s.year, farewellReason: "released" }];
-      return { ...s, roster: s.roster.filter(x => x.id !== rid), hallOfFame, log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇した`] };
+      const roster = s.roster.filter(x => x.id !== rid);
+      // v13.1: 能力・将来性次第でライバルチームに拾われる。拾われた場合は殿堂入りさせず
+      // rivalAlumniで追跡し、そのチームで出走を続けさせる（いずれ引退した時点で改めて判定）
+      const pickedUp = Math.random() < computePickupChance(r);
+      if (pickedUp) {
+        const signedTeam = RIVAL_TEAMS[Math.floor(Math.random() * RIVAL_TEAMS.length)].name;
+        const rivalAlumni = [...s.rivalAlumni, { ...r, signedTeam, signedYear: s.year }];
+        return {
+          ...s, roster, rivalAlumni,
+          log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇 → ${signedTeam}が獲得したとの噂`],
+        };
+      }
+      // v13.1: 殿堂入りは一定の実績かお気に入り登録がある選手のみ（無条件だとキリがない）
+      const hallOfFame = isHallOfFameWorthy(r)
+        ? [...s.hallOfFame, { ...r, farewellYear: s.year, farewellReason: "released" }]
+        : s.hallOfFame;
+      return { ...s, roster, hallOfFame, log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇した`] };
     });
   };
 
@@ -2855,6 +2931,10 @@ function App() {
                     <span style={{ marginLeft: 5, fontFamily: FONT_M, fontSize: 12, color: POW[r.growthPow].color }}>成長{r.growthPow}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => toggleFavorite(r.id)} title="お気に入り登録（殿堂入りが確約されます）"
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 0, color: r.favorite ? C.yellow : C.sub }}>
+                      {r.favorite ? "★" : "☆"}
+                    </button>
                     <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
                     {g.month === 0 && <Btn small outline color={C.red} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id))}>解雇</Btn>}
                   </div>
@@ -3113,8 +3193,14 @@ function App() {
                       <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 14.5 }}>{r.name}</span>
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: TYPES[r.type].color }}>{TYPES[r.type].label}</span>
                     </div>
-                    <span style={{ fontSize: 11, color: C.sub }}>{r.farewellReason === "retired" ? `${r.farewellYear}年目 引退` : `${r.farewellYear}年目 退団`}</span>
+                    <span style={{ fontSize: 11, color: C.sub }}>
+                      {r.farewellReason === "retired" && `${r.farewellYear}年目 引退`}
+                      {r.farewellReason === "released" && `${r.farewellYear}年目 退団`}
+                      {r.farewellReason === "rival_retired" && `${r.farewellYear}年目 引退（${r.signedTeam}）`}
+                    </span>
                   </div>
+                  {r.signedTeam && <div style={{ fontSize: 11, color: C.red, marginTop: 1 }}>🔀 解雇後、{r.signedTeam}に拾われて現役を続けた</div>}
+                  {r.favorite && <div style={{ fontSize: 10.5, color: C.yellow, marginTop: 1 }}>★ お気に入り登録選手</div>}
                   <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>
                   <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
                   <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>通算{(r.raceLog || []).length}戦・{wins}勝・表彰台{podiums}回</div>
@@ -3495,7 +3581,7 @@ function App() {
             <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", borderRadius: 6, fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
               <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}>
                 <span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{e.rank}.</span>
-                {e.name}{e.isAce ? " 👑" : ""}<span style={{ color: C.sub, fontSize: 10.5 }}> / {e.teamName}</span>
+                {e.name}{e.isAce ? " 👑" : ""}{e.isAlumnus ? " 🔀" : ""}<span style={{ color: C.sub, fontSize: 10.5 }}> / {e.teamName}</span>
               </span>
               <span style={{ fontFamily: FONT_M, color: C.sub }}>{e.rank === 1 ? fmtTime(e.finishTime) : fmtGap(e.finishTime - res.ranked[0].finishTime)}</span>
             </div>
@@ -3545,7 +3631,7 @@ function App() {
             const e = idToEntrant[id];
             return (
               <div key={id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
-                <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}</span>
+                <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}{e.isAlumnus ? " 🔀" : ""}</span>
                 <span style={{ fontFamily: FONT_M, color: C.sub }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrderSoFar[0][1])}</span>
               </div>
             );
@@ -3586,7 +3672,7 @@ function App() {
             const e = idToEntrant[id];
             return (
               <div key={id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
-                <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}</span>
+                <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}{e.isAlumnus ? " 🔀" : ""}</span>
                 <span style={{ fontFamily: FONT_M, color: C.sub }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrder[0][1])}</span>
               </div>
             );
