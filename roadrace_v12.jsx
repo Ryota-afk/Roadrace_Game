@@ -609,6 +609,40 @@ const ML_BACKGROUNDS = {
   corporate: { label: "実業団卒", age: 25, powerBase: 58, growth: "early", powDist: [0.02, 0.12, 0.40],
     desc: "即戦力級の完成度を持つが、伸びしろは小さめ" },
 };
+// v14.2: マイライフの私生活・取材イベント。シーズンモードのEVENTS/resolveEventと
+// 同じ「タイトル・本文・選択肢×効果」の構成を、選手1人向けに簡略化して流用する
+const ML_EVENTS = [
+  { title: "地元メディアの取材", text: "地元テレビ局が調子について取材したいと申し出た。",
+    choices: [
+      { label: "前向きにアピールする", result: "自信に満ちた受け答えで注目を集めた。少し気を張ったが手応えを感じている。", effects: { fatigueDelta: 4, abBoost: 1 } },
+      { label: "謙虚に答える", result: "謙虚な受け答えが好感を持たれた。気負わず過ごせた。", effects: { fatigueDelta: -4 } },
+    ] },
+  { title: "個人スポンサーとの会食", text: "個人スポンサーの担当者から食事に誘われた。",
+    choices: [
+      { label: "しっかり交流する", result: "関係を深めることができ、期待に応えたいという気持ちが強くなった。", effects: { abBoost: 2, fatigueDelta: 6 } },
+      { label: "早めに切り上げて休む", result: "体調を優先し、早めに休んだ。", effects: { fatigueDelta: -10 } },
+    ] },
+  { title: "実家に顔を出す", text: "オフの合間、久しぶりに実家に顔を出した。",
+    choices: [
+      { label: "ゆっくり休養する", result: "心身ともにリフレッシュでき、疲れが抜けた。", effects: { fatigueDelta: -25 } },
+      { label: "自主トレに励む", result: "休みの日も鍛錬を怠らず、地力が少し上がった。", effects: { abBoost: 3, fatigueDelta: 5 } },
+    ] },
+  { title: "ライバルからの挑発", text: "SNSでライバル選手から挑発めいた投稿があった。",
+    choices: [
+      { label: "闘志を燃やす", result: "闘志に火がつき、練習に熱が入った。", effects: { abBoost: 3, fatigueDelta: 10 } },
+      { label: "受け流す", result: "冷静に受け流し、平常心を保った。", effects: { fatigueDelta: -2 } },
+    ] },
+  { title: "監督との面談", text: "監督に呼ばれ、今後の起用方針について話をした。",
+    choices: [
+      { label: "エースを目指したいと伝える", result: "強い意欲を評価された一方、気合が入りすぎて少し力んでしまった。", effects: { abBoost: 2, fatigueDelta: 6 } },
+      { label: "チームのために尽くすと伝える", result: "誠実な姿勢が信頼につながった。", effects: { fatigueDelta: -6 } },
+    ] },
+  { title: "違和感のある一日", text: "練習中、脚に軽い張りを感じた。",
+    choices: [
+      { label: "無理せず様子を見る", result: "早めのケアで大事に至らず、疲労も抜けた。", effects: { fatigueDelta: -15 } },
+      { label: "気にせず追い込む", result: "その日は乗り切ったが、疲労が蓄積した。", effects: { abBoost: 2, fatigueDelta: 18 } },
+    ] },
+];
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
   flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
@@ -2726,22 +2760,33 @@ function App() {
       };
     });
   }
-  function mlAdvanceMonth(raced) {
+  // v14.2: 月次アクションを「レース／練習」の2択から拡張。練習・休養・イベントで
+  // 選手への効果を出し分ける（レースは既にmlRaceFinish側で反映済みのためここでは疲労のみ）
+  function mlApplyMonthEffect(player0, mode) {
+    const player = { ...player0 };
+    if (mode === "race") {
+      player.fatigue = Math.min(100, player.fatigue + 40);
+      player.streak = (player.streak || 0) + 1;
+    } else if (mode === "train") {
+      const ph = growthPhase(player);
+      const gain = 1.5 * ph.gain * POW[player.growthPow].mul;
+      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus));
+      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k)));
+      const ph2 = growthPhase(player);
+      if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
+      player.fatigue = Math.max(0, player.fatigue - 15);
+      player.streak = 0;
+    } else if (mode === "rest") {
+      player.fatigue = Math.max(0, player.fatigue - 35);
+      player.streak = 0;
+    } else if (mode === "event") {
+      player.fatigue = Math.max(0, player.fatigue - 5);
+    }
+    return player;
+  }
+  function mlAdvanceMonth(mode) {
     setMl(s => {
-      let player = { ...s.player };
-      if (raced) {
-        player.fatigue = Math.min(100, player.fatigue + 40);
-        player.streak = (player.streak || 0) + 1;
-      } else {
-        const ph = growthPhase(player);
-        const gain = 1.5 * ph.gain * POW[player.growthPow].mul;
-        addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus));
-        AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k)));
-        const ph2 = growthPhase(player);
-        if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
-        player.fatigue = Math.max(0, player.fatigue - 15);
-        player.streak = 0;
-      }
+      let player = mlApplyMonthEffect(s.player, mode);
       const log = [...s.log];
       if (s.month === 11) {
         player.age += 1;
@@ -2776,6 +2821,26 @@ function App() {
   }
   function mlChooseTeam(teamName) {
     setMl(s => ({ ...s, team: teamName, contractOffers: null, screen: "mylife_main" }));
+  }
+  // v14.2: 私生活・取材イベント（練習/休養以外の月次アクション）
+  function mlApplyEventEffects(player0, effects) {
+    const player = { ...player0 };
+    if (effects.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + effects.fatigueDelta));
+    if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost));
+    return player;
+  }
+  function mlTriggerEvent() {
+    const ev = ML_EVENTS[Math.floor(Math.random() * ML_EVENTS.length)];
+    setMl(s => ({ ...s, pendingEvent: ev, screen: "mylife_event" }));
+  }
+  function mlResolveEvent(choiceIdx) {
+    setMl(s => {
+      const ev = s.pendingEvent;
+      if (!ev) return s;
+      const choice = ev.choices[choiceIdx];
+      const player = mlApplyEventEffects(s.player, choice.effects);
+      return { ...s, player, pendingEvent: null, eventResultText: choice.result, screen: "mylife_event_result" };
+    });
   }
 
   // ---- 購入・装備・アイテム ----
@@ -3042,7 +3107,9 @@ function App() {
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
-            <Btn outline color={C.sub} onClick={() => mlAdvanceMonth(false)}>この月は練習に専念する（レース見送り）</Btn>
+            <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習する（能力強化・疲労+）</Btn>
+            <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養する（疲労回復のみ）</Btn>
+            <Btn outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活のイベントを受ける</Btn>
           </div>
           <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
         </div>
@@ -3066,10 +3133,35 @@ function App() {
             <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
             <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt</div>
           </div>
-          <Btn onClick={() => mlAdvanceMonth(true)}>翌月へ進む →</Btn>
+          <Btn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</Btn>
         </div>
       );
     }
+
+    if (ml.screen === "mylife_event" && ml.pendingEvent) {
+      const ev = ml.pendingEvent;
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "12px 14px" }}>
+            <Eyebrow color={C.purple}>LIFE EVENT — {ev.title}</Eyebrow>
+            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0" }}>{ev.text}</p>
+          </div>
+          {ev.choices.map((c, i) => (
+            <Btn key={i} color={C.purple} onClick={() => mlResolveEvent(i)}>{c.label}</Btn>
+          ))}
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_event_result") return mlWrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
+          <Eyebrow color={C.purple}>結果</Eyebrow>
+          <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.eventResultText}</p>
+        </div>
+        <Btn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</Btn>
+      </div>
+    );
 
     if (ml.screen === "mylife_contract" && ml.contractOffers) return mlWrap(
       <div style={{ display: "grid", gap: 12 }}>
