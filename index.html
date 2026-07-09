@@ -567,6 +567,30 @@ function riderFlavorText(r) {
   const traitText = r.trait ? `${TRAITS[r.trait].label}（${TRAITS[r.trait].desc}）の持ち主。` : "";
   return `${typeText}。${persText}${traitText}`.trim();
 }
+// v13.2: 殿堂入り選手専用の「軌跡」テキスト。riderFlavorText（脚質・性格などの固定プロフィール）
+// とは別枠で、raceLogや離脱理由から実際のキャリアの歩みを物語調に組み立てる
+function riderCareerSummary(r) {
+  const log = r.raceLog || [];
+  const wins = log.filter(e => e.rank === 1).length;
+  const podiums = log.filter(e => e.rank <= 3).length;
+  const races = log.length;
+  const firstYear = races > 0 ? Math.min(...log.map(e => e.year)) : null;
+  const lastYear = r.farewellYear;
+  const spanText = firstYear != null && lastYear != null
+    ? `${firstYear}年目から${lastYear}年目までの${Math.max(1, lastYear - firstYear + 1)}年間、`
+    : "";
+  const originText = r.prodigy ? "鳴り物入りの逸材として加入し、" : "";
+  let recordText;
+  if (races === 0) recordText = "出走機会には恵まれなかったが、";
+  else if (wins > 0) recordText = `通算${races}戦${wins}勝・表彰台${podiums}回という実績を残し、`;
+  else if (podiums > 0) recordText = `通算${races}戦、表彰台${podiums}回まで食い込みながらも勝利には届かず、`;
+  else recordText = `通算${races}戦を走り抜いたが目立った結果は残せず、`;
+  let farewellText;
+  if (r.farewellReason === "rival_retired") farewellText = `解雇後は${r.signedTeam}に活躍の場を移し、${r.age}歳でそこで現役を退いた。`;
+  else if (r.farewellReason === "released") farewellText = `${r.age}歳でチームを去った。`;
+  else farewellText = `${r.age}歳で現役を引退した。`;
+  return `${originText}${spanText}${recordText}${farewellText}`;
+}
 // v13.1: 殿堂入りの条件。「所属したことがある全選手」を無条件で殿堂入りさせるとキリがないため、
 // 一定の実績（出走数・勝利・表彰台・能力）かお気に入り登録のいずれかを満たした選手だけを
 // 選手名鑑に永久保存する。基準未満の選手はチームを離れた時点で記録から静かに消える
@@ -3212,6 +3236,9 @@ function App() {
                   {r.favorite && <div style={{ fontSize: 10.5, color: C.yellow, marginTop: 1 }}>★ お気に入り登録選手</div>}
                   {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
                   <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
+                  <div style={{ fontSize: 11.5, color: C.text, marginTop: 5, padding: "6px 8px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.purple}`, lineHeight: 1.6 }}>
+                    {riderCareerSummary(r)}
+                  </div>
                   <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>通算{(r.raceLog || []).length}戦・{wins}勝・表彰台{podiums}回</div>
                   <Btn small outline color={C.sub} style={{ marginTop: 6 }} onClick={() => setExpandedRiderId(expandedRiderId === rid ? null : rid)}>
                     {expandedRiderId === rid ? "▲ 戦績を閉じる" : "▼ 戦績を見る"}
