@@ -4165,6 +4165,7 @@ function App() {
             <Btn small outline color={C.sub} onClick={() => {
               askConfirm("タイトルに戻ります。セーブ済みのデータは消えません。よろしいですか？", () => {
                 setG(s => ({ ...s, screen: "intro" }));
+                setSuperMode(null);
               });
             }}>🏠 タイトルに戻る</Btn>
           </div>
