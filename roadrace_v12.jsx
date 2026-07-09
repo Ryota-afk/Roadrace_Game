@@ -599,6 +599,16 @@ const MYLIFE_TEAMS = [
   ...RIVAL_TEAMS,
   { name: "サンライズ静岡", color: "#4fd1c5" }, { name: "北斗プロサイクル", color: "#c084fc" },
 ];
+// v14.1: マイライフの経歴選択。年齢・初期能力・成長ポテンシャル（growthPow分布・成長タイプ）に
+// 差を付け、「若く粗削りだが伸びしろ最大」〜「即戦力だが伸びしろ小さめ」の3択にする
+const ML_BACKGROUNDS = {
+  highschool: { label: "高校卒", age: 18, powerBase: 40, growth: "late", powDist: [0.16, 0.46, 0.80],
+    desc: "能力はまだ粗削りだが伸びしろは最大級。長い目で育てる叩き上げタイプ" },
+  university: { label: "大学卒", age: 22, powerBase: 50, growth: "normal", powDist: [0.08, 0.30, 0.65],
+    desc: "能力・伸びしろのバランス型。安定した成長曲線が魅力" },
+  corporate: { label: "実業団卒", age: 25, powerBase: 58, growth: "early", powDist: [0.02, 0.12, 0.40],
+    desc: "即戦力級の完成度を持つが、伸びしろは小さめ" },
+};
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
   flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
@@ -654,8 +664,10 @@ function newRider(power, rng, opts = {}) {
   AB_KEYS.forEach(k => r[k] = clamp(r[k]));
   const age = opts.age ?? (22 + Math.floor(rng() * 12));
   const gKeys = Object.keys(GROWTH);
-  let growth = gKeys[Math.floor(rng() * 3)];
-  if (age <= 19 && rng() < 0.5) growth = "late";
+  // v14: マイライフの経歴選択（高卒/大卒/実業団卒）で成長タイプを明示指定できるように。
+  // 指定が無ければ従来通りランダム（若年層はlate寄りの補正込み）
+  let growth = opts.growth || gKeys[Math.floor(rng() * 3)];
+  if (!opts.growth && age <= 19 && rng() < 0.5) growth = "late";
   let trait = null;
   if (rng() < 0.35) {
     const bad = rng() < 0.25;
@@ -2205,7 +2217,7 @@ function clearSaveGame() {
 // GROWTH/newRider/generateCourse/simulateTicks/rankSim/riderNickname等はそのまま再利用する
 function initMyLife() {
   return {
-    screen: "mylife_create", typeChoice: "RUL",
+    screen: "mylife_create", typeChoice: "RUL", bgChoice: "university",
     year: 1, month: 0, classIdx: 0, points: 0,
     player: null, team: null,
     races: [], sel: { raceId: null },
@@ -2672,15 +2684,17 @@ function App() {
     const grade = month === 11 ? 3 : 1 + Math.floor(rng() * 3);
     return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx };
   }
-  function mlCreateChar(type) {
+  function mlCreateChar(type, background) {
     const rng = mulberry(Date.now() % 999983);
     const team = MYLIFE_TEAMS[Math.floor(Math.random() * MYLIFE_TEAMS.length)];
-    const player = newRider(46, rng, { type, age: 18, banned: new Set() });
+    const bg = ML_BACKGROUNDS[background];
+    const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set() });
+    player.background = background;
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
     setMl(s => ({
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
-      log: [`【1年目 4月】${team.name}に新人選手として加入`],
+      log: [`【1年目 4月】${bg.label}として${team.name}に新人選手加入`],
       screen: "mylife_main",
     }));
   }
@@ -2935,34 +2949,57 @@ function App() {
   if (superMode === "mylife") {
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
+      const bgOpts = Object.entries(ML_BACKGROUNDS);
       return mlWrap(
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
             <Eyebrow>MY LIFE — キャラクター作成</Eyebrow>
             <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.7, margin: "6px 0 0" }}>
-              脚質を選んでB1のいずれかのチームに新人選手として加入します。18歳からのキャリアスタートです。
+              脚質と経歴を選んでB1のいずれかのチームに新人選手として加入します。
             </p>
           </div>
           {hasMyLifeSave() && (
             <Btn onClick={() => { const loaded = loadMyLifeGame(); if (loaded) setMl(loaded); }}>💾 続きから</Btn>
           )}
-          <div style={{ display: "grid", gap: 8 }}>
-            {typeOpts.map(([k, t]) => (
-              <button key={k} onClick={() => setMl(s => ({ ...s, typeChoice: k }))}
-                style={{
-                  textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
-                  background: ml.typeChoice === k ? "rgba(255,210,63,0.12)" : C.panel,
-                  border: `1.5px solid ${ml.typeChoice === k ? C.yellow : C.line}`,
-                }}>
-                <span style={{ fontFamily: FONT_D, fontWeight: 700, color: t.color }}>{t.label}</span>
-              </button>
-            ))}
+          <div>
+            <Eyebrow>脚質</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+              {typeOpts.map(([k, t]) => (
+                <button key={k} onClick={() => setMl(s => ({ ...s, typeChoice: k }))}
+                  style={{
+                    textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                    background: ml.typeChoice === k ? "rgba(255,210,63,0.12)" : C.panel,
+                    border: `1.5px solid ${ml.typeChoice === k ? C.yellow : C.line}`,
+                  }}>
+                  <span style={{ fontFamily: FONT_D, fontWeight: 700, color: t.color }}>{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Eyebrow>経歴（年齢・能力・伸びしろに影響）</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+              {bgOpts.map(([k, b]) => (
+                <button key={k} onClick={() => setMl(s => ({ ...s, bgChoice: k }))}
+                  style={{
+                    textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                    background: ml.bgChoice === k ? "rgba(255,210,63,0.12)" : C.panel,
+                    border: `1.5px solid ${ml.bgChoice === k ? C.yellow : C.line}`,
+                  }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{b.label}</span>
+                    <span style={{ fontSize: 11, color: C.sub }}>{b.age}歳スタート</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{b.desc}</div>
+                </button>
+              ))}
+            </div>
           </div>
           <Btn onClick={() => {
-            const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice); };
+            const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice, ml.bgChoice); };
             if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate);
             else doCreate();
-          }}>この脚質でデビュー →</Btn>
+          }}>この内容でデビュー →</Btn>
           <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
         </div>
       );
