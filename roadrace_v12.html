@@ -643,8 +643,81 @@ const FLAVOR_EPISODE_OTHER = [
   e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}での経験は今の走りの土台になっている。`,
   e => `${e.year}年目${MONTHS[e.month]}、${roleClause(e.role)}${e.name}では悔しい結果に終わったが、その後の糧にしている。`,
 ];
+// v14.7: 単発のレース結果だけでなく、raceLog全体の傾向（連勝・無敗・役割の変遷）から
+// 選手の「人物像」を判断するアーキタイプ系フレーバー。単発エピソードより優先度を高くし、
+// 無敗＞連勝中＞役割アーキタイプ＞通常のエピソード／人物像、の順で判定する
+function raceLogWinStreak(log) {
+  let streak = 0;
+  for (let i = log.length - 1; i >= 0; i--) { if (log[i].rank === 1) streak++; else break; }
+  return streak;
+}
+const ACE_TYPE_LABEL = {
+  SPR: "エーススプリンター", CLM: "エースクライマー", RUL: "オールラウンドエース",
+  PUN: "エースパンチャー", TT: "エースタイムトライアリスト",
+};
+// v14.6で追加したROLE_CLAUSEのキーのうち、実質「アシスト系」に分類できるものをまとめる
+// （breakthroughは自由な個人色が強くどちらにも属さないため除外、breakawayは別枠で判定）
+const ASSIST_ROLES = new Set(["lead", "sub", "mountain", "flat", "support", "experience"]);
+const FLAVOR_UNDEFEATED = [
+  n => `${n}戦${n}勝、デビュー以来まだ黒星がない完全無敗を貫いている。`,
+  n => `無敗街道驀進中——${n}戦して一度も負けたことがない。`,
+  n => `${n}戦全勝という圧倒的な戦績で、負けを知らない走りを続けている。`,
+  n => `ここまで${n}戦無敗。誰にも負ける気がしないという自信がにじみ出ている。`,
+];
+const FLAVOR_STREAK = [
+  n => `現在${n}連勝中。勢いに乗ったこの選手を止めるのは容易ではない。`,
+  n => `直近${n}戦を勝ち続け、波に乗っている真っ最中だ。`,
+  n => `${n}連勝と絶好調で、次のレースでも警戒される存在になっている。`,
+  n => `破竹の${n}連勝中——誰もこの勢いに逆らえずにいる。`,
+];
+const FLAVOR_ACE_ARCHETYPE = [
+  label => `幾多のレースでエースを任され続けた、チームの絶対的${label}。`,
+  label => `迷わずエースの座を託される、押しも押されもせぬ${label}。`,
+  label => `チームメイトの誰もが認める、揺るぎない${label}としての地位を築いている。`,
+  label => `他の追随を許さぬ結果を積み重ね、名実ともにチームの${label}になった。`,
+];
+const FLAVOR_ASSIST_ARCHETYPE = [
+  () => "己の勝利より仲間を活かす道を選び続けた、チーム随一の名アシスト。",
+  () => "目立たぬ働きでエースを何度も勝たせてきた、縁の下の名アシスト。",
+  () => "献身的な牽引でチームを支え続け、いぶし銀の名アシストと評されている。",
+  () => "自らの結果より仲間のゴールを優先する、信頼厚い名アシスト。",
+];
+const FLAVOR_BREAKAWAY_ARCHETYPE = [
+  () => "序盤から果敢に飛び出す走りを繰り返す、逃げのスペシャリスト。",
+  () => "集団任せにせず自ら仕掛け続ける、逃げ屋としての矜持を持つ選手。",
+  () => "番狂わせを演出する逃げの名手として、レースを何度も面白くしてきた。",
+];
 function riderFlavorText(r) {
   const log = r.raceLog || [];
+  if (log.length >= 3 && log.every(e => e.rank === 1)) {
+    const idx = Math.floor(mulberry((r.id || 0) * 211 + log.length)() * FLAVOR_UNDEFEATED.length);
+    return FLAVOR_UNDEFEATED[idx](log.length);
+  }
+  const streak = raceLogWinStreak(log);
+  if (streak >= 3) {
+    const idx = Math.floor(mulberry((r.id || 0) * 311 + streak)() * FLAVOR_STREAK.length);
+    return FLAVOR_STREAK[idx](streak);
+  }
+  const roled = log.filter(e => e.role);
+  if (log.length >= 5 && roled.length / log.length >= 0.6) {
+    const aceCount = roled.filter(e => e.role === "ace").length;
+    const assistCount = roled.filter(e => ASSIST_ROLES.has(e.role)).length;
+    const breakawayCount = roled.filter(e => e.role === "breakaway").length;
+    const wins = log.filter(e => e.rank === 1).length;
+    if (aceCount / roled.length >= 0.7 && wins >= 2) {
+      const label = ACE_TYPE_LABEL[r.type] || "絶対的エース";
+      const idx = Math.floor(mulberry((r.id || 0) * 419 + aceCount)() * FLAVOR_ACE_ARCHETYPE.length);
+      return FLAVOR_ACE_ARCHETYPE[idx](label);
+    }
+    if (assistCount / roled.length >= 0.7) {
+      const idx = Math.floor(mulberry((r.id || 0) * 523 + assistCount)() * FLAVOR_ASSIST_ARCHETYPE.length);
+      return FLAVOR_ASSIST_ARCHETYPE[idx]();
+    }
+    if (breakawayCount / roled.length >= 0.5) {
+      const idx = Math.floor(mulberry((r.id || 0) * 617 + breakawayCount)() * FLAVOR_BREAKAWAY_ARCHETYPE.length);
+      return FLAVOR_BREAKAWAY_ARCHETYPE[idx]();
+    }
+  }
   let notable = null;
   log.forEach(e => {
     if (!notable || e.rank < notable.rank || (e.rank === notable.rank && (e.year > notable.year || (e.year === notable.year && e.month > notable.month)))) notable = e;
@@ -1052,7 +1125,8 @@ function genMonthRaces(year, month, classIdx, points, sponsor) {
   // v13: グランツール・海外遠征。7月（month===3）に年1回、その年のクラスに開かれた
   // 3日間の海外遠征ステージレースを追加する。stageTmplsで日ごとに丘陵→山岳→ヒルクライムと
   // コース性格を変え、通常のクラス別カレンダーとは独立に毎年必ず出走できる
-  if (month === 3) {
+  // v14.7: グランツールはPROクラス限定の大会に変更（B1・Aでは開催されない）
+  if (month === 3 && classIdx === 2) {
     const venue = OVERSEAS_VENUES[Math.floor(rng() * OVERSEAS_VENUES.length)];
     races.unshift({
       id: `grandtour-${year}-${classIdx}`, grandTour: true, stageRace: true, stageCount: 3,
@@ -2629,6 +2703,15 @@ function App() {
   // ---- 月次更新 ----
   function monthlyUpdate(state, raceInfo) {
     const starterIds = raceInfo ? raceInfo.starters : null;
+    // v14.7: グランツールは複数日にわたって走り切る大会のため、ワンデーレースと
+    // 同じ疲労蓄積では実態に合わない。ただしステージレースは中日ごとに-20の回復が
+    // 別途入る（startNextStage）ため、素朴に係数を掛けただけだとその回復分で
+    // ほぼ相殺されてしまう。かといって係数を上げすぎると、疲労は0未満に下がらない
+    // （中日回復は0で頭打ち）ため、開幕直後の疲労が低い選手でも常に上限100に
+    // 張り付いてしまい「グランツール＝常に即MAX」という芸のない結果になる。
+    // 3日間なら中日回復-40を踏まえてもワンデーレースよりはっきり多く疲労が残りつつ、
+    // 低疲労状態からのスタートなら100に張り付かない程度の係数に留める
+    const stageFatigueMul = (raceInfo && raceInfo.grandTour) ? 1 + ((raceInfo.stageCount || 3) - 1) / 3 : 1;
     // v13: 難易度別の成長ソフトキャップ閾値（易しいほど高い閾値まで伸びる）
     const growthCap = (DIFFICULTIES.find(d => d.id === state.difficulty) || DIFFICULTIES[0]).growthCap;
     const roster = state.roster.map(r => {
@@ -2660,7 +2743,7 @@ function App() {
         if (ph2.dec > 0) AB_KEYS.forEach(k => { n[k] = Math.max(20, n[k] - ph2.dec); });
       }
       if (starterIds && starterIds.includes(n.id)) {
-        n.fatigue = Math.min(100, n.fatigue + (n.trait === "iron" ? 32 : 45));
+        n.fatigue = Math.min(100, n.fatigue + (n.trait === "iron" ? 32 : 45) * stageFatigueMul);
         n.streak += 1;
         const ph = growthPhase(n);
         raceInfo.expKeys.forEach(k => addAb(n, k, 0.6 * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k), growthCap));
@@ -4597,7 +4680,7 @@ function App() {
             </div>
           ))}
         </div>
-        <Btn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, raceId: g.sel.raceId })}>翌月へ進む →</Btn>
+        <Btn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む →</Btn>
       </div>
     );
   }
@@ -4688,7 +4771,7 @@ function App() {
             );
           })}
         </div>
-        <Btn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, raceId: g.gc.race.id })}>翌月へ進む →</Btn>
+        <Btn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む →</Btn>
       </div>
     );
   }
