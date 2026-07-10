@@ -163,6 +163,31 @@ function upgradeGoldAbilities(r) {
   });
   return changed ? { ...r, goldAbilities: next } : r;
 }
+// v17: 特殊能力の後天的獲得。GOLD_CONDITIONSより緩い閾値で「まだ持っていない選手が
+// 新たに身につける」条件を定義する。条件を満たしても即座には身につかず、毎月低確率の
+// 抽選を通過してはじめて習得する（じわじわ育っていく手応えを出すため）
+const ACQUIRE_CONDITIONS = {
+  mount:       r => r.type === "CLM" && countWins(r) >= 2,
+  puncheur:    r => r.type === "PUN" && countWins(r) >= 2,
+  flatlander:  r => r.type === "RUL" && countWins(r) >= 2,
+  sprinter_sp: r => r.type === "SPR" && countWins(r) >= 2,
+  soloist:     r => r.type === "TT" && countWins(r) >= 2,
+  closer:      r => countWins(r) >= 4,
+  escape:      r => countRoleUses(r, e => e.role === "breakaway") >= 3,
+  domestique:  r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)) >= 5,
+  iron:        r => (r.raceLog || []).length >= 15,
+  big:         r => (r.raceLog || []).some(e => (e.name.includes("世界選手権") || e.name.includes("オリンピック")) && e.rank <= 3),
+};
+// 保有枠（0〜3）に空きがあり、条件を満たす未保有の能力が一つでもあれば、月ごとに
+// 15%の確率でその中から1つを新規習得する。変更があれば新オブジェクトを、無ければ引数をそのまま返す
+function acquireNewAbility(r) {
+  const abilities = r.abilities || [];
+  if (abilities.length >= 3) return r;
+  const eligible = Object.keys(ACQUIRE_CONDITIONS).filter(id => !abilities.includes(id) && ACQUIRE_CONDITIONS[id](r));
+  if (eligible.length === 0 || Math.random() >= 0.15) return r;
+  const id = eligible[Math.floor(Math.random() * eligible.length)];
+  return { ...r, abilities: [...abilities, id] };
+}
 // v16フェーズ3: 特殊能力ファイル（図鑑）。自チーム所属選手・マイライフの自分自身が
 // これまでに保有したことのある特殊能力を、セーブデータのリセットをまたいで記録する
 // 永続ストレージ。通常特性と金特を別々に記録し、プレイ実績として蓄積していく
@@ -1107,10 +1132,32 @@ const ML_CROSSROADS = {
         }) },
       { label: "早期復帰を目指す",
         result: "予定より早く戦列に復帰したが、無理がたたって本調子が長く続かず、以後も違和感を抱えることになった（毎月の疲労回復がわずかに下がる）。",
-        apply: (player, flags) => ({
-          player: { ...player, flat: Math.max(20, player.flat - 1), climb: Math.max(20, player.climb - 1), sprint: Math.max(20, player.sprint - 1), stamina: Math.max(20, player.stamina - 1), solo: Math.max(20, player.solo - 1) },
-          flags: { ...flags, injuryResolved: true, rushedInjuryComeback: true },
-        }) },
+        // v17: 無理な早期復帰の代償として、枠に空きがあれば「ガラスの体」を後天的に負ってしまう
+        apply: (player, flags) => {
+          const canAcquire = (player.abilities || []).length < 3 && !hasAbility(player, "glass");
+          return {
+            player: {
+              ...player,
+              flat: Math.max(20, player.flat - 1), climb: Math.max(20, player.climb - 1), sprint: Math.max(20, player.sprint - 1), stamina: Math.max(20, player.stamina - 1), solo: Math.max(20, player.solo - 1),
+              abilities: canAcquire ? [...(player.abilities || []), "glass"] : (player.abilities || []),
+            },
+            flags: { ...flags, injuryResolved: true, rushedInjuryComeback: true },
+          };
+        },
+        resultNote: (player) => hasAbility(player, "glass") ? "この経験から、特殊能力「ガラスの体」が身についてしまった…。" : "" },
+    ],
+  },
+  // v17: 結婚した選手にだけ、その後さらに続く家庭の岐路として第一子誕生を用意する
+  child: {
+    key: "child", title: "人生の岐路 — 第一子誕生",
+    text: "パートナーから妊娠を伝えられた。もうすぐ親になる。",
+    choices: [
+      { label: "喜んで育児にも積極的に関わる",
+        result: "新しい家族を迎え、生活に張り合いが生まれた。家庭がしっかり支えてくれることで、以後は疲労がさらに抜けやすくなった。",
+        apply: (player, flags) => ({ player, flags: { ...flags, hasChild: true, childResolved: true } }) },
+      { label: "パートナーに任せ、競技を最優先する",
+        result: "家庭のサポートを受けつつ競技に集中する環境を整えた。練習によりのめり込めるようになった（以後、練習効果がわずかに上がる）。",
+        apply: (player, flags) => ({ player, flags: { ...flags, hasChild: true, childResolved: true, childFocusedCareer: true } }) },
     ],
   },
 };
@@ -1121,9 +1168,24 @@ function mlRollCrossroads(s, player) {
   const candidates = [];
   if (!flags.marriageResolved && player.age >= 25 && Math.random() < 0.35) candidates.push(ML_CROSSROADS.marriage);
   if (!flags.injuryResolved && (player.raceLog || []).length >= 6 && Math.random() < 0.2) candidates.push(ML_CROSSROADS.injury);
+  // v17: 結婚済み・未解決なら第一子誕生の岐路が続く
+  if (flags.married && !flags.childResolved && player.age >= 27 && Math.random() < 0.3) candidates.push(ML_CROSSROADS.child);
   if (candidates.length === 0) return null;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
+// v17: オフシーズンの過ごし方。年度末処理のたびに必ず1つ選ぶ（人生の岐路とは違い毎年発生する）。
+// 安全策（国内自主トレ）・ハイリスクハイリターン（海外武者修行）・休養の3択で明確なトレードオフを出す
+const ML_OFFSEASON_CHOICES = [
+  { key: "domestic", label: "国内で自主トレーニングに励む", desc: "堅実に基礎を積む。伸びは控えめだが安全",
+    result: "オフシーズンは国内で黙々と走り込み、着実に地力を蓄えた。",
+    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2)); return p; } },
+  { key: "overseas", label: "海外武者修行に出る", desc: "レベルの高い環境に飛び込む。伸びは大きいが疲労が残る",
+    result: "海外の強豪選手たちに揉まれ、大きく成長する手応えを掴んだ。ただし疲労が抜けきらないまま新シーズンを迎えることになった。",
+    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4)); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
+  { key: "rest", label: "心身をしっかり休める", desc: "疲労を大きくリセットして万全の状態で新シーズンへ",
+    result: "オフシーズンをゆっくり過ごし、心身ともにリフレッシュして新シーズンを迎える。",
+    apply: (player) => ({ ...player, fatigue: Math.max(0, player.fatigue - 40) }) },
+];
 // v15: マイライフの実績・アチーブメント。既存のraceLog・rivalRecord・flags・classIdxだけから
 // 判定する（達成状態を別途保持しない）ので、算出のたびに常に最新の状態と一致する
 const ML_ACHIEVEMENTS = [
@@ -1151,6 +1213,8 @@ const ML_ACHIEVEMENTS = [
     check: (ml) => !!ml.flags?.married },
   { id: "injury_comeback", icon: "🩹", label: "苦難を乗り越えて", desc: "大きな怪我から復帰する",
     check: (ml) => !!ml.flags?.injuryResolved },
+  { id: "has_child", icon: "👶", label: "親になる", desc: "第一子を授かる",
+    check: (ml) => !!ml.flags?.hasChild },
 ];
 function computeAchievements(ml) {
   return ML_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(ml) }));
@@ -3036,8 +3100,9 @@ function initMyLife() {
     // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
     rival: null, rivalRecord: null,
     // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
-    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false },
+    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false },
     pendingCrossroads: null, crossroadsResultText: null,
+    pendingOffseason: null, offseasonResultText: null,
   };
 }
 const ML_SAVE_KEY = "roadrace_v12_mylife_save";
@@ -3273,13 +3338,21 @@ function App() {
       const swing = hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1;
       n.cond = Math.max(1, Math.min(5, n.cond + (Math.random() < 0.34 ? -swing : Math.random() < 0.5 ? 0 : swing)));
       // v15フェーズ2: 金特化の判定（勝利数・役割出走数の条件を満たしたら毎月チェック）
-      const upgraded = upgradeGoldAbilities(n);
-      if (upgraded !== n) {
-        upgraded.goldAbilities.filter(id => !(n.goldAbilities || []).includes(id))
+      let updated = n;
+      const upgraded = upgradeGoldAbilities(updated);
+      if (upgraded !== updated) {
+        upgraded.goldAbilities.filter(id => !(updated.goldAbilities || []).includes(id))
           .forEach(id => state._injured.push(`${n.name}の特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
-        return upgraded;
+        updated = upgraded;
       }
-      return n;
+      // v17: 特殊能力の後天的獲得判定
+      const acquired = acquireNewAbility(updated);
+      if (acquired !== updated) {
+        const newId = acquired.abilities[acquired.abilities.length - 1];
+        state._injured.push(`${n.name}が新たな特殊能力「${ABILITIES[newId].label}」を身につけた！`);
+        updated = acquired;
+      }
+      return updated;
     });
     return roster;
   }
@@ -3676,6 +3749,7 @@ function App() {
     const gear = (ctx && ctx.gear) || {};
     const carLv = ctx ? ctx.carLv : -1;
     const houseLv = ctx ? ctx.houseLv : -1;
+    const flags = (ctx && ctx.flags) || {};
     if (mode === "race") {
       const carCut = carLv >= 0 ? (1 - ML_CARS[carLv].raceFatigueCut) : 1;
       const chefCut = gear.chef ? 0.9 : 1;
@@ -3686,8 +3760,10 @@ function App() {
     } else if (mode === "train") {
       const ph = growthPhase(player);
       // v15: 「練習の虫」「練習嫌い」「遅咲き」の特殊能力を練習効果に反映
+      // v17: 育児をパートナーに任せて競技優先を選んだ場合、練習効果がわずかに上乗せされる
       const abMul = (hasAbility(player, "trainer") ? 1.2 : hasAbility(player, "lazy_sp") ? 0.8 : 1)
-        * (hasAbility(player, "lateblow_sp") && player.age >= 28 ? 1.15 : 1);
+        * (hasAbility(player, "lateblow_sp") && player.age >= 28 ? 1.15 : 1)
+        * (flags.childFocusedCareer ? 1.05 : 1);
       const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
       const focusMul = gear.monitor ? 1.10 : 1;
       // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
@@ -3708,9 +3784,10 @@ function App() {
     // v15: 「回復力」を持つ選手は毎月さらに疲労-15（シーズンモードと同じ効果）
     if (hasAbility(player, "recover")) player.fatigue = Math.max(0, player.fatigue - 15);
     // v15: 人生の岐路イベントで得た恒常効果（結婚による生活の安定／無理な怪我復帰の後遺症）
-    const flags = (ctx && ctx.flags) || {};
     if (flags.married) player.fatigue = Math.max(0, player.fatigue - 4);
     if (flags.rushedInjuryComeback) player.fatigue = Math.min(100, player.fatigue + 3);
+    // v17: 育児に積極的に関わる道を選んだ場合、家庭のサポートでさらに疲労が抜けやすくなる
+    if (flags.hasChild && !flags.childFocusedCareer) player.fatigue = Math.max(0, player.fatigue - 3);
     return player;
   }
   function mlAdvanceMonth(mode) {
@@ -3725,6 +3802,13 @@ function App() {
           .forEach(id => log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
         player = upgradedPlayer;
       }
+      // v17: 特殊能力の後天的獲得判定
+      const acquiredPlayer = acquireNewAbility(player);
+      if (acquiredPlayer !== player) {
+        const newId = acquiredPlayer.abilities[acquiredPlayer.abilities.length - 1];
+        log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[newId].label}」を新たに身につけた！`);
+        player = acquiredPlayer;
+      }
       // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
       // 年俸は毎月1/12ずつ資金として振り込まれる
       const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0);
@@ -3738,13 +3822,9 @@ function App() {
           mlRecordLegend(retiredState);
           return { ...retiredState, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
         }
-        // v15: 引退以外でキャリアが続く年は、低確率で人生の岐路イベントが割り込む。
-        // 発生すればいつも通りの年度末処理はいったん保留し、選択を終えてから続きへ進む
-        const finalizeYearEnd = (nextState) => {
-          const cr = mlRollCrossroads(s, nextState.player);
-          if (cr) return { ...s, screen: "mylife_crossroads", pendingCrossroads: { key: cr.key, resolvedState: nextState } };
-          return nextState;
-        };
+        // v17: 引退以外でキャリアが続く年は、必ずオフシーズンの過ごし方を選ばせる。
+        // 人生の岐路イベントの判定はオフシーズンの選択を終えたあと（mlContinueAfterOffseason）で行う
+        const finalizeYearEnd = (nextState) => ({ ...s, screen: "mylife_offseason", pendingOffseason: nextState });
         const qualified = s.points >= CLASSES[s.classIdx].need;
         const classIdx = qualified ? Math.min(2, s.classIdx + 1) : s.classIdx;
         if (qualified && classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
@@ -3826,6 +3906,33 @@ function App() {
       return { ...s, team: offer.team, classIdx, races, directive, salary, money, contractOffers: null, screen: "mylife_main", log };
     });
   }
+  // v17: オフシーズンの過ごし方を確定する。年度末処理はpendingOffseasonに既に計算済みなので、
+  // 選んだ効果をそこへ重ねてから結果画面へ進む
+  function mlResolveOffseason(choiceIdx) {
+    setMl(s => {
+      const po = s.pendingOffseason;
+      if (!po) return s;
+      const choice = ML_OFFSEASON_CHOICES[choiceIdx];
+      const player = choice.apply(po.player);
+      return {
+        ...s,
+        pendingOffseason: { ...po, player },
+        offseasonResultText: choice.result,
+        screen: "mylife_offseason_result",
+      };
+    });
+  }
+  // オフシーズンの選択を終えたあとに、人生の岐路イベントの判定へ続ける（発生すればそちらへ、
+  // なければそのままpendingOffseasonが持っていた本来の遷移先へ進む）
+  function mlContinueAfterOffseason() {
+    setMl(s => {
+      const po = s.pendingOffseason;
+      if (!po) return s;
+      const cr = mlRollCrossroads(s, po.player);
+      if (cr) return { ...s, pendingOffseason: null, offseasonResultText: null, screen: "mylife_crossroads", pendingCrossroads: { key: cr.key, resolvedState: po } };
+      return { ...po, pendingOffseason: null, offseasonResultText: null };
+    });
+  }
   // v15: 人生の岐路イベントの選択を確定する。年度末処理はpendingCrossroads.resolvedStateに
   // 既に計算済みなので、選んだ効果をそこへ重ねてから結果画面へ進む（時間は二重に進めない）
   function mlResolveCrossroads(choiceIdx) {
@@ -3835,10 +3942,11 @@ function App() {
       const cr = ML_CROSSROADS[pc.key];
       const choice = cr.choices[choiceIdx];
       const { player, flags } = choice.apply(pc.resolvedState.player, s.flags || {});
+      const note = choice.resultNote ? choice.resultNote(player) : "";
       return {
         ...s,
         pendingCrossroads: { ...pc, resolvedState: { ...pc.resolvedState, player, flags } },
-        crossroadsResultText: choice.result,
+        crossroadsResultText: note ? `${choice.result}\n\n${note}` : choice.result,
         screen: "mylife_crossroads_result",
       };
     });
@@ -4448,6 +4556,34 @@ function App() {
           <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.eventResultText}</p>
         </div>
         <Btn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</Btn>
+      </div>
+    );
+
+    if (ml.screen === "mylife_offseason" && ml.pendingOffseason) {
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "#1e2b24", border: `2px solid ${C.green}`, borderRadius: 10, padding: "12px 14px" }}>
+            <Eyebrow color={C.green}>オフシーズン</Eyebrow>
+            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0" }}>新シーズンまでの間、どのように過ごしますか？</p>
+          </div>
+          {ML_OFFSEASON_CHOICES.map((c, i) => (
+            <div key={c.key} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+              <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 14, color: C.text }}>{c.label}</div>
+              <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{c.desc}</div>
+              <Btn small color={C.green} style={{ marginTop: 8 }} onClick={() => mlResolveOffseason(i)}>これを選ぶ</Btn>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_offseason_result") return mlWrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.green}` }}>
+          <Eyebrow color={C.green}>結果</Eyebrow>
+          <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.offseasonResultText}</p>
+        </div>
+        <Btn onClick={mlContinueAfterOffseason}>続ける →</Btn>
       </div>
     );
 
