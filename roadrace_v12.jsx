@@ -1157,10 +1157,10 @@ function mlRollCrossroads(s, player) {
 const ML_OFFSEASON_CHOICES = [
   { key: "domestic", label: "国内で自主トレーニングに励む", desc: "堅実に基礎を積む。伸びは控えめだが安全",
     result: "オフシーズンは国内で黙々と走り込み、着実に地力を蓄えた。",
-    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2)); return p; } },
+    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, ML_GROWTH_CAP)); return p; } },
   { key: "overseas", label: "海外武者修行に出る", desc: "レベルの高い環境に飛び込む。伸びは大きいが疲労が残る",
     result: "海外の強豪選手たちに揉まれ、大きく成長する手応えを掴んだ。ただし疲労が抜けきらないまま新シーズンを迎えることになった。",
-    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4)); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
+    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, ML_GROWTH_CAP)); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
   { key: "rest", label: "心身をしっかり休める", desc: "疲労を大きくリセットして万全の状態で新シーズンへ",
     result: "オフシーズンをゆっくり過ごし、心身ともにリフレッシュして新シーズンを迎える。",
     apply: (player) => ({ ...player, fatigue: Math.max(0, player.fatigue - 40) }) },
@@ -1299,6 +1299,10 @@ const ML_GEAR = {
   soloCoach:    { label: "独走専門コーチ", price: 100, desc: "独走の練習効果+25%（恒常）" },
 };
 const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
+// v21: マイライフのaddAb呼び出しはこれまでcap未指定でsoftFactorの既定値（88＝シーズンモードの
+// イージー相当）に固定されており、長いキャリアの途中で能力が伸び切ってしまっていた。
+// マイライフは1周が長いキャリアものなので、シーズンモードのハード相当まで上限を引き上げる
+const ML_GROWTH_CAP = 102;
 // v19: 超早熟は稀な自然発生のみで到達できる特別枠のため、育成アイテムでの
 // 到達先には含めない（晩成方向への進行のみ：早熟→普通→晩成→超晩成）
 const GROWTH_ORDER = ["early", "normal", "late", "super_late"];
@@ -3935,8 +3939,8 @@ function App() {
       const focusMul = gear.monitor ? 1.10 : 1;
       // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
       const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
-      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus));
-      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k)));
+      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), ML_GROWTH_CAP);
+      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), ML_GROWTH_CAP));
       const ph2 = growthPhase(player);
       if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
       player.fatigue = Math.max(0, player.fatigue - 15);
@@ -4134,7 +4138,7 @@ function App() {
   function mlApplyEventEffects(player0, effects) {
     const player = { ...player0 };
     if (effects.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + effects.fatigueDelta));
-    if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost));
+    if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, ML_GROWTH_CAP));
     return player;
   }
   function mlTriggerEvent() {
@@ -4267,7 +4271,10 @@ function App() {
   const setFocus = (rid, focus) => setG(s => ({ ...s, roster: s.roster.map(r => r.id === rid ? { ...r, focus } : r) }));
   const useCamp = () => {
     if (g.inv.camp <= 0 || g.camp || g.campCooldown > 0) return;
-    setG(s => ({ ...s, camp: true, campCooldown: 1, inv: { ...s.inv, camp: s.inv.camp - 1 } }));
+    // v21: 「毎月使うのが前提」に感じられるとのフィードバックを受け、連続使用不可のクールダウンを
+    // 1ヶ月→2ヶ月に延長した（次に使えるのは2ヶ月後）。これにより、キャンプ券は毎月の
+    // ルーティンではなく、ここぞという月に狙って使う節目のブーストという位置づけになる
+    setG(s => ({ ...s, camp: true, campCooldown: 2, inv: { ...s.inv, camp: s.inv.camp - 1 } }));
   };
   // v13.1: お気に入り登録した選手は、殿堂入り条件（実績）を満たしていなくても必ず記録に残る
   const toggleFavorite = (rid) => {
@@ -4504,7 +4511,7 @@ function App() {
             </div>
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
             <FatigueBar v={r.fatigue} />
-            <AbilityGrid r={r} />
+            <AbilityGrid r={r} cap={ML_GROWTH_CAP} />
             {(ml.stock.drink > 0 || ml.stock.supp > 0 || ml.stock.tune > 0) && (
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                 {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("drink")}>{ML_STOCK_ITEMS.drink.label}(-30) ×{ml.stock.drink}</Btn>}
@@ -5188,7 +5195,7 @@ function App() {
           </div>
           <div style={{ fontSize: 11, color: C.sub }}>🎖 各選手カードのマークで主将を1名任命できます。主将より2歳以上若い選手は練習効果+10%になります。</div>
           {g.inv.camp > 0 && !g.camp && g.campCooldown === 0 && <Btn small outline color={C.purple} onClick={useCamp}>⛺ キャンプ券を使う（今月の練習効果×2）</Btn>}
-          {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ キャンプ券は連続使用できません（来月から使用可）</div>}
+          {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ キャンプ券はクールダウン中（あと{g.campCooldown}ヶ月で使用可）</div>}
           {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
           {g.month === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>4月は選手の解雇が可能です（各選手カードの「解雇」ボタン）。</div>}
           {g.roster.map(r => {
@@ -5409,7 +5416,7 @@ function App() {
                 </div>
               ))}
               {g.inv.camp > 0 && !g.camp && g.campCooldown === 0 && <Btn small outline color={C.purple} onClick={useCamp}>キャンプ券を使う（今月の練習×2）</Btn>}
-              {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ 連続使用不可（来月から使用可）</div>}
+              {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ クールダウン中（あと{g.campCooldown}ヶ月で使用可）</div>}
               {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
             </div>
           </section>
