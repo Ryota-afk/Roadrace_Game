@@ -950,6 +950,51 @@ const ML_EVENTS = [
       { label: "気にせず追い込む", result: "その日は乗り切ったが、疲労が蓄積した。", effects: { abBoost: 2, fatigueDelta: 18 } },
     ] },
 ];
+// v15: 人生の岐路イベント。ML_EVENTSの毎月の小さな出来事とは違い、年度末にだけ低確率で
+// 発生し、一度きりの大きな選択とその後ずっと続く恒常効果を持つ。flagsに解決済みかどうかを
+// 記録し、同じ岐路が二度は訪れないようにする
+const ML_CROSSROADS = {
+  marriage: {
+    key: "marriage", title: "人生の岐路 — 結婚",
+    text: "長年支えてくれた恋人から、将来について話したいと切り出された。",
+    choices: [
+      { label: "プロポーズする",
+        result: "結婚した。生活が安定し、心身ともに落ち着いて競技に取り組めるようになった（以後、毎月の疲労回復がわずかに上がる）。",
+        apply: (player, flags) => ({ player, flags: { ...flags, married: true, marriageResolved: true } }) },
+      { label: "今は競技に集中したいと伝える",
+        result: "気持ちを尊重してもらい、今は競技に専念することにした。",
+        apply: (player, flags) => ({ player, flags: { ...flags, marriageResolved: true } }) },
+    ],
+  },
+  injury: {
+    key: "injury", title: "人生の岐路 — 大きな怪我",
+    text: "練習中の落車で大きな怪我を負ってしまった。復帰への向き合い方が問われている。",
+    choices: [
+      { label: "焦らず段階的に戻す",
+        result: "無理をせず、着実にリハビリを積んで復帰を果たした。一時的に能力が落ち込んだが、後遺症は残らなかった。",
+        apply: (player, flags) => ({
+          player: { ...player, flat: Math.max(20, player.flat - 3), climb: Math.max(20, player.climb - 3), sprint: Math.max(20, player.sprint - 3), stamina: Math.max(20, player.stamina - 3), solo: Math.max(20, player.solo - 3) },
+          flags: { ...flags, injuryResolved: true },
+        }) },
+      { label: "早期復帰を目指す",
+        result: "予定より早く戦列に復帰したが、無理がたたって本調子が長く続かず、以後も違和感を抱えることになった（毎月の疲労回復がわずかに下がる）。",
+        apply: (player, flags) => ({
+          player: { ...player, flat: Math.max(20, player.flat - 1), climb: Math.max(20, player.climb - 1), sprint: Math.max(20, player.sprint - 1), stamina: Math.max(20, player.stamina - 1), solo: Math.max(20, player.solo - 1) },
+          flags: { ...flags, injuryResolved: true, rushedInjuryComeback: true },
+        }) },
+    ],
+  },
+};
+// v15: その年度末に人生の岐路イベントを発生させるか判定する。既に解決済みの岐路は対象外、
+// 条件を満たすものが複数あればランダムに1つだけ選ぶ（同じ年に2つ重ねない）
+function mlRollCrossroads(s, player) {
+  const flags = s.flags || {};
+  const candidates = [];
+  if (!flags.marriageResolved && player.age >= 25 && Math.random() < 0.35) candidates.push(ML_CROSSROADS.marriage);
+  if (!flags.injuryResolved && (player.raceLog || []).length >= 6 && Math.random() < 0.2) candidates.push(ML_CROSSROADS.injury);
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
 // v14.3: 監督指示（レースごとの役割指示）。全うすると監督評価（マスクデータ）が上がり、
 // 評価が高いほどエースなど重要な役割の指示が出やすくなる好循環にする
 const MANAGER_DIRECTIVES = {
@@ -2741,6 +2786,9 @@ function initMyLife() {
     houseLv: -1, carLv: -1,
     // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
     rival: null, rivalRecord: null,
+    // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
+    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false },
+    pendingCrossroads: null, crossroadsResultText: null,
   };
 }
 const ML_SAVE_KEY = "roadrace_v12_mylife_save";
@@ -2748,7 +2796,7 @@ const ML_SAVE_VERSION = "v12ml";
 const ML_SAVE_FIELDS = [
   "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
-  "rival", "rivalRecord",
+  "rival", "rivalRecord", "flags",
 ];
 function saveMyLife(ml) {
   try {
@@ -3398,11 +3446,15 @@ function App() {
       player.fatigue = Math.max(0, player.fatigue - 5);
     }
     if (houseLv >= 0) player.fatigue = Math.max(0, player.fatigue - ML_HOUSES[houseLv].fatigueBonus);
+    // v15: 人生の岐路イベントで得た恒常効果（結婚による生活の安定／無理な怪我復帰の後遺症）
+    const flags = (ctx && ctx.flags) || {};
+    if (flags.married) player.fatigue = Math.max(0, player.fatigue - 4);
+    if (flags.rushedInjuryComeback) player.fatigue = Math.min(100, player.fatigue + 3);
     return player;
   }
   function mlAdvanceMonth(mode) {
     setMl(s => {
-      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv };
+      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags };
       let player = mlApplyMonthEffect(s.player, mode, ctx);
       const log = [...s.log];
       // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
@@ -3416,6 +3468,13 @@ function App() {
         if (retire) {
           return { ...s, player, money, managerEval, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
         }
+        // v15: 引退以外でキャリアが続く年は、低確率で人生の岐路イベントが割り込む。
+        // 発生すればいつも通りの年度末処理はいったん保留し、選択を終えてから続きへ進む
+        const finalizeYearEnd = (nextState) => {
+          const cr = mlRollCrossroads(s, nextState.player);
+          if (cr) return { ...s, screen: "mylife_crossroads", pendingCrossroads: { key: cr.key, resolvedState: nextState } };
+          return nextState;
+        };
         const qualified = s.points >= CLASSES[s.classIdx].need;
         const classIdx = qualified ? Math.min(2, s.classIdx + 1) : s.classIdx;
         if (qualified && classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
@@ -3431,22 +3490,22 @@ function App() {
         if (interest >= 0.8 && Math.random() < 0.6) {
           const others = MYLIFE_TEAMS.filter(t => t.name !== s.team);
           const offerTeams = [...others].sort(() => Math.random() - 0.5).slice(0, 2).map(t => t.name);
-          return {
+          return finalizeYearEnd({
             ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
             races: [mlGenRace(s.year + 1, 0, classIdx)],
             directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
             contractOffers: [s.team, ...offerTeams],
             salary, money, managerEval,
             screen: "mylife_contract", log,
-          };
+          });
         }
-        return {
+        return finalizeYearEnd({
           ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
           races: [mlGenRace(s.year + 1, 0, classIdx)],
           directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
           salary, money, managerEval,
           screen: "mylife_main", log,
-        };
+        });
       }
       const month = s.month + 1;
       return {
@@ -3459,6 +3518,30 @@ function App() {
   }
   function mlChooseTeam(teamName) {
     setMl(s => ({ ...s, team: teamName, contractOffers: null, screen: "mylife_main" }));
+  }
+  // v15: 人生の岐路イベントの選択を確定する。年度末処理はpendingCrossroads.resolvedStateに
+  // 既に計算済みなので、選んだ効果をそこへ重ねてから結果画面へ進む（時間は二重に進めない）
+  function mlResolveCrossroads(choiceIdx) {
+    setMl(s => {
+      const pc = s.pendingCrossroads;
+      if (!pc) return s;
+      const cr = ML_CROSSROADS[pc.key];
+      const choice = cr.choices[choiceIdx];
+      const { player, flags } = choice.apply(pc.resolvedState.player, s.flags || {});
+      return {
+        ...s,
+        pendingCrossroads: { ...pc, resolvedState: { ...pc.resolvedState, player, flags } },
+        crossroadsResultText: choice.result,
+        screen: "mylife_crossroads_result",
+      };
+    });
+  }
+  function mlContinueAfterCrossroads() {
+    setMl(s => {
+      const pc = s.pendingCrossroads;
+      if (!pc) return s;
+      return { ...pc.resolvedState, pendingCrossroads: null, crossroadsResultText: null };
+    });
   }
   // v14.2: 私生活・取材イベント（練習/休養以外の月次アクション）
   function mlApplyEventEffects(player0, effects) {
@@ -3778,6 +3861,7 @@ function App() {
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
               <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
               <span>成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></span>
+              {ml.flags?.married && <span style={{ color: C.purple }}>💍 既婚</span>}
             </div>
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
             <FatigueBar v={r.fatigue} />
@@ -4006,6 +4090,31 @@ function App() {
           <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.eventResultText}</p>
         </div>
         <Btn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</Btn>
+      </div>
+    );
+
+    if (ml.screen === "mylife_crossroads" && ml.pendingCrossroads) {
+      const cr = ML_CROSSROADS[ml.pendingCrossroads.key];
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "#2b1e1e", border: `2px solid ${C.red}`, borderRadius: 10, padding: "12px 14px" }}>
+            <Eyebrow color={C.red}>{cr.title}</Eyebrow>
+            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0" }}>{cr.text}</p>
+          </div>
+          {cr.choices.map((c, i) => (
+            <Btn key={i} color={C.red} onClick={() => mlResolveCrossroads(i)}>{c.label}</Btn>
+          ))}
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_crossroads_result") return mlWrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.red}` }}>
+          <Eyebrow color={C.red}>結果</Eyebrow>
+          <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.crossroadsResultText}</p>
+        </div>
+        <Btn onClick={mlContinueAfterCrossroads}>続ける →</Btn>
       </div>
     );
 
