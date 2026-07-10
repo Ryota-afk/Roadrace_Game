@@ -86,19 +86,53 @@ const POW = {
   S: { mul: 1.6, color: "#ffd23f" }, A: { mul: 1.3, color: "#35c07e" },
   B: { mul: 1.0, color: "#4f8fe8" }, C: { mul: 0.7, color: "#9aa3b5" },
 };
-const TRAITS = {
-  big:        { label: "大舞台に強い", desc: "★3レースで全能力+6%" },
-  escape:     { label: "逃げ屋", desc: "逃げ集団での貢献度1.5倍" },
-  mount:      { label: "山の申し子", desc: "登坂系区間で能力+4" },
-  iron:       { label: "鉄人", desc: "出走疲労 +45→+32" },
-  recover:    { label: "回復力", desc: "毎月さらに疲労-15" },
-  closer:     { label: "勝負師", desc: "最終区間で能力+5%" },
-  domestique: { label: "献身のアシスト", desc: "エースの牽引・レッドアウト時の効果+30%" },
-  trainer:    { label: "練習の虫", desc: "練習効果+20%" },
-  tough:      { label: "頑丈", desc: "怪我の発生率が半分（3連闘は防げない）" },
-  glass:      { label: "ガラスの体", desc: "怪我の発生率2倍・離脱期間+1ヶ月", bad: true },
-  moody:      { label: "ムラっ気", desc: "調子の変動が激しい", bad: true },
+// v15: 特殊能力システム（パワプロ風）。以前は選手ごとに1枠だけの「特性」だったが、
+// 0〜3個を保有できる「特殊能力」に拡張した。categoryは今後の特殊能力ファイル（図鑑）用の分類。
+// bad:true は悪特性。escape/domestique/closerは旧バージョンでは付与されるだけで効果が
+// 実装されていなかった（死んだ特性）ため、今回きちんと効果を持たせた
+const ABILITIES = {
+  // 地形適性
+  mount:       { label: "山の申し子", desc: "山岳・山頂フィニッシュ区間で能力+4", category: "地形適性" },
+  puncheur:    { label: "丘陵ハンター", desc: "丘陵区間で能力+4", category: "地形適性" },
+  flatlander:  { label: "平坦の職人", desc: "平坦区間で能力+4", category: "地形適性" },
+  sprinter_sp: { label: "スプリント巧者", desc: "ゴールスプリント区間で能力+4", category: "地形適性" },
+  soloist:     { label: "独走の求道者", desc: "TT区間で能力+4", category: "地形適性" },
+  // 展開・役割
+  escape:      { label: "逃げ屋", desc: "アタック（逃げ）中の能力+4", category: "展開・役割" },
+  domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },
+  closer:      { label: "勝負師", desc: "ゴールスプリント・山頂フィニッシュで能力+4", category: "展開・役割" },
+  crosswind_sp:{ label: "横風耐性", desc: "横風区間でのドラフト消耗が軽減される", category: "展開・役割" },
+  // メンタル・大舞台
+  big:         { label: "大舞台に強い", desc: "★3レースで全能力+6%", category: "メンタル" },
+  // フィジカル
+  iron:        { label: "鉄人", desc: "出走疲労が軽減される", category: "フィジカル" },
+  recover:     { label: "回復力", desc: "毎月さらに疲労-15", category: "フィジカル" },
+  tough:       { label: "頑丈", desc: "怪我の発生率が半分（3連闘は防げない）", category: "フィジカル" },
+  steady_sp:   { label: "精密機械", desc: "調子の変動が小さく安定する", category: "フィジカル" },
+  glass:       { label: "ガラスの体", desc: "怪我の発生率2倍・離脱期間+1ヶ月", category: "フィジカル", bad: true },
+  moody:       { label: "ムラっ気", desc: "調子の変動が激しい", category: "フィジカル", bad: true },
+  // 成長
+  trainer:     { label: "練習の虫", desc: "練習効果+20%", category: "成長" },
+  lateblow_sp: { label: "遅咲き", desc: "28歳以降の練習効果+15%", category: "成長" },
+  lazy_sp:     { label: "練習嫌い", desc: "練習効果-20%", category: "成長", bad: true },
 };
+function hasAbility(r, id) { return !!(r && r.abilities && r.abilities.includes(id)); }
+// v15: 保有数は0〜3個（多いほど稀）。逸材(forceProdigy)は2〜3個確定・悪特性を含まない
+function rollAbilities(rng, opts = {}) {
+  const goodPool = Object.keys(ABILITIES).filter(k => !ABILITIES[k].bad);
+  const badPool = Object.keys(ABILITIES).filter(k => ABILITIES[k].bad);
+  let n;
+  if (opts.forceProdigy) n = rng() < 0.5 ? 2 : 3;
+  else { const roll = rng(); n = roll < 0.35 ? 0 : roll < 0.75 ? 1 : roll < 0.95 ? 2 : 3; }
+  const abilities = [];
+  for (let i = 0; i < n; i++) {
+    const wantBad = !opts.forceProdigy && rng() < 0.2;
+    const pool = (wantBad ? badPool : goodPool).filter(k => !abilities.includes(k));
+    if (pool.length === 0) continue;
+    abilities.push(pool[Math.floor(rng() * pool.length)]);
+  }
+  return abilities;
+}
 const PERSONALITIES = {
   normal:   { label: "普通", desc: "クセなし", mul: {} },
   genius:   { label: "天才", desc: "全能力が伸びやすい", mul: { flat: 1.25, climb: 1.25, sprint: 1.25, stamina: 1.25, solo: 1.25 } },
@@ -1178,12 +1212,7 @@ function newRider(power, rng, opts = {}) {
   // 指定が無ければ従来通りランダム（若年層はlate寄りの補正込み）
   let growth = opts.growth || gKeys[Math.floor(rng() * 3)];
   if (!opts.growth && age <= 19 && rng() < 0.5) growth = "late";
-  let trait = null;
-  if (rng() < 0.35) {
-    const bad = rng() < 0.25;
-    const pool = Object.keys(TRAITS).filter(k => !!TRAITS[k].bad === bad);
-    trait = pool[Math.floor(rng() * pool.length)];
-  }
+  const abilities = rollAbilities(rng, { forceProdigy: opts.forceProdigy });
   const px = rng();
   let personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
     : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
@@ -1192,7 +1221,7 @@ function newRider(power, rng, opts = {}) {
   const rider = {
     id: RID++,
     name: pickRiderName(rng, opts.banned),
-    type, ...r, age, growth, growthPow: growthPowVal, trait, personality,
+    type, ...r, age, growth, growthPow: growthPowVal, abilities, personality,
     fatigue: 20 + Math.floor(rng() * 20), cond: 3, injury: 0, streak: 0,
     focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
     prodigy: !!opts.forceProdigy,
@@ -1207,7 +1236,7 @@ function initRoster() {
   const mk = (name, type, f, c, sp, st, so, age, growth, pow, trait, pers) => {
     const r = {
       id: RID++, name, type, flat: f, climb: c, sprint: sp, stamina: st, solo: so,
-      age, growth, growthPow: pow, trait: trait || null, personality: pers,
+      age, growth, growthPow: pow, abilities: trait ? [trait] : [], personality: pers,
       fatigue: 20, cond: 3, injury: 0, streak: 0,
       focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
       raceLog: [], favorite: false,
@@ -1397,12 +1426,12 @@ function effAbilities(r, equip, itemBoost, grade) {
       if (pid && PARTS[pid]) Object.entries(PARTS[pid].ab).forEach(([k, v]) => { e[k] += v; });
     });
   }
-  const bigMul = (r.trait === "big" && grade === 3) ? 1.06 : 1;
+  const bigMul = (hasAbility(r, "big") && grade === 3) ? 1.06 : 1;
   AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul; });
   e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
   e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
   AB_KEYS.forEach(k => { e[k] = Math.min(135, e[k]); });
-  e.type = r.type; e.trait = r.trait;
+  e.type = r.type; e.abilities = r.abilities;
   return e;
 }
 // 脚質の得意区間ボーナス（形骸化対策）
@@ -1504,7 +1533,13 @@ function segmentAbility(segType, e, steepness) {
   else if (segType === "mtn") ab = e.climb * 0.7 + e.sprint * 0.3;
   else { const w = climbWeightFor(segType, steepness); ab = e.flat * (1 - w) + e.climb * w; }
   ab += typeAffinityBonus(e.type, segType);
-  if (e.trait === "mount" && ["hill", "climb", "mtn"].includes(segType)) ab += 4;
+  // v15: 特殊能力による区間タイプ別の能力補正
+  if (hasAbility(e, "mount") && ["climb", "mtn"].includes(segType)) ab += 4;
+  if (hasAbility(e, "puncheur") && segType === "hill") ab += 4;
+  if (hasAbility(e, "flatlander") && segType === "flat") ab += 4;
+  if (hasAbility(e, "sprinter_sp") && segType === "sprint") ab += 4;
+  if (hasAbility(e, "soloist") && segType === "tt") ab += 4;
+  if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += 4;
   return ab;
 }
 
@@ -1547,7 +1582,11 @@ function energyPenaltyMul(energy) {
   return Math.max(0.55, 1 + (energy / 100) * 0.5);
 }
 function tickSpeedFactor(en, segType, mode, steepness) {
-  const ab = segmentAbility(segType, en, steepness);
+  let ab = segmentAbility(segType, en, steepness);
+  // v15: 展開依存の特殊能力（逃げ屋・献身のアシスト）は、能力算出時点ではmodeを
+  // 知らないsegmentAbilityではなくここで加算する
+  if (hasAbility(en, "escape") && mode === "attack") ab += 4;
+  if (hasAbility(en, "domestique") && mode === "pull") ab += 3;
   let f = 1 + (ab - 70) / 260;
   if (mode === "attack") f *= 1.15;
   f *= energyPenaltyMul(en.energy);
@@ -1755,7 +1794,9 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const shelterMul = sheltered ? groupShelterMul(members.length) : 1;
         const backRatio = sheltered ? Math.min(1, (en.slot || 0) / Math.max(1, members.length - 1)) : 0;
         const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * (windActive && en.mode === "draft" ? 1.25 : 1) * shelterMul;
+        // v15: 横風耐性を持つ選手は横風区間でのドラフト消耗ペナルティが軽減される（1.25→1.1）
+        const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
       });
     });
@@ -1834,7 +1875,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
     const e = effAbilities(r, equip, itemBoost, raceMeta.grade);
     const role = roles[r.id] || "lead";
     riders.push({
-      id: r.id, name: r.name, type: r.type, trait: r.trait, ...e,
+      id: r.id, name: r.name, type: r.type, abilities: r.abilities, ...e,
       team: "PLAYER", teamName: "あなたのチーム", color: C.yellow,
       isAce: r.id === aceId, role,
     });
@@ -1864,7 +1905,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
       return members.map((r, i) => ({
-        id: r.id, name: r.name, type: r.type, trait: r.trait,
+        id: r.id, name: r.name, type: r.type, abilities: r.abilities,
         flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
         team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
         isAlumnus: alumniIds.has(r.id),
@@ -1929,14 +1970,22 @@ function FatigueBar({ v }) {
     </div>
   );
 }
-function TraitLine({ trait }) {
-  if (!trait) return null;
-  const t = TRAITS[trait];
-  const col = t.bad ? C.red : "#e8a13c";
+// v15: 1選手が複数の特殊能力を保有できるようになったため、バッジ付きの行を複数表示する
+function TraitLine({ abilities }) {
+  if (!abilities || abilities.length === 0) return null;
   return (
-    <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>
-      <span style={{ color: col, border: `1px solid ${col}`, borderRadius: 4, padding: "0px 5px", marginRight: 5 }}>{t.label}</span>
-      {t.desc}
+    <div style={{ marginTop: 2 }}>
+      {abilities.map(id => {
+        const t = ABILITIES[id];
+        if (!t) return null;
+        const col = t.bad ? C.red : "#e8a13c";
+        return (
+          <div key={id} style={{ fontSize: 10.5, color: C.sub, marginTop: 1 }}>
+            <span style={{ color: col, border: `1px solid ${col}`, borderRadius: 4, padding: "0px 5px", marginRight: 5 }}>{t.label}</span>
+            {t.desc}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2838,7 +2887,7 @@ function clearSaveGame() {
 
 // ---------- v14: マイライフモード（選手1人のキャリア） ----------
 // v9〜v13のシーズンモード（チーム運営）とは完全に別のセーブ・状態を持つ、
-// 選手1人の視点でB1からのキャリアを歩む新モード。既存のTYPES/TRAITS/PERSONALITIES/
+// 選手1人の視点でB1からのキャリアを歩む新モード。既存のTYPES/ABILITIES/PERSONALITIES/
 // GROWTH/newRider/generateCourse/simulateTicks/rankSim/riderNickname等はそのまま再利用する
 function initMyLife() {
   return {
@@ -2905,13 +2954,8 @@ function mlCreateRival(rng, playerName, playerTeamName) {
   const px = rng();
   const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
     : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
-  let trait = null;
-  if (rng() < 0.35) {
-    const bad = rng() < 0.25;
-    const pool = Object.keys(TRAITS).filter(k => !!TRAITS[k].bad === bad);
-    trait = pool[Math.floor(rng() * pool.length)];
-  }
-  return { id: RID++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, trait };
+  const abilities = rollAbilities(rng);
+  return { id: RID++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, abilities };
 }
 // v14: マイライフのレースは6チーム全部をAI生成し、プレイヤーの選手だけを
 // 「PLAYER」チームタグ付きの1名として混ぜる（RaceView等の既存カメラ・強調表示ロジックを
@@ -2935,14 +2979,14 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
     const teamEntrants = members.map((r, i) => ({
-      id: r.id, name: r.name, type: r.type, trait: r.trait,
+      id: r.id, name: r.name, type: r.type, abilities: r.abilities,
       flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
       team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
     }));
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
       const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned });
       teamEntrants[0] = {
-        ...teamEntrants[0], id: rival.id, name: rival.name, type: rival.type, trait: rival.trait,
+        ...teamEntrants[0], id: rival.id, name: rival.name, type: rival.type, abilities: rival.abilities,
         flat: rivalStats.flat, climb: rivalStats.climb, sprint: rivalStats.sprint, stamina: rivalStats.stamina, solo: rivalStats.solo,
         isRival: true,
       };
@@ -2958,7 +3002,7 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
       else playerIsAce = playerTotal >= topAbility;
       if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
       riders.push({
-        id: player.id, name: player.name, type: player.type, trait: player.trait, ...playerEff,
+        id: player.id, name: player.name, type: player.type, abilities: player.abilities, ...playerEff,
         team: "PLAYER", teamName: myTeamName, color: C.yellow,
         isAce: playerIsAce, role: playerIsAce ? "lead" : "sub", isPlayerChar: true,
       });
@@ -3044,8 +3088,8 @@ function App() {
     const growthCap = (DIFFICULTIES.find(d => d.id === state.difficulty) || DIFFICULTIES[0]).growthCap;
     const roster = state.roster.map(r => {
       const n = { ...r, parts: { ...r.parts } };
-      const injMul = n.trait === "glass" ? 2 : n.trait === "tough" ? 0.5 : 1;
-      const injExtra = n.trait === "glass" ? 1 : 0;
+      const injMul = hasAbility(n, "glass") ? 2 : hasAbility(n, "tough") ? 0.5 : 1;
+      const injExtra = hasAbility(n, "glass") ? 1 : 0;
       if (n.injury > 0) {
         n.injury -= 1;
         n.fatigue = Math.max(0, n.fatigue - 30);
@@ -3061,7 +3105,8 @@ function App() {
             * (winter ? 1.3 : 1) * (state.camp ? 2 : 1)
             * (1 + state.equip.facility * 0.15)
             * (1 + (state.staff?.trainer || 0) * 0.12)
-            * (n.trait === "trainer" ? 1.2 : 1);
+            * (hasAbility(n, "trainer") ? 1.2 : hasAbility(n, "lazy_sp") ? 0.8 : 1)
+            * (hasAbility(n, "lateblow_sp") && n.age >= 28 ? 1.15 : 1);
           // 指定能力の成長にトレードオフ（×0.9）。指定外はさらに絞って14%
           addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus), growthCap);
           AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k), growthCap));
@@ -3071,7 +3116,7 @@ function App() {
         if (ph2.dec > 0) AB_KEYS.forEach(k => { n[k] = Math.max(20, n[k] - ph2.dec); });
       }
       if (starterIds && starterIds.includes(n.id)) {
-        n.fatigue = Math.min(100, n.fatigue + (n.trait === "iron" ? 32 : 45) * stageFatigueMul);
+        n.fatigue = Math.min(100, n.fatigue + (hasAbility(n, "iron") ? 32 : 45) * stageFatigueMul);
         n.streak += 1;
         const ph = growthPhase(n);
         raceInfo.expKeys.forEach(k => addAb(n, k, 0.6 * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k), growthCap));
@@ -3093,8 +3138,8 @@ function App() {
         n.fatigue = Math.max(0, n.fatigue - (starterIds ? 30 : 50));
         n.streak = 0;
       }
-      if (n.trait === "recover") n.fatigue = Math.max(0, n.fatigue - 15);
-      const swing = n.trait === "moody" ? 2 : 1;
+      if (hasAbility(n, "recover")) n.fatigue = Math.max(0, n.fatigue - 15);
+      const swing = hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1;
       n.cond = Math.max(1, Math.min(5, n.cond + (Math.random() < 0.34 ? -swing : Math.random() < 0.5 ? 0 : swing)));
       return n;
     });
@@ -3496,11 +3541,16 @@ function App() {
     if (mode === "race") {
       const carCut = carLv >= 0 ? (1 - ML_CARS[carLv].raceFatigueCut) : 1;
       const chefCut = gear.chef ? 0.9 : 1;
-      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut);
+      // v15: 「鉄人」を持つ選手は出走疲労が軽減される（シーズンモードの45→32と同じ比率）
+      const ironCut = hasAbility(player, "iron") ? 32 / 45 : 1;
+      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut);
       player.streak = (player.streak || 0) + 1;
     } else if (mode === "train") {
       const ph = growthPhase(player);
-      const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1);
+      // v15: 「練習の虫」「練習嫌い」「遅咲き」の特殊能力を練習効果に反映
+      const abMul = (hasAbility(player, "trainer") ? 1.2 : hasAbility(player, "lazy_sp") ? 0.8 : 1)
+        * (hasAbility(player, "lateblow_sp") && player.age >= 28 ? 1.15 : 1);
+      const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
       const focusMul = gear.monitor ? 1.10 : 1;
       addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul);
       AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k)));
@@ -3515,6 +3565,8 @@ function App() {
       player.fatigue = Math.max(0, player.fatigue - 5);
     }
     if (houseLv >= 0) player.fatigue = Math.max(0, player.fatigue - ML_HOUSES[houseLv].fatigueBonus);
+    // v15: 「回復力」を持つ選手は毎月さらに疲労-15（シーズンモードと同じ効果）
+    if (hasAbility(player, "recover")) player.fatigue = Math.max(0, player.fatigue - 15);
     // v15: 人生の岐路イベントで得た恒常効果（結婚による生活の安定／無理な怪我復帰の後遺症）
     const flags = (ctx && ctx.flags) || {};
     if (flags.married) player.fatigue = Math.max(0, player.fatigue - 4);
@@ -3946,7 +3998,7 @@ function App() {
             </div>
             {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
             <PersonaLine p={r.personality} />
-            <TraitLine trait={r.trait} />
+            <TraitLine abilities={r.abilities} />
             <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
               <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
@@ -4602,7 +4654,7 @@ function App() {
                 </div>
                 {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
                 <PersonaLine p={r.personality} />
-                <TraitLine trait={r.trait} />
+                <TraitLine abilities={r.abilities} />
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
                 <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
                   <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
@@ -4683,7 +4735,7 @@ function App() {
                       </div>
                       <div style={{ fontSize: 11.5, color: C.sub, margin: "3px 0" }}>{sc.tag}・{r.age}歳・{GROWTH[r.growth].label}型・成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></div>
                       <PersonaLine p={r.personality} />
-                      <TraitLine trait={r.trait} />
+                      <TraitLine abilities={r.abilities} />
                       <BlurGrid blur={sc.blur} />
                       <div style={{ marginTop: 8 }}>
                         <Btn small color={C.green} disabled={g.budget < sc.price || g.roster.length >= rosterMax} onClick={() => signScout(sc)}>
@@ -4715,7 +4767,7 @@ function App() {
                     </div>
                     <div style={{ fontSize: 11.5, color: C.sub, margin: "3px 0" }}>{fa.age}歳・{GROWTH[r.growth].label}型・成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></div>
                     <PersonaLine p={r.personality} />
-                    <TraitLine trait={r.trait} />
+                    <TraitLine abilities={r.abilities} />
                     <AbilityGrid r={r} cap={growthCap} />
                     <div style={{ marginTop: 8 }}>
                       <Btn small color={C.green} disabled={g.budget < fa.price || full} onClick={() => signFa(fa)}>
@@ -5108,7 +5160,7 @@ function App() {
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
                     </span>
                   </div>
-                  <TraitLine trait={r.trait} />
+                  <TraitLine abilities={r.abilities} />
                   <FatigueBar v={r.fatigue} />
                   <AbilityGrid r={r} cap={growthCap} />
                 </div>
@@ -5362,7 +5414,7 @@ function App() {
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
                     </span>
                   </div>
-                  <TraitLine trait={r.trait} />
+                  <TraitLine abilities={r.abilities} />
                   <FatigueBar v={r.fatigue} />
                   <AbilityGrid r={r} cap={growthCap} />
                 </div>
