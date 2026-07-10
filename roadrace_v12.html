@@ -270,7 +270,11 @@ const bumpEquipLv = (state, amount) => ({
 const addProdigyRookie = (state) => {
   const rng = mulberry(Date.now() % 999983 + state.roster.length * 7919);
   const banned = new Set(state.roster.map(r => r.name));
-  const rookie = newRider(70, rng, { banned, forceProdigy: true });
+  // v24: age未指定だとnewRiderが22〜33歳のどれかをランダムに割り当ててしまい、成長タイプの
+  // 組み合わせによっては加入した瞬間から衰え期の逸材が出て萎えるというフィードバックを受けた。
+  // クリアポイントで確保する逸材は必ず18〜20歳の若手にし、どの成長タイプでも
+  // 加入時点でまだ成長期／全盛期に入りたてであることを保証する
+  const rookie = newRider(70, rng, { banned, forceProdigy: true, age: 18 + Math.floor(rng() * 3) });
   return { ...state, roster: [...state.roster, rookie] };
 };
 // v13.3: 内容が弱いというフィードバックを受け、ラダーの間隔を広げて本数を増やし、
