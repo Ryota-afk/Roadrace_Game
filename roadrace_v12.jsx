@@ -3492,15 +3492,24 @@ function App() {
         const salary = s.salary + salaryGain;
         if (salaryGain > 0) log.push(`【${s.year}年目 3月】戦績が評価され年俸+${salaryGain}万円（年俸${salary}万円に）`);
         // v14: 好成績を残すと移籍オファーが来る（簡易な移籍システム）
+        // v15: オファーはチーム名だけでなく、年俸倍率・契約金・エース確約の有無が
+        // チームごとに異なる。残留オファーは条件を上乗せしない基準線として提示し、
+        // 移籍オファーはそれより魅力的な条件を出すことで「引き抜き」らしさを出す
         const interest = s.points / Math.max(1, CLASSES[s.classIdx].need);
         if (interest >= 0.8 && Math.random() < 0.6) {
           const others = MYLIFE_TEAMS.filter(t => t.name !== s.team);
-          const offerTeams = [...others].sort(() => Math.random() - 0.5).slice(0, 2).map(t => t.name);
+          const offerTeams = [...others].sort(() => Math.random() - 0.5).slice(0, 2).map(t => ({
+            team: t.name,
+            salaryMul: Math.round((1.05 + Math.random() * 0.25) * 100) / 100,
+            bonus: Math.round(20 + Math.random() * 80),
+            aceGuarantee: Math.random() < 0.4,
+          }));
+          const stayOffer = { team: s.team, salaryMul: 1, bonus: 0, aceGuarantee: false };
           return finalizeYearEnd({
             ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
             races: [mlGenRace(s.year + 1, 0, classIdx)],
             directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-            contractOffers: [s.team, ...offerTeams],
+            contractOffers: [stayOffer, ...offerTeams],
             salary, money, managerEval,
             screen: "mylife_contract", log,
           });
@@ -3522,8 +3531,17 @@ function App() {
       };
     });
   }
-  function mlChooseTeam(teamName) {
-    setMl(s => ({ ...s, team: teamName, contractOffers: null, screen: "mylife_main" }));
+  // v15: 選んだオファーの条件（年俸倍率・契約金・エース確約）を実際に反映して契約を結ぶ
+  function mlChooseTeam(offer) {
+    setMl(s => {
+      const salary = Math.round(s.salary * offer.salaryMul);
+      const money = s.money + offer.bonus;
+      const directive = offer.aceGuarantee ? MANAGER_DIRECTIVES.ace : s.directive;
+      const log = offer.bonus > 0 || offer.salaryMul > 1
+        ? [...s.log, `【${s.year}年目 4月】${offer.team}と契約（年俸${salary}万円${offer.bonus > 0 ? `／契約金+${offer.bonus}万円` : ""}）`]
+        : s.log;
+      return { ...s, team: offer.team, salary, money, directive, contractOffers: null, screen: "mylife_main", log };
+    });
   }
   // v15: 人生の岐路イベントの選択を確定する。年度末処理はpendingCrossroads.resolvedStateに
   // 既に計算済みなので、選んだ効果をそこへ重ねてから結果画面へ進む（時間は二重に進めない）
@@ -4160,13 +4178,20 @@ function App() {
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "10px 14px" }}>
           <Eyebrow color={C.purple}>CONTRACT — 移籍オファー</Eyebrow>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>好成績を残したあなたに、複数チームから声がかかっています。来季どのチームで走りますか？</div>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>好成績を残したあなたに、複数チームから声がかかっています。条件を見比べて来季の所属先を選んでください。</div>
         </div>
-        {ml.contractOffers.map((teamName, i) => (
-          <Btn key={i} outline={i > 0} onClick={() => mlChooseTeam(teamName)}>
-            {i === 0 ? `${teamName}に残留` : `${teamName}へ移籍`}
-          </Btn>
-        ))}
+        {ml.contractOffers.map((offer, i) => {
+          const isStay = i === 0;
+          const previewSalary = Math.round(ml.salary * offer.salaryMul);
+          return (
+            <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1.5px solid ${isStay ? C.line : C.purple}` }}>
+              <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 14, color: C.text }}>{offer.team}{isStay ? "（残留）" : "（移籍）"}</div>
+              <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>年俸 {previewSalary}万円{offer.bonus > 0 && <span style={{ color: C.green }}>／契約金 +{offer.bonus}万円</span>}</div>
+              {offer.aceGuarantee && <div style={{ fontSize: 11, color: C.yellow, marginTop: 2 }}>👑 来季開幕戦はエースとして起用を確約</div>}
+              <Btn small outline={isStay} color={C.purple} onClick={() => mlChooseTeam(offer)} style={{ marginTop: 8 }}>この条件で契約する</Btn>
+            </div>
+          );
+        })}
       </div>
     );
 
