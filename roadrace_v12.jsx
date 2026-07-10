@@ -56,6 +56,10 @@ const GROWTH = {
   early: { label: "早熟", peak: [21, 25] },
   normal: { label: "普通", peak: [24, 29] },
   late: { label: "晩成", peak: [28, 33] },
+  // v19: 早熟・晩成それぞれの極端形。superEarly/超晩成は通常の3タイプよりさらに
+  // ピークが偏っており、ごく稀にしか出現しない（newRiderの生成時に低確率で抽選）
+  super_early: { label: "超早熟", peak: [18, 21] },
+  super_late: { label: "超晩成", peak: [32, 38] },
 };
 const POW = {
   S: { mul: 1.6, color: "#ffd23f" }, A: { mul: 1.3, color: "#35c07e" },
@@ -1292,14 +1296,16 @@ const ML_GEAR = {
   soloCoach:    { label: "独走専門コーチ", price: 100, desc: "独走の練習効果+25%（恒常）" },
 };
 const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
-const GROWTH_ORDER = ["early", "normal", "late"];
+// v19: 超早熟は稀な自然発生のみで到達できる特別枠のため、育成アイテムでの
+// 到達先には含めない（晩成方向への進行のみ：早熟→普通→晩成→超晩成）
+const GROWTH_ORDER = ["early", "normal", "late", "super_late"];
 const ML_STOCK_ITEMS = {
   drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
   supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },
   tune:  { label: "コンディション調整", desc: "調子を1段階アップ", price: 20, condDelta: 1 },
   // v15フェーズ2: 成長力・成長タイプを底上げする消耗品
   growthPowUp: { label: "才能開花プログラム", desc: "成長力を1段階アップ（C→B→A→S）", price: 180, growthPowUp: true },
-  growthShift: { label: "晩成型トレーニング理論", desc: "成長タイプを1段階「晩成」寄りに変更（早熟→普通→晩成）", price: 150, growthShiftUp: true },
+  growthShift: { label: "晩成型トレーニング理論", desc: "成長タイプを1段階「晩成」寄りに変更（早熟→普通→晩成→超晩成）", price: 150, growthShiftUp: true },
 };
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
@@ -1360,6 +1366,12 @@ function newRider(power, rng, opts = {}) {
   // 指定が無ければ従来通りランダム（若年層はlate寄りの補正込み）
   let growth = opts.growth || gKeys[Math.floor(rng() * 3)];
   if (!opts.growth && age <= 19 && rng() < 0.5) growth = "late";
+  // v19: ごく稀に「超早熟」「超晩成」という極端な成長タイプが出現する（明示指定時は対象外）
+  if (!opts.growth) {
+    const rare = rng();
+    if (rare < 0.03) growth = "super_early";
+    else if (rare < 0.06) growth = "super_late";
+  }
   const abilities = rollAbilities(rng, { forceProdigy: opts.forceProdigy });
   const px = rng();
   let personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
