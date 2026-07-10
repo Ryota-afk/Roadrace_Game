@@ -970,6 +970,37 @@ function mlRollCrossroads(s, player) {
   if (candidates.length === 0) return null;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
+// v15: マイライフの実績・アチーブメント。既存のraceLog・rivalRecord・flags・classIdxだけから
+// 判定する（達成状態を別途保持しない）ので、算出のたびに常に最新の状態と一致する
+const ML_ACHIEVEMENTS = [
+  { id: "first_win", icon: "🥇", label: "初勝利", desc: "レースで初めて優勝する",
+    check: (ml) => (ml.player?.raceLog || []).some(e => e.rank === 1) },
+  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる",
+    check: (ml) => (ml.player?.raceLog || []).some(e => e.rank <= 3) },
+  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する",
+    check: (ml) => ml.classIdx >= 1 },
+  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する",
+    check: (ml) => ml.classIdx >= 2 },
+  { id: "worlds_podium", icon: "🌍", label: "世界選手権メダリスト", desc: "世界選手権で表彰台に上がる",
+    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank <= 3) },
+  { id: "worlds_win", icon: "🌍", label: "世界選手権制覇", desc: "世界選手権で優勝する",
+    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank === 1) },
+  { id: "olympics_podium", icon: "🥇", label: "オリンピックメダリスト", desc: "オリンピックで表彰台に上がる",
+    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank <= 3) },
+  { id: "olympics_win", icon: "🥇", label: "オリンピック制覇", desc: "オリンピックで金メダルを獲得する",
+    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank === 1) },
+  { id: "rival_5wins", icon: "🔥", label: "宿命のライバル", desc: "ライバルに5勝する",
+    check: (ml) => (ml.rivalRecord?.wins || 0) >= 5 },
+  { id: "veteran_50", icon: "🚴", label: "百戦錬磨", desc: "通算50戦に出走する",
+    check: (ml) => (ml.player?.raceLog || []).length >= 50 },
+  { id: "married", icon: "💍", label: "家庭を持つ", desc: "結婚する",
+    check: (ml) => !!ml.flags?.married },
+  { id: "injury_comeback", icon: "🩹", label: "苦難を乗り越えて", desc: "大きな怪我から復帰する",
+    check: (ml) => !!ml.flags?.injuryResolved },
+];
+function computeAchievements(ml) {
+  return ML_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(ml) }));
+}
 // v14.3: 監督指示（レースごとの役割指示）。全うすると監督評価（マスクデータ）が上がり、
 // 評価が高いほどエースなど重要な役割の指示が出やすくなる好循環にする
 const MANAGER_DIRECTIVES = {
@@ -3891,9 +3922,41 @@ function App() {
             <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養する（疲労回復のみ）</Btn>
             <Btn outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活のイベントを受ける</Btn>
             <Btn outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップに行く</Btn>
+            <Btn outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>
+              🏆 実績を見る（{computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}達成）
+            </Btn>
           </div>
           <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => setMl(s => ({ ...s, screen: "mylife_retired" })))}>🏁 現役引退する</Btn>
           <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_achievements" && ml.player) {
+      const achievements = computeAchievements(ml);
+      const achievedCount = achievements.filter(a => a.achieved).length;
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
+            <Eyebrow color={C.yellow}>🏆 実績</Eyebrow>
+            <div style={{ fontFamily: FONT_D, fontSize: 18, color: C.text, margin: "4px 0" }}>{achievedCount} / {achievements.length} 達成</div>
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {achievements.map(a => (
+              <div key={a.id} style={{
+                background: a.achieved ? "rgba(255,210,63,0.1)" : C.panel, borderRadius: 10, padding: "10px 12px",
+                border: `1.5px solid ${a.achieved ? C.yellow : C.line}`, opacity: a.achieved ? 1 : 0.55,
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <span style={{ fontSize: 22 }}>{a.achieved ? a.icon : "🔒"}</span>
+                <div>
+                  <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: a.achieved ? C.yellow : C.text }}>{a.label}</div>
+                  <div style={{ fontSize: 11, color: C.sub }}>{a.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
         </div>
       );
     }
