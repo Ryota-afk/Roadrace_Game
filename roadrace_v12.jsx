@@ -1276,11 +1276,14 @@ const ML_HOUSES = [
   { label: "賃貸アパート", price: 80, fatigueBonus: 5, desc: "毎月の疲労回復+5（恒常）" },
   { label: "分譲マンション", price: 220, fatigueBonus: 12, desc: "毎月の疲労回復+12（恒常）" },
   { label: "郊外の一戸建て", price: 480, fatigueBonus: 22, desc: "毎月の疲労回復+22。私生活が安定し監督評価もやや上がりやすくなる" },
+  // v20: 稼いだ資金の使い道が尽きて余りがちだったため、終盤向けの最上位グレードを追加
+  { label: "都心の高級タワーマンション", price: 900, fatigueBonus: 30, desc: "毎月の疲労回復+30。この上ない生活環境で、監督評価もさらに上がりやすくなる" },
 ];
 const ML_CARS = [
   { label: "中古の軽自動車", price: 60, raceFatigueCut: 0.10, desc: "レース参加による疲労蓄積-10%" },
   { label: "国産セダン", price: 160, raceFatigueCut: 0.20, desc: "レース参加による疲労蓄積-20%" },
   { label: "輸入スポーツカー", price: 400, raceFatigueCut: 0.30, desc: "レース参加による疲労蓄積-30%" },
+  { label: "オーダーメイドの高級SUV", price: 750, raceFatigueCut: 0.38, desc: "レース参加による疲労蓄積-38%" },
 ];
 // v15フェーズ2: 種目別専門コーチ（恒常）。5種目それぞれの練習効果を、現在の練習指定に
 // 関わらずそのアビリティが対象になったときだけ底上げする
@@ -3954,6 +3957,9 @@ function App() {
     if (flags.hasChild && !flags.childFocusedCareer) player.fatigue = Math.max(0, player.fatigue - 3);
     // v18: 若手のメンターになると、後進を気にかける充実感から疲労がわずかに抜けやすくなる
     if (flags.mentor) player.fatigue = Math.max(0, player.fatigue - 3);
+    // v20: シーズンモードと同様、調子は毎月ランダムに変動する（moody/steady_spがあれば変動幅も反映）
+    const swing = hasAbility(player, "moody") ? 2 : hasAbility(player, "steady_sp") ? 0.5 : 1;
+    player.cond = Math.max(1, Math.min(5, (player.cond || 3) + (Math.random() < 0.34 ? -swing : Math.random() < 0.5 ? 0 : swing)));
     return player;
   }
   function mlAdvanceMonth(mode) {
@@ -3977,7 +3983,7 @@ function App() {
       }
       // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
       // 年俸は毎月1/12ずつ資金として振り込まれる
-      const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0) + (s.flags?.mentor ? 0.3 : 0);
+      const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0) + (s.houseLv >= 3 ? 0.2 : 0) + (s.flags?.mentor ? 0.3 : 0);
       const managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
       const money = s.money + Math.round(s.salary / 12);
       if (s.month === 11) {
@@ -4189,6 +4195,22 @@ function App() {
       }
       return { ...s, player, stock: { ...s.stock, [k]: s.stock[k] - 1 } };
     });
+  }
+  // v20: 疲労が既に十分低い状態で回復アイテムを使うと、上限クランプで一部が無駄になる。
+  // 気づかず使ってしまうのを防ぐため、無駄になる場合は先に確認ダイアログを挟む
+  function mlUseStockConfirm(k) {
+    const it = ML_STOCK_ITEMS[k];
+    const player = ml.player;
+    if (player && it.fatigueDelta && player.fatigue + it.fatigueDelta < 0) {
+      const wasted = Math.round(Math.abs(player.fatigue + it.fatigueDelta));
+      askConfirm(`疲労は現在${Math.round(player.fatigue)}です。${it.label}を使うと回復量の一部（約${wasted}）が無駄になります。それでも使いますか？`, () => mlUseStock(k));
+      return;
+    }
+    if (player && it.condDelta && player.cond >= 5) {
+      askConfirm(`調子は既に最高潮（↑↑）です。${it.label}を使っても変化しません。それでも使いますか？`, () => mlUseStock(k));
+      return;
+    }
+    mlUseStock(k);
   }
   function mlBuyCar() {
     setMl(s => {
@@ -4477,16 +4499,17 @@ function App() {
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
               <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
               <span>成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></span>
+              <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span></span>
               {ml.flags?.married && <span style={{ color: C.purple }}>💍 既婚</span>}
             </div>
-            <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
+            <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
             <FatigueBar v={r.fatigue} />
             <AbilityGrid r={r} />
             {(ml.stock.drink > 0 || ml.stock.supp > 0 || ml.stock.tune > 0) && (
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStock("drink")}>{ML_STOCK_ITEMS.drink.label}(-30) ×{ml.stock.drink}</Btn>}
-                {ml.stock.supp > 0 && <Btn small outline color={C.green} onClick={() => mlUseStock("supp")}>{ML_STOCK_ITEMS.supp.label}(-60) ×{ml.stock.supp}</Btn>}
-                {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStock("tune")}>{ML_STOCK_ITEMS.tune.label}(調子+1) ×{ml.stock.tune}</Btn>}
+                {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("drink")}>{ML_STOCK_ITEMS.drink.label}(-30) ×{ml.stock.drink}</Btn>}
+                {ml.stock.supp > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("supp")}>{ML_STOCK_ITEMS.supp.label}(-60) ×{ml.stock.supp}</Btn>}
+                {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("tune")}>{ML_STOCK_ITEMS.tune.label}(調子+1) ×{ml.stock.tune}</Btn>}
               </div>
             )}
           </div>
@@ -4631,6 +4654,11 @@ function App() {
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
             <Eyebrow color={C.green}>SHOP — 所持金 {ml.money}万円</Eyebrow>
             <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます）</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+              <span style={{ fontSize: 11, color: C.sub }}>現在の疲労</span>
+              <div style={{ width: 90 }}><FatigueBar v={r.fatigue} /></div>
+              <span style={{ fontSize: 11, color: C.sub }}>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span></span>
+            </div>
           </div>
           <section>
             <Eyebrow color={C.purple}>マシンパーツ（クラス昇格で上位解禁）</Eyebrow>
@@ -4677,7 +4705,7 @@ function App() {
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <Btn small outline color={C.green} disabled={ml.money < it.price} onClick={() => mlBuyStock(k)}>{it.price}万で購入</Btn>
-                    <Btn small color={C.green} disabled={(ml.stock[k] || 0) <= 0} onClick={() => mlUseStock(k)}>使う</Btn>
+                    <Btn small color={C.green} disabled={(ml.stock[k] || 0) <= 0} onClick={() => mlUseStockConfirm(k)}>使う</Btn>
                   </div>
                 </div>
               ))}
