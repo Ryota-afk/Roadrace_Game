@@ -2713,6 +2713,8 @@ function initMyLife() {
     partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
     gear: { roller: false, monitor: false, chef: false },
     houseLv: -1, carLv: -1,
+    // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
+    rival: null, rivalRecord: null,
   };
 }
 const ML_SAVE_KEY = "roadrace_v12_mylife_save";
@@ -2720,6 +2722,7 @@ const ML_SAVE_VERSION = "v12ml";
 const ML_SAVE_FIELDS = [
   "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
+  "rival", "rivalRecord",
 ];
 function saveMyLife(ml) {
   try {
@@ -2739,16 +2742,40 @@ function loadMyLifeGame() {
     if (parsed.version !== ML_SAVE_VERSION || !parsed.state) return null;
     const base = initMyLife();
     if (parsed.state.player && parsed.state.player.id >= RID) RID = parsed.state.player.id + 1;
+    if (parsed.state.rival && parsed.state.rival.id >= RID) RID = parsed.state.rival.id + 1;
     return { ...base, ...parsed.state, sel: base.sel, result: null, resultInfo: null };
   } catch (e) { return null; }
 }
 function clearMyLifeSave() {
   try { localStorage.removeItem(ML_SAVE_KEY); } catch (e) { /* noop */ }
 }
+// v15: マイライフ専用のライバル選手。キャリア開始時に1名だけ生成し、以後は名前・脚質・
+// 性格・所属チームを固定したまま、レースのたびに現在のクラス／グレードに応じた能力で
+// 登場させる（プレイヤーと同じ月次成長シミュレーションを個別に回す必要をなくすための単純化）
+function mlCreateRival(rng, playerName, playerTeamName) {
+  const otherTeams = MYLIFE_TEAMS.filter(t => t.name !== playerTeamName);
+  const team = otherTeams[Math.floor(rng() * otherTeams.length)];
+  const keys = Object.keys(TYPES);
+  const type = keys[Math.floor(rng() * keys.length)];
+  const banned = new Set([playerName]);
+  const name = pickRiderName(rng, banned);
+  const px = rng();
+  const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
+    : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
+  let trait = null;
+  if (rng() < 0.35) {
+    const bad = rng() < 0.25;
+    const pool = Object.keys(TRAITS).filter(k => !!TRAITS[k].bad === bad);
+    trait = pool[Math.floor(rng() * pool.length)];
+  }
+  return { id: RID++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, trait };
+}
 // v14: マイライフのレースは6チーム全部をAI生成し、プレイヤーの選手だけを
 // 「PLAYER」チームタグ付きの1名として混ぜる（RaceView等の既存カメラ・強調表示ロジックを
 // そのまま再利用するため）。プレイヤー自身のチームメイトは実際のチーム名で登場する
-function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey) {
+// v15: rivalとraceMeta.rivalPresentが揃っていれば、ライバルの所属チームの1枠（エース枠）を
+// ライバルの固定アイデンティティ（名前・脚質・性格）に差し替え、isRivalフラグを立てる
+function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival) {
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
@@ -2769,6 +2796,14 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
       flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
       team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
     }));
+    if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
+      const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned });
+      teamEntrants[0] = {
+        ...teamEntrants[0], id: rival.id, name: rival.name, type: rival.type, trait: rival.trait,
+        flat: rivalStats.flat, climb: rivalStats.climb, sprint: rivalStats.sprint, stamina: rivalStats.stamina, solo: rivalStats.solo,
+        isRival: true,
+      };
+    }
     if (isMyTeam) {
       // v14.3: 監督指示が「エース」「アシスト／経験」であれば役割はそれに従って強制する。
       // 指示のない特別な区分（積極的な走り等）の場合のみ、従来通り能力比較で自動判定する
@@ -3218,7 +3253,9 @@ function App() {
     const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
     const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
     const grade = month === 11 ? 3 : 1 + Math.floor(rng() * 3);
-    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx };
+    // v15: 約45%の確率でその月のレースにライバルが出走してくる（rival自体はキャラ作成時に固定生成済み）
+    const rivalPresent = rng() < 0.45;
+    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent };
   }
   function mlCreateChar(type, background) {
     const rng = mulberry(Date.now() % 999983);
@@ -3229,6 +3266,7 @@ function App() {
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
     // v14.3: 経歴ごとの初任給（万円/年）。年俸・監督評価・資産はキャリア開始時に初期化する
     const initialSalary = { highschool: 220, university: 280, corporate: 360 }[background] || 260;
+    const rival = mlCreateRival(rng, player.name, team.name);
     setMl(s => ({
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
@@ -3237,7 +3275,8 @@ function App() {
       partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
       gear: { roller: false, monitor: false, chef: false },
       houseLv: -1, carLv: -1,
-      log: [`【1年目 4月】${bg.label}として${team.name}に新人選手加入`],
+      rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
+      log: [`【1年目 4月】${bg.label}として${team.name}に新人選手加入`, `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`],
       screen: "mylife_main",
     }));
   }
@@ -3248,7 +3287,7 @@ function App() {
     if (mlRaceLockRef.current) return;
     mlRaceLockRef.current = true;
     const race = ml.races[0];
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null);
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null, ml.rival);
     setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
   }
   function mlRaceFinish() {
@@ -3262,6 +3301,8 @@ function App() {
     const fulfilled = directive ? directive.check(me.rank, sim.ranked.length) : false;
     const evalDelta = directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0;
     const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + ml.classIdx * 0.25));
+    // v15: このレースにライバルが出走していれば、着順を比較して通算のライバル戦績を更新する
+    const rivalEntrant = sim.ranked.find(e => e.isRival);
     setMl(s => {
       // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
       const role = directive ? directive.key : (me.isAce ? "ace" : "support");
@@ -3269,11 +3310,22 @@ function App() {
         ...s.player,
         raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role }],
       };
+      let rivalRecord = s.rivalRecord;
+      let rivalOutcome = null;
+      if (rivalEntrant) {
+        const beat = me.rank < rivalEntrant.rank;
+        rivalRecord = {
+          meetings: (rivalRecord?.meetings || 0) + 1,
+          wins: (rivalRecord?.wins || 0) + (beat ? 1 : 0),
+          losses: (rivalRecord?.losses || 0) + (beat ? 0 : 1),
+        };
+        rivalOutcome = { name: rivalEntrant.name, rank: rivalEntrant.rank, beat };
+      }
       return {
         ...s, player, points: s.points + pts,
         managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
-        money: s.money + prize,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize },
+        money: s.money + prize, rivalRecord,
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome },
         screen: "mylife_result",
       };
     });
@@ -3711,6 +3763,16 @@ function App() {
               </div>
             </div>
           )}
+          {ml.rival && (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.red}` }}>
+              <Eyebrow color={C.red}>ライバル</Eyebrow>
+              <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.rival.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{ml.rival.team}・{TYPES[ml.rival.type].label}）</span></div>
+              <div style={{ fontSize: 11, color: C.sub }}>
+                通算対戦成績：{ml.rivalRecord?.meetings || 0}戦 <span style={{ color: C.green }}>{ml.rivalRecord?.wins || 0}勝</span> <span style={{ color: C.red }}>{ml.rivalRecord?.losses || 0}敗</span>
+              </div>
+              {race.rivalPresent && <div style={{ fontSize: 11, color: C.yellow, marginTop: 3 }}>🔥 今月のレースにライバルも出走してくる</div>}
+            </div>
+          )}
           <div>
             <Eyebrow>今月の練習メニュー</Eyebrow>
             <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
@@ -3745,7 +3807,7 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
@@ -3753,6 +3815,12 @@ function App() {
             <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
             <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt ／ 賞金 +{prize}万円</div>
           </div>
+          {rivalOutcome && (
+            <div style={{ background: rivalOutcome.beat ? "#16241c" : "#241818", border: `1px solid ${rivalOutcome.beat ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
+              <Eyebrow color={rivalOutcome.beat ? C.green : C.red}>🔥 ライバル対決 — {rivalOutcome.beat ? "勝利" : "敗北"}</Eyebrow>
+              <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{rivalOutcome.name}は{rivalOutcome.rank}位でフィニッシュ。{rivalOutcome.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。"}</div>
+            </div>
+          )}
           {directive && (
             <div style={{ background: fulfilled ? "#16241c" : "#241818", border: `1px solid ${fulfilled ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
               <Eyebrow color={fulfilled ? C.green : C.red}>監督指示 — {fulfilled ? "達成" : "未達成"}</Eyebrow>
@@ -3929,6 +3997,11 @@ function App() {
             {riderCareerSummary({ ...r, farewellYear: ml.year, farewellReason: "retired" })}
           </div>
           <div style={{ fontSize: 11.5, color: C.sub }}>通算{(r.raceLog || []).length}戦・{wins}勝・表彰台{podiums}回</div>
+          {ml.rival && (
+            <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.red}`, lineHeight: 1.6 }}>
+              ライバル・{ml.rival.name}（{ml.rival.team}）との通算対戦成績は{ml.rivalRecord?.meetings || 0}戦{ml.rivalRecord?.wins || 0}勝{ml.rivalRecord?.losses || 0}敗だった。
+            </div>
+          )}
           <Btn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</Btn>
           <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
         </div>
