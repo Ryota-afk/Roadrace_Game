@@ -138,6 +138,32 @@ function upgradeGoldAbilities(r) {
   });
   return changed ? { ...r, goldAbilities: next } : r;
 }
+// v16フェーズ3: 特殊能力ファイル（図鑑）。自チーム所属選手・マイライフの自分自身が
+// これまでに保有したことのある特殊能力を、セーブデータのリセットをまたいで記録する
+// 永続ストレージ。通常特性と金特を別々に記録し、プレイ実績として蓄積していく
+const ABILITY_FILE_KEY = "roadrace_v12_ability_file";
+function loadAbilityFile() {
+  try {
+    const raw = localStorage.getItem(ABILITY_FILE_KEY);
+    if (!raw) return { normal: [], gold: [] };
+    const parsed = JSON.parse(raw);
+    return { normal: Array.isArray(parsed.normal) ? parsed.normal : [], gold: Array.isArray(parsed.gold) ? parsed.gold : [] };
+  } catch (e) { return { normal: [], gold: [] }; }
+}
+function saveAbilityFile(data) {
+  try { localStorage.setItem(ABILITY_FILE_KEY, JSON.stringify(data)); } catch (e) { /* noop */ }
+}
+function noteAbilityDiscovery(riders) {
+  const file = loadAbilityFile();
+  const normalSet = new Set(file.normal);
+  const goldSet = new Set(file.gold);
+  let changed = false;
+  (riders || []).forEach(r => {
+    (r && r.abilities || []).forEach(id => { if (!normalSet.has(id)) { normalSet.add(id); changed = true; } });
+    (r && r.goldAbilities || []).forEach(id => { if (!goldSet.has(id)) { goldSet.add(id); changed = true; } });
+  });
+  if (changed) saveAbilityFile({ normal: [...normalSet], gold: [...goldSet] });
+}
 const PERSONALITIES = {
   normal:   { label: "普通", desc: "クセなし", mul: {} },
   genius:   { label: "天才", desc: "全能力が伸びやすい", mul: { flat: 1.25, climb: 1.25, sprint: 1.25, stamina: 1.25, solo: 1.25 } },
@@ -969,20 +995,21 @@ function computePickupChance(r) {
   if (r.prodigy) chance += 0.2;
   return Math.min(0.9, chance);
 }
-// v15: rankはチームの格付け（S>A>B>C）。マイライフの移籍オファー画面で
-// 「どれくらい強豪のチームか」を一目でわかるように表示するための情報用フラグ
+// v16: tierはチームが所属する実際のクラス（0=B1／1=A／2=PRO）。マイライフの移籍
+// オファー画面でチームのランクを一目でわかるように表示し、かつ実際にそのチームと
+// 契約するとプレイヤーのclassIdxがそのtierに変わる（機材解放条件に直結する）
 const RIVAL_TEAMS = [
-  { name: "レッドサンダー山陽", color: "#d9484a", rank: "A" }, { name: "クレディ・ブルー", color: "#3f7fd9", rank: "S" },
-  { name: "ヴェロチタ京都", color: "#9a6be0", rank: "B" }, { name: "ウィンドミル北海道", color: "#e08a3f", rank: "B" },
+  { name: "レッドサンダー山陽", color: "#d9484a", tier: 1 }, { name: "クレディ・ブルー", color: "#3f7fd9", tier: 2 },
+  { name: "ヴェロチタ京都", color: "#9a6be0", tier: 0 }, { name: "ウィンドミル北海道", color: "#e08a3f", tier: 0 },
 ];
 // v14: マイライフモード用のチームプール（6チーム）。プレイヤーは新人としてこの中の
 // 1チームに加入し、残り5チームは全て純粋なライバルAIチームとしてレースに登場する
 const MYLIFE_TEAMS = [
   ...RIVAL_TEAMS,
-  { name: "サンライズ静岡", color: "#4fd1c5", rank: "C" }, { name: "北斗プロサイクル", color: "#c084fc", rank: "A" },
+  { name: "サンライズ静岡", color: "#4fd1c5", tier: 0 }, { name: "北斗プロサイクル", color: "#c084fc", tier: 1 },
 ];
-const TEAM_RANK_COLOR = { S: "#ffd23f", A: "#f0703f", B: "#3f7fd9", C: C.sub };
-function mlTeamRank(teamName) { return (MYLIFE_TEAMS.find(t => t.name === teamName) || {}).rank || "C"; }
+const CLASS_TIER_COLOR = [C.sub, C.blue, C.yellow];
+function mlTeamTier(teamName) { const t = MYLIFE_TEAMS.find(t => t.name === teamName); return t ? t.tier : 0; }
 // v14.1: マイライフの経歴選択。年齢・初期能力・成長ポテンシャル（growthPow分布・成長タイプ）に
 // 差を付け、「若く粗削りだが伸びしろ最大」〜「即戦力だが伸びしろ小さめ」の3択にする
 const ML_BACKGROUNDS = {
@@ -2005,6 +2032,63 @@ function TraitLine({ abilities, goldAbilities }) {
               {isGold ? "★" : ""}{t.label}
             </span>
             {t.desc}{isGold ? "（金特・効果2倍）" : ""}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+// v16フェーズ3: 特殊能力ファイル（図鑑）。まだ発見していない能力は「???」で伏せて表示し、
+// 自チーム/マイライフで実際にその能力を持つ選手を保有すると解禁される
+const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長"];
+function AbilityFileList({ file }) {
+  const normalSet = new Set(file.normal);
+  const goldSet = new Set(file.gold);
+  const allIds = Object.keys(ABILITIES);
+  const discoveredCount = allIds.filter(id => normalSet.has(id)).length;
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ background: C.panel, borderRadius: 12, padding: 14, borderTop: `4px solid ${C.purple}` }}>
+        <div style={{ fontFamily: FONT_D, fontSize: 18, color: C.text }}>{discoveredCount} / {allIds.length} 発見済み</div>
+        <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>該当する特殊能力を持つ選手を保有すると解禁されます（シーズンモード・マイライフ通算）。</div>
+      </div>
+      {ABILITY_CATEGORY_ORDER.map(cat => {
+        const ids = allIds.filter(id => ABILITIES[id].category === cat);
+        if (ids.length === 0) return null;
+        return (
+          <div key={cat}>
+            <Eyebrow color={C.purple}>{cat}</Eyebrow>
+            <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+              {ids.map(id => {
+                const t = ABILITIES[id];
+                const found = normalSet.has(id);
+                const gold = goldSet.has(id);
+                const goldable = !!GOLD_CONDITIONS[id];
+                const col = t.bad ? C.red : "#e8a13c";
+                return (
+                  <div key={id} style={{
+                    background: found ? C.panel : C.panel2, borderRadius: 10, padding: "9px 12px",
+                    border: `1px solid ${found ? col : C.line}`, opacity: found ? 1 : 0.6,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 16 }}>{found ? (t.bad ? "⚠️" : "✦") : "🔒"}</span>
+                      <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: found ? col : C.sub }}>
+                        {found ? t.label : "???"}
+                      </span>
+                      {goldable && found && (
+                        <span style={{
+                          fontSize: 9.5, color: gold ? C.yellow : C.sub, border: `1px solid ${gold ? C.yellow : C.line}`,
+                          borderRadius: 4, padding: "0 4px",
+                        }}>{gold ? "★ 金特入手済" : "金特あり"}</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.sub, marginTop: 3 }}>
+                      {found ? t.desc : "まだ発見されていない特殊能力です。"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })}
@@ -3070,12 +3154,12 @@ function App() {
 
   // v10: main画面に到達するたびに自動保存
   useEffect(() => {
-    if (g.screen === "main") saveGame(g);
+    if (g.screen === "main") { saveGame(g); noteAbilityDiscovery(g.roster); }
   }, [g]);
 
   // v14: マイライフモードも同様にmylife_main到達時点で自動保存（別のセーブキー）
   useEffect(() => {
-    if (superMode === "mylife" && ml.screen === "mylife_main") saveMyLife(ml);
+    if (superMode === "mylife" && ml.screen === "mylife_main") { saveMyLife(ml); noteAbilityDiscovery([ml.player]); }
   }, [ml, superMode]);
 
   // v13: グランファイナル制覇でクリアポイントを付与（周回プレイの起点）。
@@ -3650,16 +3734,22 @@ function App() {
         // v15: オファーはチーム名だけでなく、年俸倍率・契約金・エース確約の有無が
         // チームごとに異なる。残留オファーは条件を上乗せしない基準線として提示し、
         // 移籍オファーはそれより魅力的な条件を出すことで「引き抜き」らしさを出す
+        // v16: オファーには移籍先チームのtier（B1/A/PRO）を持たせ、契約するとその
+        // tierがそのままプレイヤーの新classIdxになる。一度の移籍で飛び級しすぎない
+        // よう、現在のclassIdxから±1tierの範囲のチームだけを候補にする
         const interest = s.points / Math.max(1, CLASSES[s.classIdx].need);
         if (interest >= 0.8 && Math.random() < 0.6) {
           const others = MYLIFE_TEAMS.filter(t => t.name !== s.team);
-          const offerTeams = [...others].sort(() => Math.random() - 0.5).slice(0, 2).map(t => ({
+          const nearTier = others.filter(t => Math.abs(t.tier - classIdx) <= 1);
+          const pool = nearTier.length >= 2 ? nearTier : others;
+          const offerTeams = [...pool].sort(() => Math.random() - 0.5).slice(0, 2).map(t => ({
             team: t.name,
+            tier: t.tier,
             salaryMul: Math.round((1.05 + Math.random() * 0.25) * 100) / 100,
             bonus: Math.round(20 + Math.random() * 80),
             aceGuarantee: Math.random() < 0.4,
           }));
-          const stayOffer = { team: s.team, salaryMul: 1, bonus: 0, aceGuarantee: false };
+          const stayOffer = { team: s.team, tier: mlTeamTier(s.team), salaryMul: 1, bonus: 0, aceGuarantee: false };
           return finalizeYearEnd({
             ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
             races: [mlGenRace(s.year + 1, 0, classIdx)],
@@ -3687,15 +3777,28 @@ function App() {
     });
   }
   // v15: 選んだオファーの条件（年俸倍率・契約金・エース確約）を実際に反映して契約を結ぶ
+  // v16: 移籍先チームのtierがそのままプレイヤーの新classIdxになる（機材解放条件に直結）。
+  // classIdxが変わる場合はそのtierに合わせてrace/directiveも生成し直す
   function mlChooseTeam(offer) {
     setMl(s => {
       const salary = Math.round(s.salary * offer.salaryMul);
       const money = s.money + offer.bonus;
-      const directive = offer.aceGuarantee ? MANAGER_DIRECTIVES.ace : s.directive;
-      const log = offer.bonus > 0 || offer.salaryMul > 1
+      const classIdx = offer.tier != null ? offer.tier : s.classIdx;
+      const classChanged = classIdx !== s.classIdx;
+      const races = classChanged ? [mlGenRace(s.year, s.month, classIdx)] : s.races;
+      const managerEval = s.managerEval;
+      const directive = offer.aceGuarantee
+        ? MANAGER_DIRECTIVES.ace
+        : (classChanged ? mlGenDirective(s.year, s.month, classIdx, managerEval) : s.directive);
+      let log = offer.bonus > 0 || offer.salaryMul > 1
         ? [...s.log, `【${s.year}年目 4月】${offer.team}と契約（年俸${salary}万円${offer.bonus > 0 ? `／契約金+${offer.bonus}万円` : ""}）`]
-        : s.log;
-      return { ...s, team: offer.team, salary, money, directive, contractOffers: null, screen: "mylife_main", log };
+        : [...s.log];
+      if (classChanged) {
+        log = [...log, classIdx > s.classIdx
+          ? `${offer.team}への移籍に伴い${CLASSES[classIdx].label}に昇格した！`
+          : `${offer.team}への移籍に伴い${CLASSES[classIdx].label}に降格となった`];
+      }
+      return { ...s, team: offer.team, classIdx, races, directive, salary, money, contractOffers: null, screen: "mylife_main", log };
     });
   }
   // v15: 人生の岐路イベントの選択を確定する。年度末処理はpendingCrossroads.resolvedStateに
@@ -4108,6 +4211,7 @@ function App() {
             <Btn outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>
               🏆 実績を見る（{computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}達成）
             </Btn>
+            <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑を見る</Btn>
           </div>
           <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🏁 現役引退する</Btn>
           <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
@@ -4143,6 +4247,14 @@ function App() {
         </div>
       );
     }
+
+    if (ml.screen === "mylife_abilityfile") return mlWrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <Eyebrow color={C.purple}>🗂 特殊能力図鑑</Eyebrow>
+        <AbilityFileList file={loadAbilityFile()} />
+        <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
+      </div>
+    );
 
     if (ml.screen === "mylife_race" && ml.result) return mlWrap(
       <div>
@@ -4348,15 +4460,17 @@ function App() {
         {ml.contractOffers.map((offer, i) => {
           const isStay = i === 0;
           const previewSalary = Math.round(ml.salary * offer.salaryMul);
-          const rank = mlTeamRank(offer.team);
+          const classDelta = offer.tier - ml.classIdx;
           return (
             <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1.5px solid ${isStay ? C.line : C.purple}` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{
-                  fontFamily: FONT_M, fontSize: 11, fontWeight: 700, color: "#14171d", background: TEAM_RANK_COLOR[rank],
+                  fontFamily: FONT_M, fontSize: 11, fontWeight: 700, color: "#14171d", background: CLASS_TIER_COLOR[offer.tier],
                   borderRadius: 5, padding: "1px 6px",
-                }}>{rank}</span>
+                }}>{CLASSES[offer.tier].id}</span>
                 <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 14, color: C.text }}>{offer.team}{isStay ? "（残留）" : "（移籍）"}</span>
+                {classDelta > 0 && <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>⬆ 昇格</span>}
+                {classDelta < 0 && <span style={{ fontSize: 11, color: C.red, fontWeight: 700 }}>⬇ 降格</span>}
               </div>
               <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>年俸 {previewSalary}万円{offer.bonus > 0 && <span style={{ color: C.green }}>／契約金 +{offer.bonus}万円</span>}</div>
               {offer.aceGuarantee && <div style={{ fontSize: 11, color: C.yellow, marginTop: 2 }}>👑 来季開幕戦はエースとして起用を確約</div>}
@@ -4986,6 +5100,8 @@ function App() {
               );
             })}
           </div>
+          <Eyebrow color={C.purple}>🗂 特殊能力図鑑</Eyebrow>
+          <AbilityFileList file={loadAbilityFile()} />
         </div>
       );
     }
