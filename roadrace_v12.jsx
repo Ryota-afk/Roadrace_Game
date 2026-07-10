@@ -1164,32 +1164,34 @@ const ML_OFFSEASON_CHOICES = [
 // v15: マイライフの実績・アチーブメント。既存のraceLog・rivalRecord・flags・classIdxだけから
 // 判定する（達成状態を別途保持しない）ので、算出のたびに常に最新の状態と一致する
 const ML_ACHIEVEMENTS = [
-  { id: "first_win", icon: "🥇", label: "初勝利", desc: "レースで初めて優勝する",
+  { id: "first_win", icon: "🥇", label: "初勝利", desc: "レースで初めて優勝する", reward: { money: 30 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.rank === 1) },
-  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる",
+  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる", reward: { money: 20 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.rank <= 3) },
-  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する",
+  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する", reward: { money: 50, cp: 1 },
     check: (ml) => ml.classIdx >= 1 },
-  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する",
+  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する", reward: { money: 100, cp: 2 },
     check: (ml) => ml.classIdx >= 2 },
-  { id: "worlds_podium", icon: "🌍", label: "世界選手権メダリスト", desc: "世界選手権で表彰台に上がる",
+  { id: "worlds_podium", icon: "🌍", label: "世界選手権メダリスト", desc: "世界選手権で表彰台に上がる", reward: { money: 80, cp: 2 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank <= 3) },
-  { id: "worlds_win", icon: "🌍", label: "世界選手権制覇", desc: "世界選手権で優勝する",
+  { id: "worlds_win", icon: "🌍", label: "世界選手権制覇", desc: "世界選手権で優勝する", reward: { money: 150, cp: 4 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank === 1) },
-  { id: "olympics_podium", icon: "🥇", label: "オリンピックメダリスト", desc: "オリンピックで表彰台に上がる",
+  { id: "olympics_podium", icon: "🥇", label: "オリンピックメダリスト", desc: "オリンピックで表彰台に上がる", reward: { money: 100, cp: 3 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank <= 3) },
-  { id: "olympics_win", icon: "🥇", label: "オリンピック制覇", desc: "オリンピックで金メダルを獲得する",
+  { id: "olympics_win", icon: "🥇", label: "オリンピック制覇", desc: "オリンピックで金メダルを獲得する", reward: { money: 200, cp: 5 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank === 1) },
-  { id: "rival_5wins", icon: "🔥", label: "宿命のライバル", desc: "ライバルに5勝する",
+  { id: "rival_5wins", icon: "🔥", label: "宿命のライバル", desc: "ライバルに5勝する", reward: { money: 60 },
     check: (ml) => (ml.rivalRecord?.wins || 0) >= 5 },
-  { id: "veteran_50", icon: "🚴", label: "百戦錬磨", desc: "通算50戦に出走する",
+  { id: "veteran_50", icon: "🚴", label: "百戦錬磨", desc: "通算50戦に出走する", reward: { money: 60 },
     check: (ml) => (ml.player?.raceLog || []).length >= 50 },
-  { id: "married", icon: "💍", label: "家庭を持つ", desc: "結婚する",
+  { id: "married", icon: "💍", label: "家庭を持つ", desc: "結婚する", reward: { money: 30 },
     check: (ml) => !!ml.flags?.married },
-  { id: "injury_comeback", icon: "🩹", label: "苦難を乗り越えて", desc: "大きな怪我から復帰する",
+  { id: "injury_comeback", icon: "🩹", label: "苦難を乗り越えて", desc: "大きな怪我から復帰する", reward: { money: 30 },
     check: (ml) => !!ml.flags?.injuryResolved },
-  { id: "has_child", icon: "👶", label: "親になる", desc: "第一子を授かる",
+  { id: "has_child", icon: "👶", label: "親になる", desc: "第一子を授かる", reward: { money: 30 },
     check: (ml) => !!ml.flags?.hasChild },
+  { id: "mentor", icon: "🎖", label: "チームの精神的支柱に", desc: "後輩選手のメンターになる", reward: { money: 40 },
+    check: (ml) => !!ml.flags?.mentor },
 ];
 function computeAchievements(ml) {
   return ML_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(ml) }));
@@ -1197,29 +1199,39 @@ function computeAchievements(ml) {
 // v17: シーズンモード（チーム運営）版の実績システム。マイライフと同様、既存の
 // careerStats・careerHistory・hallOfFame・classIdx・roster・captainIdだけから判定する
 const SEASON_ACHIEVEMENTS = [
-  { id: "first_win", icon: "🥇", label: "初優勝", desc: "レースで初めて優勝する",
+  { id: "first_win", icon: "🥇", label: "初優勝", desc: "レースで初めて優勝する", reward: { money: 30 },
     check: (g) => g.careerStats.totalWins >= 1 },
-  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる",
+  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる", reward: { money: 20 },
     check: (g) => g.careerStats.totalPodiums >= 1 },
-  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する",
+  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する", reward: { money: 50, cp: 1 },
     check: (g) => g.classIdx >= 1 },
-  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する",
+  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する", reward: { money: 100, cp: 2 },
     check: (g) => g.classIdx >= 2 },
-  { id: "champion", icon: "🏆", label: "グランファイナル制覇", desc: "グランファイナルで総合優勝する",
+  { id: "champion", icon: "🏆", label: "グランファイナル制覇", desc: "グランファイナルで総合優勝する", reward: { money: 200, cp: 5 },
     check: (g) => (g.careerHistory || []).some(h => h.champBest === 1) },
-  { id: "wins_50", icon: "🔥", label: "通算50勝", desc: "チーム通算で50勝する",
+  { id: "wins_50", icon: "🔥", label: "通算50勝", desc: "チーム通算で50勝する", reward: { money: 150, cp: 3 },
     check: (g) => g.careerStats.totalWins >= 50 },
-  { id: "races_100", icon: "🚴", label: "百戦錬磨", desc: "チーム通算で100戦に出走する",
+  { id: "races_100", icon: "🚴", label: "百戦錬磨", desc: "チーム通算で100戦に出走する", reward: { money: 100, cp: 2 },
     check: (g) => g.careerStats.totalRaces >= 100 },
-  { id: "hof_1", icon: "🏛", label: "名鑑入り選手を輩出", desc: "殿堂入り選手を1人以上輩出する",
+  { id: "hof_1", icon: "🏛", label: "名鑑入り選手を輩出", desc: "殿堂入り選手を1人以上輩出する", reward: { money: 40 },
     check: (g) => (g.hallOfFame || []).length >= 1 },
-  { id: "chemistry_max", icon: "🤝", label: "鉄壁の絆", desc: "チームケミストリーを最高段階まで高める",
+  { id: "chemistry_max", icon: "🤝", label: "鉄壁の絆", desc: "チームケミストリーを最高段階まで高める", reward: { money: 50 },
     check: (g) => teamChemistryTier(g.roster).label === "鉄壁の絆" },
-  { id: "captain", icon: "🎖", label: "主将を任命", desc: "チームに主将を任命する",
+  { id: "captain", icon: "🎖", label: "主将を任命", desc: "チームに主将を任命する", reward: { money: 20 },
     check: (g) => !!g.captainId },
+  { id: "jersey", icon: "🎽", label: "副次タイトル獲得", desc: "グランツールでポイント賞・山岳賞・新人賞のいずれかを獲得する", reward: { money: 60, cp: 1 },
+    check: (g) => { const j = g.jerseyWinCounts; return !!j && (j.points > 0 || j.mountains > 0 || j.youth > 0); } },
 ];
 function computeSeasonAchievements(g) {
   return SEASON_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(g) }));
+}
+// v18: 実績報酬（資金・クリアポイント）を表示用テキストに整形する
+function formatAchievementReward(a) {
+  if (!a.reward) return "";
+  const parts = [];
+  if (a.reward.money) parts.push(`+${a.reward.money}万円`);
+  if (a.reward.cp) parts.push(`CP+${a.reward.cp}`);
+  return parts.length ? `報酬：${parts.join("／")}` : "";
 }
 // v14.3: 監督指示（レースごとの役割指示）。全うすると監督評価（マスクデータ）が上がり、
 // 評価が高いほどエースなど重要な役割の指示が出やすくなる好循環にする
@@ -2044,7 +2056,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
     const e = effAbilities(r, equip, itemBoost, raceMeta.grade);
     const role = roles[r.id] || "lead";
     riders.push({
-      id: r.id, name: r.name, type: r.type, abilities: r.abilities, chemMul: chemTier.mul, ...e,
+      id: r.id, name: r.name, type: r.type, abilities: r.abilities, age: r.age, chemMul: chemTier.mul, ...e,
       team: "PLAYER", teamName: "あなたのチーム", color: C.yellow,
       isAce: r.id === aceId, role,
     });
@@ -2074,7 +2086,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
       return members.map((r, i) => ({
-        id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities,
+        id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, age: r.age,
         flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
         team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
         isAlumnus: alumniIds.has(r.id),
@@ -3059,6 +3071,11 @@ function initGame() {
     gtWins: [],
     // v17: キャプテン制度。指名した選手のidを保持する（未指名ならnull）
     captainId: null,
+    // v18: グランツール副次クラシフィケーション（ポイント賞・山岳賞・新人賞）の
+    // 自チーム通算獲得回数。実績判定に使う
+    jerseyWinCounts: { points: 0, mountains: 0, youth: 0 },
+    // v18: 実績を初めて達成した時に一度だけ報酬を付与するため、既に報酬を受け取った実績idを記録する
+    rewardedAchievements: [],
   };
 }
 
@@ -3072,7 +3089,7 @@ const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
-  "gtWins", "captainId", "tradeOffers",
+  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements",
 ];
 function serializeState(g) {
   const out = {};
@@ -3138,7 +3155,8 @@ function initMyLife() {
     // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
     rival: null, rivalRecord: null,
     // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
-    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false },
+    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false, mentor: false },
+    rewardedAchievements: [],
     pendingCrossroads: null, crossroadsResultText: null,
     pendingOffseason: null, offseasonResultText: null,
   };
@@ -3148,7 +3166,7 @@ const ML_SAVE_VERSION = "v12ml";
 const ML_SAVE_FIELDS = [
   "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
-  "rival", "rivalRecord", "flags",
+  "rival", "rivalRecord", "flags", "rewardedAchievements",
 ];
 function saveMyLife(ml) {
   try {
@@ -3290,6 +3308,40 @@ function App() {
     if (superMode === "mylife" && ml.screen === "mylife_main") { saveMyLife(ml); noteAbilityDiscovery([ml.player]); }
   }, [ml, superMode]);
 
+  // v18: 実績を初めて達成したタイミングで自動的に報酬（資金・一部はクリアポイント）を付与する。
+  // rewardedAchievementsに記録済みのidは対象から除外するので、次回以降のrender/effectでは
+  // newlyが空になり安全に停止する（重複付与しない）
+  useEffect(() => {
+    if (g.screen !== "main") return;
+    const newly = computeSeasonAchievements(g).filter(a => a.achieved && !(g.rewardedAchievements || []).includes(a.id));
+    if (newly.length === 0) return;
+    const moneyTotal = newly.reduce((sum, a) => sum + (a.reward?.money || 0), 0);
+    const cpTotal = newly.reduce((sum, a) => sum + (a.reward?.cp || 0), 0);
+    if (cpTotal > 0) { const meta = loadMeta(); saveMeta({ totalEarnedCP: meta.totalEarnedCP + cpTotal }); }
+    setG(s => ({
+      ...s,
+      budget: s.budget + moneyTotal,
+      rewardedAchievements: [...(s.rewardedAchievements || []), ...newly.map(a => a.id)],
+      log: [...s.log, ...newly.map(a => `【実績解除】${a.label}（+${a.reward?.money || 0}万円${a.reward?.cp ? `／CP+${a.reward.cp}` : ""}）`)],
+    }));
+  }, [g]);
+
+  // v18: マイライフも同様に実績達成時に報酬を付与する
+  useEffect(() => {
+    if (superMode !== "mylife" || ml.screen !== "mylife_main" || !ml.player) return;
+    const newly = computeAchievements(ml).filter(a => a.achieved && !(ml.rewardedAchievements || []).includes(a.id));
+    if (newly.length === 0) return;
+    const moneyTotal = newly.reduce((sum, a) => sum + (a.reward?.money || 0), 0);
+    const cpTotal = newly.reduce((sum, a) => sum + (a.reward?.cp || 0), 0);
+    if (cpTotal > 0) { const meta = loadMeta(); saveMeta({ totalEarnedCP: meta.totalEarnedCP + cpTotal }); }
+    setMl(s => ({
+      ...s,
+      money: s.money + moneyTotal,
+      rewardedAchievements: [...(s.rewardedAchievements || []), ...newly.map(a => a.id)],
+      log: [...s.log, ...newly.map(a => `【実績解除】${a.label}（+${a.reward?.money || 0}万円${a.reward?.cp ? `／CP+${a.reward.cp}` : ""}）`)],
+    }));
+  }, [ml, superMode]);
+
   // v13: グランファイナル制覇でクリアポイントを付与（周回プレイの起点）。
   // 通常のセーブデータとは別のlocalStorageキーに保存し、「最初から」でリセットしても
   // 消えない永続的な進行度にする。re-render時に重複加算しないようrefでガードする
@@ -3320,9 +3372,15 @@ function App() {
     const stageFatigueMul = (raceInfo && raceInfo.grandTour) ? 1 + ((raceInfo.stageCount || 3) - 1) / 3 : 1;
     // v13: 難易度別の成長ソフトキャップ閾値（易しいほど高い閾値まで伸びる）
     const growthCap = (DIFFICULTIES.find(d => d.id === state.difficulty) || DIFFICULTIES[0]).growthCap;
-    // v17: キャプテン制度。主将より2歳以上若い選手は、主将の指導を受けて練習効果+10%になる
+    // v17: キャプテン制度。主将より2歳以上若い選手は、主将の指導を受けて練習効果+10%になる。
+    // v18バランス調整: 指導に時間を割く分、主将自身の練習効果はわずかに落ちる（-5%）ようにし、
+    // 「誰でも無条件に任命した方が得」にならないよう小さなトレードオフを持たせた
     const captain = state.roster.find(r => r.id === state.captainId);
-    const captainMentorMul = (n) => (captain && n.id !== captain.id && n.age < captain.age - 2) ? 1.1 : 1;
+    const captainMentorMul = (n) => {
+      if (!captain) return 1;
+      if (n.id === captain.id) return 0.95;
+      return n.age < captain.age - 2 ? 1.1 : 1;
+    };
     const roster = state.roster.map(r => {
       const n = { ...r, parts: { ...r.parts } };
       // v17: チームケミストリー用に、在籍月数を毎月加算する
@@ -3677,11 +3735,51 @@ function App() {
         const gtWins = (race.grandTour && bestRank === 1 && race.gtIndex != null && !(s.gtWins || []).includes(race.gtIndex))
           ? [...(s.gtWins || []), race.gtIndex]
           : (s.gtWins || []);
+        // v18: グランツールの副次クラシフィケーション（ポイント賞・山岳賞・新人賞）。
+        // 実際のGCタイムとは別に、各ステージの着順を日ごとの地形（favors）で重み付けして
+        // 集計する。新人賞は26歳未満の選手の中でのGC最高位。自チームの選手が獲得すれば
+        // ボーナス賞金を上乗せする
+        const STAGE_JERSEY_POINTS = [20, 17, 15, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+        let jerseyBonus = 0;
+        let jerseyInfo = null;
+        if (race.grandTour) {
+          const pointsScore = {}, komScore = {};
+          dayLogs.forEach(dl => {
+            const dayTmpl = race.stageTmpls ? race.stageTmpls[dl.day - 1] : race.tmpl;
+            const favors = dayTmpl ? dayTmpl.favors : race.tmpl.favors;
+            const pointsMul = favors === "SPR" ? 1.5 : favors === "PUN" ? 1.0 : favors === "CLM" ? 0.6 : 1.0;
+            const komMul = favors === "CLM" ? 1.5 : favors === "PUN" ? 0.6 : 0.2;
+            Object.entries(dl.rankById).forEach(([id, rank]) => {
+              const base = STAGE_JERSEY_POINTS[rank - 1] || 0;
+              pointsScore[id] = (pointsScore[id] || 0) + base * pointsMul;
+              komScore[id] = (komScore[id] || 0) + base * komMul;
+            });
+          });
+          const byScoreDesc = (score) => Object.keys(score).sort((a, b) => score[b] - score[a]);
+          const pointsLeaderId = byScoreDesc(pointsScore)[0] || null;
+          const komLeaderId = byScoreDesc(komScore)[0] || null;
+          const youthOrder = order.filter(([id]) => idToEntrant[id] && idToEntrant[id].age <= 25);
+          const youthLeaderId = youthOrder.length ? youthOrder[0][0] : null;
+          const isPlayer = (id) => id != null && idToEntrant[id]?.team === "PLAYER";
+          const pointsLeaderIsPlayer = isPlayer(pointsLeaderId);
+          const komLeaderIsPlayer = isPlayer(komLeaderId);
+          const youthLeaderIsPlayer = isPlayer(youthLeaderId);
+          jerseyBonus = (pointsLeaderIsPlayer ? 50 : 0) + (komLeaderIsPlayer ? 50 : 0) + (youthLeaderIsPlayer ? 30 : 0);
+          jerseyInfo = {
+            pointsLeaderId, pointsLeaderName: pointsLeaderId ? idToEntrant[pointsLeaderId].name : null, pointsLeaderIsPlayer,
+            komLeaderId, komLeaderName: komLeaderId ? idToEntrant[komLeaderId].name : null, komLeaderIsPlayer,
+            youthLeaderId, youthLeaderName: youthLeaderId ? idToEntrant[youthLeaderId].name : null, youthLeaderIsPlayer,
+          };
+        }
+        const jerseyWinCounts = { ...(s.jerseyWinCounts || { points: 0, mountains: 0, youth: 0 }) };
+        if (jerseyInfo?.pointsLeaderIsPlayer) jerseyWinCounts.points += 1;
+        if (jerseyInfo?.komLeaderIsPlayer) jerseyWinCounts.mountains += 1;
+        if (jerseyInfo?.youthLeaderIsPlayer) jerseyWinCounts.youth += 1;
         return {
-          ...s, roster, rivalAlumni, budget: s.budget + prize, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
-          careerStats: bumpCareerStats(s.careerStats, bestRank, prize),
-          gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize, pts },
-          gtWins,
+          ...s, roster, rivalAlumni, budget: s.budget + prize + jerseyBonus, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
+          careerStats: bumpCareerStats(s.careerStats, bestRank, prize + jerseyBonus),
+          gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize: prize + jerseyBonus, pts, jerseyInfo, jerseyBonus },
+          gtWins, jerseyWinCounts,
           screen: "gc_final",
         };
       });
@@ -3738,6 +3836,14 @@ function App() {
   }
   function mlSetFocus(key) {
     setMl(s => ({ ...s, player: { ...s.player, focus: key } }));
+  }
+  // v18: シーズンモードのキャプテン制度に対応するマイライフ側の役割。30歳以降、
+  // チームの精神的支柱（メンター）になることを選べる。一度なると解除はできない
+  function mlBecomeMentor() {
+    setMl(s => ({
+      ...s, flags: { ...s.flags, mentor: true },
+      log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】チームの精神的支柱としてメンター役を引き受けた`],
+    }));
   }
   function mlStartRace() {
     if (mlRaceLockRef.current) return;
@@ -3834,6 +3940,8 @@ function App() {
     if (flags.rushedInjuryComeback) player.fatigue = Math.min(100, player.fatigue + 3);
     // v17: 育児に積極的に関わる道を選んだ場合、家庭のサポートでさらに疲労が抜けやすくなる
     if (flags.hasChild && !flags.childFocusedCareer) player.fatigue = Math.max(0, player.fatigue - 3);
+    // v18: 若手のメンターになると、後進を気にかける充実感から疲労がわずかに抜けやすくなる
+    if (flags.mentor) player.fatigue = Math.max(0, player.fatigue - 3);
     return player;
   }
   function mlAdvanceMonth(mode) {
@@ -3857,7 +3965,7 @@ function App() {
       }
       // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
       // 年俸は毎月1/12ずつ資金として振り込まれる
-      const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0);
+      const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0) + (s.flags?.mentor ? 0.3 : 0);
       const managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
       const money = s.money + Math.round(s.salary / 12);
       if (s.month === 11) {
@@ -4416,6 +4524,13 @@ function App() {
               🏆 実績を見る（{computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}達成）
             </Btn>
             <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑を見る</Btn>
+            {ml.flags?.mentor
+              ? <div style={{ fontSize: 11.5, color: C.yellow, textAlign: "center" }}>🎖 チームの精神的支柱（毎月疲労-3／監督評価の伸び+0.3）</div>
+              : r.age >= 30 && (
+                <Btn outline color={C.yellow} onClick={() => askConfirm("若手のメンターになりますか？（毎月の疲労回復と監督評価の伸びが恒常的に上がります。一度なると元には戻せません）", mlBecomeMentor)}>
+                  🎖 若手のメンターになる
+                </Btn>
+              )}
           </div>
           <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🏁 現役引退する</Btn>
           <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
@@ -4443,6 +4558,7 @@ function App() {
                 <div>
                   <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: a.achieved ? C.yellow : C.text }}>{a.label}</div>
                   <div style={{ fontSize: 11, color: C.sub }}>{a.desc}</div>
+                  {formatAchievementReward(a) && <div style={{ fontSize: 10.5, color: C.green, marginTop: 1 }}>{formatAchievementReward(a)}</div>}
                 </div>
               </div>
             ))}
@@ -5330,6 +5446,7 @@ function App() {
                 <div>
                   <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: a.achieved ? C.yellow : C.text }}>{a.label}</div>
                   <div style={{ fontSize: 11, color: C.sub }}>{a.desc}</div>
+                  {formatAchievementReward(a) && <div style={{ fontSize: 10.5, color: C.green, marginTop: 1 }}>{formatAchievementReward(a)}</div>}
                 </div>
               </div>
             ))}
@@ -5927,7 +6044,7 @@ function App() {
   }
 
   if (g.screen === "gc_final" && g.gc && g.gc.gcOrder) {
-    const { gcOrder, idToEntrant, bestRank, prize, pts } = g.gc;
+    const { gcOrder, idToEntrant, bestRank, prize, pts, jerseyInfo, jerseyBonus } = g.gc;
     const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))];
     // v13バグ修正: 上位10名までしか一覧に出しておらず、自チームが11位以下だと
     // 総合タイムがどこにも表示されないまま終わっていた。ヘッダーに自チームの
@@ -5951,6 +6068,23 @@ function App() {
             {bestRank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
           </div>
         </div>
+        {jerseyInfo && (
+          <div style={{ background: C.panel, borderRadius: 12, padding: 14, borderTop: `4px solid ${"#e8a13c"}` }}>
+            <Eyebrow color={"#e8a13c"}>副次クラシフィケーション</Eyebrow>
+            <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
+              <div style={{ fontSize: 12.5, color: jerseyInfo.pointsLeaderIsPlayer ? C.yellow : C.text }}>
+                🟢 ポイント賞：{jerseyInfo.pointsLeaderName || "—"}{jerseyInfo.pointsLeaderIsPlayer && " （自チーム！+50万円）"}
+              </div>
+              <div style={{ fontSize: 12.5, color: jerseyInfo.komLeaderIsPlayer ? C.yellow : C.text }}>
+                🔴 山岳賞：{jerseyInfo.komLeaderName || "—"}{jerseyInfo.komLeaderIsPlayer && " （自チーム！+50万円）"}
+              </div>
+              <div style={{ fontSize: 12.5, color: jerseyInfo.youthLeaderIsPlayer ? C.yellow : C.text }}>
+                ⚪ 新人賞（26歳未満）：{jerseyInfo.youthLeaderName || "該当者なし"}{jerseyInfo.youthLeaderIsPlayer && " （自チーム！+30万円）"}
+              </div>
+            </div>
+            {jerseyBonus > 0 && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 6 }}>副次タイトルボーナスとして賞金に+{jerseyBonus}万円を上乗せ済み</div>}
+          </div>
+        )}
         <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
           {gcOrder.map(([id, t], i) => {
             const e = idToEntrant[id];
