@@ -3450,7 +3450,10 @@ function App() {
         n.fatigue = Math.min(100, n.fatigue + (hasAbility(n, "iron") ? 32 : 45) * stageFatigueMul);
         n.streak += 1;
         const ph = growthPhase(n);
-        raceInfo.expKeys.forEach(k => addAb(n, k, 0.6 * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k), growthCap));
+        // v25: 出走経験による成長が練習に比べて弱く、レースに出る意味が薄いという指摘を受け強化。
+        // 基礎係数を引き上げた上、格上のレース（グレードが高い）ほど得るものが大きくなるようにした
+        const raceGradeMul = GRADE_MUL[raceInfo.grade] || 1;
+        raceInfo.expKeys.forEach(k => addAb(n, k, 1.0 * raceGradeMul * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k), growthCap));
         // v11: ドクター（staff.doctor）は故障の発生率を下げ、発生した場合も期間を短縮する
         const doctorLv = state.staff?.doctor || 0;
         if (n.streak >= 3) {
@@ -3926,7 +3929,8 @@ function App() {
     });
   }
   // v14.2: 月次アクションを「レース／練習」の2択から拡張。練習・休養・イベントで
-  // 選手への効果を出し分ける（レースは既にmlRaceFinish側で反映済みのためここでは疲労のみ）。
+  // 選手への効果を出し分ける（順位・ポイント・賞金は既にmlRaceFinish側で反映済みのため
+  // ここでは疲労・出走経験による能力成長を扱う）。
   // v14.3: 永続トレーニング用品（ローラー台・パワーメーター）と車（レース疲労軽減）の
   // 恒常効果もここで反映する
   function mlApplyMonthEffect(player0, mode, ctx) {
@@ -3943,6 +3947,12 @@ function App() {
       const ironCut = hasAbility(player, "iron") ? 32 / 45 : 1;
       player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut);
       player.streak = (player.streak || 0) + 1;
+      // v25: シーズンモード同様、出走した種目に応じた能力成長（出走経験）を追加。
+      // 格上のレース（グレードが高い）ほど得るものが大きい
+      const raceExpKeys = (ctx && ctx.raceExpKeys) || [];
+      const raceGradeMul = (ctx && ctx.raceGrade) ? (GRADE_MUL[ctx.raceGrade] || 1) : 1;
+      const ph = growthPhase(player);
+      raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
     } else if (mode === "train") {
       const ph = growthPhase(player);
       // v15: 「練習の虫」「練習嫌い」「遅咲き」の特殊能力を練習効果に反映
@@ -3983,7 +3993,12 @@ function App() {
   }
   function mlAdvanceMonth(mode) {
     setMl(s => {
-      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year };
+      // v25: シーズンモードと同様、マイライフでも出走した種目に応じた「出走経験」で能力が伸びるようにする
+      // （従来は出走しても疲労とストリークが変化するだけで能力は一切伸びなかった）
+      const raceExpKeys = (mode === "race" && s.result && s.result.course)
+        ? [...new Set(s.result.course.segs.map(seg => SEG_AB[seg.type]))] : [];
+      const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
+      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, raceExpKeys, raceGrade };
       let player = mlApplyMonthEffect(s.player, mode, ctx);
       const log = [...s.log];
       // v15フェーズ2: 金特化の判定
@@ -5947,7 +5962,7 @@ function App() {
             </div>
           ))}
         </div>
-        <Btn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む →</Btn>
+        <Btn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む →</Btn>
       </div>
     );
   }
@@ -6162,7 +6177,7 @@ function App() {
             );
           })}
         </div>
-        <Btn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む →</Btn>
+        <Btn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, grade: g.gc.race.grade, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む →</Btn>
       </div>
     );
   }
