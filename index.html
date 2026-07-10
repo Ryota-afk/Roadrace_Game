@@ -311,7 +311,8 @@ const SCOUT_POLICIES = {
 
 const PRIZES = [100, 60, 40, 30, 22, 16, 12, 9, 6, 4];
 const PTS = [10, 7, 5, 3, 3, 1, 1, 1, 1, 1];
-const GRADE_MUL = { 1: 1, 2: 1.5, 3: 2 };
+// v15: グレード4はマイライフの節目の大会（世界選手権・オリンピック）専用の最高格付け
+const GRADE_MUL = { 1: 1, 2: 1.5, 3: 2, 4: 2.6 };
 
 // ---------- v8: 選択肢付きランダムイベント（栄冠ナイン風の月間フレーバー） ----------
 const EVENT_CHANCE = 0.35;
@@ -3274,7 +3275,17 @@ function App() {
   };
 
   // ==== v14: マイライフモード専用ハンドラ ====
+  // v15: 節目の大会。通常の月次カレンダーとは別枠で、特定の月・クラス到達時にのみ登場する
+  // 最高格付け（グレード4）の一発勝負。世界選手権は毎年9月・クラスA以上で選出、
+  // オリンピックは4年に一度7月・PROクラスでのみ選出される。ライバルも代表入りし、
+  // 大舞台での因縁の対決になる
   function mlGenRace(year, month, classIdx) {
+    if (month === 5 && classIdx >= 1) {
+      return { id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true };
+    }
+    if (month === 3 && classIdx >= 2 && (year - 1) % 4 === 0) {
+      return { id: `ml-olympics-${year}`, name: `${year}年目 オリンピック ロードレース`, tmpl: TEMPLATES[3], grade: 4, cls: classIdx, milestone: "olympics", rivalPresent: true };
+    }
     const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
     const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
     const grade = month === 11 ? 3 : 1 + Math.floor(rng() * 3);
@@ -3282,6 +3293,7 @@ function App() {
     const rivalPresent = rng() < 0.45;
     return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent };
   }
+  const ML_MILESTONE_LABEL = { worlds: { eyebrow: "🌍 世界選手権", color: C.blue }, olympics: { eyebrow: "🥇 オリンピック", color: C.yellow } };
   function mlCreateChar(type, background) {
     const rng = mulberry(Date.now() % 999983);
     const team = MYLIFE_TEAMS[Math.floor(Math.random() * MYLIFE_TEAMS.length)];
@@ -3805,10 +3817,14 @@ function App() {
               {AB_KEYS.map(k => <option key={k} value={k}>{AB_LABEL[k]}強化</option>)}
             </select>
           </div>
-          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-            <Eyebrow color={C.green}>今月のレース</Eyebrow>
+          <div style={{
+            background: race.milestone ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
+            border: `1.5px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.line}`,
+          }}>
+            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.green}>{race.milestone ? ML_MILESTONE_LABEL[race.milestone].eyebrow : "今月のレース"}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0" }}>{race.name}</div>
             <div style={{ fontSize: 11.5, color: C.sub }}>{race.tmpl.kind}・{"★".repeat(race.grade)}・{TYPES[race.tmpl.favors].label}有利</div>
+            {race.milestone && <div style={{ fontSize: 11, color: ML_MILESTONE_LABEL[race.milestone].color, marginTop: 3 }}>代表選出！一生に何度もない大舞台での一戦だ。</div>}
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
@@ -3835,8 +3851,8 @@ function App() {
       const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
-            <Eyebrow>RESULT — {race.name}</Eyebrow>
+          <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
+            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : undefined}>{race.milestone ? `${ML_MILESTONE_LABEL[race.milestone].eyebrow} RESULT` : "RESULT"} — {race.name}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
             <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt ／ 賞金 +{prize}万円</div>
           </div>
