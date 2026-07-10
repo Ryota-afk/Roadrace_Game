@@ -1157,10 +1157,10 @@ function mlRollCrossroads(s, player) {
 const ML_OFFSEASON_CHOICES = [
   { key: "domestic", label: "国内で自主トレーニングに励む", desc: "堅実に基礎を積む。伸びは控えめだが安全",
     result: "オフシーズンは国内で黙々と走り込み、着実に地力を蓄えた。",
-    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, ML_GROWTH_CAP)); return p; } },
+    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, mlGrowthCap(year))); return p; } },
   { key: "overseas", label: "海外武者修行に出る", desc: "レベルの高い環境に飛び込む。伸びは大きいが疲労が残る",
     result: "海外の強豪選手たちに揉まれ、大きく成長する手応えを掴んだ。ただし疲労が抜けきらないまま新シーズンを迎えることになった。",
-    apply: (player) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, ML_GROWTH_CAP)); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
+    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, mlGrowthCap(year))); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
   { key: "rest", label: "心身をしっかり休める", desc: "疲労を大きくリセットして万全の状態で新シーズンへ",
     result: "オフシーズンをゆっくり過ごし、心身ともにリフレッシュして新シーズンを迎える。",
     apply: (player) => ({ ...player, fatigue: Math.max(0, player.fatigue - 40) }) },
@@ -1301,8 +1301,14 @@ const ML_GEAR = {
 const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
 // v21: マイライフのaddAb呼び出しはこれまでcap未指定でsoftFactorの既定値（88＝シーズンモードの
 // イージー相当）に固定されており、長いキャリアの途中で能力が伸び切ってしまっていた。
-// マイライフは1周が長いキャリアものなので、シーズンモードのハード相当まで上限を引き上げる
-const ML_GROWTH_CAP = 102;
+// v23: 固定値に引き上げただけでは、結局そのより高い壁に到達した時点で同じ問題（練習が
+// ソフトキャップ付近でほぼ無意味になる）が起きるだけだと指摘を受けた。soft capはvが
+// cap未満なら効果1倍・cap超で指数関数的に急減するという「壁」の構造そのものが原因のため、
+// 経過年数に応じて上限自体をじわじわ引き上げ、長いキャリアを通して壁に本当の意味で
+// 到達しない（＝練習が最後まで意味を持ち続ける）ようにする
+function mlGrowthCap(year) {
+  return Math.min(132, 90 + Math.floor(Math.max(0, (year || 1) - 1)) * 2);
+}
 // v19: 超早熟は稀な自然発生のみで到達できる特別枠のため、育成アイテムでの
 // 到達先には含めない（晩成方向への進行のみ：早熟→普通→晩成→超晩成）
 const GROWTH_ORDER = ["early", "normal", "late", "super_late"];
@@ -3925,6 +3931,7 @@ function App() {
     const carLv = ctx ? ctx.carLv : -1;
     const houseLv = ctx ? ctx.houseLv : -1;
     const flags = (ctx && ctx.flags) || {};
+    const growthCap = mlGrowthCap(ctx && ctx.year);
     if (mode === "race") {
       const carCut = carLv >= 0 ? (1 - ML_CARS[carLv].raceFatigueCut) : 1;
       const chefCut = gear.chef ? 0.9 : 1;
@@ -3943,8 +3950,8 @@ function App() {
       const focusMul = gear.monitor ? 1.10 : 1;
       // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
       const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
-      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), ML_GROWTH_CAP);
-      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), ML_GROWTH_CAP));
+      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), growthCap);
+      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), growthCap));
       const ph2 = growthPhase(player);
       if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
       player.fatigue = Math.max(0, player.fatigue - 15);
@@ -3972,7 +3979,7 @@ function App() {
   }
   function mlAdvanceMonth(mode) {
     setMl(s => {
-      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags };
+      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year };
       let player = mlApplyMonthEffect(s.player, mode, ctx);
       const log = [...s.log];
       // v15フェーズ2: 金特化の判定
@@ -4093,7 +4100,7 @@ function App() {
       const po = s.pendingOffseason;
       if (!po) return s;
       const choice = ML_OFFSEASON_CHOICES[choiceIdx];
-      const player = choice.apply(po.player);
+      const player = choice.apply(po.player, po.year);
       return {
         ...s,
         pendingOffseason: { ...po, player },
@@ -4139,10 +4146,10 @@ function App() {
     });
   }
   // v14.2: 私生活・取材イベント（練習/休養以外の月次アクション）
-  function mlApplyEventEffects(player0, effects) {
+  function mlApplyEventEffects(player0, effects, year) {
     const player = { ...player0 };
     if (effects.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + effects.fatigueDelta));
-    if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, ML_GROWTH_CAP));
+    if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, mlGrowthCap(year)));
     return player;
   }
   function mlTriggerEvent() {
@@ -4154,7 +4161,7 @@ function App() {
       const ev = s.pendingEvent;
       if (!ev) return s;
       const choice = ev.choices[choiceIdx];
-      const player = mlApplyEventEffects(s.player, choice.effects);
+      const player = mlApplyEventEffects(s.player, choice.effects, s.year);
       const managerEval = Math.max(0, Math.min(100, s.managerEval + (choice.effects.managerEvalDelta || 0)));
       return { ...s, player, managerEval, pendingEvent: null, eventResultText: choice.result, screen: "mylife_event_result" };
     });
@@ -4520,7 +4527,8 @@ function App() {
             </div>
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
             <FatigueBar v={r.fatigue} />
-            <AbilityGrid r={r} cap={ML_GROWTH_CAP} />
+            <AbilityGrid r={r} cap={mlGrowthCap(ml.year)} />
+            <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year)}以上＝限界突破（伸びの上限は経験を積むほど毎年じわじわ上がっていきます）</div>
             {(ml.stock.drink > 0 || ml.stock.supp > 0 || ml.stock.tune > 0) && (
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                 {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("drink")}>{ML_STOCK_ITEMS.drink.label}(-30) ×{ml.stock.drink}</Btn>}
