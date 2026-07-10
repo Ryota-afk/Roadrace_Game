@@ -1194,6 +1194,33 @@ const ML_ACHIEVEMENTS = [
 function computeAchievements(ml) {
   return ML_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(ml) }));
 }
+// v17: シーズンモード（チーム運営）版の実績システム。マイライフと同様、既存の
+// careerStats・careerHistory・hallOfFame・classIdx・roster・captainIdだけから判定する
+const SEASON_ACHIEVEMENTS = [
+  { id: "first_win", icon: "🥇", label: "初優勝", desc: "レースで初めて優勝する",
+    check: (g) => g.careerStats.totalWins >= 1 },
+  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる",
+    check: (g) => g.careerStats.totalPodiums >= 1 },
+  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する",
+    check: (g) => g.classIdx >= 1 },
+  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する",
+    check: (g) => g.classIdx >= 2 },
+  { id: "champion", icon: "🏆", label: "グランファイナル制覇", desc: "グランファイナルで総合優勝する",
+    check: (g) => (g.careerHistory || []).some(h => h.champBest === 1) },
+  { id: "wins_50", icon: "🔥", label: "通算50勝", desc: "チーム通算で50勝する",
+    check: (g) => g.careerStats.totalWins >= 50 },
+  { id: "races_100", icon: "🚴", label: "百戦錬磨", desc: "チーム通算で100戦に出走する",
+    check: (g) => g.careerStats.totalRaces >= 100 },
+  { id: "hof_1", icon: "🏛", label: "名鑑入り選手を輩出", desc: "殿堂入り選手を1人以上輩出する",
+    check: (g) => (g.hallOfFame || []).length >= 1 },
+  { id: "chemistry_max", icon: "🤝", label: "鉄壁の絆", desc: "チームケミストリーを最高段階まで高める",
+    check: (g) => teamChemistryTier(g.roster).label === "鉄壁の絆" },
+  { id: "captain", icon: "🎖", label: "主将を任命", desc: "チームに主将を任命する",
+    check: (g) => !!g.captainId },
+];
+function computeSeasonAchievements(g) {
+  return SEASON_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(g) }));
+}
 // v14.3: 監督指示（レースごとの役割指示）。全うすると監督評価（マスクデータ）が上がり、
 // 評価が高いほどエースなど重要な役割の指示が出やすくなる好循環にする
 const MANAGER_DIRECTIVES = {
@@ -1336,6 +1363,7 @@ function newRider(power, rng, opts = {}) {
     prodigy: !!opts.forceProdigy,
     raceLog: [], // v13: 選手名鑑用の出走履歴（{year, month, name, rank}）
     favorite: false, // v13.1: お気に入り登録（殿堂入り条件を満たさなくても必ず記録に残す）
+    tenure: 0, // v17: チームケミストリー用の在籍月数（加入時は常に0からスタート）
   };
   rider.joinOvr = overall(rider);
   return rider;
@@ -1348,7 +1376,7 @@ function initRoster() {
       age, growth, growthPow: pow, abilities: trait ? [trait] : [], personality: pers,
       fatigue: 20, cond: 3, injury: 0, streak: 0,
       focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
-      raceLog: [], favorite: false,
+      raceLog: [], favorite: false, tenure: 0,
     };
     r.joinOvr = overall(r); return r;
   };
@@ -1426,6 +1454,22 @@ function genFaPool(classIdx, seed, existingNames) {
     out.push({ rider: r, age, price });
   }
   return out;
+}
+
+// v17: 選手間トレード。ライバルチームが自チームの特定選手に目を付け、代わりに
+// 自チーム所属の選手と近い実力の選手を1名提示してくる。最大2件、毎月入れ替わる
+function genTradeOffers(classIdx, seed, roster) {
+  if (!roster || roster.length <= 1) return [];
+  const rng = mulberry(seed);
+  const base = CLASSES[classIdx].scout;
+  const nameBanned = new Set(roster.map(r => r.name));
+  const wanted = [...roster].sort(() => rng() - 0.5).slice(0, Math.min(2, roster.length));
+  return wanted.map(r => {
+    const team = RIVAL_TEAMS[Math.floor(rng() * RIVAL_TEAMS.length)];
+    const power = Math.max(base * 0.6, overall(r) + (rng() - 0.5) * 12);
+    const offeredRider = newRider(power, rng, { banned: nameBanned });
+    return { id: `trade-${r.id}-${Math.floor(rng() * 999999)}`, team: team.name, teamColor: team.color, wantRiderId: r.id, offeredRider };
+  });
 }
 
 function genSponsors(classIdx, year) {
@@ -1905,7 +1949,8 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
         // v15: 横風耐性を持つ選手は横風区間でのドラフト消耗ペナルティが軽減される（1.25→1.1）
         const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul;
+        // v17: チームケミストリー（squad構築時にchemMulを付与。未設定なら1で無効果）
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1);
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
       });
     });
@@ -1971,6 +2016,20 @@ function rankSim(sim) {
   sim.ranked.forEach((e, i) => e.rank = i + 1);
 }
 
+// v17: チームケミストリー。出走メンバーの平均在籍月数（tenure）が長いほど、
+// 集団内でのドラフト効率が上がる（消耗が減る）。長く一緒に走ってきたチームほど
+// ローテーションの息が合ってくる、という表現。squadは出走選手のみで判定する
+const CHEMISTRY_TIERS = [
+  { min: 30, label: "鉄壁の絆", mul: 0.92 },
+  { min: 15, label: "円熟したチーム", mul: 0.95 },
+  { min: 6,  label: "定着期", mul: 0.98 },
+  { min: 0,  label: "新体制", mul: 1 },
+];
+function teamChemistryTier(squad) {
+  const avg = (!squad || squad.length === 0) ? 0 : squad.reduce((s, r) => s + (r.tenure || 0), 0) / squad.length;
+  const tier = CHEMISTRY_TIERS.find(t => avg >= t.min);
+  return { ...tier, avgTenure: avg };
+}
 // ---------- buildSim：選手構築＋コース生成＋ティックシミュレーション実行 ----------
 // fixedAiTeams を渡すとAI選手を再利用する（GCステージレースの2日目用）
 // dayTag を渡すとコース生成のシードに反映される（同じraceMetaでも日ごとに別コースにする）
@@ -1980,11 +2039,12 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
   const course = generateCourse(raceMeta, dayTag);
   const groupMode = groupModeFor(squad.length);
   const riders = [];
+  const chemTier = teamChemistryTier(squad);
   squad.forEach(r => {
     const e = effAbilities(r, equip, itemBoost, raceMeta.grade);
     const role = roles[r.id] || "lead";
     riders.push({
-      id: r.id, name: r.name, type: r.type, abilities: r.abilities, ...e,
+      id: r.id, name: r.name, type: r.type, abilities: r.abilities, chemMul: chemTier.mul, ...e,
       team: "PLAYER", teamName: "あなたのチーム", color: C.yellow,
       isAce: r.id === aceId, role,
     });
@@ -2978,6 +3038,7 @@ function initGame() {
     // 自チームの初期ロースターの名前とも被らないよう渡す
     scouts: genScouts(0, Date.now() % 999983, "balance", rosterNames),
     faMarket: genFaPool(0, (Date.now() + 12345) % 999983, rosterNames),
+    tradeOffers: genTradeOffers(0, (Date.now() + 54321) % 999983, roster),
     races: genMonthRaces(1, 0, 0, 0, null, []),
     sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
     result: null, prizeInfo: null,
@@ -2996,6 +3057,8 @@ function initGame() {
     // v14.8: その年に総合優勝したグランツールのgtIndex一覧（年度末にリセット）。
     // PROクラスのグランファイナル出場条件（全戦制覇）の判定に使う
     gtWins: [],
+    // v17: キャプテン制度。指名した選手のidを保持する（未指名ならnull）
+    captainId: null,
   };
 }
 
@@ -3009,7 +3072,7 @@ const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
-  "gtWins",
+  "gtWins", "captainId", "tradeOffers",
 ];
 function serializeState(g) {
   const out = {};
@@ -3257,8 +3320,13 @@ function App() {
     const stageFatigueMul = (raceInfo && raceInfo.grandTour) ? 1 + ((raceInfo.stageCount || 3) - 1) / 3 : 1;
     // v13: 難易度別の成長ソフトキャップ閾値（易しいほど高い閾値まで伸びる）
     const growthCap = (DIFFICULTIES.find(d => d.id === state.difficulty) || DIFFICULTIES[0]).growthCap;
+    // v17: キャプテン制度。主将より2歳以上若い選手は、主将の指導を受けて練習効果+10%になる
+    const captain = state.roster.find(r => r.id === state.captainId);
+    const captainMentorMul = (n) => (captain && n.id !== captain.id && n.age < captain.age - 2) ? 1.1 : 1;
     const roster = state.roster.map(r => {
       const n = { ...r, parts: { ...r.parts } };
+      // v17: チームケミストリー用に、在籍月数を毎月加算する
+      n.tenure = (n.tenure || 0) + 1;
       const injMul = hasAbility(n, "glass") ? 2 : hasAbility(n, "tough") ? 0.5 : 1;
       const injExtra = hasAbility(n, "glass") ? 1 : 0;
       if (n.injury > 0) {
@@ -3277,7 +3345,8 @@ function App() {
             * (1 + state.equip.facility * 0.15)
             * (1 + (state.staff?.trainer || 0) * 0.12)
             * (hasAbility(n, "trainer") ? 1.2 : hasAbility(n, "lazy_sp") ? 0.8 : 1)
-            * (hasAbility(n, "lateblow_sp") && n.age >= 28 ? 1.15 : 1);
+            * (hasAbility(n, "lateblow_sp") && n.age >= 28 ? 1.15 : 1)
+            * captainMentorMul(n);
           // 指定能力の成長にトレードオフ（×0.9）。指定外はさらに絞って14%
           addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus), growthCap);
           AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k), growthCap));
@@ -3408,6 +3477,7 @@ function App() {
           sponsor: null, sponsorOffers: nextOffers,
           scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name)),
           faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
+          tradeOffers: genTradeOffers(classIdx, year * 1471 + 37, survivors),
           races: genMonthRaces(year, 0, classIdx, 0, null, []),
           camp: false, campCooldown: 0, champBest: null, gc: null,
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
@@ -3425,6 +3495,7 @@ function App() {
         budget: s.budget + income - upkeep - staffSalary,
         sponsor,
         faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7, roster.map(r => r.name)),
+        tradeOffers: genTradeOffers(s.classIdx, s.year * 1231 + month * 59 + 17, roster),
         races: genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins),
         sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
         gc: null,
@@ -4060,6 +4131,10 @@ function App() {
   const toggleFavorite = (rid) => {
     setG(s => ({ ...s, roster: s.roster.map(r => r.id === rid ? { ...r, favorite: !r.favorite } : r) }));
   };
+  // v17: キャプテン制度。同じ選手をもう一度指名すると解任になる（1名まで）
+  const setCaptain = (rid) => {
+    setG(s => ({ ...s, captainId: s.captainId === rid ? null : rid }));
+  };
   const releaseRider = (rid) => {
     if (g.month !== 0) return;
     setG(s => {
@@ -4067,6 +4142,7 @@ function App() {
       const r = s.roster.find(x => x.id === rid);
       if (!r) return s;
       const roster = s.roster.filter(x => x.id !== rid);
+      const captainId = s.captainId === rid ? null : s.captainId;
       // v13.1: 能力・将来性次第でライバルチームに拾われる。拾われた場合は殿堂入りさせず
       // rivalAlumniで追跡し、そのチームで出走を続けさせる（いずれ引退した時点で改めて判定）
       const pickedUp = Math.random() < computePickupChance(r);
@@ -4074,7 +4150,7 @@ function App() {
         const signedTeam = RIVAL_TEAMS[Math.floor(Math.random() * RIVAL_TEAMS.length)].name;
         const rivalAlumni = [...s.rivalAlumni, { ...r, signedTeam, signedYear: s.year }];
         return {
-          ...s, roster, rivalAlumni,
+          ...s, roster, rivalAlumni, captainId,
           log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇 → ${signedTeam}が獲得したとの噂`],
         };
       }
@@ -4082,8 +4158,28 @@ function App() {
       const hallOfFame = isHallOfFameWorthy(r)
         ? [...s.hallOfFame, { ...r, farewellYear: s.year, farewellReason: "released" }]
         : s.hallOfFame;
-      return { ...s, roster, hallOfFame, log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇した`] };
+      return { ...s, roster, hallOfFame, captainId, log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇した`] };
     });
+  };
+  // v17: 選手間トレード。受け入れると自チームの該当選手が抜け、相手が提示した選手が加入する
+  const acceptTrade = (offerId) => {
+    setG(s => {
+      const offer = (s.tradeOffers || []).find(o => o.id === offerId);
+      if (!offer) return s;
+      const outgoing = s.roster.find(r => r.id === offer.wantRiderId);
+      if (!outgoing) return s;
+      const incoming = { ...offer.offeredRider, id: RID++, tenure: 0, favorite: false, raceLog: [] };
+      const roster = s.roster.filter(r => r.id !== offer.wantRiderId).concat(incoming);
+      const captainId = s.captainId === offer.wantRiderId ? null : s.captainId;
+      return {
+        ...s, roster, captainId,
+        tradeOffers: s.tradeOffers.filter(o => o.id !== offerId),
+        log: [...s.log, `【${MONTHS[s.month]}】${offer.team}と選手交換トレード成立：${outgoing.name} → ${incoming.name}が加入`],
+      };
+    });
+  };
+  const declineTrade = (offerId) => {
+    setG(s => ({ ...s, tradeOffers: (s.tradeOffers || []).filter(o => o.id !== offerId) }));
   };
 
   // ---- 共通 ----
@@ -4921,11 +5017,20 @@ function App() {
       );
     }
     if (g.tab === "riders") {
+      const chem = teamChemistryTier(g.roster);
       body = (
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontSize: 12, color: C.sub }}>
             所属 {g.roster.length}/{rosterMax}名。<span style={{ color: C.yellow }}>能力{growthCap}以上＝限界突破</span>（金色表示・成長が大幅に鈍化。難易度「{(DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label}」の成長上限）。練習指定能力の伸びはトレードオフ（×0.9）で指定外に一部融通されます。
           </div>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <span style={{ fontSize: 11.5, color: C.sub }}>チームケミストリー </span>
+              <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: C.green }}>{chem.label}</span>
+            </div>
+            <div style={{ fontSize: 10.5, color: C.sub }}>平均在籍{chem.avgTenure.toFixed(1)}ヶ月{chem.mul < 1 ? `／レース中のドラフト消耗-${Math.round((1 - chem.mul) * 100)}%` : ""}</div>
+          </div>
+          <div style={{ fontSize: 11, color: C.sub }}>🎖 各選手カードのマークで主将を1名任命できます。主将より2歳以上若い選手は練習効果+10%になります。</div>
           {g.inv.camp > 0 && !g.camp && g.campCooldown === 0 && <Btn small outline color={C.purple} onClick={useCamp}>⛺ キャンプ券を使う（今月の練習効果×2）</Btn>}
           {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ キャンプ券は連続使用できません（来月から使用可）</div>}
           {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
@@ -4937,10 +5042,15 @@ function App() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
                   <div>
                     <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}</span>
+                    {r.id === g.captainId && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.yellow, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🎖 主将</span>}
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color, border: `1px solid ${t.color}`, borderRadius: 4, padding: "1px 5px" }}>{t.label}</span>
                     <span style={{ marginLeft: 5, fontFamily: FONT_M, fontSize: 12, color: POW[r.growthPow].color }}>成長{r.growthPow}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => setCaptain(r.id)} title="主将に任命（自分より2歳以上若い選手の練習効果+10%）"
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 0, color: r.id === g.captainId ? C.yellow : C.sub }}>
+                      🎖
+                    </button>
                     <button onClick={() => toggleFavorite(r.id)} title="お気に入り登録（殿堂入りが確約されます）"
                       style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 0, color: r.favorite ? C.yellow : C.sub }}>
                       {r.favorite ? "★" : "☆"}
@@ -5077,6 +5187,38 @@ function App() {
             </div>
           </section>
           <section>
+            <Eyebrow color={"#e8a13c"}>選手間トレード（毎月入れ替え）</Eyebrow>
+            <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>ライバルチームが自チームの選手に興味を示し、代わりの選手を提示してきています。受け入れると1対1で入れ替わります。</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {(g.tradeOffers || []).length === 0 && <div style={{ fontSize: 13, color: C.sub }}>今月のトレードオファーはありません。</div>}
+              {(g.tradeOffers || []).map(offer => {
+                const wantRider = g.roster.find(r => r.id === offer.wantRiderId);
+                if (!wantRider) return null;
+                const r = offer.offeredRider, t = TYPES[r.type];
+                return (
+                  <div key={offer.id} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${"#e8a13c"}` }}>
+                    <div style={{ fontSize: 12, color: C.sub }}>{offer.team}が<span style={{ color: C.text, fontWeight: 700 }}>{wantRider.name}</span>（{TYPES[wantRider.type].label}・{overall(wantRider)} OVR）を欲しがっています</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginTop: 6 }}>
+                      <div>
+                        <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 15 }}>{r.name}</span>
+                        <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
+                        <span style={{ marginLeft: 6, fontSize: 11, color: C.sub }}>{r.age}歳</span>
+                      </div>
+                      <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 13 }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></span>
+                    </div>
+                    <PersonaLine p={r.personality} />
+                    <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
+                    <AbilityGrid r={r} cap={growthCap} />
+                    <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      <Btn small color={"#e8a13c"} disabled={g.roster.length <= 1} onClick={() => askConfirm(`${wantRider.name}を放出し、${r.name}を獲得するトレードを成立させますか？`, () => acceptTrade(offer.id))}>このトレードを受け入れる</Btn>
+                      <Btn small outline color={C.sub} onClick={() => declineTrade(offer.id)}>見送る</Btn>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          <section>
             <Eyebrow color={C.purple}>マシンパーツ（クラス昇格で上位解禁）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {Object.entries(PARTS).map(([pid, p]) => {
@@ -5175,6 +5317,22 @@ function App() {
             <div><div style={{ fontSize: 11, color: C.sub }}>通算表彰台（3位以内）</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.green }}>{cs.totalPodiums}</div></div>
             <div><div style={{ fontSize: 11, color: C.sub }}>自己ベスト着順</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.text }}>{cs.bestFinish ? `${cs.bestFinish}位` : "—"}</div></div>
             <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, color: C.sub }}>通算獲得賞金</div><div style={{ fontFamily: FONT_M, fontSize: 20, color: C.text }}>{cs.totalPrize}万円</div></div>
+          </div>
+          <Eyebrow color={C.yellow}>🏆 実績（{computeSeasonAchievements(g).filter(a => a.achieved).length} / {SEASON_ACHIEVEMENTS.length}達成）</Eyebrow>
+          <div style={{ display: "grid", gap: 8 }}>
+            {computeSeasonAchievements(g).map(a => (
+              <div key={a.id} style={{
+                background: a.achieved ? "rgba(255,210,63,0.1)" : C.panel, borderRadius: 10, padding: "10px 12px",
+                border: `1.5px solid ${a.achieved ? C.yellow : C.line}`, opacity: a.achieved ? 1 : 0.55,
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <span style={{ fontSize: 22 }}>{a.achieved ? a.icon : "🔒"}</span>
+                <div>
+                  <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: a.achieved ? C.yellow : C.text }}>{a.label}</div>
+                  <div style={{ fontSize: 11, color: C.sub }}>{a.desc}</div>
+                </div>
+              </div>
+            ))}
           </div>
           <Eyebrow color={C.sub}>年度別記録</Eyebrow>
           {history.length === 0 && <div style={{ fontSize: 12.5, color: C.sub }}>まだ年度を終えていません。3月のチャンピオンシップを終えると記録が積み重なります。</div>}
