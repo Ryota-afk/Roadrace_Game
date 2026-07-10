@@ -193,6 +193,40 @@ function loadMeta() {
 function saveMeta(meta) {
   try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* noop */ }
 }
+// v15: マイライフ専用の殿堂入り・レジェンド記録。マイライフモードのリセット（新しい選手で
+// キャリアを始める）をまたいで、引退した歴代選手のサマリーだけを別キーで蓄積し続ける
+const ML_LEGENDS_KEY = "roadrace_v12_mylife_legends";
+function loadMlLegends() {
+  try {
+    const raw = localStorage.getItem(ML_LEGENDS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function saveMlLegends(list) {
+  try { localStorage.setItem(ML_LEGENDS_KEY, JSON.stringify(list)); } catch (e) { /* noop */ }
+}
+// v15: 引退の瞬間（強制引退・自主引退どちらも）にこのスナップショットを記録する。
+// computeAchievements/riderNickname/riderCareerSummaryは全てファイル後方で定義されるが、
+// 実際に呼ばれるのは選手が引退した実行時（スクリプト全体の評価が終わった後）なので問題ない
+function mlLegendSnapshot(s) {
+  const r = s.player;
+  const wins = (r.raceLog || []).filter(e => e.rank === 1).length;
+  const podiums = (r.raceLog || []).filter(e => e.rank <= 3).length;
+  const achievedCount = computeAchievements(s).filter(a => a.achieved).length;
+  return {
+    name: r.name, type: r.type, background: r.background, team: s.team,
+    endYear: s.year, age: r.age, races: (r.raceLog || []).length, wins, podiums,
+    salary: s.salary, rivalName: s.rival ? s.rival.name : null, rivalRecord: s.rivalRecord || null,
+    achievedCount, achievedTotal: ML_ACHIEVEMENTS.length,
+    nickname: riderNickname(r), summary: riderCareerSummary({ ...r, farewellYear: s.year, farewellReason: "retired" }),
+    retiredAt: Date.now(),
+  };
+}
+function mlRecordLegend(s) {
+  saveMlLegends([...loadMlLegends(), mlLegendSnapshot(s)]);
+}
 const MONTHS = ["4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
 const RELEGATE_LINE = 15;
 // v8: クラス連動の恩恵（ロースター上限・スカウト人数・逸材確率）
@@ -896,16 +930,20 @@ function computePickupChance(r) {
   if (r.prodigy) chance += 0.2;
   return Math.min(0.9, chance);
 }
+// v15: rankはチームの格付け（S>A>B>C）。マイライフの移籍オファー画面で
+// 「どれくらい強豪のチームか」を一目でわかるように表示するための情報用フラグ
 const RIVAL_TEAMS = [
-  { name: "レッドサンダー山陽", color: "#d9484a" }, { name: "クレディ・ブルー", color: "#3f7fd9" },
-  { name: "ヴェロチタ京都", color: "#9a6be0" }, { name: "ウィンドミル北海道", color: "#e08a3f" },
+  { name: "レッドサンダー山陽", color: "#d9484a", rank: "A" }, { name: "クレディ・ブルー", color: "#3f7fd9", rank: "S" },
+  { name: "ヴェロチタ京都", color: "#9a6be0", rank: "B" }, { name: "ウィンドミル北海道", color: "#e08a3f", rank: "B" },
 ];
 // v14: マイライフモード用のチームプール（6チーム）。プレイヤーは新人としてこの中の
 // 1チームに加入し、残り5チームは全て純粋なライバルAIチームとしてレースに登場する
 const MYLIFE_TEAMS = [
   ...RIVAL_TEAMS,
-  { name: "サンライズ静岡", color: "#4fd1c5" }, { name: "北斗プロサイクル", color: "#c084fc" },
+  { name: "サンライズ静岡", color: "#4fd1c5", rank: "C" }, { name: "北斗プロサイクル", color: "#c084fc", rank: "A" },
 ];
+const TEAM_RANK_COLOR = { S: "#ffd23f", A: "#f0703f", B: "#3f7fd9", C: C.sub };
+function mlTeamRank(teamName) { return (MYLIFE_TEAMS.find(t => t.name === teamName) || {}).rank || "C"; }
 // v14.1: マイライフの経歴選択。年齢・初期能力・成長ポテンシャル（growthPow分布・成長タイプ）に
 // 差を付け、「若く粗削りだが伸びしろ最大」〜「即戦力だが伸びしろ小さめ」の3択にする
 const ML_BACKGROUNDS = {
@@ -3497,7 +3535,9 @@ function App() {
         player.age += 1;
         const retire = player.age >= 36 || (player.age >= 33 && overall(player) < player.joinOvr * 0.8);
         if (retire) {
-          return { ...s, player, money, managerEval, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
+          const retiredState = { ...s, player, money, managerEval };
+          mlRecordLegend(retiredState);
+          return { ...retiredState, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
         }
         // v15: 引退以外でキャリアが続く年は、低確率で人生の岐路イベントが割り込む。
         // 発生すればいつも通りの年度末処理はいったん保留し、選択を終えてから続きへ進む
@@ -3887,6 +3927,7 @@ function App() {
             if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate);
             else doCreate();
           }}>この内容でデビュー →</Btn>
+          <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>🏛 歴代選手の殿堂を見る</Btn>
           <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
         </div>
       );
@@ -3969,7 +4010,7 @@ function App() {
               🏆 実績を見る（{computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}達成）
             </Btn>
           </div>
-          <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => setMl(s => ({ ...s, screen: "mylife_retired" })))}>🏁 現役引退する</Btn>
+          <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🏁 現役引退する</Btn>
           <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
         </div>
       );
@@ -4208,9 +4249,16 @@ function App() {
         {ml.contractOffers.map((offer, i) => {
           const isStay = i === 0;
           const previewSalary = Math.round(ml.salary * offer.salaryMul);
+          const rank = mlTeamRank(offer.team);
           return (
             <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1.5px solid ${isStay ? C.line : C.purple}` }}>
-              <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 14, color: C.text }}>{offer.team}{isStay ? "（残留）" : "（移籍）"}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  fontFamily: FONT_M, fontSize: 11, fontWeight: 700, color: "#14171d", background: TEAM_RANK_COLOR[rank],
+                  borderRadius: 5, padding: "1px 6px",
+                }}>{rank}</span>
+                <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 14, color: C.text }}>{offer.team}{isStay ? "（残留）" : "（移籍）"}</span>
+              </div>
               <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>年俸 {previewSalary}万円{offer.bonus > 0 && <span style={{ color: C.green }}>／契約金 +{offer.bonus}万円</span>}</div>
               {offer.aceGuarantee && <div style={{ fontSize: 11, color: C.yellow, marginTop: 2 }}>👑 来季開幕戦はエースとして起用を確約</div>}
               <Btn small outline={isStay} color={C.purple} onClick={() => mlChooseTeam(offer)} style={{ marginTop: 8 }}>この条件で契約する</Btn>
@@ -4241,7 +4289,40 @@ function App() {
             </div>
           )}
           <Btn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</Btn>
+          <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>🏛 歴代選手の殿堂を見る</Btn>
           <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
+        </div>
+      );
+    }
+
+    if (ml.screen === "mylife_legends") {
+      const legends = [...loadMlLegends()].reverse();
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
+            <Eyebrow color={C.purple}>🏛 マイライフ殿堂</Eyebrow>
+            <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>これまでのプレイで引退した歴代選手の記録です（{legends.length}名）。</div>
+          </div>
+          {legends.length === 0 && <div style={{ fontSize: 12.5, color: C.sub }}>まだ引退した選手はいません。</div>}
+          <div style={{ display: "grid", gap: 8 }}>
+            {legends.map((leg, i) => (
+              <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.purple}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
+                  <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 14.5 }}>
+                    {leg.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: TYPES[leg.type]?.color }}>{TYPES[leg.type]?.label}</span>
+                  </span>
+                  <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>{leg.endYear}年目引退・{leg.age}歳</span>
+                </div>
+                {leg.nickname && <div style={{ fontSize: 11.5, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{leg.nickname}」</div>}
+                <div style={{ fontSize: 11, color: C.text, marginTop: 4, lineHeight: 1.6 }}>{leg.summary}</div>
+                <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>
+                  {leg.team}／通算{leg.races}戦{leg.wins}勝・表彰台{leg.podiums}回／実績{leg.achievedCount}/{leg.achievedTotal}
+                  {leg.rivalName && `／ライバル${leg.rivalName}に${leg.rivalRecord?.wins || 0}勝${leg.rivalRecord?.losses || 0}敗`}
+                </div>
+              </div>
+            ))}
+          </div>
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_create" }))}>← 戻る</Btn>
         </div>
       );
     }
