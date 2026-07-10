@@ -133,6 +133,36 @@ function rollAbilities(rng, opts = {}) {
   }
   return abilities;
 }
+// v15フェーズ2: 金特（ゴールド進化）。対応する特殊能力を保有したまま一定の条件
+// （その脚質での勝利数、または該当する役割での出走数）を満たすと、保有能力自体は
+// そのままに「金特」フラグ（goldAbilities配列）が立ち、効果が強化される。
+// ASSIST_ROLESはこのファイル後方（v13のフレーバーテキスト部）で定義されるが、
+// 実際に呼ばれるのは選手が条件を満たした実行時なので問題ない
+function hasGoldAbility(r, id) { return !!(r && r.goldAbilities && r.goldAbilities.includes(id)); }
+function countWins(r) { return (r.raceLog || []).filter(e => e.rank === 1).length; }
+function countRoleUses(r, pred) { return (r.raceLog || []).filter(pred).length; }
+const GOLD_CONDITIONS = {
+  mount:       r => r.type === "CLM" && countWins(r) >= 5,
+  puncheur:    r => r.type === "PUN" && countWins(r) >= 5,
+  flatlander:  r => r.type === "RUL" && countWins(r) >= 5,
+  sprinter_sp: r => r.type === "SPR" && countWins(r) >= 5,
+  soloist:     r => r.type === "TT" && countWins(r) >= 5,
+  closer:      r => countWins(r) >= 8,
+  escape:      r => countRoleUses(r, e => e.role === "breakaway") >= 5,
+  domestique:  r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)) >= 8,
+};
+// 保有する特殊能力のうち、条件を満たしたものだけを金特化する。新たに金特化があれば
+// 変更後のオブジェクトを返し（呼び出し側で差分検知してログ表示に使える）、無ければ引数をそのまま返す
+function upgradeGoldAbilities(r) {
+  const abilities = r.abilities || [];
+  const current = r.goldAbilities || [];
+  const next = [...current];
+  let changed = false;
+  Object.keys(GOLD_CONDITIONS).forEach(id => {
+    if (abilities.includes(id) && !next.includes(id) && GOLD_CONDITIONS[id](r)) { next.push(id); changed = true; }
+  });
+  return changed ? { ...r, goldAbilities: next } : r;
+}
 const PERSONALITIES = {
   normal:   { label: "普通", desc: "クセなし", mul: {} },
   genius:   { label: "天才", desc: "全能力が伸びやすい", mul: { flat: 1.25, climb: 1.25, sprint: 1.25, stamina: 1.25, solo: 1.25 } },
@@ -1143,15 +1173,28 @@ const ML_CARS = [
   { label: "国産セダン", price: 160, raceFatigueCut: 0.20, desc: "レース参加による疲労蓄積-20%" },
   { label: "輸入スポーツカー", price: 400, raceFatigueCut: 0.30, desc: "レース参加による疲労蓄積-30%" },
 ];
+// v15フェーズ2: 種目別専門コーチ（恒常）。5種目それぞれの練習効果を、現在の練習指定に
+// 関わらずそのアビリティが対象になったときだけ底上げする
+const ML_AB_COACH_KEY = { flat: "flatCoach", climb: "climbCoach", sprint: "sprintCoach", stamina: "staminaCoach", solo: "soloCoach" };
 const ML_GEAR = {
   roller: { label: "自主トレ用スマートローラー", price: 90, desc: "練習の成長効果+15%（恒常）" },
   monitor: { label: "パワーメーター一式", price: 70, desc: "狙った能力の伸びがさらに+10%（恒常）" },
   chef: { label: "専属コンディショニングシェフ", price: 150, desc: "レース参加による疲労蓄積が10%軽減される（恒常）" },
+  flatCoach:    { label: "平坦専門コーチ", price: 100, desc: "平坦の練習効果+25%（恒常）" },
+  climbCoach:   { label: "登坂専門コーチ", price: 100, desc: "登坂の練習効果+25%（恒常）" },
+  sprintCoach:  { label: "スプリント専門コーチ", price: 100, desc: "スプリントの練習効果+25%（恒常）" },
+  staminaCoach: { label: "スタミナ専門コーチ", price: 100, desc: "スタミナの練習効果+25%（恒常）" },
+  soloCoach:    { label: "独走専門コーチ", price: 100, desc: "独走の練習効果+25%（恒常）" },
 };
+const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
+const GROWTH_ORDER = ["early", "normal", "late"];
 const ML_STOCK_ITEMS = {
   drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
   supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },
   tune:  { label: "コンディション調整", desc: "調子を1段階アップ", price: 20, condDelta: 1 },
+  // v15フェーズ2: 成長力・成長タイプを底上げする消耗品
+  growthPowUp: { label: "才能開花プログラム", desc: "成長力を1段階アップ（C→B→A→S）", price: 180, growthPowUp: true },
+  growthShift: { label: "晩成型トレーニング理論", desc: "成長タイプを1段階「晩成」寄りに変更（早熟→普通→晩成）", price: 150, growthShiftUp: true },
 };
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
@@ -1431,7 +1474,7 @@ function effAbilities(r, equip, itemBoost, grade) {
   e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
   e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
   AB_KEYS.forEach(k => { e[k] = Math.min(135, e[k]); });
-  e.type = r.type; e.abilities = r.abilities;
+  e.type = r.type; e.abilities = r.abilities; e.goldAbilities = r.goldAbilities;
   return e;
 }
 // 脚質の得意区間ボーナス（形骸化対策）
@@ -1533,13 +1576,13 @@ function segmentAbility(segType, e, steepness) {
   else if (segType === "mtn") ab = e.climb * 0.7 + e.sprint * 0.3;
   else { const w = climbWeightFor(segType, steepness); ab = e.flat * (1 - w) + e.climb * w; }
   ab += typeAffinityBonus(e.type, segType);
-  // v15: 特殊能力による区間タイプ別の能力補正
-  if (hasAbility(e, "mount") && ["climb", "mtn"].includes(segType)) ab += 4;
-  if (hasAbility(e, "puncheur") && segType === "hill") ab += 4;
-  if (hasAbility(e, "flatlander") && segType === "flat") ab += 4;
-  if (hasAbility(e, "sprinter_sp") && segType === "sprint") ab += 4;
-  if (hasAbility(e, "soloist") && segType === "tt") ab += 4;
-  if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += 4;
+  // v15: 特殊能力による区間タイプ別の能力補正（金特なら効果2倍）
+  if (hasAbility(e, "mount") && ["climb", "mtn"].includes(segType)) ab += hasGoldAbility(e, "mount") ? 8 : 4;
+  if (hasAbility(e, "puncheur") && segType === "hill") ab += hasGoldAbility(e, "puncheur") ? 8 : 4;
+  if (hasAbility(e, "flatlander") && segType === "flat") ab += hasGoldAbility(e, "flatlander") ? 8 : 4;
+  if (hasAbility(e, "sprinter_sp") && segType === "sprint") ab += hasGoldAbility(e, "sprinter_sp") ? 8 : 4;
+  if (hasAbility(e, "soloist") && segType === "tt") ab += hasGoldAbility(e, "soloist") ? 8 : 4;
+  if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += hasGoldAbility(e, "closer") ? 8 : 4;
   return ab;
 }
 
@@ -1585,8 +1628,8 @@ function tickSpeedFactor(en, segType, mode, steepness) {
   let ab = segmentAbility(segType, en, steepness);
   // v15: 展開依存の特殊能力（逃げ屋・献身のアシスト）は、能力算出時点ではmodeを
   // 知らないsegmentAbilityではなくここで加算する
-  if (hasAbility(en, "escape") && mode === "attack") ab += 4;
-  if (hasAbility(en, "domestique") && mode === "pull") ab += 3;
+  if (hasAbility(en, "escape") && mode === "attack") ab += hasGoldAbility(en, "escape") ? 8 : 4;
+  if (hasAbility(en, "domestique") && mode === "pull") ab += hasGoldAbility(en, "domestique") ? 6 : 3;
   let f = 1 + (ab - 70) / 260;
   if (mode === "attack") f *= 1.15;
   f *= energyPenaltyMul(en.energy);
@@ -1905,7 +1948,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
       return members.map((r, i) => ({
-        id: r.id, name: r.name, type: r.type, abilities: r.abilities,
+        id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities,
         flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
         team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
         isAlumnus: alumniIds.has(r.id),
@@ -1970,19 +2013,23 @@ function FatigueBar({ v }) {
     </div>
   );
 }
-// v15: 1選手が複数の特殊能力を保有できるようになったため、バッジ付きの行を複数表示する
-function TraitLine({ abilities }) {
+// v15: 1選手が複数の特殊能力を保有できるようになったため、バッジ付きの行を複数表示する。
+// v15フェーズ2: 金特化した能力は★付きの金色バッジで区別する
+function TraitLine({ abilities, goldAbilities }) {
   if (!abilities || abilities.length === 0) return null;
   return (
     <div style={{ marginTop: 2 }}>
       {abilities.map(id => {
         const t = ABILITIES[id];
         if (!t) return null;
-        const col = t.bad ? C.red : "#e8a13c";
+        const isGold = !!(goldAbilities && goldAbilities.includes(id));
+        const col = isGold ? C.yellow : t.bad ? C.red : "#e8a13c";
         return (
           <div key={id} style={{ fontSize: 10.5, color: C.sub, marginTop: 1 }}>
-            <span style={{ color: col, border: `1px solid ${col}`, borderRadius: 4, padding: "0px 5px", marginRight: 5 }}>{t.label}</span>
-            {t.desc}
+            <span style={{ color: col, border: `1px solid ${col}`, borderRadius: 4, padding: "0px 5px", marginRight: 5, fontWeight: isGold ? 700 : 400 }}>
+              {isGold ? "★" : ""}{t.label}
+            </span>
+            {t.desc}{isGold ? "（金特・効果2倍）" : ""}
           </div>
         );
       })}
@@ -2900,7 +2947,7 @@ function initMyLife() {
     // v14.3: 監督指示・監督評価（マスクデータ）・年俸・ショップ用の資産
     directive: null, managerEval: 30, salary: 0, money: 0,
     partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
-    gear: { roller: false, monitor: false, chef: false },
+    gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
     houseLv: -1, carLv: -1,
     // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
     rival: null, rivalRecord: null,
@@ -2979,14 +3026,14 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
     const teamEntrants = members.map((r, i) => ({
-      id: r.id, name: r.name, type: r.type, abilities: r.abilities,
+      id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities,
       flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
       team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
     }));
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
       const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned });
       teamEntrants[0] = {
-        ...teamEntrants[0], id: rival.id, name: rival.name, type: rival.type, abilities: rival.abilities,
+        ...teamEntrants[0], id: rival.id, name: rival.name, type: rival.type, abilities: rival.abilities, goldAbilities: rival.goldAbilities,
         flat: rivalStats.flat, climb: rivalStats.climb, sprint: rivalStats.sprint, stamina: rivalStats.stamina, solo: rivalStats.solo,
         isRival: true,
       };
@@ -3002,7 +3049,7 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
       else playerIsAce = playerTotal >= topAbility;
       if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
       riders.push({
-        id: player.id, name: player.name, type: player.type, abilities: player.abilities, ...playerEff,
+        id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: player.goldAbilities, ...playerEff,
         team: "PLAYER", teamName: myTeamName, color: C.yellow,
         isAce: playerIsAce, role: playerIsAce ? "lead" : "sub", isPlayerChar: true,
       });
@@ -3141,6 +3188,13 @@ function App() {
       if (hasAbility(n, "recover")) n.fatigue = Math.max(0, n.fatigue - 15);
       const swing = hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1;
       n.cond = Math.max(1, Math.min(5, n.cond + (Math.random() < 0.34 ? -swing : Math.random() < 0.5 ? 0 : swing)));
+      // v15フェーズ2: 金特化の判定（勝利数・役割出走数の条件を満たしたら毎月チェック）
+      const upgraded = upgradeGoldAbilities(n);
+      if (upgraded !== n) {
+        upgraded.goldAbilities.filter(id => !(n.goldAbilities || []).includes(id))
+          .forEach(id => state._injured.push(`${n.name}の特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
+        return upgraded;
+      }
       return n;
     });
     return roster;
@@ -3472,7 +3526,7 @@ function App() {
       directive: mlGenDirective(1, 0, 0, 30),
       managerEval: 30, salary: initialSalary, money: 0,
       partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
-      gear: { roller: false, monitor: false, chef: false },
+      gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
       houseLv: -1, carLv: -1,
       rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
       log: [`【1年目 4月】${bg.label}として${team.name}に新人選手加入`, `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`],
@@ -3552,8 +3606,10 @@ function App() {
         * (hasAbility(player, "lateblow_sp") && player.age >= 28 ? 1.15 : 1);
       const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
       const focusMul = gear.monitor ? 1.10 : 1;
-      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul);
-      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k)));
+      // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
+      const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
+      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus));
+      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k)));
       const ph2 = growthPhase(player);
       if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
       player.fatigue = Math.max(0, player.fatigue - 15);
@@ -3578,6 +3634,13 @@ function App() {
       const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags };
       let player = mlApplyMonthEffect(s.player, mode, ctx);
       const log = [...s.log];
+      // v15フェーズ2: 金特化の判定
+      const upgradedPlayer = upgradeGoldAbilities(player);
+      if (upgradedPlayer !== player) {
+        upgradedPlayer.goldAbilities.filter(id => !(player.goldAbilities || []).includes(id))
+          .forEach(id => log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
+        player = upgradedPlayer;
+      }
       // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
       // 年俸は毎月1/12ずつ資金として振り込まれる
       const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0);
@@ -3738,6 +3801,15 @@ function App() {
       const player = { ...s.player };
       if (it.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + it.fatigueDelta));
       if (it.condDelta) player.cond = Math.max(1, Math.min(5, player.cond + it.condDelta));
+      // v15フェーズ2: 成長力・成長タイプを1段階アップさせる消耗品
+      if (it.growthPowUp) {
+        const idx = GROWTHPOW_ORDER.indexOf(player.growthPow);
+        if (idx >= 0 && idx < GROWTHPOW_ORDER.length - 1) player.growthPow = GROWTHPOW_ORDER[idx + 1];
+      }
+      if (it.growthShiftUp) {
+        const idx = GROWTH_ORDER.indexOf(player.growth);
+        if (idx >= 0 && idx < GROWTH_ORDER.length - 1) player.growth = GROWTH_ORDER[idx + 1];
+      }
       return { ...s, player, stock: { ...s.stock, [k]: s.stock[k] - 1 } };
     });
   }
@@ -3998,7 +4070,7 @@ function App() {
             </div>
             {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
             <PersonaLine p={r.personality} />
-            <TraitLine abilities={r.abilities} />
+            <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
             <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
               <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
@@ -4176,7 +4248,7 @@ function App() {
             </div>
           </section>
           <section>
-            <Eyebrow color={C.green}>疲労回復グッズ（在庫制）</Eyebrow>
+            <Eyebrow color={C.green}>消耗品（在庫制）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {Object.entries(ML_STOCK_ITEMS).map(([k, it]) => (
                 <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
@@ -4654,7 +4726,7 @@ function App() {
                 </div>
                 {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
                 <PersonaLine p={r.personality} />
-                <TraitLine abilities={r.abilities} />
+                <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
                 <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
                   <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
@@ -4735,7 +4807,7 @@ function App() {
                       </div>
                       <div style={{ fontSize: 11.5, color: C.sub, margin: "3px 0" }}>{sc.tag}・{r.age}歳・{GROWTH[r.growth].label}型・成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></div>
                       <PersonaLine p={r.personality} />
-                      <TraitLine abilities={r.abilities} />
+                      <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
                       <BlurGrid blur={sc.blur} />
                       <div style={{ marginTop: 8 }}>
                         <Btn small color={C.green} disabled={g.budget < sc.price || g.roster.length >= rosterMax} onClick={() => signScout(sc)}>
@@ -4767,7 +4839,7 @@ function App() {
                     </div>
                     <div style={{ fontSize: 11.5, color: C.sub, margin: "3px 0" }}>{fa.age}歳・{GROWTH[r.growth].label}型・成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></div>
                     <PersonaLine p={r.personality} />
-                    <TraitLine abilities={r.abilities} />
+                    <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
                     <AbilityGrid r={r} cap={growthCap} />
                     <div style={{ marginTop: 8 }}>
                       <Btn small color={C.green} disabled={g.budget < fa.price || full} onClick={() => signFa(fa)}>
@@ -5160,7 +5232,7 @@ function App() {
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
                     </span>
                   </div>
-                  <TraitLine abilities={r.abilities} />
+                  <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
                   <FatigueBar v={r.fatigue} />
                   <AbilityGrid r={r} cap={growthCap} />
                 </div>
@@ -5414,7 +5486,7 @@ function App() {
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
                     </span>
                   </div>
-                  <TraitLine abilities={r.abilities} />
+                  <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
                   <FatigueBar v={r.fatigue} />
                   <AbilityGrid r={r} cap={growthCap} />
                 </div>
