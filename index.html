@@ -404,7 +404,7 @@ const ITEMS = {
   suit:  { label: "エアロワンピース", desc: "次の1レース：出走全員の平坦+15%", price: 30 },
   supp:  { label: "リカバリーサプリ", desc: "選手1名の疲労を40回復", price: 12 },
   tune:  { label: "コンディション調律", desc: "選手1名の調子を2段階アップ", price: 15 },
-  camp:  { label: "トレーニングキャンプ券", desc: "今月の練習効果×2（チーム全体）", price: 25 },
+  camp:  { label: "トレーニングキャンプ券", desc: "今月の練習効果×2（チーム全体）。ただし全員の疲労+25（故障リスクに注意）", price: 25 },
 };
 const EQUIPS = {
   frame: { label: "エアロフレーム(チーム)", desc: "平坦 +6%/Lv（全員・恒常）" },
@@ -3085,7 +3085,7 @@ function initGame() {
     staff: { manager: 0, trainer: 0, doctor: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
     partsInv: {},
-    camp: false, campCooldown: 0,
+    camp: false,
     sponsor: null,
     sponsorOffers: genSponsors(0, 1),
     scoutPolicy: "balance",
@@ -3131,7 +3131,7 @@ const SAVE_KEY = "roadrace_v12_save";
 const SAVE_VERSION = "v12";
 const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
-  "camp", "campCooldown", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
+  "camp", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
   "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements",
 ];
@@ -3258,11 +3258,15 @@ function mlCreateRival(rng, playerName, playerTeamName) {
 // そのまま再利用するため）。プレイヤー自身のチームメイトは実際のチーム名で登場する
 // v15: rivalとraceMeta.rivalPresentが揃っていれば、ライバルの所属チームの1枠（エース枠）を
 // ライバルの固定アイデンティティ（名前・脚質・性格）に差し替え、isRivalフラグを立てる
-function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival) {
+function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year) {
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
-  const power = (50 + classIdx * 9 + (raceMeta.grade - 1) * 4) * diffAiMul;
+  // v22: クラスさえ上がれば以降は相手のレベルが固定されてしまい、キャリア後半は練習しなくても
+  // 勝ち続けられて練習の意味が薄れる、という指摘を受けた。年数が経つほどライバル勢も力をつけて
+  // くる（新世代の台頭）という設定で、経過年数に応じてAIの地力を継続的に底上げする
+  const yearBonus = Math.min(24, ((year || 1) - 1) * 1.5);
+  const power = (50 + classIdx * 9 + (raceMeta.grade - 1) * 4 + yearBonus) * diffAiMul;
   const { squadMin, squadMax } = raceMeta.tmpl;
   const nameBanned = new Set([player.name]);
   const riders = [];
@@ -3581,7 +3585,7 @@ function App() {
           faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
           tradeOffers: genTradeOffers(classIdx, year * 1471 + 37, survivors),
           races: genMonthRaces(year, 0, classIdx, 0, null, []),
-          camp: false, campCooldown: 0, champBest: null, gc: null,
+          camp: false, champBest: null, gc: null,
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
           // v14.8: 年が変わるのでグランツール制覇状況もリセットする
           gtWins: [],
@@ -3593,7 +3597,7 @@ function App() {
       const upkeep = roster.length * UPKEEP_PER_RIDER;
       const staffSalary = staffSalaryTotal(s.staff);
       const base = {
-        ...s, roster, month, camp: false, campCooldown: Math.max(0, s.campCooldown - 1),
+        ...s, roster, month, camp: false,
         budget: s.budget + income - upkeep - staffSalary,
         sponsor,
         faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7, roster.map(r => r.name)),
@@ -3893,7 +3897,7 @@ function App() {
     if (mlRaceLockRef.current) return;
     mlRaceLockRef.current = true;
     const race = ml.races[0];
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null, ml.rival);
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null, ml.rival, ml.year);
     setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
   }
   function mlRaceFinish() {
@@ -4295,11 +4299,16 @@ function App() {
   const useTune = (rid) => { if (g.inv.tune <= 0) return; setG(s => ({ ...s, inv: { ...s.inv, tune: s.inv.tune - 1 }, roster: s.roster.map(r => r.id === rid ? { ...r, cond: Math.min(5, r.cond + 2) } : r) })); };
   const setFocus = (rid, focus) => setG(s => ({ ...s, roster: s.roster.map(r => r.id === rid ? { ...r, focus } : r) }));
   const useCamp = () => {
-    if (g.inv.camp <= 0 || g.camp || g.campCooldown > 0) return;
-    // v21: 「毎月使うのが前提」に感じられるとのフィードバックを受け、連続使用不可のクールダウンを
-    // 1ヶ月→2ヶ月に延長した（次に使えるのは2ヶ月後）。これにより、キャンプ券は毎月の
-    // ルーティンではなく、ここぞという月に狙って使う節目のブーストという位置づけになる
-    setG(s => ({ ...s, camp: true, campCooldown: 2, inv: { ...s.inv, camp: s.inv.camp - 1 } }));
+    if (g.inv.camp <= 0 || g.camp) return;
+    // v22: クールダウンによる利用間隔の制限では「空けばすぐ使う」が最適解になり続けて
+    // 「毎月使うのが前提」という印象は変わらなかったため、タイマーではなく実質的な負荷で
+    // ブレーキをかける方式に変更。キャンプは全員の疲労を大きく消耗させる（+25）ため、
+    // 連発するとレース前に疲労90超＝故障リスクゾーンへ突入しやすくなる。「今は無理をしても
+    // いい月か」をプレイヤー自身が毎回判断する、意味のある選択にする
+    setG(s => ({
+      ...s, camp: true, inv: { ...s.inv, camp: s.inv.camp - 1 },
+      roster: s.roster.map(r => ({ ...r, fatigue: Math.min(100, r.fatigue + 25) })),
+    }));
   };
   // v13.1: お気に入り登録した選手は、殿堂入り条件（実績）を満たしていなくても必ず記録に残る
   const toggleFavorite = (rid) => {
@@ -5219,8 +5228,7 @@ function App() {
             <div style={{ fontSize: 10.5, color: C.sub }}>平均在籍{chem.avgTenure.toFixed(1)}ヶ月{chem.mul < 1 ? `／レース中のドラフト消耗-${Math.round((1 - chem.mul) * 100)}%` : ""}</div>
           </div>
           <div style={{ fontSize: 11, color: C.sub }}>🎖 各選手カードのマークで主将を1名任命できます。主将より2歳以上若い選手は練習効果+10%になります。</div>
-          {g.inv.camp > 0 && !g.camp && g.campCooldown === 0 && <Btn small outline color={C.purple} onClick={useCamp}>⛺ キャンプ券を使う（今月の練習効果×2）</Btn>}
-          {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ キャンプ券はクールダウン中（あと{g.campCooldown}ヶ月で使用可）</div>}
+          {g.inv.camp > 0 && !g.camp && <Btn small outline color={C.purple} onClick={() => askConfirm("キャンプを実施しますか？今月の練習効果が×2になりますが、選手全員の疲労が+25されます（連発すると故障リスクが高まります）。", useCamp)}>⛺ キャンプ券を使う（今月の練習効果×2・全員疲労+25）</Btn>}
           {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
           {g.month === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>4月は選手の解雇が可能です（各選手カードの「解雇」ボタン）。</div>}
           {g.roster.map(r => {
@@ -5440,8 +5448,7 @@ function App() {
                   <Btn small color={C.purple} disabled={g.budget < it.price} onClick={() => buyItem(k)}>{it.price}万</Btn>
                 </div>
               ))}
-              {g.inv.camp > 0 && !g.camp && g.campCooldown === 0 && <Btn small outline color={C.purple} onClick={useCamp}>キャンプ券を使う（今月の練習×2）</Btn>}
-              {g.inv.camp > 0 && !g.camp && g.campCooldown > 0 && <div style={{ fontSize: 11.5, color: C.sub }}>⛺ クールダウン中（あと{g.campCooldown}ヶ月で使用可）</div>}
+              {g.inv.camp > 0 && !g.camp && <Btn small outline color={C.purple} onClick={() => askConfirm("キャンプを実施しますか？今月の練習効果が×2になりますが、選手全員の疲労が+25されます（連発すると故障リスクが高まります）。", useCamp)}>キャンプ券を使う（今月の練習×2・全員疲労+25）</Btn>}
               {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
             </div>
           </section>
