@@ -317,6 +317,27 @@ function loadMeta() {
 function saveMeta(meta) {
   try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* noop */ }
 }
+// v27: コースレコード。コース種別（クリテリウム・丘陵ロード等）ごとに、これまでの全レースで
+// 記録された最速の「レコード指数」（コース距離÷勝者フィニッシュタイム×100。距離のばらつきを
+// 正規化した比較可能な指標）を、達成者名・年とともにプレイをまたいで蓄積する。
+// シーズン・マイライフ両モードで共有し、殿堂やクリアポイント同様の永続記録として扱う
+const COURSE_REC_KEY = "roadrace_v12_course_records";
+function loadCourseRecords() {
+  try { const raw = localStorage.getItem(COURSE_REC_KEY); const o = raw ? JSON.parse(raw) : {}; return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; }
+}
+function saveCourseRecords(recs) {
+  try { localStorage.setItem(COURSE_REC_KEY, JSON.stringify(recs)); } catch (e) { /* noop */ }
+}
+// 1レース終了時に呼ぶ。新記録なら保存し、結果画面で祝えるよう判定情報を返す
+function recordCourseResult(kind, length, winnerTime, holder, isPlayer, year) {
+  if (!kind || !winnerTime || winnerTime <= 0 || !length) return null;
+  const speed = Math.round((length / winnerTime) * 100);
+  const recs = loadCourseRecords();
+  const prev = recs[kind] || null;
+  const isNew = !prev || speed > prev.speed;
+  if (isNew) { recs[kind] = { speed, holder: holder || "—", isPlayer: !!isPlayer, year: year || 1 }; saveCourseRecords(recs); }
+  return { kind, speed, isNew, prev, holder: holder || "—", isPlayer: !!isPlayer };
+}
 // v15: マイライフ専用の殿堂入り・レジェンド記録。マイライフモードのリセット（新しい選手で
 // キャリアを始める）をまたいで、引退した歴代選手のサマリーだけを別キーで蓄積し続ける
 const ML_LEGENDS_KEY = "roadrace_v12_mylife_legends";
@@ -407,6 +428,22 @@ const CHASE_MODES = {
   hold:      { label: "静観", desc: "牽引役の脚を温存し、ギャップの拡大を許容する" },
   ace_early: { label: "エース早期発射", desc: "エースが単独アタック。エネルギー切れで大失速のリスクあり（1回限り）" },
 };
+
+// v27: 実況テキストの拡充。区間タイプごとに複数の実況パターンを用意し、単調な
+// 「◯◯へ突入！」の繰り返しを避ける（区間インデックスで決定的に選ぶ）
+const SEG_COMMENTARY = {
+  flat: ["平坦区間、集団は一団となってハイスピードで進む", "風を切る平坦路、隊列が長く伸びていく", "平坦の巡航、アシストが前を固めてペースを作る", "平坦基調、脚を溜めながらの我慢比べだ"],
+  hill: ["丘陵に差しかかる、パンチャーがそわそわし始める", "細かなアップダウンで集団にじわじわ負荷がかかる", "起伏の連続、脚のある者が徐々に前へ上がる", "丘陵区間、ここで無理をすると後半に響く"],
+  climb: ["本格的な登坂開始、クライマーの独壇場だ", "勾配がきつくなり、早くも千切れる選手が出る", "山岳区間、じりじりとタイム差が生まれていく", "登りに入った、パワーウェイトレシオがものを言う"],
+  sprint: ["最終スプリント区間へ、隊列が一気に凝縮する", "ゴールスプリントの位置取り争いが激化してきた", "スプリンターが車列の前方へ殺到する", "ラスト、トレインが発進態勢に入る"],
+  mtn: ["山頂フィニッシュへ、最後の急坂が待ち受ける", "頂上決戦、ここまでの疲労がすべて出る", "最後の登り、まさに勝負どころだ", "山頂ゴールへの激坂、脚が残っているのは誰だ"],
+  tt: ["個人TT、孤独な独走のはじまり", "エアロポジションを保ち一定ペースを刻む", "独走力の真価が問われる区間だ", "タイムトライアル、己との戦いが続く"],
+};
+const FINISH_COMMENTARY = [
+  "🎙 フィニッシュ！歓声が競技場を包む",
+  "🎙 ゴール！長い戦いに決着がついた",
+  "🎙 フィニッシュライン通過！勝者が決まる",
+];
 
 // v9: 出走人数を固定値からsquadMin〜squadMaxの幅に変更（編成画面で選択）
 const TEMPLATES = [
@@ -1212,6 +1249,23 @@ const ML_EVENTS = [
       { label: "浮かれず淡々と過ごす", result: "普段通りのペースを崩さず過ごせた。", effects: { fatigueDelta: -4 } },
     ] },
 ];
+// v27: 個人スポンサーの依頼イベント。人気度が一定以上になると受けられる、CM出演・撮影などの
+// 単発の仕事。引き受けると報酬（お金）と人気度が得られるが、その月は競技に集中できず疲労が残る。
+// 報酬は現在の人気度に比例して大きくなる（有名になるほど良い仕事が舞い込む）
+const ML_SPONSOR_GIGS = [
+  { title: "スポーツ用品ブランドのCM撮影", text: "個人スポンサーから、新製品のテレビCM出演のオファーが届いた。",
+    baseMoney: 30, moneyPerPop: 1.2, pop: 3, fatigue: 12,
+    acceptResult: "スタジオでの終日撮影をこなした。露出が増え、知名度がぐっと上がった。" },
+  { title: "自転車雑誌の表紙撮影", text: "有名自転車雑誌から、表紙モデルとしての撮影依頼が来た。",
+    baseMoney: 24, moneyPerPop: 1.0, pop: 3, fatigue: 9,
+    acceptResult: "こだわりの撮影は長丁場だったが、雑誌の表紙を飾ることで注目が集まった。" },
+  { title: "トークショー・ファンイベント出演", text: "スポンサー主催のファンイベントに、ゲストとして招かれた。",
+    baseMoney: 20, moneyPerPop: 0.8, pop: 4, fatigue: 8,
+    acceptResult: "ファンとの交流イベントは大盛況。多くの応援を背に受けることになった。" },
+  { title: "地域プロモーション動画への出演", text: "地元自治体との共同で、地域を盛り上げるプロモ動画への出演依頼が来た。",
+    baseMoney: 26, moneyPerPop: 1.0, pop: 2, fatigue: 10,
+    acceptResult: "地域と一体になったプロモーションは好評で、応援の輪が広がった。" },
+];
 // v15: 人生の岐路イベント。ML_EVENTSの毎月の小さな出来事とは違い、年度末にだけ低確率で
 // 発生し、一度きりの大きな選択とその後ずっと続く恒常効果を持つ。flagsに解決済みかどうかを
 // 記録し、同じ岐路が二度は訪れないようにする
@@ -1873,6 +1927,24 @@ function generateCourse(raceMeta, dayTag) {
     laps, lapAtFrac: (frac) => Math.min(laps, Math.floor(Math.max(0, Math.min(1, frac)) * laps) + 1),
   };
 }
+// v27: 今季のチームポイント順位表。他チームのポイントは実シミュレーションしていないため、
+// 年・クラス・チーム名から決定的に「シーズン想定合計」を割り出し、経過月数に応じて按分して
+// 現在値を推定する（難易度が上がるほど他チームも強くなる）。自チームは実際のポイントを使う
+function computeStandings(g) {
+  const monthProg = Math.max(0.08, (g.month + 1) / 12);
+  const need = CLASSES[g.classIdx].need;
+  const diffMul = (DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).aiMul;
+  const dynastyMul = 1 + Math.min(0.4, (g.dynastyLevel || 0) * 0.1);
+  const rows = RIVAL_TEAMS.map(t => {
+    const rng = mulberry(strHash(t.name) + g.year * 101 + g.classIdx * 7);
+    const strength = (0.6 + rng() * 0.85) * diffMul * dynastyMul;
+    const seasonTotal = Math.round(need * strength * 1.35);
+    return { name: t.name, color: t.color, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
+  });
+  rows.push({ name: "あなたのチーム", color: C.yellow, pts: g.points, isPlayer: true });
+  rows.sort((a, b) => b.pts - a.pts);
+  return rows;
+}
 // v13: キャリア統計の通算値更新（レース1件確定するたびに呼ぶ）
 function bumpCareerStats(cs, rank, prize) {
   return {
@@ -2385,6 +2457,36 @@ function TraitLine({ abilities, goldAbilities }) {
 // v16フェーズ3: 特殊能力ファイル（図鑑）。まだ発見していない能力は「???」で伏せて表示し、
 // 自チーム/マイライフで実際にその能力を持つ選手を保有すると解禁される
 const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長"];
+// v27: コースレコード一覧。コース種別ごとの最速レコード指数と達成者を表示する。
+// シーズン・マイライフ両モードで共有する
+function CourseRecordsPanel() {
+  const recs = loadCourseRecords();
+  const kinds = TEMPLATES.map(t => t.kind);
+  const anyRec = kinds.some(k => recs[k]);
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.7 }}>
+        コース種別ごとの最速記録（レコード指数＝コース距離÷勝者タイム×100。数値が大きいほど速い）。全プレイ・両モードで共有され、更新されるたびに達成者が刻まれます。
+      </div>
+      {!anyRec && <div style={{ fontSize: 12.5, color: C.sub }}>まだ記録はありません。レースを走ると刻まれていきます。</div>}
+      {kinds.map(k => {
+        const r = recs[k];
+        return (
+          <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${r && r.isPlayer ? C.yellow : C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+            <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13 }}>{k}</span>
+            {r ? (
+              <span style={{ fontSize: 11.5, color: C.sub }}>
+                指数<span style={{ color: C.yellow, fontFamily: FONT_M, marginLeft: 3 }}>{r.speed}</span>
+                <span style={{ marginLeft: 8, color: r.isPlayer ? C.yellow : C.text }}>{r.holder}{r.isPlayer ? " ★" : ""}</span>
+                <span style={{ marginLeft: 6, color: C.sub }}>({r.year}年目)</span>
+              </span>
+            ) : <span style={{ fontSize: 11.5, color: C.sub }}>記録なし</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 function AbilityFileList({ file }) {
   const normalSet = new Set(file.normal);
   const goldSet = new Set(file.gold);
@@ -2923,9 +3025,18 @@ function RaceView({ sim, onFinish }) {
     const baseEvents = [];
     course.segs.forEach((s, j) => {
       const fracStart = j === 0 ? 0 : course.cumFrac[j - 1];
-      baseEvents.push({ t: fracStart, text: s.wind ? `🌬 ${s.label}へ突入！横風区間：集団分裂に注意` : `🎙 ${s.label}へ突入！` });
+      if (s.wind) {
+        baseEvents.push({ t: fracStart, text: `🌬 ${s.label}：横風区間！エシュロンで集団が分断されるか` });
+        return;
+      }
+      // v27: 区間タイプごとの実況パターンから決定的に1つ選ぶ（区間indexで循環）
+      const pool = SEG_COMMENTARY[s.type];
+      const line = pool ? pool[j % pool.length] : `${s.label}へ突入！`;
+      baseEvents.push({ t: fracStart, text: `🎙 ${line}` });
     });
-    baseEvents.push({ t: 0.985, text: "🎙 フィニッシュ！" });
+    baseEvents.push({ t: 0.985, text: FINISH_COMMENTARY[Math.floor(strHash(sim.raceMeta.name || "x") % FINISH_COMMENTARY.length)] });
+    // v27: 実況の動的イベント検知用の状態（逃げとメインのギャップ変化を追う）
+    let prevGapSec = null, lastDynCommentAt = 0;
 
     let clock = 0, prev = performance.now(), done = false, lastHud = 0, intervalId = null;
     const tick = () => {
@@ -3076,19 +3187,36 @@ function RaceView({ sim, onFinish }) {
         const top = sorted.slice(0, 5).map(r => ({ name: r.e.name, team: r.e.team, gap: (sorted[0].frac - r.frac) * totalRef.current }));
         let segLabel = course.segs[course.segs.length - 1].label;
         for (let j = 0; j < course.segs.length; j++) { if (leadFrac <= course.cumFrac[j] + 1e-6) { segLabel = course.segs[j].label; break; } }
+        // ライブギャップ表示（逃げ集団 vs 追走）：先頭グループと2番手グループの位置差を秒換算
+        let gapText = null;
+        const gidSet = [...new Set(sorted.map(r => r.gid))];
+        let curGapSec = null;
+        if (sim.groupMode !== "solo" && gidSet.length > 1) {
+          const leadG = sorted[0].gid;
+          const chaseR = sorted.find(r => r.gid !== leadG);
+          if (chaseR) {
+            curGapSec = Math.max(0, Math.round((sorted[0].frac - chaseR.frac) * totalRef.current));
+            gapText = `逃げとメインのギャップ：約${curGapSec}秒`;
+          }
+        }
+        // v27: 実況の動的イベント。逃げとメインのギャップが大きく動いた瞬間に実況を差し込む
+        // （最終区間はラストスパート演出が優先されるため対象外。過度な連発を避けて4秒間隔で抑制）
+        if (!finalSegRef.current && curGapSec != null && prevGapSec != null && now - lastDynCommentAt > 4000) {
+          const d = curGapSec - prevGapSec;
+          if (curGapSec < 1.5 && prevGapSec >= 3) {
+            liveRef.current = { text: "📻 逃げ吸収！集団は再び一つにまとまった", until: now + 2600 }; lastDynCommentAt = now;
+          } else if (d >= 4) {
+            liveRef.current = { text: "📻 逃げがリードを広げる！メイン集団は反応できるか", until: now + 2600 }; lastDynCommentAt = now;
+          } else if (d <= -4 && curGapSec > 2) {
+            liveRef.current = { text: "📻 メイン集団がペースを上げ、逃げを引き戻しにかかる", until: now + 2600 }; lastDynCommentAt = now;
+          }
+        }
+        if (curGapSec != null) prevGapSec = curGapSec;
         let comment = "";
         if (liveRef.current.until > now) comment = liveRef.current.text;
         else {
           const ev = [...baseEvents].reverse().find(e => e.t <= leadFrac + 1e-4);
           comment = ev ? ev.text : "";
-        }
-        // ライブギャップ表示（逃げ集団 vs 追走）：先頭グループと2番手グループの位置差を秒換算
-        let gapText = null;
-        const gidSet = [...new Set(sorted.map(r => r.gid))];
-        if (sim.groupMode !== "solo" && gidSet.length > 1) {
-          const leadG = sorted[0].gid;
-          const chaseR = sorted.find(r => r.gid !== leadG);
-          if (chaseR) gapText = `逃げとメインのギャップ：約${Math.max(0, Math.round((sorted[0].frac - chaseR.frac) * totalRef.current))}秒`;
         }
         const isDone = clock >= PLAY_DUR;
         const lap = course.laps > 1 ? course.lapAtFrac(leadFrac) : null;
@@ -3900,6 +4028,9 @@ function App() {
     }
     const playerRs = sim.ranked.filter(e => e.team === "PLAYER");
     const best = playerRs[0];
+    // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
+    const winner = sim.ranked[0];
+    const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, winner.team === "PLAYER", g.year);
     const mul = CLASSES[g.classIdx].prizeMul * GRADE_MUL[race.grade];
     const prize = Math.round(playerRs.reduce((s2, e) => s2 + (PRIZES[e.rank - 1] || 1), 0) * mul);
     const mandateHit = !race.championship && !!race.sponsorMandate;
@@ -3926,7 +4057,7 @@ function App() {
         champBest: race.championship ? best.rank : s.champBest,
         sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
         careerStats: bumpCareerStats(s.careerStats, best.rank, prize),
-        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak },
+        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak, courseRecord },
         screen: "result",
       };
     });
@@ -4136,6 +4267,9 @@ function App() {
     const rivalEntrant = sim.ranked.find(e => e.isRival);
     // v26: 複数ライバル制。2人目の好敵手も同様に戦績を追跡する
     const rival2Entrant = sim.ranked.find(e => e.isRival2);
+    // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
+    const winner = sim.ranked[0];
+    const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, !!winner.isPlayerChar, ml.year);
     setMl(s => {
       // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
       const role = directive ? directive.key : (me.isAce ? "ace" : "support");
@@ -4189,7 +4323,7 @@ function App() {
         ...s, player, points: s.points + pts, log,
         managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
         money: s.money + prize + popBonus, rivalRecord, rivalRecord2,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus },
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord },
         screen: "mylife_result",
       };
     });
@@ -4458,11 +4592,29 @@ function App() {
     const player = { ...player0 };
     if (effects.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + effects.fatigueDelta));
     if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, mlGrowthCap(year)));
+    // v27: 個人スポンサー依頼イベント用。人気度も増減させられるようにする
+    if (effects.popularityDelta) player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + effects.popularityDelta));
     return player;
   }
   function mlTriggerEvent() {
     const ev = ML_EVENTS[Math.floor(Math.random() * ML_EVENTS.length)];
     setMl(s => ({ ...s, pendingEvent: ev, screen: "mylife_event" }));
+  }
+  // v27: 個人スポンサーの依頼イベント。現在の人気度に応じて報酬が大きくなる仕事を1件生成する
+  function mlTriggerSponsorGig() {
+    setMl(s => {
+      const pop = s.player.popularity || 0;
+      const g0 = ML_SPONSOR_GIGS[Math.floor(Math.random() * ML_SPONSOR_GIGS.length)];
+      const money = Math.round(g0.baseMoney + pop * g0.moneyPerPop);
+      const gig = {
+        title: g0.title, text: g0.text,
+        choices: [
+          { label: `引き受ける（+${money}万円・人気度+${g0.pop}・疲労+${g0.fatigue}）`, result: g0.acceptResult, effects: { moneyDelta: money, popularityDelta: g0.pop, fatigueDelta: g0.fatigue } },
+          { label: "今回は辞退する", result: "今は競技に集中したいと、丁重に辞退した。", effects: { fatigueDelta: -3 } },
+        ],
+      };
+      return { ...s, pendingEvent: gig, screen: "mylife_event" };
+    });
   }
   function mlResolveEvent(choiceIdx) {
     setMl(s => {
@@ -4471,7 +4623,9 @@ function App() {
       const choice = ev.choices[choiceIdx];
       const player = mlApplyEventEffects(s.player, choice.effects, s.year);
       const managerEval = Math.max(0, Math.min(100, s.managerEval + (choice.effects.managerEvalDelta || 0)));
-      return { ...s, player, managerEval, pendingEvent: null, eventResultText: choice.result, screen: "mylife_event_result" };
+      // v27: スポンサー依頼イベントの報酬（お金）を即時反映する
+      const money = s.money + (choice.effects.moneyDelta || 0);
+      return { ...s, player, money, managerEval, pendingEvent: null, eventResultText: choice.result, screen: "mylife_event_result" };
     });
   }
   // v14.3: マイライフ専用ショップ（年俸で得た資金を使う）。パーツはPARTS/PART_SLOTSを
@@ -4971,11 +5125,15 @@ function App() {
             <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習する（能力強化・疲労+）</Btn>
             <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養する（疲労回復のみ）</Btn>
             <Btn outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活のイベントを受ける</Btn>
+            {(ml.player.popularity || 0) >= 20 && (
+              <Btn outline color={"#e8a13c"} onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事を受ける（人気度で報酬UP・その月は競技に集中できない）</Btn>
+            )}
             <Btn outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップに行く</Btn>
             <Btn outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>
               🏆 実績を見る（{computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}達成）
             </Btn>
             <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑を見る</Btn>
+            <Btn outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコードを見る</Btn>
             <Btn outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプを見る</Btn>
             {ml.flags?.mentor
               ? <div style={{ fontSize: 11.5, color: C.yellow, textAlign: "center" }}>🎖 チームの精神的支柱（毎月疲労-3／監督評価の伸び+0.3）</div>
@@ -5025,6 +5183,15 @@ function App() {
       <div style={{ display: "grid", gap: 12 }}>
         <Eyebrow color={C.purple}>🗂 特殊能力図鑑</Eyebrow>
         <AbilityFileList file={loadAbilityFile()} />
+        <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
+      </div>
+    );
+
+    // v27: コースレコード一覧（シーズンモードと共有の永続記録）
+    if (ml.screen === "mylife_records") return mlWrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <Eyebrow color={"#e8a13c"}>🏅 コースレコード</Eyebrow>
+        <CourseRecordsPanel />
         <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
       </div>
     );
@@ -5084,6 +5251,7 @@ function App() {
 
           <Section color={"#e8a13c"} title="個人スポンサー・人気度">
             <Card>レースの着順が良いほど（グレードが高いレースほど）人気度（0〜100）が上がります。人気度10ごとに月+2万円の個人スポンサー収入（チーム年俸とは別枠）が入り、25/50/75/100到達時には契約一時金も入ります。</Card>
+            <Card>人気度が20以上になると、毎月のアクションとして<span style={{ color: C.text }}>スポンサーの仕事（CM出演・撮影など）</span>を引き受けられるようになります。報酬（お金）と人気度が得られますが、その月は競技に集中できず疲労が残ります。報酬額は人気度が高いほど大きくなります。</Card>
           </Section>
 
           <Section color={C.blue} title="新人時代の恩師（師弟関係）">
@@ -5116,7 +5284,7 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
@@ -5126,6 +5294,11 @@ function App() {
             {popGain > 0 && (
               <div style={{ fontSize: 11.5, color: "#e8a13c", marginTop: 3 }}>
                 人気度 +{popGain}{popBonus > 0 ? `／個人スポンサー契約ボーナス +${popBonus}万円！` : ""}
+              </div>
+            )}
+            {courseRecord && courseRecord.isNew && (
+              <div style={{ fontSize: 12, color: courseRecord.isPlayer ? C.yellow : C.text, marginTop: 4, fontWeight: 700 }}>
+                🏅 {courseRecord.kind}のコースレコード更新！（指数{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・あなた" : ""}）
               </div>
             )}
           </div>
@@ -5681,6 +5854,7 @@ function App() {
           })}
           <Btn outline color={C.sub} onClick={() => advanceMonth(null)}>翌月へ進む（今月は休養：全員の疲労-50）</Btn>
           <Btn outline color={C.blue} onClick={() => setG(s => ({ ...s, screen: "program" }))}>📅 年間レースプログラムを見る</Btn>
+          <Btn outline color={C.purple} onClick={() => setG(s => ({ ...s, screen: "standings" }))}>📊 今季のチーム順位表を見る</Btn>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn small outline color={C.green} onClick={() => {
               const ok = saveGame(g);
@@ -6086,6 +6260,8 @@ function App() {
               );
             })}
           </div>
+          <Eyebrow color={"#e8a13c"}>🏅 コースレコード</Eyebrow>
+          <CourseRecordsPanel />
           <Eyebrow color={C.purple}>🗂 特殊能力図鑑</Eyebrow>
           <AbilityFileList file={loadAbilityFile()} />
         </div>
@@ -6342,6 +6518,37 @@ function App() {
     );
   }
 
+  // v27: 今季のチームポイント順位表
+  if (g.screen === "standings") {
+    const rows = computeStandings(g);
+    return wrap(
+      <div style={{ display: "grid", gap: 10 }}>
+        <Eyebrow color={C.purple}>今季のチーム順位表（{g.year}年目・{cls.label}）</Eyebrow>
+        <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.7 }}>
+          {MONTHS[g.month]}時点の推定ポイント順位です。他チームのポイントは想定値ですが、昇格ライン（{CLASSES[g.classIdx].need}pt）到達の目安として自チームの立ち位置を確認できます。
+        </div>
+        <div style={{ background: C.panel, borderRadius: 12, padding: "6px 10px", display: "grid", gap: 2 }}>
+          {rows.map((row, i) => (
+            <div key={row.name} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 8px",
+              borderRadius: 8, background: row.isPlayer ? "rgba(255,210,63,0.12)" : "transparent",
+              borderBottom: i < rows.length - 1 ? `1px solid ${C.line}` : "none",
+            }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontFamily: FONT_M, fontSize: 14, color: i === 0 ? C.yellow : C.sub, width: 22 }}>{i + 1}.</span>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: row.color, display: "inline-block" }} />
+                <span style={{ fontFamily: FONT_D, fontWeight: 700, color: row.isPlayer ? C.yellow : C.text, fontSize: 13.5 }}>{row.name}</span>
+              </span>
+              <span style={{ fontFamily: FONT_M, fontSize: 14, color: row.isPlayer ? C.yellow : C.text }}>{row.pts}pt</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: C.sub }}>3月のチャンピオンシップ3位以内で昇格できます。順位表はあくまで参考で、昇格判定はチャンピオンシップの結果で決まります。</div>
+        <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
+      </div>
+    );
+  }
+
   if (g.screen === "lineup") {
     const race = g.races.find(r => r.id === g.sel.raceId);
     const N = g.sel.squadN || race.tmpl.squadMin;
@@ -6538,7 +6745,7 @@ function App() {
   if (g.screen === "result_pending") return wrap(<div style={{ color: C.sub }}>結果集計中…</div>);
 
   if (g.screen === "result" && g.result && g.prizeInfo) {
-    const { race, prize, pts, best, mandateHit, breakSurvived, hadBreak } = g.prizeInfo;
+    const { race, prize, pts, best, mandateHit, breakSurvived, hadBreak, courseRecord } = g.prizeInfo;
     const res = g.result;
     const expKeys = [...new Set(res.course.segs.map(s => SEG_AB[s.type]))];
     return wrap(
@@ -6557,6 +6764,11 @@ function App() {
             </div>
           )}
           <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>出走経験：{expKeys.map(k => AB_LABEL[k]).join("・")}が成長</div>
+          {courseRecord && courseRecord.isNew && (
+            <div style={{ fontSize: 12.5, color: courseRecord.isPlayer ? C.yellow : C.text, marginTop: 4, fontWeight: 700 }}>
+              🏅 {courseRecord.kind}のコースレコード更新！（指数{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・自チーム" : ""}）
+            </div>
+          )}
           {race.championship && (
             <div style={{ marginTop: 6, fontSize: 13, color: best.rank <= 3 ? C.yellow : C.red }}>
               {g.classIdx === 2 && best.rank === 1 ? "グランファイナル制覇！！" : best.rank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
