@@ -236,6 +236,15 @@ const softFactor = (v, cap = 88) => (v < cap ? 1 : Math.exp(-(v - cap) / 4));
 const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * softFactor(r[k], cap); };
 const COND_ARROW = ["↓↓", "↘", "→", "↗", "↑↑"];
 const COND_COLOR = ["#7a8296", "#8fa0b8", "#9aa3b5", "#7dd0a0", "#35c07e"];
+// v27: コンディション予報。来月の調子変動の向き（-1下降/0安定/+1上昇）を事前に示す。
+// 予報どおりに翌月の調子が動くよう、予報を保持して翌月に実際の変動として適用する
+const COND_FC_ARROW = ["↘", "→", "↗"];
+const COND_FC_COLOR = ["#8fa0b8", "#9aa3b5", "#7dd0a0"];
+const COND_FC_LABEL = ["下降ぎみ", "安定", "上向き"];
+// 元の調子変動と同じ確率分布（下降34%／安定33%／上昇33%）で向きを1つ引く
+function rollCondDir() {
+  return Math.random() < 0.34 ? -1 : Math.random() < 0.5 ? 0 : 1;
+}
 const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];
 
 const CLASSES = [
@@ -499,6 +508,10 @@ function staffSalaryTotal(staff) {
   if (!staff) return 0;
   return (Object.values(staff).reduce((a, b) => a + b, 0)) * STAFF_SALARY_PER_LV;
 }
+// v27: 引退選手のスタッフ登用（OBコーチ）。殿堂入りしたOBを月給制で専属コーチに迎えると、
+// その選手の脚質に対応する能力の練習効果が全選手+25%になる。月給8万円で一度に1名まで。
+const OB_COACH_SALARY = 8; // 万円/月
+const TYPE_COACH_ABILITY = { SPR: "sprint", CLM: "climb", RUL: "flat", PUN: "climb", TT: "solo" };
 
 // v7: パーツスロットを4種に拡張
 const PART_SLOTS = ["frame", "tire", "wheels", "nutrition"];
@@ -1621,7 +1634,7 @@ function newRider(power, rng, opts = {}) {
     id: RID++,
     name: pickRiderName(rng, opts.banned),
     type, ...r, age, growth, growthPow: growthPowVal, abilities, personality,
-    fatigue: 20 + Math.floor(rng() * 20), cond: 3, injury: 0, streak: 0,
+    fatigue: 20 + Math.floor(rng() * 20), cond: 3, condForecast: (rng() < 0.34 ? -1 : rng() < 0.5 ? 0 : 1), injury: 0, streak: 0,
     focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
     prodigy: !!opts.forceProdigy,
     raceLog: [], // v13: 選手名鑑用の出走履歴（{year, month, name, rank}）
@@ -1637,7 +1650,7 @@ function initRoster() {
     const r = {
       id: RID++, name, type, flat: f, climb: c, sprint: sp, stamina: st, solo: so,
       age, growth, growthPow: pow, abilities: trait ? [trait] : [], personality: pers,
-      fatigue: 20, cond: 3, injury: 0, streak: 0,
+      fatigue: 20, cond: 3, condForecast: 0, injury: 0, streak: 0,
       focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
       raceLog: [], favorite: false, tenure: 0,
     };
@@ -2457,6 +2470,12 @@ function TraitLine({ abilities, goldAbilities }) {
 // v16フェーズ3: 特殊能力ファイル（図鑑）。まだ発見していない能力は「???」で伏せて表示し、
 // 自チーム/マイライフで実際にその能力を持つ選手を保有すると解禁される
 const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長"];
+// v27: コンディション予報の小さな表示。来月の調子変動の向きを控えめに添える
+function CondFc({ dir }) {
+  if (dir == null) return null;
+  const i = dir + 1;
+  return <span style={{ fontSize: 10, color: COND_FC_COLOR[i], marginLeft: 4 }} title={`来月の調子予報：${COND_FC_LABEL[i]}`}>予報{COND_FC_ARROW[i]}</span>;
+}
 // v27: コースレコード一覧。コース種別ごとの最速レコード指数と達成者を表示する。
 // シーズン・マイライフ両モードで共有する
 function CourseRecordsPanel() {
@@ -3418,6 +3437,8 @@ function initGame() {
     // v25: ユース育成枠（年1回だけ安価に確保できる原石）。使用済みかどうかを保持し、
     // 年度末に毎年リセットする
     youthUsed: false,
+    // v27: 引退選手のスタッフ登用（OBコーチ）。殿堂入りOBを月給制で1名まで雇える
+    obCoach: null,
   };
 }
 
@@ -3431,7 +3452,7 @@ const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
-  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed",
+  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed", "obCoach",
 ];
 function serializeState(g) {
   const out = {};
@@ -3770,9 +3791,12 @@ function App() {
             * (hasAbility(n, "trainer") ? 1.2 : hasAbility(n, "lazy_sp") ? 0.8 : 1)
             * (hasAbility(n, "lateblow_sp") && n.age >= 28 ? 1.15 : 1)
             * captainMentorMul(n);
+          // v27: OBコーチが在籍していれば、その担当能力の練習効果を全選手+25%する
+          const obAb = state.obCoach ? state.obCoach.ab : null;
+          const obMul = (k) => (obAb && k === obAb ? 1.25 : 1);
           // 指定能力の成長にトレードオフ（×0.9）。指定外はさらに絞って14%
-          addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus), growthCap);
-          AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k), growthCap));
+          addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus) * obMul(n.focus), growthCap);
+          AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k) * obMul(k), growthCap));
           n.fatigue = Math.min(100, n.fatigue + 6);
         }
         const ph2 = growthPhase(n);
@@ -3812,8 +3836,11 @@ function App() {
         n.streak = 0;
       }
       if (hasAbility(n, "recover")) n.fatigue = Math.max(0, n.fatigue - 15);
+      // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
       const swing = hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1;
-      n.cond = Math.max(1, Math.min(5, n.cond + (Math.random() < 0.34 ? -swing : Math.random() < 0.5 ? 0 : swing)));
+      const dir = (n.condForecast != null) ? n.condForecast : rollCondDir();
+      n.cond = Math.max(1, Math.min(5, n.cond + dir * swing));
+      n.condForecast = rollCondDir();
       // v15フェーズ2: 金特化の判定（勝利数・役割出走数の条件を満たしたら毎月チェック）
       let updated = n;
       const upgraded = upgradeGoldAbilities(updated);
@@ -3874,7 +3901,7 @@ function App() {
         });
         const year = s.year + 1;
         const upkeep = survivors.length * UPKEEP_PER_RIDER;
-        const staffSalary = staffSalaryTotal(s.staff);
+        const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
         const managerLv = s.staff?.manager || 0;
         const nextOffers = genSponsors(classIdx, year).map(o => ({
           ...o,
@@ -3924,7 +3951,7 @@ function App() {
       }
       const month = s.month + 1;
       const upkeep = roster.length * UPKEEP_PER_RIDER;
-      const staffSalary = staffSalaryTotal(s.staff);
+      const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
       const base = {
         ...s, roster, month, camp: false,
         budget: s.budget + income - upkeep - staffSalary,
@@ -4252,6 +4279,40 @@ function App() {
     const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null, ml.rival, ml.year, ml.rival2);
     setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
   }
+  // v27: ラストレース演出。引退前に「最後のレース」を特別に用意し、有終の美を飾れるようにする。
+  // 脚質に合ったコースのグレード4エキシビションとして、両ライバルも駆けつける最高の舞台にする
+  function mlStartLastRace() {
+    if (mlRaceLockRef.current) return;
+    mlRaceLockRef.current = true;
+    const tmplByType = { SPR: TEMPLATES[0], CLM: TEMPLATES[3], RUL: TEMPLATES[2], PUN: TEMPLATES[2], TT: TEMPLATES[5] };
+    const tmpl = tmplByType[ml.player.type] || TEMPLATES[2];
+    const meta = { id: `ml-lastrace-${ml.year}`, name: `${ml.player.name} 引退記念ラストレース`, tmpl, grade: 4, cls: ml.classIdx, rivalPresent: true, rival2Present: true, weather: "clear", isLastRace: true };
+    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, "easy", undefined, "ace", ml.rival, ml.year, ml.rival2);
+    setMl(s => ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
+  }
+  function mlLastRaceFinish() {
+    mlRaceLockRef.current = false;
+    const sim = ml.result;
+    const me = sim.ranked.find(e => e.isPlayerChar);
+    const rank = me ? me.rank : sim.ranked.length;
+    const total = sim.ranked.length;
+    const flavor = rank === 1 ? "最後のレースを、なんと勝利で締めくくった！最高の花道だ。"
+      : rank <= 3 ? "最後のレースで堂々の表彰台。見事な有終の美を飾った。"
+      : rank <= 10 ? "最後まで集団に食らいつき、力を出し切って走り抜けた。"
+      : "結果は振るわなかったが、最後まで自分の走りを貫いた。悔いはない。";
+    setMl(s => {
+      // ラストレースの戦績も通算記録に含めてから殿堂入りさせる
+      const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: sim.raceMeta.name, rank, role: "ace" }] };
+      const finalState = { ...s, player };
+      mlRecordLegend(finalState);
+      return {
+        ...finalState, inLastRace: false, result: null,
+        lastRaceResult: { rank, total, flavor, name: sim.raceMeta.name },
+        screen: "mylife_retired",
+        log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】ラストレースで${rank}位。${player.age}歳で現役を退いた`],
+      };
+    });
+  }
   function mlRaceFinish() {
     mlRaceLockRef.current = false;
     const sim = ml.result;
@@ -4400,8 +4461,11 @@ function App() {
     // v18: 若手のメンターになると、後進を気にかける充実感から疲労がわずかに抜けやすくなる
     if (flags.mentor) player.fatigue = Math.max(0, player.fatigue - 3);
     // v20: シーズンモードと同様、調子は毎月ランダムに変動する（moody/steady_spがあれば変動幅も反映）
+    // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
     const swing = hasAbility(player, "moody") ? 2 : hasAbility(player, "steady_sp") ? 0.5 : 1;
-    player.cond = Math.max(1, Math.min(5, (player.cond || 3) + (Math.random() < 0.34 ? -swing : Math.random() < 0.5 ? 0 : swing)));
+    const dir = (player.condForecast != null) ? player.condForecast : rollCondDir();
+    player.cond = Math.max(1, Math.min(5, (player.cond || 3) + dir * swing));
+    player.condForecast = rollCondDir();
     return player;
   }
   function mlAdvanceMonth(mode) {
@@ -4473,19 +4537,24 @@ function App() {
           const others = MYLIFE_TEAMS.filter(t => t.name !== s.team);
           const nearTier = others.filter(t => Math.abs(t.tier - classIdx) <= 1);
           const pool = nearTier.length >= 2 ? nearTier : others;
-          const offerTeams = [...pool].sort(() => Math.random() - 0.5).slice(0, 2).map(t => ({
+          // v27: 移籍時の争奪戦。昇格ラインを大きく超える好成績（interest>=1.2）を残した年は、
+          // 複数チームが競って条件を吊り上げる。オファー数が増え、年俸倍率・契約金・エース確約が
+          // 通常より豪華になり、契約画面に「争奪戦」の演出が表示される
+          const biddingWar = interest >= 1.2;
+          const offerN = biddingWar ? Math.min(3, pool.length) : 2;
+          const offerTeams = [...pool].sort(() => Math.random() - 0.5).slice(0, offerN).map(t => ({
             team: t.name,
             tier: t.tier,
-            salaryMul: Math.round((1.05 + Math.random() * 0.25) * 100) / 100,
-            bonus: Math.round(20 + Math.random() * 80),
-            aceGuarantee: Math.random() < 0.4,
+            salaryMul: Math.round(((biddingWar ? 1.2 : 1.05) + Math.random() * (biddingWar ? 0.4 : 0.25)) * 100) / 100,
+            bonus: Math.round((biddingWar ? 60 : 20) + Math.random() * (biddingWar ? 140 : 80)),
+            aceGuarantee: Math.random() < (biddingWar ? 0.7 : 0.4),
           }));
-          const stayOffer = { team: s.team, tier: mlTeamTier(s.team), salaryMul: 1, bonus: 0, aceGuarantee: false };
+          const stayOffer = { team: s.team, tier: mlTeamTier(s.team), salaryMul: biddingWar ? 1.1 : 1, bonus: biddingWar ? 40 : 0, aceGuarantee: false };
           return finalizeYearEnd({
             ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
             races: [mlGenRace(s.year + 1, 0, classIdx)],
             directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-            contractOffers: [stayOffer, ...offerTeams],
+            contractOffers: [stayOffer, ...offerTeams], biddingWar,
             salary, money, managerEval,
             screen: "mylife_contract", log,
           });
@@ -4529,7 +4598,7 @@ function App() {
           ? `${offer.team}への移籍に伴い${CLASSES[classIdx].label}に昇格した！`
           : `${offer.team}への移籍に伴い${CLASSES[classIdx].label}に降格となった`];
       }
-      return { ...s, team: offer.team, classIdx, races, directive, salary, money, contractOffers: null, screen: "mylife_main", log };
+      return { ...s, team: offer.team, classIdx, races, directive, salary, money, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
     });
   }
   // v17: オフシーズンの過ごし方を確定する。年度末処理はpendingOffseasonに既に計算済みなので、
@@ -4722,6 +4791,17 @@ function App() {
     if (lv >= staffMax) return;
     setG(s => ({ ...s, staff: { ...s.staff, [k]: lv + 1 } }));
   };
+  // v27: 引退選手のスタッフ登用。殿堂入りOBを月給制で専属コーチに迎える（1名まで）
+  const hireObCoach = (hof) => {
+    setG(s => ({
+      ...s,
+      obCoach: { id: hof.id, name: hof.name, type: hof.type, ab: TYPE_COACH_ABILITY[hof.type] || "flat" },
+      log: [...s.log, `【${MONTHS[s.month]}】${hof.name}をOBコーチに迎えた（${AB_LABEL[TYPE_COACH_ABILITY[hof.type] || "flat"]}の練習効果+25%／月給-${OB_COACH_SALARY}万）`],
+    }));
+  };
+  const dismissObCoach = () => {
+    setG(s => ({ ...s, obCoach: null, log: [...s.log, `【${MONTHS[s.month]}】OBコーチとの契約を解消した`] }));
+  };
   const signScout = (sc) => {
     if (g.budget < sc.price || g.roster.length >= rosterMax) return;
     setG(s => ({
@@ -4836,6 +4916,7 @@ function App() {
           <div style={{ fontSize: 10.5, color: C.sub }}>
             選手維持費 -{g.roster.length * UPKEEP_PER_RIDER}万/月（{g.roster.length}名）
             {staffSalaryTotal(g.staff) > 0 && <>／スタッフ月給 -{staffSalaryTotal(g.staff)}万/月</>}
+            {g.obCoach && <>／OBコーチ -{OB_COACH_SALARY}万/月</>}
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -5037,7 +5118,7 @@ function App() {
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
               <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
               <span>成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></span>
-              <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span></span>
+              <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span><CondFc dir={r.condForecast} /></span>
               {ml.flags?.married && <span style={{ color: C.purple }}>💍 既婚</span>}
             </div>
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
@@ -5119,6 +5200,21 @@ function App() {
               </div>
             )}
             {race.milestone && <div style={{ fontSize: 11, color: ML_MILESTONE_LABEL[race.milestone].color, marginTop: 3 }}>代表選出！一生に何度もない大舞台での一戦だ。</div>}
+            {/* v27: 天候予報。今月を含む先の月の天候を先読みして育成計画に活かせるようにする */}
+            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span>天候予報：</span>
+              {[0, 1, 2].map(off => {
+                const mi = ml.month + off;
+                if (mi > 11) return null;
+                const fr = mlGenRace(ml.year, mi, ml.classIdx);
+                const w = fr.weather || "clear";
+                return (
+                  <span key={off} style={{ color: w === "rain" ? C.blue : w === "heat" ? C.red : C.sub }}>
+                    {MONTHS[mi]}{off === 0 ? "(今)" : ""} {WEATHER[w].icon}
+                  </span>
+                );
+              })}
+            </div>
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
@@ -5143,7 +5239,8 @@ function App() {
                 </Btn>
               )}
           </div>
-          <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🏁 現役引退する</Btn>
+          <Btn outline color={"#e8a13c"} onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースを走って引退する</Btn>
+          <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>そのまま静かに引退する</Btn>
           <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
         </div>
       );
@@ -5277,8 +5374,8 @@ function App() {
 
     if (ml.screen === "mylife_race" && ml.result) return mlWrap(
       <div>
-        <div style={{ marginBottom: 8 }}><Eyebrow color={C.red}>LIVE — {ml.result.raceMeta.name}</Eyebrow></div>
-        <RaceView sim={ml.result} onFinish={mlRaceFinish} />
+        <div style={{ marginBottom: 8 }}><Eyebrow color={ml.inLastRace ? "#e8a13c" : C.red}>{ml.inLastRace ? "🏁 LAST RACE — " : "LIVE — "}{ml.result.raceMeta.name}</Eyebrow></div>
+        <RaceView sim={ml.result} onFinish={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish} />
         <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>● 印＝あなた。位置が近い選手同士が自然にグループを作ります。</div>
       </div>
     );
@@ -5525,9 +5622,13 @@ function App() {
 
     if (ml.screen === "mylife_contract" && ml.contractOffers) return mlWrap(
       <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "10px 14px" }}>
-          <Eyebrow color={C.purple}>CONTRACT — 移籍オファー</Eyebrow>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>好成績を残したあなたに、複数チームから声がかかっています。条件を見比べて来季の所属先を選んでください。</div>
+        <div style={{ background: ml.biddingWar ? "#3a2a12" : "#2b2436", border: `1px solid ${ml.biddingWar ? "#e8a13c" : C.purple}`, borderRadius: 10, padding: "10px 14px" }}>
+          <Eyebrow color={ml.biddingWar ? "#e8a13c" : C.purple}>{ml.biddingWar ? "🔥 CONTRACT — 争奪戦！" : "CONTRACT — 移籍オファー"}</Eyebrow>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>
+            {ml.biddingWar
+              ? "圧倒的な成績にチーム間で争奪戦が勃発！各チームが競って年俸・契約金・エース確約を吊り上げてきています。最高の条件を選び取りましょう。"
+              : "好成績を残したあなたに、複数チームから声がかかっています。条件を見比べて来季の所属先を選んでください。"}
+          </div>
         </div>
         {ml.contractOffers.map((offer, i) => {
           const isStay = i === 0;
@@ -5564,6 +5665,13 @@ function App() {
             <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 22, margin: "8px 0" }}>{r.name} 引退</h2>
             {riderNickname(r) && <div style={{ fontSize: 13, color: C.purple, fontStyle: "italic" }}>「{riderNickname(r)}」</div>}
           </div>
+          {ml.lastRaceResult && (
+            <div style={{ background: "rgba(232,161,60,0.1)", borderRadius: 10, padding: "10px 12px", border: `1.5px solid #e8a13c` }}>
+              <Eyebrow color={"#e8a13c"}>🏁 ラストレース — {ml.lastRaceResult.name}</Eyebrow>
+              <div style={{ fontFamily: FONT_D, fontSize: 17, color: C.text, fontWeight: 700, margin: "4px 0" }}>{ml.lastRaceResult.rank}位 / {ml.lastRaceResult.total}人中</div>
+              <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>{ml.lastRaceResult.flavor}</div>
+            </div>
+          )}
           <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.purple}`, lineHeight: 1.6 }}>
             {riderCareerSummary({ ...r, farewellYear: ml.year, farewellReason: "retired" })}
           </div>
@@ -5931,7 +6039,7 @@ function App() {
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
                 <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
                   <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
-                  <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span></span>
+                  <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span><CondFc dir={r.condForecast} /></span>
                   {r.streak > 0 && <span style={{ color: r.streak >= 2 ? C.red : "#e8a13c" }}>連闘{r.streak}{r.streak >= 2 ? "（次で故障！）" : ""}</span>}
                   {r.injury > 0 && <span style={{ color: C.red }}>🏥 故障 残{r.injury}ヶ月</span>}
                 </div>
@@ -6162,6 +6270,34 @@ function App() {
                   );
                 })}
                 <div style={{ fontSize: 10.5, color: C.sub }}>スタッフ月給合計 -{staffSalaryTotal(g.staff)}万/月</div>
+              </div>
+            )}
+          </section>
+          <section>
+            <Eyebrow color={"#e8a13c"}>OBコーチ（引退選手の登用・月給{OB_COACH_SALARY}万）</Eyebrow>
+            <div style={{ fontSize: 11, color: C.sub, marginTop: 4, lineHeight: 1.6 }}>殿堂入りしたOBを専属コーチに迎えると、その選手の脚質に対応する能力の練習効果が全選手+25%になります（1名まで）。</div>
+            {g.obCoach && (
+              <div style={{ background: "rgba(232,161,60,0.1)", borderRadius: 10, padding: "10px 12px", border: `1.5px solid #e8a13c`, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>🎓 {g.obCoach.name}コーチ <span style={{ fontSize: 10.5, color: TYPES[g.obCoach.type].color }}>{TYPES[g.obCoach.type].label}</span></div>
+                  <div style={{ color: "#e8a13c", fontSize: 11.5 }}>{AB_LABEL[g.obCoach.ab]}の練習効果+25%（全選手）</div>
+                </div>
+                <Btn small outline color={C.sub} onClick={dismissObCoach}>契約解消</Btn>
+              </div>
+            )}
+            {!g.obCoach && (
+              <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                {g.hallOfFame.length === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>まだ殿堂入りOBがいません（引退・退団した実績ある選手が対象です）。</div>}
+                {[...g.hallOfFame].reverse().slice(0, 6).map((h, i) => (
+                  <div key={`ob-${h.id}-${i}`} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13 }}>{h.name}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10.5, color: TYPES[h.type].color }}>{TYPES[h.type].label}</span>
+                      <div style={{ fontSize: 10.5, color: C.sub }}>{AB_LABEL[TYPE_COACH_ABILITY[h.type] || "flat"]}の練習効果+25%</div>
+                    </div>
+                    <Btn small color={"#e8a13c"} onClick={() => hireObCoach(h)}>コーチに迎える</Btn>
+                  </div>
+                ))}
               </div>
             )}
           </section>
@@ -6497,7 +6633,7 @@ function App() {
     return wrap(
       <div style={{ display: "grid", gap: 10 }}>
         <Eyebrow color={C.blue}>年間レースプログラム（{g.year}年目・{cls.label}）</Eyebrow>
-        <div style={{ fontSize: 11.5, color: C.sub }}>会場・グレードは月初に確定するため、先の月は目安です。</div>
+        <div style={{ fontSize: 11.5, color: C.sub }}>会場・グレードは月初に確定するため、先の月は目安です。天候予報も併記します（☀️晴れ／🌧雨／🥵猛暑）。</div>
         {MONTHS.map((m, mi) => {
           const races = genMonthRaces(g.year, mi, g.classIdx, mi === 11 ? 9999 : 0, g.sponsor, g.gtWins);
           const isMandate = g.sponsor && g.sponsor.mandateMonths.includes(mi);
@@ -6508,7 +6644,7 @@ function App() {
                 {isMandate && <span style={{ fontSize: 10.5, color: C.red }}>🎯スポンサー指定月</span>}
               </div>
               <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3, lineHeight: 1.6 }}>
-                {races.map(r => `${r.championship ? "👑" : ""}${r.name}${"★".repeat(r.grade)}`).join(" ／ ")}
+                {races.map(r => `${r.championship ? "👑" : ""}${r.weather && r.weather !== "clear" ? WEATHER[r.weather].icon : ""}${r.name}${"★".repeat(r.grade)}`).join(" ／ ")}
               </div>
             </div>
           );
@@ -6630,7 +6766,7 @@ function App() {
                       {r.streak >= 1 && !dis && <span style={{ marginLeft: 6, fontSize: 10.5, color: r.streak >= 2 ? C.red : "#e8a13c" }}>連闘{r.streak}{r.streak >= 2 ? "（出すと故障）" : ""}</span>}
                     </span>
                     <span style={{ fontFamily: FONT_M, fontSize: 12, color: COND_COLOR[r.cond - 1] }}>
-                      {COND_ARROW[r.cond - 1]} <span style={{ color: C.yellow }}>{overall(r)}</span>
+                      {COND_ARROW[r.cond - 1]}<CondFc dir={r.condForecast} /> <span style={{ color: C.yellow }}>{overall(r)}</span>
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
                     </span>
                   </div>
@@ -6889,7 +7025,7 @@ function App() {
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
                     </span>
                     <span style={{ fontFamily: FONT_M, fontSize: 12, color: COND_COLOR[r.cond - 1] }}>
-                      {COND_ARROW[r.cond - 1]} <span style={{ color: C.yellow }}>{overall(r)}</span>
+                      {COND_ARROW[r.cond - 1]}<CondFc dir={r.condForecast} /> <span style={{ color: C.yellow }}>{overall(r)}</span>
                       <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
                     </span>
                   </div>
