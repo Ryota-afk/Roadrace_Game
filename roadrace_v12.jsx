@@ -4807,6 +4807,7 @@ function App() {
               🏆 実績を見る（{computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}達成）
             </Btn>
             <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑を見る</Btn>
+            <Btn outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプを見る</Btn>
             {ml.flags?.mentor
               ? <div style={{ fontSize: 11.5, color: C.yellow, textAlign: "center" }}>🎖 チームの精神的支柱（毎月疲労-3／監督評価の伸び+0.3）</div>
               : r.age >= 30 && (
@@ -4858,6 +4859,84 @@ function App() {
         <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
       </div>
     );
+
+    // v25: マイライフ専用ヘルプ。毎月のアクションから細かな仕様まで一覧できるようにする
+    if (ml.screen === "mylife_help") {
+      const Section = ({ color, title, children }) => (
+        <div>
+          <Eyebrow color={color}>{title}</Eyebrow>
+          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>{children}</div>
+        </div>
+      );
+      const Card = ({ children }) => (
+        <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>{children}</div>
+      );
+      return mlWrap(
+        <div style={{ display: "grid", gap: 14 }}>
+          <Eyebrow color={C.blue}>📖 ヘルプ</Eyebrow>
+
+          <Section color={C.green} title="毎月の基本アクション">
+            <Card>毎月1つだけアクションを選びます：<span style={{ color: C.text }}>①その月のレースに出走</span>／<span style={{ color: C.text }}>②練習</span>（指定能力+疲労増）／<span style={{ color: C.text }}>③完全休養</span>（疲労回復のみ）／<span style={{ color: C.text }}>④取材・私生活イベント</span>（能力・疲労に小さな効果）。出走すると賞金・ポイント・出走経験による能力成長が入りますが、疲労も大きく増えます。</Card>
+            <Card>クラスはB1→A→PROの3段階。各クラスの昇格に必要なポイントを1年（12ヶ月）で稼ぐと年度末に昇格し、上位クラスほど賞金・年俸の倍率が上がります。</Card>
+          </Section>
+
+          <Section color={C.yellow} title="成長・練習の仕組み">
+            <Card>選手（自分）にも成長タイプ（早熟・普通・晩成・超早熟・超晩成）と成長期／全盛期／衰え期があり、成長力（C/B/A/S、×0.7〜×1.6）が伸び方に倍率をかけます。練習では指定能力に90%、残り4能力に14%が配分されます。</Card>
+            <Card>能力の伸びには年数が経つほど上昇し続けるソフトキャップがあります（目安：1年目90、以後1年ごとに+2、最大132）。この値未満は伸び全開、超えると急激に鈍化します。キャリアが長くなっても練習が無意味にならないよう、上限自体が毎年じわじわ上がっていきます。</Card>
+            <Card>出走した場合は、レースで使った区間の種目に応じた「出走経験」でも能力が伸び、レースのグレードが高いほど伸びが大きくなります。またキャリアを重ねるほど対戦相手（AI選手）の地力も底上げされていくため、成長を怠るとだんだん勝てなくなっていきます。</Card>
+          </Section>
+
+          <Section color={C.red} title="疲労・調子">
+            <Card>出走で疲労+40（車のグレードや「鉄人」「回復力」等で軽減）。調子は→／↗／↑↑／↘／↓↓の5段階で毎月ランダムに変動します。疲労が60未満なら急いで回復させる必要はなく、90を超えると要注意です。</Card>
+            <Card>結婚・子供の有無・一戸建て以上の住居・メンター就任などのライフイベントは、毎月の疲労回復量にわずかな恒常ボーナスを与えます。</Card>
+          </Section>
+
+          <Section color={C.blue} title="監督指示・監督評価">
+            <Card>毎月、監督から「エースとして表彰台を狙え」「積極的な走りで上位進出せよ」「アシストとしてチームを支えよ」「経験を積むために出走せよ」のいずれかの指示が出ます。達成すると監督評価が上がり、未達成だと下がります。監督評価が高いほど「エース」指示が出やすくなります。</Card>
+            <Card>監督評価は年俸交渉や移籍オファーの内容にも影響します。練習をこなす、住環境を整える等でも少しずつ上がります。</Card>
+          </Section>
+
+          <Section color={C.purple} title="年俸・契約・移籍オファー">
+            <Card>年俸は年度末にその年のポイント・勝利数・表彰台数に応じて改定されます。好成績を残すと複数チームから移籍オファー（年俸倍率・契約金・エース確約の有無つき）が届き、残留か移籍かを選べます。移籍先のクラス（B1/A/PRO）がそのまま翌年の所属クラスになります。</Card>
+          </Section>
+
+          <Section color={C.red} title="ライバル">
+            <Card>キャリア開始時に固定のライバル選手が1名生成されます。同じレースに出走すると自動で対決成績（通算勝敗）が記録され、随所で意識させられる存在になります。</Card>
+          </Section>
+
+          <Section color={C.yellow} title="節目の大会">
+            <Card>🌍世界選手権：クラスA以上なら毎年9月に選出されます。🥇オリンピック：PROクラスかつ4年に一度だけ、3月に選出されます。どちらもグレード4（通常の最高格付けの1.3倍相当）の一発勝負で、ライバルも代表入りしてきます。</Card>
+          </Section>
+
+          <Section color={C.green} title="人生の岐路・オフシーズンの過ごし方">
+            <Card>年度末には必ず「オフシーズンの過ごし方」を3択（国内自主トレ・海外武者修行・休養）から選びます。海外武者修行はハイリスクハイリターン（伸び大・疲労も増加）です。</Card>
+            <Card>それとは別に、結婚・大きな怪我・第一子誕生・新人時代の恩師との別れといった「人生の岐路」が、条件を満たすと年度末に低確率（恩師との別れのみ確定）で発生し、一度きりの選択とその後ずっと続く恒常効果をもたらします。</Card>
+          </Section>
+
+          <Section color={"#e8a13c"} title="個人スポンサー・人気度">
+            <Card>レースの着順が良いほど（グレードが高いレースほど）人気度（0〜100）が上がります。人気度10ごとに月+2万円の個人スポンサー収入（チーム年俸とは別枠）が入り、25/50/75/100到達時には契約一時金も入ります。</Card>
+          </Section>
+
+          <Section color={C.blue} title="新人時代の恩師（師弟関係）">
+            <Card>キャリア開始時、チームの恩師が新人指導を買って出てくれます。3年目を迎えるまでは練習・出走経験の伸びに+15%のボーナスがかかり、3年目に「人生の岐路」として一区切りを迎えます（選択次第で餞別の能力ボーナスもあります）。</Card>
+          </Section>
+
+          <Section color={"#6fa8dc"} title="天候">
+            <Card>レースごとに晴れ・🌧雨・🥵猛暑のいずれかが決まります。雨は能力低下＋落車リスク（「悪天候巧者」で軽減）、猛暑は出走後の疲労蓄積増です。</Card>
+          </Section>
+
+          <Section color={C.purple} title="特殊能力">
+            <Card>0〜3個の特殊能力を保有し、条件を満たすと保有能力が金特に強化されたり、新しい能力を後天的に習得したりします。発見済みの能力は特殊能力図鑑で内容を確認できます。</Card>
+          </Section>
+
+          <Section color={C.sub} title="実績・殿堂入り">
+            <Card>初勝利・初表彰台など、キャリアを通じた実績を達成すると報酬が入ります。達成状況は「実績を見る」から確認できます。引退時はキャリアが記録として殿堂（歴代選手の殿堂）に残ります。</Card>
+          </Section>
+
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
+        </div>
+      );
+    }
 
     if (ml.screen === "mylife_race" && ml.result) return mlWrap(
       <div>
@@ -5890,6 +5969,118 @@ function App() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* v25: ヘルプを大幅拡充。基本の能力・成長システムから、細かな仕様まで一覧できるようにする */}
+          <div>
+            <Eyebrow color={C.green}>能力値と特殊能力の基本</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                能力値は<span style={{ color: C.text }}>平坦・登坂・スプリント・スタミナ・独走</span>の5種類（22〜135）。区間の種類ごとに使われる能力が決まり、丘陵は登坂55%＋平坦45%、山頂フィニッシュは登坂70%＋スプリント30%、TT区間は独走60%＋平坦40%というように複数の能力が混ざる区間もあります。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                選手は<span style={{ color: C.text }}>特殊能力を0〜3個</span>保有します。地形適性・展開/役割・メンタル・フィジカル・成長の5カテゴリがあり、悪特性（バッドステータス）が混ざることもあります。一定の勝利数や役割出走数を満たすと保有能力が「金特」に強化され、逆に条件を満たせば未保有の能力を後天的に習得することもあります。発見済みの能力は「記録」タブの特殊能力図鑑で内容を確認できます（未発見のものは？？？で伏せられます）。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={C.yellow}>成長・練習の仕組み</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                選手にはそれぞれ<span style={{ color: C.text }}>成長タイプ</span>（早熟・普通・晩成・超早熟・超晩成）があり、年齢によって「成長期（伸び最大）」「全盛期（伸び半減）」「衰え期（能力が少しずつ下がる）」が切り替わります。ピーク年齢は早熟21〜25歳・普通24〜29歳・晩成28〜33歳・超早熟18〜21歳・超晩成32〜38歳です。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                さらに<span style={{ color: C.text }}>成長力（C/B/A/S）</span>が練習・出走経験の伸び方に倍率をかけます（C×0.7・B×1.0・A×1.3・S×1.6）。練習では指定した1能力に90%、残り4能力に14%の伸びが配分されます（トレードオフ）。出走した場合は、レースで使った区間の種目に応じた「出走経験」でも能力が伸び、レースのグレードが高いほど伸びが大きくなります。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                能力には難易度ごとの<span style={{ color: C.text }}>ソフトキャップ</span>があります（イージー88・ノーマル94・ハード102・鬼112）。この値未満なら伸びは全開ですが、超えると急激に伸びが鈍化します。上限を超えた金色表示の能力は「限界突破」状態です。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={C.red}>疲労・コンディション・故障</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                出走すると疲労が+45（「鉄人」持ちは+32）増えます。<span style={{ color: C.red }}>3ヶ月連続で出走（3連闘）すると確定で故障</span>、疲労が90を超えると確率で故障が発生します（ドクターの雇用で確率・離脱期間ともに軽減）。「頑丈」は故障率半減、「ガラスの体」は故障率2倍＆離脱+1ヶ月です。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                調子は→（普通）／↗（好調）／↑↑（絶好調）／↘（やや不調）／↓↓（絶不調）の5段階で毎月ランダムに変動します（「ムラっ気」は変動幅が大きく、「精密機械」は小さい）。休養させると疲労が回復します（出走なしなら-50、故障中でも自然回復します）。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={C.blue}>チームケミストリー・キャプテン制度</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                ロースター平均在籍月数に応じて<span style={{ color: C.text }}>チームケミストリー</span>が「新体制／定着期／円熟したチーム／鉄壁の絆」の順に上がり、レース中のドラフト消耗が最大8%軽減されます。移籍・トレード・解雇が多いと在籍月数がリセットされるため、頻繁な入れ替えは足元のケミストリーを崩すコストがあります。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                任命した<span style={{ color: C.text }}>キャプテン</span>より2歳以上若い選手は練習効果+10%になりますが、キャプテン自身の練習効果は-5%になります（誰でも任命した方が得、にはならないよう小さなトレードオフがあります）。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={"#6fa8dc"}>天候</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                レースごとに晴れ・🌧雨・🥵猛暑のいずれかが決まります（カレンダー・出走前画面に表示）。<span style={{ color: C.text }}>雨</span>は出走選手全員の能力を一律で下げ（「悪天候巧者」持ちは軽減）、持たない選手には落車による負傷離脱のリスクも上乗せされます。<span style={{ color: C.text }}>猛暑</span>は出走後の疲労蓄積が増えます。横風区間の影響（「横風耐性」で軽減）とは別の、レース全体にかかる要素です。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={C.purple}>キャンプ・機材・スタッフ</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                <span style={{ color: C.text }}>トレーニングキャンプ券</span>を使うとその月の練習効果が×2になりますが、選手全員の疲労が+25されます。クールダウンはありませんが、連発すると疲労90超＝故障リスクゾーンに入りやすくなるため、使いどころの見極めが重要です。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                恒常装備：<span style={{ color: C.text }}>エアロフレーム</span>（平坦+6%/Lv）・<span style={{ color: C.text }}>軽量ホイール</span>（登坂+6%/Lv）・<span style={{ color: C.text }}>トレーニング設備</span>（練習効果+15%/Lv）は買い切りで恒常的に効果が続きます。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                スタッフは月給制：<span style={{ color: C.text }}>監督</span>（スポンサー契約が有利に）・<span style={{ color: C.text }}>トレーナー</span>（練習効果が恒常アップ）・<span style={{ color: C.text }}>ドクター</span>（故障率と離脱期間を軽減）。雇用できるレベル上限はクラスが上がるほど増えます。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={"#e8a13c"}>グランツール・副次クラシフィケーション</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                PROクラス限定で年3回（春・夏・秋）、3日間ステージレースの<span style={{ color: C.text }}>グランツール</span>が開催されます。グランファイナルへの出場には、その年の3戦すべてで総合優勝することが条件です。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                グランツールでは総合成績とは別に、🟢ポイント賞（各区間の着順ポイント合計）・🔴山岳賞（山岳区間の着順ポイント合計）・⚪新人賞（26歳未満限定）の<span style={{ color: C.text }}>副次クラシフィケーション</span>が争われ、自チームが獲得すると賞金ボーナスが入ります。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={C.green}>ディナスティ周回・ユース育成枠</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                グランファイナル制覇後、「新たなチームで最初から」ではなく<span style={{ color: C.text }}>この轍を継いでさらなる高みへ</span>を選ぶと、同じチームのまま周回を継続できます（ディナスティモード）。周回を重ねるたびに他チームの地力が底上げされ、歯応えが保たれます。クリアポイントは周回のたびに再獲得できます。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                「選手・練習」タブでは年1回だけ、契約金15万円で<span style={{ color: C.text }}>ユース選手（16〜17歳・成長力A以上確定）</span>を確保できます。現在の能力は低いですが、長期育成向けの原石です。使用枠は4月の年度替わりでリセットされます。
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Eyebrow color={C.sub}>スカウト・移籍・トレード・実績</Eyebrow>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                毎年4月は新人スカウト月間。事前に選んだ方針（おまかせ／スプリント重視／登坂力重視／将来性重視／即戦力重視）に応じて候補5名の傾向が変わります。年間を通じてFA市場・他チームからのトレード提案・選手解雇（4月のみ）も利用できます。
+              </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                実績を達成すると報酬（賞金や恒常ボーナス）が入ります。詳細な一覧は「記録」タブで確認できます。解雇・引退した選手のうち、実績かお気に入り登録の条件を満たした選手だけが殿堂入りとして名鑑に残ります。
+              </div>
             </div>
           </div>
         </div>
