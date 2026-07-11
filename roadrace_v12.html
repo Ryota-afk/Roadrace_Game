@@ -347,6 +347,29 @@ function recordCourseResult(kind, length, winnerTime, holder, isPlayer, year) {
   if (isNew) { recs[kind] = { speed, holder: holder || "—", isPlayer: !!isPlayer, year: year || 1 }; saveCourseRecords(recs); }
   return { kind, speed, isNew, prev, holder: holder || "—", isPlayer: !!isPlayer };
 }
+// v28: 通算タイトル数。シーズン・マイライフ両モードで自分（自チーム）が獲得した主要タイトルを
+// プレイをまたいで永続的に集計する。グランツール総合優勝・グランファイナル制覇（シーズン）、
+// 世界選手権優勝・オリンピック優勝（マイライフ）を数える
+const TITLES_KEY = "roadrace_v12_titles";
+const TITLE_DEFS = [
+  { key: "grandTour", label: "グランツール総合優勝", icon: "🌍" },
+  { key: "grandFinal", label: "グランファイナル制覇", icon: "🏆" },
+  { key: "worlds", label: "世界選手権優勝", icon: "🌐" },
+  { key: "olympics", label: "オリンピック優勝", icon: "🥇" },
+];
+function loadTitles() {
+  try { const raw = localStorage.getItem(TITLES_KEY); const o = raw ? JSON.parse(raw) : {}; return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; }
+}
+function recordTitle(kind) {
+  if (!kind) return;
+  const t = loadTitles();
+  t[kind] = (t[kind] || 0) + 1;
+  try { localStorage.setItem(TITLES_KEY, JSON.stringify(t)); } catch (e) { /* noop */ }
+}
+function totalTitleCount() {
+  const t = loadTitles();
+  return TITLE_DEFS.reduce((s, d) => s + (t[d.key] || 0), 0);
+}
 // v15: マイライフ専用の殿堂入り・レジェンド記録。マイライフモードのリセット（新しい選手で
 // キャリアを始める）をまたいで、引退した歴代選手のサマリーだけを別キーで蓄積し続ける
 const ML_LEGENDS_KEY = "roadrace_v12_mylife_legends";
@@ -410,8 +433,10 @@ function computePrestige() {
   const mlWins = legends.reduce((s, l) => s + (l.wins || 0), 0);
   const mlPodiums = legends.reduce((s, l) => s + (l.podiums || 0), 0);
   const mlAchieved = legends.reduce((s, l) => s + (l.achievedCount || 0), 0);
-  const score = Math.round(meta.totalEarnedCP * 3 + legends.length * 15 + mlWins * 2 + mlPodiums * 1 + mlAchieved * 5);
-  return { score, totalEarnedCP: meta.totalEarnedCP, legendCount: legends.length, mlWins, mlPodiums, mlAchieved };
+  // v28: 通算タイトルもプレステージに加える（1タイトル=25点の重み）
+  const titleCount = totalTitleCount();
+  const score = Math.round(meta.totalEarnedCP * 3 + legends.length * 15 + mlWins * 2 + mlPodiums * 1 + mlAchieved * 5 + titleCount * 25);
+  return { score, totalEarnedCP: meta.totalEarnedCP, legendCount: legends.length, mlWins, mlPodiums, mlAchieved, titleCount };
 }
 const MONTHS = ["4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
 const RELEGATE_LINE = 15;
@@ -2470,6 +2495,28 @@ function TraitLine({ abilities, goldAbilities }) {
 // v16フェーズ3: 特殊能力ファイル（図鑑）。まだ発見していない能力は「???」で伏せて表示し、
 // 自チーム/マイライフで実際にその能力を持つ選手を保有すると解禁される
 const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長"];
+// v28: 通算タイトル一覧。プレイをまたいで獲得した主要タイトルの回数を表示する
+function TitlesPanel() {
+  const t = loadTitles();
+  const total = totalTitleCount();
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.7 }}>これまでの全プレイ・両モードで自分（自チーム）が獲得した主要タイトルの通算数です。</div>
+      <div style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", textAlign: "center", border: `1px solid ${total > 0 ? "#e8a13c" : C.line}` }}>
+        <div style={{ fontSize: 11, color: C.sub }}>通算タイトル</div>
+        <div style={{ fontFamily: FONT_M, fontSize: 28, color: "#e8a13c", fontWeight: 700 }}>{total}</div>
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {TITLE_DEFS.map(d => (
+          <div key={d.key} style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 12.5, color: C.text }}>{d.icon} {d.label}</span>
+            <span style={{ fontFamily: FONT_M, fontSize: 15, color: (t[d.key] || 0) > 0 ? C.yellow : C.sub }}>{t[d.key] || 0}<span style={{ fontSize: 10, color: C.sub }}> 回</span></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 // v27: コンディション予報の小さな表示。来月の調子変動の向きを控えめに添える
 function CondFc({ dir }) {
   if (dir == null) return null;
@@ -3803,6 +3850,8 @@ function App() {
         if (ph2.dec > 0) AB_KEYS.forEach(k => { n[k] = Math.max(20, n[k] - ph2.dec); });
       }
       if (starterIds && starterIds.includes(n.id)) {
+        // v28: 出走した選手はベンチ月数（起用されない不満の蓄積）をリセットする
+        n.benchMonths = 0;
         // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす（悪天候巧者による軽減はなし＝純粋な体力勝負）
         const heatMul = raceInfo.weather === "heat" ? 1.15 : 1;
         n.fatigue = Math.min(100, n.fatigue + (hasAbility(n, "iron") ? 32 : 45) * stageFatigueMul * heatMul);
@@ -3834,6 +3883,8 @@ function App() {
       } else if (n.injury === 0) {
         n.fatigue = Math.max(0, n.fatigue - (starterIds ? 30 : 50));
         n.streak = 0;
+        // v28: レースが行われた月に起用されなかった選手は「ベンチ月数」が積み上がる（移籍志願の判定に使う）
+        if (starterIds) n.benchMonths = (n.benchMonths || 0) + 1;
       }
       if (hasAbility(n, "recover")) n.fatigue = Math.max(0, n.fatigue - 15);
       // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
@@ -3877,7 +3928,7 @@ function App() {
         let classIdx = s.classIdx;
         const info = { promoted: false, relegated: false, retired: [], retiredRiders: [], cleared: false, champBest: s.champBest, sponsorResult: null };
         if (s.champBest !== null && s.champBest <= 3) {
-          if (s.classIdx === 2 && s.champBest === 1) info.cleared = true;
+          if (s.classIdx === 2 && s.champBest === 1) { info.cleared = true; recordTitle("grandFinal"); }
           else { classIdx = Math.min(2, s.classIdx + 1); info.promoted = true; }
         } else if (s.points < RELEGATE_LINE && s.classIdx > 0) {
           classIdx = s.classIdx - 1; info.relegated = true;
@@ -3963,6 +4014,12 @@ function App() {
         gc: null,
         screen: "main", log,
       };
+      // v28: 選手の移籍志願。長期間ベンチに置かれた実力者（能力55以上）が不満を募らせ、
+      // 退団を申し出ることがある。主将は対象外。慰留か放出かをプレイヤーが選ぶ
+      const requester = roster.find(r => r.injury === 0 && (r.benchMonths || 0) >= 4 && overall(r) >= 55 && r.id !== s.captainId);
+      if (month !== 0 && requester && roster.length > 1 && Math.random() < 0.25) {
+        return { ...base, transferRequest: { riderId: requester.id, name: requester.name }, screen: "transferRequest" };
+      }
       // v8: 月替わりでランダムに選択肢付きイベントが発生（春先の解禁月は除く）
       if (month !== 0 && Math.random() < EVENT_CHANCE) {
         const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
@@ -3971,6 +4028,41 @@ function App() {
       return base;
     });
   }
+  // v28: 移籍志願への対応。慰留＝引き止め費用を払って残ってもらう／放出＝退団（他チームに拾われうる）
+  const retainRider = () => {
+    setG(s => {
+      const req = s.transferRequest;
+      if (!req) return s;
+      const cost = 30;
+      return {
+        ...s, budget: s.budget - cost, transferRequest: null, screen: "main",
+        roster: s.roster.map(r => r.id === req.riderId ? { ...r, benchMonths: 0, cond: Math.min(5, r.cond + 1) } : r),
+        log: [...s.log, `【${MONTHS[s.month]}】${req.name}を慰留（引き止め費用-${cost}万・本人は納得して残留）`],
+      };
+    });
+  };
+  const grantTransferRequest = () => {
+    setG(s => {
+      const req = s.transferRequest;
+      if (!req) return s;
+      const r = s.roster.find(x => x.id === req.riderId);
+      if (!r) return { ...s, transferRequest: null, screen: "main" };
+      const roster = s.roster.filter(x => x.id !== req.riderId);
+      const captainId = s.captainId === req.riderId ? null : s.captainId;
+      // 志願しての退団なので、他チームに拾われやすい（能力・将来性に応じて）
+      const pickedUp = Math.random() < Math.max(0.5, computePickupChance(r));
+      if (pickedUp) {
+        const signedTeam = RIVAL_TEAMS[Math.floor(Math.random() * RIVAL_TEAMS.length)].name;
+        return {
+          ...s, roster, captainId, transferRequest: null, screen: "main",
+          rivalAlumni: [...s.rivalAlumni, { ...r, signedTeam, signedYear: s.year }],
+          log: [...s.log, `【${MONTHS[s.month]}】${r.name}の移籍志願を受け入れた → ${signedTeam}へ移籍`],
+        };
+      }
+      const hallOfFame = isHallOfFameWorthy(r) ? [...s.hallOfFame, { ...r, farewellYear: s.year, farewellReason: "released" }] : s.hallOfFame;
+      return { ...s, roster, captainId, hallOfFame, transferRequest: null, screen: "main", log: [...s.log, `【${MONTHS[s.month]}】${r.name}の移籍志願を受け入れ、円満に送り出した`] };
+    });
+  };
 
   function resolveEvent(choiceIdx) {
     setG(s => {
@@ -4139,9 +4231,10 @@ function App() {
           ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id) }] }
           : r);
         // v14.8: グランツールで自チーム総合優勝ならそのgtIndexを勝利記録に加える（重複防止）
-        const gtWins = (race.grandTour && bestRank === 1 && race.gtIndex != null && !(s.gtWins || []).includes(race.gtIndex))
-          ? [...(s.gtWins || []), race.gtIndex]
-          : (s.gtWins || []);
+        const gtNewWin = race.grandTour && bestRank === 1 && race.gtIndex != null && !(s.gtWins || []).includes(race.gtIndex);
+        const gtWins = gtNewWin ? [...(s.gtWins || []), race.gtIndex] : (s.gtWins || []);
+        // v28: 通算タイトル記録（グランツール総合優勝）
+        if (gtNewWin) recordTitle("grandTour");
         // v18: グランツールの副次クラシフィケーション（ポイント賞・山岳賞・新人賞）。
         // 実際のGCタイムとは別に、各ステージの着順を日ごとの地形（favors）で重み付けして
         // 集計する。新人賞は26歳未満の選手の中でのGC最高位。自チームの選手が獲得すれば
@@ -4275,8 +4368,20 @@ function App() {
   function mlStartRace() {
     if (mlRaceLockRef.current) return;
     mlRaceLockRef.current = true;
-    const race = ml.races[0];
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null, ml.rival, ml.year, ml.rival2);
+    let race = ml.races[0];
+    // v28: 代表チームでの立場。世界選手権・オリンピックでは代表監督から役割が与えられる。
+    // 監督評価が高い（信頼されている）ほどエースを任され、そうでなければアシスト役になる。
+    // 役割はそのままレースでの立ち回り（directive）に反映される
+    let directiveKey = ml.directive ? ml.directive.key : null;
+    if (race.milestone && !race.nationalRole) {
+      const natRole = ml.managerEval >= 55 ? "ace" : "support";
+      race = { ...race, nationalRole: natRole };
+      directiveKey = natRole;
+      setMl(s => ({ ...s, races: [race, ...s.races.slice(1)] }));
+    } else if (race.milestone && race.nationalRole) {
+      directiveKey = race.nationalRole;
+    }
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2);
     setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
   }
   // v27: ラストレース演出。引退前に「最後のレース」を特別に用意し、有終の美を飾れるようにする。
@@ -4331,11 +4436,19 @@ function App() {
     // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
     const winner = sim.ranked[0];
     const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, !!winner.isPlayerChar, ml.year);
+    // v28: 通算タイトル記録（世界選手権・オリンピックで優勝したら）
+    if (me.rank === 1 && race.milestone) recordTitle(race.milestone);
+    // v28: 代表チームでの立場。世界選手権・オリンピックには代表監督から役割（エース/アシスト）が
+    // 与えられる。役割を全うすると名声（人気度）が大きく上がる
+    const natRole = race.nationalRole || null;
+    const natFulfilled = natRole ? (natRole === "ace" ? me.rank <= 3 : me.rank <= 10) : false;
+    const natPopBonus = natRole ? (natFulfilled ? (natRole === "ace" ? 8 : 5) : 0) : 0;
     setMl(s => {
       // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
       const role = directive ? directive.key : (me.isAce ? "ace" : "support");
       // v25: 個人スポンサー・メディア人気度。着順が良いほど、また規模の大きいレースほど伸びる
-      const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade];
+      // v28: 代表の役割を全うすれば名声（人気度）が上乗せされる
+      const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade] + natPopBonus;
       const popMilestones = s.player.popMilestones || [];
       const newPopularity = Math.max(0, Math.min(100, (s.player.popularity || 0) + popGain));
       let popBonus = 0;
@@ -4384,7 +4497,7 @@ function App() {
         ...s, player, points: s.points + pts, log,
         managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
         money: s.money + prize + popBonus, rivalRecord, rivalRecord2,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord },
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus },
         screen: "mylife_result",
       };
     });
@@ -5015,6 +5128,12 @@ function App() {
           <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>シーズンモード・マイライフモード両方のプレイ履歴から算出されます</div>
         </div>
         <div>
+          <Eyebrow color={"#e8a13c"}>通算タイトル</Eyebrow>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, marginTop: 8, fontSize: 12.5, color: C.text, lineHeight: 1.8 }}>
+            主要タイトル獲得数：<span style={{ color: "#e8a13c", fontFamily: FONT_M }}>{p.titleCount}回</span>（グランツール・グランファイナル・世界選手権・オリンピック）
+          </div>
+        </div>
+        <div>
           <Eyebrow color={C.blue}>シーズンモード（周回プレイ）</Eyebrow>
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, marginTop: 8, fontSize: 12.5, color: C.text, lineHeight: 1.8 }}>
             生涯獲得クリアポイント：<span style={{ color: C.yellow, fontFamily: FONT_M }}>{p.totalEarnedCP}pt</span>
@@ -5200,6 +5319,15 @@ function App() {
               </div>
             )}
             {race.milestone && <div style={{ fontSize: 11, color: ML_MILESTONE_LABEL[race.milestone].color, marginTop: 3 }}>代表選出！一生に何度もない大舞台での一戦だ。</div>}
+            {race.milestone && (() => {
+              // v28: 代表チームでの立場。監督評価に応じてエース／アシストの役割が示される
+              const natRole = (race.nationalRole || (ml.managerEval >= 55 ? "ace" : "support"));
+              return (
+                <div style={{ fontSize: 11, color: natRole === "ace" ? C.yellow : C.blue, marginTop: 3 }}>
+                  🎌 代表での役割：<b>{natRole === "ace" ? "エース（3位以内で任務達成）" : "アシスト（10位以内で任務達成）"}</b>。全うすれば名声が大きく上がります。
+                </div>
+              );
+            })()}
             {/* v27: 天候予報。今月を含む先の月の天候を先読みして育成計画に活かせるようにする */}
             <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <span>天候予報：</span>
@@ -5287,6 +5415,8 @@ function App() {
     // v27: コースレコード一覧（シーズンモードと共有の永続記録）
     if (ml.screen === "mylife_records") return mlWrap(
       <div style={{ display: "grid", gap: 12 }}>
+        <Eyebrow color={"#e8a13c"}>👑 通算タイトル</Eyebrow>
+        <TitlesPanel />
         <Eyebrow color={"#e8a13c"}>🏅 コースレコード</Eyebrow>
         <CourseRecordsPanel />
         <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
@@ -5381,7 +5511,7 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
@@ -5399,6 +5529,14 @@ function App() {
               </div>
             )}
           </div>
+          {natRole && (
+            <div style={{ background: natFulfilled ? "#16241c" : "#241818", border: `1px solid ${natFulfilled ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
+              <Eyebrow color={natFulfilled ? C.green : C.red}>🎌 代表での役割（{natRole === "ace" ? "エース" : "アシスト"}） — {natFulfilled ? "任務達成" : "任務未達"}</Eyebrow>
+              <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>
+                {natFulfilled ? `期待に応える走りで代表の役割を全うした。名声が高まった（人気度+${natPopBonus}）。` : "代表の役割を果たしきれず、悔しい結果となった。"}
+              </div>
+            </div>
+          )}
           {rivalOutcome && (
             <div style={{ background: rivalOutcome.beat ? "#16241c" : "#241818", border: `1px solid ${rivalOutcome.beat ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
               <Eyebrow color={rivalOutcome.beat ? C.green : C.red}>🔥 ライバル対決 — {rivalOutcome.beat ? "勝利" : "敗北"}</Eyebrow>
@@ -6230,6 +6368,34 @@ function App() {
               {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
             </div>
           </section>
+          {/* v28: チーム施設のアップグレード段階可視化。機材・スタッフの現在レベルと累積効果を
+              バーで一覧できるようにし、投資の進み具合と効果を直感的に把握できるようにする */}
+          <section>
+            <Eyebrow color={"#e8a13c"}>🏭 施設・投資の状況</Eyebrow>
+            <div style={{ display: "grid", gap: 7, marginTop: 6 }}>
+              {[
+                { label: "エアロフレーム", lv: g.equip.frame, max: 5, effect: `平坦 +${g.equip.frame * 6}%`, color: C.blue },
+                { label: "軽量ホイール", lv: g.equip.wheels, max: 5, effect: `登坂 +${g.equip.wheels * 6}%`, color: C.red },
+                { label: "トレーニング設備", lv: g.equip.facility, max: 5, effect: `練習効果 +${g.equip.facility * 15}%`, color: C.green },
+                { label: "監督", lv: g.staff.manager, max: 3, effect: g.staff.manager > 0 ? `月収+${g.staff.manager * 6}%・ノルマ-${g.staff.manager * 4}%` : "未雇用", color: C.yellow },
+                { label: "トレーナー", lv: g.staff.trainer, max: 3, effect: g.staff.trainer > 0 ? `練習成長 +${g.staff.trainer * 12}%` : "未雇用", color: C.green },
+                { label: "ドクター", lv: g.staff.doctor, max: 3, effect: g.staff.doctor > 0 ? `故障率 -${g.staff.doctor * 15}%` : "未雇用", color: "#6fa8dc" },
+              ].map((row, i) => (
+                <div key={i} style={{ background: C.panel, borderRadius: 8, padding: "7px 10px", border: `1px solid ${C.line}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: C.text, fontWeight: 700 }}>{row.label} <span style={{ fontFamily: FONT_M, color: C.sub, fontSize: 10.5 }}>Lv{row.lv}/{row.max}</span></span>
+                    <span style={{ fontSize: 10.5, color: row.lv > 0 ? row.color : C.sub }}>{row.effect}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {Array.from({ length: row.max }).map((_, j) => (
+                      <div key={j} style={{ flex: 1, height: 6, borderRadius: 3, background: j < row.lv ? row.color : C.panel2 }} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {g.obCoach && <div style={{ fontSize: 11, color: "#e8a13c", marginTop: 6 }}>🎓 OBコーチ {g.obCoach.name}：{AB_LABEL[g.obCoach.ab]}の練習効果+25%</div>}
+          </section>
           <section>
             <Eyebrow color={C.red}>チーム機材（Lv上限：{cls.id}＝{equipMax}）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
@@ -6396,6 +6562,8 @@ function App() {
               );
             })}
           </div>
+          <Eyebrow color={"#e8a13c"}>👑 通算タイトル</Eyebrow>
+          <TitlesPanel />
           <Eyebrow color={"#e8a13c"}>🏅 コースレコード</Eyebrow>
           <CourseRecordsPanel />
           <Eyebrow color={C.purple}>🗂 特殊能力図鑑</Eyebrow>
@@ -6612,6 +6780,27 @@ function App() {
           {ev.choices.map((c, i) => (
             <Btn key={i} color={C.purple} onClick={() => resolveEvent(i)}>{c.label}</Btn>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  // v28: 選手の移籍志願イベント
+  if (g.screen === "transferRequest" && g.transferRequest) {
+    const req = g.transferRequest;
+    const r = g.roster.find(x => x.id === req.riderId);
+    return wrap(
+      <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ background: "#2b1e1e", borderRadius: 12, padding: 18, borderTop: `4px solid ${C.red}` }}>
+          <Eyebrow color={C.red}>移籍志願 — {MONTHS[g.month]}</Eyebrow>
+          <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 19, margin: "6px 0 10px" }}>{req.name}が退団を申し出た</h2>
+          <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.8, margin: 0 }}>
+            「最近ずっと出番がなく、このチームでは自分の力を発揮できない。もっと走れる場所へ移りたい」——長くベンチが続いた{req.name}{r ? `（${TYPES[r.type].label}・OVR${overall(r)}）` : ""}が、真剣な面持ちで移籍を願い出てきました。
+          </p>
+        </div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <Btn color={C.green} disabled={g.budget < 30} onClick={retainRider}>慰留する（引き止め費用30万・残留＆調子+1）{g.budget < 30 ? "／資金不足" : ""}</Btn>
+          <Btn outline color={C.red} onClick={() => askConfirm(`${req.name}の移籍志願を受け入れますか？この選手はチームを去ります。`, grantTransferRequest)}>志願を受け入れて送り出す</Btn>
         </div>
       </div>
     );
