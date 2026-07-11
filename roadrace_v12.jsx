@@ -81,6 +81,7 @@ const ABILITIES = {
   domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },
   closer:      { label: "勝負師", desc: "ゴールスプリント・山頂フィニッシュで能力+4", category: "展開・役割" },
   crosswind_sp:{ label: "横風耐性", desc: "横風区間でのドラフト消耗が軽減される", category: "展開・役割" },
+  rain_sp:     { label: "悪天候巧者", desc: "雨天レースでの能力低下が軽減され、落車のリスクも下がる", category: "展開・役割" },
   // メンタル・大舞台
   big:         { label: "大舞台に強い", desc: "★3レースで全能力+6%", category: "メンタル" },
   // フィジカル
@@ -445,6 +446,25 @@ const PRIZES = [100, 60, 40, 30, 22, 16, 12, 9, 6, 4];
 const PTS = [10, 7, 5, 3, 3, 1, 1, 1, 1, 1];
 // v15: グレード4はマイライフの節目の大会（世界選手権・オリンピック）専用の最高格付け
 const GRADE_MUL = { 1: 1, 2: 1.5, 3: 2, 4: 2.6 };
+// v25: 天候の悪化。レース単位で「晴れ／雨／猛暑」を1つ決め、雨は能力を一律で少し下げつつ
+// 落車リスクを上乗せし（悪天候巧者持ちは軽減）、猛暑は出走後の疲労蓄積を増やす。
+// 横風のような区間単位の演出ではなく、レース全体にかかる駆け引き要素として扱う
+const WEATHER = {
+  clear: { label: "晴れ", icon: "☀️" },
+  rain: { label: "雨", icon: "🌧" },
+  heat: { label: "猛暑", icon: "🥵" },
+};
+function rollWeather(rng) {
+  const r = rng();
+  if (r < 0.14) return "rain";
+  if (r < 0.24) return "heat";
+  return "clear";
+}
+// v25: マイライフの個人スポンサー・メディア人気度。節目（25/50/75/100）に到達するたびに
+// 一時金の個人スポンサー契約が入る。加えて月々の人気度に応じた個人スポンサー収入も別途支給する
+const POP_MILESTONES = [
+  { th: 25, bonus: 80 }, { th: 50, bonus: 150 }, { th: 75, bonus: 250 }, { th: 100, bonus: 400 },
+];
 
 // ---------- v8: 選択肢付きランダムイベント（栄冠ナイン風の月間フレーバー） ----------
 const EVENT_CHANCE = 0.35;
@@ -615,6 +635,33 @@ const EVENTS = [
     choices: [
       { label: "実施を後押しする", result: "気合の入った合宿になり、参加した選手たちの動きが良くなった。", effects: { boostRandomRiderAbilities: 4, rosterFatigueAll: 10 } },
       { label: "通常メニューに留める", result: "無理のない範囲での調整に留めた。", effects: { rosterFatigueAll: -5 } },
+    ] },
+  // v25: イベントの種類をさらに増やしてほしいという要望。ネガティブな不和イベントに
+  // 偏らないよう、表彰・地域交流・OB指導など前向き〜中立寄りの出来事を中心に追加
+  { id: "cityAward", title: "自治体から表彰の打診", text: "地元自治体から「スポーツ振興功労賞」として表彰したいとの連絡が来た。",
+    choices: [
+      { label: "表彰式に出席する", result: "晴れやかな式典となり、地域からの支援がさらに厚くなった。", effects: { budget: 22, rosterCondAll: 1 } },
+      { label: "書面での受賞に留める", result: "式典は辞退したが、記念品と共に祝い金が届いた。", effects: { budget: 12 } },
+    ] },
+  { id: "obCoach", title: "OB選手が臨時コーチとして参加", text: "現役時代に鳴らしたOBが、臨時コーチとして数日帯同してくれることになった。",
+    choices: [
+      { label: "みっちり指導を受ける", result: "実戦的な指導が刺激になり、成長のコツを掴んだ選手が出た。", effects: { growthPowUpgradeRandom: 1, rosterFatigueAll: 6 } },
+      { label: "軽めのアドバイスに留める", result: "無理のない範囲で助言をもらい、和やかな雰囲気で終えた。", effects: { rosterCondAll: 1 } },
+    ] },
+  { id: "nutritionist", title: "栄養士から食事指導の提案", text: "スポーツ栄養士から、選手向けの食事メニュー指導をしたいと申し出があった。",
+    choices: [
+      { label: "全員で指導を受ける", result: "食生活が見直され、体調管理の意識が高まった。", effects: { rosterCondAll: 1, rosterFatigueAll: -6 } },
+      { label: "希望者だけに任せる", result: "関心のある選手だけが指導を受け、無理のない範囲で取り入れた。", effects: { rosterFatigueAll: -3 } },
+    ] },
+  { id: "localFestival", title: "地域の自転車イベントとの日程調整", text: "近隣で行われる自転車の地域イベントと練習日程が重なりそうだ。",
+    choices: [
+      { label: "イベントに協力する", result: "地域との関係を優先し、日程を調整して協力した。多少慌ただしくなった。", effects: { budget: 14, rosterFatigueAll: 7 } },
+      { label: "練習を優先する", result: "予定通り練習に専念し、コンディションを整えた。", effects: { rosterFatigueAll: -8 } },
+    ] },
+  { id: "youngTalentBuzz", title: "育成選手の走りが評判に", text: "若手選手の練習での走りが、関係者の間でひそかに評判になっているらしい。",
+    choices: [
+      { label: "期待に応えるよう後押しする", result: "期待を力に変え、練習に一段と熱が入った。", effects: { boostRandomRiderAbilities: 5, rosterFatigueAll: 6 } },
+      { label: "焦らず見守る", result: "プレッシャーをかけずに見守ることにした。", effects: { condRandomRider: 1 } },
     ] },
 ];
 
@@ -1086,6 +1133,27 @@ const ML_EVENTS = [
       { label: "無理せず様子を見る", result: "早めのケアで大事に至らず、疲労も抜けた。", effects: { fatigueDelta: -15 } },
       { label: "気にせず追い込む", result: "その日は乗り切ったが、疲労が蓄積した。", effects: { abBoost: 2, fatigueDelta: 18 } },
     ] },
+  // v25: イベントの種類をさらに増やしてほしいという要望を受けて追加
+  { title: "地元の子供たちからサイン会の依頼", text: "地域の子供向けサイクリング教室から、サイン会に来てほしいと依頼が来た。",
+    choices: [
+      { label: "喜んで引き受ける", result: "子供たちの憧れの眼差しに、身の引き締まる思いがした。", effects: { fatigueDelta: 3, abBoost: 1 } },
+      { label: "手紙だけ送る", result: "無理のない形で気持ちを届けた。", effects: { fatigueDelta: -3 } },
+    ] },
+  { title: "先輩選手から食事に誘われる", text: "チームの先輩から「たまには飯でも」と誘われた。",
+    choices: [
+      { label: "経験談を聞かせてもらう", result: "貴重な経験談を聞け、走りへのヒントを得た気がする。", effects: { abBoost: 2, fatigueDelta: 2 } },
+      { label: "気楽に楽しむ", result: "肩の力を抜いた楽しい時間を過ごせた。", effects: { fatigueDelta: -6 } },
+    ] },
+  { title: "新しいトレーニング理論の紹介", text: "海外で話題のトレーニング理論を紹介する記事を読んだ。",
+    choices: [
+      { label: "さっそく取り入れてみる", result: "新しい刺激になり、動きに変化の兆しが見えた。", effects: { abBoost: 3, fatigueDelta: 8 } },
+      { label: "今のやり方を信じて続ける", result: "これまで積み上げてきたやり方を貫くことにした。", effects: { fatigueDelta: -2 } },
+    ] },
+  { title: "地方紙にインタビューが掲載", text: "地方紙の取材を受けた記事が、思いのほか大きく掲載された。",
+    choices: [
+      { label: "手応えを噛みしめる", result: "評価されている実感が自信につながった。", effects: { abBoost: 1, managerEvalDelta: 2 } },
+      { label: "浮かれず淡々と過ごす", result: "普段通りのペースを崩さず過ごせた。", effects: { fatigueDelta: -4 } },
+    ] },
 ];
 // v15: 人生の岐路イベント。ML_EVENTSの毎月の小さな出来事とは違い、年度末にだけ低確率で
 // 発生し、一度きりの大きな選択とその後ずっと続く恒常効果を持つ。flagsに解決済みかどうかを
@@ -1143,6 +1211,24 @@ const ML_CROSSROADS = {
         apply: (player, flags) => ({ player, flags: { ...flags, hasChild: true, childResolved: true, childFocusedCareer: true } }) },
     ],
   },
+  // v25: 新人時代に指導を受けていた恩師との別れ。新人期は練習・出走経験の伸びに
+  // ボーナスが乗るが、キャリアが進むと「もう教えることはない」と巣立ちを促される
+  mentor_graduation: {
+    key: "mentor_graduation", title: "人生の岐路 — 恩師との別れ",
+    text: "新人時代から指導してくれた恩師が「もう教えることはない。あとは自分の力で這い上がれ」と告げてきた。",
+    choices: [
+      { label: "教えを胸に、独り立ちする",
+        result: "恩師の教えを胸に刻み、独り立ちを決意した。これまでの指導の総仕上げとして、餞別に一段と地力が上がった。",
+        apply: (player, flags) => {
+          const p = { ...player };
+          AB_KEYS.forEach(k => { p[k] = Math.min(135, p[k] + 3); });
+          return { player: p, flags: { ...flags, mentorActive: false } };
+        } },
+      { label: "感謝を伝え、これからも助言を仰ぐ",
+        result: "巣立ちを告げられつつも、関係は緩やかに続けることにした。指導ボーナスはなくなったが、時折もらえる助言が心の支えになっている。",
+        apply: (player, flags) => ({ player, flags: { ...flags, mentorActive: false } }) },
+    ],
+  },
 };
 // v15: その年度末に人生の岐路イベントを発生させるか判定する。既に解決済みの岐路は対象外、
 // 条件を満たすものが複数あればランダムに1つだけ選ぶ（同じ年に2つ重ねない）
@@ -1153,6 +1239,8 @@ function mlRollCrossroads(s, player) {
   if (!flags.injuryResolved && (player.raceLog || []).length >= 6 && Math.random() < 0.2) candidates.push(ML_CROSSROADS.injury);
   // v17: 結婚済み・未解決なら第一子誕生の岐路が続く
   if (flags.married && !flags.childResolved && player.age >= 27 && Math.random() < 0.3) candidates.push(ML_CROSSROADS.child);
+  // v25: 新人期の師弟関係は3年目を迎えたタイミングで必ず一区切りを迎える（確率抽選なし）
+  if (flags.mentorActive && s.year >= 3) candidates.push(ML_CROSSROADS.mentor_graduation);
   if (candidates.length === 0) return null;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
@@ -1393,7 +1481,7 @@ function newRider(power, rng, opts = {}) {
   const px = rng();
   let personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
     : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
-  let growthPowVal = randPow(rng, opts.powDist);
+  let growthPowVal = opts.growthPow || randPow(rng, opts.powDist);
   if (opts.forceProdigy) { personality = "genius"; growthPowVal = "S"; }
   const rider = {
     id: RID++,
@@ -1560,13 +1648,13 @@ function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
     races.push({
       id: `champ-${year}-${classIdx}`, championship: true, locked: !qualified, stageRace: true, stageCount: 2,
       name: stageName,
-      tmpl: TEMPLATES[3], grade: 3, cls: classIdx,
+      tmpl: TEMPLATES[3], grade: 3, cls: classIdx, weather: rollWeather(rng),
       lockReason: qualified ? null : (isProFinal
         ? `出場権なし（年間グランツール全${GRAND_TOURS.length}戦制覇が必要・現在${gtWinCount}/${GRAND_TOURS.length}勝）`
         : `出場権なし（${CLASSES[classIdx].need}pt必要）`),
     });
     const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
-    races.push({ id: `r-${year}-${month}-x`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}ファイナルロード`, tmpl: t, grade: 2, cls: classIdx, locked: false });
+    races.push({ id: `r-${year}-${month}-x`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}ファイナルロード`, tmpl: t, grade: 2, cls: classIdx, locked: false, weather: rollWeather(rng) });
     return races;
   }
   const count = month === 0 ? 3 : (month === 8 || month === 9) ? 4 : 5;
@@ -1579,7 +1667,7 @@ function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
     races.push({
       id: `r-${year}-${month}-${i}`,
       name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`,
-      tmpl: t, grade, cls,
+      tmpl: t, grade, cls, weather: rollWeather(rng),
       locked: !open || cls !== classIdx,
       lockReason: (!open || cls !== classIdx) ? `${CLASSES[cls].id}限定` : null,
     });
@@ -1598,7 +1686,7 @@ function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
       id: `grandtour-${year}-${gtIndex}`, grandTour: true, gtIndex, stageRace: true, stageCount: 3,
       name: `${venue}${gtDef.season}グランツール（3日間・総合タイム）`,
       tmpl: gtDef.stageTmpls[0], stageTmpls: gtDef.stageTmpls,
-      grade: 3, cls: classIdx, locked: false, lockReason: null,
+      grade: 3, cls: classIdx, locked: false, lockReason: null, weather: rollWeather(rng),
     });
   }
   if (sponsor && sponsor.mandateMonths && sponsor.mandateMonths.includes(month)) {
@@ -1609,7 +1697,11 @@ function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
 }
 
 // ---------- 実効能力 ----------
-function effAbilities(r, equip, itemBoost, grade) {
+function rainMul(r, weather) {
+  if (weather !== "rain") return 1;
+  return hasAbility(r, "rain_sp") ? 0.97 : 0.93;
+}
+function effAbilities(r, equip, itemBoost, grade, weather) {
   const fatPen = 1 - Math.max(0, (r.fatigue || 0) - 50) * 0.003;
   const cm = condMul(r.cond || 3);
   const e = {};
@@ -1621,7 +1713,8 @@ function effAbilities(r, equip, itemBoost, grade) {
     });
   }
   const bigMul = (hasAbility(r, "big") && grade === 3) ? 1.06 : 1;
-  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul; });
+  const wMul = rainMul(r, weather);
+  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul; });
   e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
   e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
   AB_KEYS.forEach(k => { e[k] = Math.min(135, e[k]); });
@@ -2074,15 +2167,18 @@ function teamChemistryTier(squad) {
 // ---------- buildSim：選手構築＋コース生成＋ティックシミュレーション実行 ----------
 // fixedAiTeams を渡すとAI選手を再利用する（GCステージレースの2日目用）
 // dayTag を渡すとコース生成のシードに反映される（同じraceMetaでも日ごとに別コースにする）
-function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni) {
+function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel) {
   // v13: 難易度による他チームの強さ補正（aiMul）。省略時はnormal相当
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
+  // v25: グランファイナル制覇後の周回（ディナスティ）モード。周を重ねるたびに他チームの
+  // 地力を底上げし、周回プレイでも歯応えが保たれるようにする
+  const dynastyBonus = Math.min(20, (dynastyLevel || 0) * 5);
   const course = generateCourse(raceMeta, dayTag);
   const groupMode = groupModeFor(squad.length);
   const riders = [];
   const chemTier = teamChemistryTier(squad);
   squad.forEach(r => {
-    const e = effAbilities(r, equip, itemBoost, raceMeta.grade);
+    const e = effAbilities(r, equip, itemBoost, raceMeta.grade, raceMeta.weather);
     const role = roles[r.id] || "lead";
     riders.push({
       id: r.id, name: r.name, type: r.type, abilities: r.abilities, age: r.age, chemMul: chemTier.mul, ...e,
@@ -2096,7 +2192,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
     fixedAiTeams.forEach(list => list.forEach(en => riders.push({ ...en })));
   } else {
     const rng = mulberry(Date.now() % 999983);
-    const power = (52 + classIdx * 9 + (raceMeta.grade - 1) * 4 + (raceMeta.championship ? 6 : 0)) * diffAiMul;
+    const power = (52 + classIdx * 9 + (raceMeta.grade - 1) * 4 + (raceMeta.championship ? 6 : 0) + dynastyBonus) * diffAiMul;
     // v12: 相手チームの出走人数は自チームの選択人数に連動させず、レース規定の範囲内で
     // チームごとに独立して決める（毎回同じ人数になる不自然さを解消）
     const { squadMin, squadMax } = raceMeta.tmpl;
@@ -2114,12 +2210,15 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
       const aiRoles = assignAIRoles(members, aiSquadN);
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
-      return members.map((r, i) => ({
-        id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, age: r.age,
-        flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
-        team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
-        isAlumnus: alumniIds.has(r.id),
-      }));
+      return members.map((r, i) => {
+        const wm = rainMul(r, raceMeta.weather);
+        return {
+          id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, age: r.age,
+          flat: r.flat * wm, climb: r.climb * wm, sprint: r.sprint * wm, stamina: r.stamina * wm, solo: r.solo * wm,
+          team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
+          isAlumnus: alumniIds.has(r.id),
+        };
+      });
     });
     aiTeamsUsed.forEach(list => list.forEach(en => riders.push({ ...en })));
   }
@@ -3105,6 +3204,12 @@ function initGame() {
     jerseyWinCounts: { points: 0, mountains: 0, youth: 0 },
     // v18: 実績を初めて達成した時に一度だけ報酬を付与するため、既に報酬を受け取った実績idを記録する
     rewardedAchievements: [],
+    // v25: グランファイナル制覇後も同じチームで続けられる周回モード（ディナスティ）。
+    // 周回のたびに他チームの地力を底上げし、再挑戦のたびに歯応えを保つ
+    dynastyLevel: 0,
+    // v25: ユース育成枠（年1回だけ安価に確保できる原石）。使用済みかどうかを保持し、
+    // 年度末に毎年リセットする
+    youthUsed: false,
   };
 }
 
@@ -3118,7 +3223,7 @@ const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
-  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements",
+  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed",
 ];
 function serializeState(g) {
   const out = {};
@@ -3184,7 +3289,7 @@ function initMyLife() {
     // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
     rival: null, rivalRecord: null,
     // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
-    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false, mentor: false },
+    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false, mentor: false, mentorName: null, mentorActive: false },
     rewardedAchievements: [],
     pendingCrossroads: null, crossroadsResultText: null,
     pendingOffseason: null, offseasonResultText: null,
@@ -3255,7 +3360,7 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
   const { squadMin, squadMax } = raceMeta.tmpl;
   const nameBanned = new Set([player.name]);
   const riders = [];
-  const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade);
+  const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
   MYLIFE_TEAMS.forEach(d => {
     const isMyTeam = d.name === myTeamName;
     const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
@@ -3263,16 +3368,20 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
     for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
-    const teamEntrants = members.map((r, i) => ({
-      id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities,
-      flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo,
-      team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
-    }));
+    const teamEntrants = members.map((r, i) => {
+      const wm = rainMul(r, raceMeta.weather);
+      return {
+        id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities,
+        flat: r.flat * wm, climb: r.climb * wm, sprint: r.sprint * wm, stamina: r.stamina * wm, solo: r.solo * wm,
+        team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
+      };
+    });
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
       const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned });
+      const rwm = rainMul(rival, raceMeta.weather);
       teamEntrants[0] = {
         ...teamEntrants[0], id: rival.id, name: rival.name, type: rival.type, abilities: rival.abilities, goldAbilities: rival.goldAbilities,
-        flat: rivalStats.flat, climb: rivalStats.climb, sprint: rivalStats.sprint, stamina: rivalStats.stamina, solo: rivalStats.solo,
+        flat: rivalStats.flat * rwm, climb: rivalStats.climb * rwm, sprint: rivalStats.sprint * rwm, stamina: rivalStats.stamina * rwm, solo: rivalStats.solo * rwm,
         isRival: true,
       };
     }
@@ -3447,7 +3556,9 @@ function App() {
         if (ph2.dec > 0) AB_KEYS.forEach(k => { n[k] = Math.max(20, n[k] - ph2.dec); });
       }
       if (starterIds && starterIds.includes(n.id)) {
-        n.fatigue = Math.min(100, n.fatigue + (hasAbility(n, "iron") ? 32 : 45) * stageFatigueMul);
+        // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす（悪天候巧者による軽減はなし＝純粋な体力勝負）
+        const heatMul = raceInfo.weather === "heat" ? 1.15 : 1;
+        n.fatigue = Math.min(100, n.fatigue + (hasAbility(n, "iron") ? 32 : 45) * stageFatigueMul * heatMul);
         n.streak += 1;
         const ph = growthPhase(n);
         // v25: 出走経験による成長が練習に比べて弱く、レースに出る意味が薄いという指摘を受け強化。
@@ -3467,6 +3578,11 @@ function App() {
             n.streak = 0;
             state._injured.push(`${n.name} が疲労の蓄積で故障（${n.injury}ヶ月離脱）`);
           }
+        } else if (raceInfo.weather === "rain" && Math.random() < (hasAbility(n, "rain_sp") ? 0.02 : 0.06)) {
+          // v25: 雨天レースは悪天候巧者を持たない選手に一定確率で落車リスクを上乗せする
+          n.injury = Math.max(1, 1 + (Math.random() < 0.3 ? 1 : 0) + injExtra - Math.floor(doctorLv / 2));
+          n.streak = 0;
+          state._injured.push(`${n.name} が雨天のレースで落車、負傷離脱（${n.injury}ヶ月）`);
         }
       } else if (n.injury === 0) {
         n.fatigue = Math.max(0, n.fatigue - (starterIds ? 30 : 50));
@@ -3577,6 +3693,8 @@ function App() {
           sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
           // v14.8: 年が変わるのでグランツール制覇状況もリセットする
           gtWins: [],
+          // v25: ユース育成枠も年度が変わるたびにリセットする
+          youthUsed: false,
           yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame, rivalAlumni: survivingAlumni,
           screen: info.cleared ? "clear" : "yearend", tab: "home",
         };
@@ -3627,7 +3745,7 @@ function App() {
     const itemBoost = { wheel: g.sel.useWheel, suit: g.sel.useSuit };
     // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
     const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
-    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni);
+    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel);
     setG(s => ({
       ...s, result: sim,
       gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,
@@ -3666,7 +3784,7 @@ function App() {
       const aceId = gc.starters.length === 1 ? gc.starters[0] : (s.sel.ace || gc.aceId);
       const roles = s.sel.roles || gc.roles;
       // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty);
+      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty, undefined, s.dynastyLevel);
       simResult = sim; raceRef = gc.race;
       return {
         ...s, roster: roster2, result: sim,
@@ -3834,17 +3952,19 @@ function App() {
   // 大舞台での因縁の対決になる
   function mlGenRace(year, month, classIdx) {
     if (month === 5 && classIdx >= 1) {
-      return { id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true };
+      const wrng = mulberry(year * 401 + month * 7 + 501);
+      return { id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, weather: rollWeather(wrng) };
     }
     if (month === 3 && classIdx >= 2 && (year - 1) % 4 === 0) {
-      return { id: `ml-olympics-${year}`, name: `${year}年目 オリンピック ロードレース`, tmpl: TEMPLATES[3], grade: 4, cls: classIdx, milestone: "olympics", rivalPresent: true };
+      const wrng = mulberry(year * 401 + month * 7 + 502);
+      return { id: `ml-olympics-${year}`, name: `${year}年目 オリンピック ロードレース`, tmpl: TEMPLATES[3], grade: 4, cls: classIdx, milestone: "olympics", rivalPresent: true, weather: rollWeather(wrng) };
     }
     const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
     const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
     const grade = month === 11 ? 3 : 1 + Math.floor(rng() * 3);
     // v15: 約45%の確率でその月のレースにライバルが出走してくる（rival自体はキャラ作成時に固定生成済み）
     const rivalPresent = rng() < 0.45;
-    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent };
+    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent, weather: rollWeather(rng) };
   }
   const ML_MILESTONE_LABEL = { worlds: { eyebrow: "🌍 世界選手権", color: C.blue }, olympics: { eyebrow: "🥇 オリンピック", color: C.yellow } };
   function mlCreateChar(type, background) {
@@ -3854,9 +3974,16 @@ function App() {
     const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set() });
     player.background = background;
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
+    // v25: 個人スポンサー・メディア人気度。チーム年俸とは別枠で、戦績に応じて上がる
+    // 知名度が個人スポンサー収入（月極＋節目の一時金）に反映される
+    player.popularity = 0;
+    player.popMilestones = [];
     // v14.3: 経歴ごとの初任給（万円/年）。年俸・監督評価・資産はキャリア開始時に初期化する
     const initialSalary = { highschool: 220, university: 280, corporate: 360 }[background] || 260;
     const rival = mlCreateRival(rng, player.name, team.name);
+    // v25: 新人時代に指導してくれる恩師を1名設定する。在籍から3年目を迎えるまでの間、
+    // 練習・出走経験の伸びにボーナスがかかり、3年目に「人生の岐路」として一区切りを迎える
+    const mentorName = pickRiderName(rng, new Set([player.name, rival.name]));
     setMl(s => ({
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
@@ -3866,7 +3993,12 @@ function App() {
       gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
       houseLv: -1, carLv: -1,
       rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
-      log: [`【1年目 4月】${bg.label}として${team.name}に新人選手加入`, `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`],
+      flags: { ...s.flags, mentorName, mentorActive: true },
+      log: [
+        `【1年目 4月】${bg.label}として${team.name}に新人選手加入`,
+        `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`,
+        `【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`,
+      ],
       screen: "mylife_main",
     }));
   }
@@ -3904,9 +4036,20 @@ function App() {
     setMl(s => {
       // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
       const role = directive ? directive.key : (me.isAce ? "ace" : "support");
+      // v25: 個人スポンサー・メディア人気度。着順が良いほど、また規模の大きいレースほど伸びる
+      const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade];
+      const popMilestones = s.player.popMilestones || [];
+      const newPopularity = Math.max(0, Math.min(100, (s.player.popularity || 0) + popGain));
+      let popBonus = 0;
+      const newlyHit = [];
+      POP_MILESTONES.forEach(m => {
+        if (newPopularity >= m.th && !popMilestones.includes(m.th)) { popBonus += m.bonus; newlyHit.push(m.th); }
+      });
       const player = {
         ...s.player,
         raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role }],
+        popularity: newPopularity,
+        popMilestones: [...popMilestones, ...newlyHit],
       };
       let rivalRecord = s.rivalRecord;
       let rivalOutcome = null;
@@ -3919,11 +4062,14 @@ function App() {
         };
         rivalOutcome = { name: rivalEntrant.name, rank: rivalEntrant.rank, beat };
       }
+      const log = newlyHit.length > 0
+        ? [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】人気度が${newlyHit.join("・")}に到達し、個人スポンサー契約で+${popBonus}万円`]
+        : s.log;
       return {
-        ...s, player, points: s.points + pts,
+        ...s, player, points: s.points + pts, log,
         managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
-        money: s.money + prize, rivalRecord,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome },
+        money: s.money + prize + popBonus, rivalRecord,
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, popGain: Math.round(popGain * 10) / 10, popBonus },
         screen: "mylife_result",
       };
     });
@@ -3945,21 +4091,34 @@ function App() {
       const chefCut = gear.chef ? 0.9 : 1;
       // v15: 「鉄人」を持つ選手は出走疲労が軽減される（シーズンモードの45→32と同じ比率）
       const ironCut = hasAbility(player, "iron") ? 32 / 45 : 1;
-      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut);
+      // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす
+      const raceWeather = ctx && ctx.raceWeather;
+      const heatMul = raceWeather === "heat" ? 1.15 : 1;
+      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut * heatMul);
       player.streak = (player.streak || 0) + 1;
       // v25: シーズンモード同様、出走した種目に応じた能力成長（出走経験）を追加。
       // 格上のレース（グレードが高い）ほど得るものが大きい
       const raceExpKeys = (ctx && ctx.raceExpKeys) || [];
       const raceGradeMul = (ctx && ctx.raceGrade) ? (GRADE_MUL[ctx.raceGrade] || 1) : 1;
+      // v25: 新人時代に恩師の指導を受けている間は、出走経験の伸びにもボーナスがかかる
+      const mentorMul = flags.mentorActive ? 1.15 : 1;
       const ph = growthPhase(player);
-      raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
+      raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
+      // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
+      if (raceWeather === "rain" && Math.random() < (hasAbility(player, "rain_sp") ? 0.02 : 0.06)) {
+        player.fatigue = Math.min(100, player.fatigue + 15);
+        AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - 2); });
+        player.__weatherCrash = true;
+      }
     } else if (mode === "train") {
       const ph = growthPhase(player);
       // v15: 「練習の虫」「練習嫌い」「遅咲き」の特殊能力を練習効果に反映
       // v17: 育児をパートナーに任せて競技優先を選んだ場合、練習効果がわずかに上乗せされる
       const abMul = (hasAbility(player, "trainer") ? 1.2 : hasAbility(player, "lazy_sp") ? 0.8 : 1)
         * (hasAbility(player, "lateblow_sp") && player.age >= 28 ? 1.15 : 1)
-        * (flags.childFocusedCareer ? 1.05 : 1);
+        * (flags.childFocusedCareer ? 1.05 : 1)
+        // v25: 新人時代に恩師の指導を受けている間は練習効果+15%
+        * (flags.mentorActive ? 1.15 : 1);
       const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
       const focusMul = gear.monitor ? 1.10 : 1;
       // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
@@ -3998,9 +4157,14 @@ function App() {
       const raceExpKeys = (mode === "race" && s.result && s.result.course)
         ? [...new Set(s.result.course.segs.map(seg => SEG_AB[seg.type]))] : [];
       const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
-      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, raceExpKeys, raceGrade };
+      const raceWeather = (mode === "race" && s.resultInfo) ? s.resultInfo.race.weather : null;
+      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, raceExpKeys, raceGrade, raceWeather };
       let player = mlApplyMonthEffect(s.player, mode, ctx);
       const log = [...s.log];
+      if (player.__weatherCrash) {
+        log.push(`【${s.year}年目 ${MONTHS[s.month]}】雨天のレースで危うく転倒しかけ、ヒヤッとした…`);
+        player = { ...player, __weatherCrash: undefined };
+      }
       // v15フェーズ2: 金特化の判定
       const upgradedPlayer = upgradeGoldAbilities(player);
       if (upgradedPlayer !== player) {
@@ -4019,7 +4183,9 @@ function App() {
       // 年俸は毎月1/12ずつ資金として振り込まれる
       const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0) + (s.houseLv >= 3 ? 0.2 : 0) + (s.flags?.mentor ? 0.3 : 0);
       const managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
-      const money = s.money + Math.round(s.salary / 12);
+      // v25: 個人スポンサー収入。人気度10ごとに月+2万円の継続収入が入る（チーム年俸とは別枠）
+      const popIncome = Math.floor((s.player.popularity || 0) / 10) * 2;
+      const money = s.money + Math.round(s.salary / 12) + popIncome;
       if (s.month === 11) {
         player.age += 1;
         const retire = player.age >= 36 || (player.age >= 33 && overall(player) < player.joinOvr * 0.8);
@@ -4134,7 +4300,9 @@ function App() {
     setMl(s => {
       const po = s.pendingOffseason;
       if (!po) return s;
-      const cr = mlRollCrossroads(s, po.player);
+      // v25: 恩師卒業の判定は「年が明けたあと」の年数を見る必要があるため、
+      // 更新前のsではなく年度更新済みのpo（年度末処理の計算結果）を渡す
+      const cr = mlRollCrossroads(po, po.player);
       if (cr) return { ...s, pendingOffseason: null, offseasonResultText: null, screen: "mylife_crossroads", pendingCrossroads: { key: cr.key, resolvedState: po } };
       return { ...po, pendingOffseason: null, offseasonResultText: null };
     });
@@ -4345,6 +4513,22 @@ function App() {
       return { ...s, roster, hallOfFame, captainId, log: [...s.log, `【${MONTHS[s.month]}】${r.name} を解雇した`] };
     });
   };
+  // v25: ユース育成枠。4月のスカウト候補とは別に、年1回だけ安価な契約金で
+  // 16〜17歳の若手を確保できる。現在の能力は低いが成長力（growthPow）はA以上を保証し、
+  // 長期育成前提の「原石」枠として機能させる
+  const signYouthProspect = () => {
+    setG(s => {
+      if (s.youthUsed || s.budget < 15) return s;
+      const rng = mulberry(Date.now() % 999983 + s.roster.length * 4111);
+      const banned = new Set(s.roster.map(r => r.name));
+      const growthPow = rng() < 0.4 ? "S" : "A";
+      const rookie = newRider(34, rng, { banned, age: 16 + Math.floor(rng() * 2), growthPow });
+      return {
+        ...s, roster: [...s.roster, rookie], budget: s.budget - 15, youthUsed: true,
+        log: [...s.log, `【${MONTHS[s.month]}】ユース育成枠で${rookie.name}（${rookie.age}歳・成長力${growthPow}）を確保した`],
+      };
+    });
+  };
   // v17: 選手間トレード。受け入れると自チームの該当選手が抜け、相手が提示した選手が加入する
   const acceptTrade = (offerId) => {
     setG(s => {
@@ -4371,7 +4555,7 @@ function App() {
     <div style={{ padding: "10px 0", borderBottom: `1px solid ${C.line}`, marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <Eyebrow>{cls.label} — {g.year}年目 {MONTHS[g.month]}</Eyebrow>
+          <Eyebrow>{cls.label} — {g.year}年目 {MONTHS[g.month]}{g.dynastyLevel > 0 ? ` ／ 🔁 ディナスティ${g.dynastyLevel}周目` : ""}</Eyebrow>
           <div style={{ fontFamily: FONT_D, fontSize: 18, fontWeight: 700, color: C.text }}>チーム運営 v12</div>
           {g.sponsor && <div style={{ fontSize: 10.5, color: C.sub }}>SPONSOR: {g.sponsor.name}（月+{g.sponsor.monthly}万／ノルマ{g.sponsor.norma}pt／未達-{g.sponsor.penalty}万／指定レース{g.sponsor.mandatesMet}済{g.sponsor.mandatesMissed > 0 ? `・見送り${g.sponsor.mandatesMissed}` : ""}）</div>}
           <div style={{ fontSize: 10.5, color: C.sub }}>
@@ -4566,6 +4750,21 @@ function App() {
               </div>
             </div>
           )}
+          {ml.flags?.mentorActive && (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.green}` }}>
+              <Eyebrow color={C.green}>🧑‍🏫 恩師の指導</Eyebrow>
+              <div style={{ fontSize: 11.5, color: C.text, marginTop: 4 }}>{ml.flags.mentorName}が新人指導中（練習・出走経験の伸び+15%）</div>
+              <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>3年目を迎えると一区切りを迎えます</div>
+            </div>
+          )}
+          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+            <Eyebrow color={"#e8a13c"}>個人スポンサー・人気度</Eyebrow>
+            <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>
+              人気度 <span style={{ fontFamily: FONT_M, color: "#e8a13c", fontWeight: 700 }}>{Math.round(ml.player.popularity || 0)}</span>/100
+              （個人スポンサー収入 月+{Math.floor((ml.player.popularity || 0) / 10) * 2}万円）
+            </div>
+            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>好成績を残すほど上がり、25/50/75/100到達で一時金の契約ボーナスも入ります</div>
+          </div>
           {ml.rival && (
             <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.red}` }}>
               <Eyebrow color={C.red}>ライバル</Eyebrow>
@@ -4590,6 +4789,12 @@ function App() {
             <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.green}>{race.milestone ? ML_MILESTONE_LABEL[race.milestone].eyebrow : "今月のレース"}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0" }}>{race.name}</div>
             <div style={{ fontSize: 11.5, color: C.sub }}>{race.tmpl.kind}・{"★".repeat(race.grade)}・{TYPES[race.tmpl.favors].label}有利</div>
+            {race.weather && race.weather !== "clear" && (
+              <div style={{ fontSize: 11.5, color: race.weather === "rain" ? C.blue : C.red, marginTop: 2 }}>
+                {WEATHER[race.weather].icon} 天候：{WEATHER[race.weather].label}
+                {race.weather === "rain" ? "（悪天候巧者がないと能力低下・落車リスク増）" : "（出走後の疲労蓄積が増える）"}
+              </div>
+            )}
             {race.milestone && <div style={{ fontSize: 11, color: ML_MILESTONE_LABEL[race.milestone].color, marginTop: 3 }}>代表選出！一生に何度もない大舞台での一戦だ。</div>}
           </div>
           <div style={{ display: "grid", gap: 8 }}>
@@ -4663,13 +4868,18 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, popGain, popBonus } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
             <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : undefined}>{race.milestone ? `${ML_MILESTONE_LABEL[race.milestone].eyebrow} RESULT` : "RESULT"} — {race.name}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
             <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt ／ 賞金 +{prize}万円</div>
+            {popGain > 0 && (
+              <div style={{ fontSize: 11.5, color: "#e8a13c", marginTop: 3 }}>
+                人気度 +{popGain}{popBonus > 0 ? `／個人スポンサー契約ボーナス +${popBonus}万円！` : ""}
+              </div>
+            )}
           </div>
           {rivalOutcome && (
             <div style={{ background: rivalOutcome.beat ? "#16241c" : "#241818", border: `1px solid ${rivalOutcome.beat ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
@@ -5169,7 +5379,7 @@ function App() {
                   <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>
                     {r.championship ? "👑 " : ""}{r.grandTour ? "🌍 " : ""}{r.sponsorMandate ? "🎯 " : ""}{r.name}
                   </div>
-                  <div style={{ fontFamily: FONT_M, fontSize: 12, color: C.yellow }}>{"★".repeat(r.grade)}</div>
+                  <div style={{ fontFamily: FONT_M, fontSize: 12, color: C.yellow }}>{r.weather && r.weather !== "clear" ? `${WEATHER[r.weather].icon} ` : ""}{"★".repeat(r.grade)}</div>
                 </div>
                 <div style={{ display: "flex", gap: 3, margin: "6px 0 4px" }}>
                   {r.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 6, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
@@ -5232,6 +5442,12 @@ function App() {
           <div style={{ fontSize: 11, color: C.sub }}>🎖 各選手カードのマークで主将を1名任命できます。主将より2歳以上若い選手は練習効果+10%になります。</div>
           {g.inv.camp > 0 && !g.camp && <Btn small outline color={C.purple} onClick={() => askConfirm("キャンプを実施しますか？今月の練習効果が×2になりますが、選手全員の疲労が+25されます（連発すると故障リスクが高まります）。", useCamp)}>⛺ キャンプ券を使う（今月の練習効果×2・全員疲労+25）</Btn>}
           {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
+          {!g.youthUsed && g.roster.length < rosterMax && g.budget >= 15 && (
+            <Btn small outline color={C.green} onClick={() => askConfirm("ユース候補を1名確保しますか？契約金15万円。現在の能力は控えめですが、成長力（growthPow A以上）が保証された若手（16〜17歳）です。", signYouthProspect)}>
+              🌱 ユース選手を獲得する（契約金15万円・年1回限り）
+            </Btn>
+          )}
+          {g.youthUsed && <div style={{ fontSize: 11, color: C.sub }}>🌱 ユース育成枠は今年度使用済み（来年4月にリセット）</div>}
           {g.month === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>4月は選手の解雇が可能です（各選手カードの「解雇」ボタン）。</div>}
           {g.roster.map(r => {
             const t = TYPES[r.type], ph = growthPhase(r);
@@ -5241,6 +5457,7 @@ function App() {
                   <div>
                     <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}</span>
                     {r.id === g.captainId && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.yellow, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🎖 主将</span>}
+                    {r.age <= 18 && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.green, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🌱 ユース</span>}
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color, border: `1px solid ${t.color}`, borderRadius: 4, padding: "1px 5px" }}>{t.label}</span>
                     <span style={{ marginLeft: 5, fontFamily: FONT_M, fontSize: 12, color: POW[r.growthPow].color }}>成長{r.growthPow}</span>
                   </div>
@@ -5761,6 +5978,12 @@ function App() {
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.yellow}` }}>
           <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{race.championship ? "👑 " : ""}{race.sponsorMandate ? "🎯 " : ""}{race.name} {"★".repeat(race.grade)}</div>
+          {race.weather && race.weather !== "clear" && (
+            <div style={{ fontSize: 12, color: race.weather === "rain" ? C.blue : C.red, marginTop: 2 }}>
+              {WEATHER[race.weather].icon} 天候：{WEATHER[race.weather].label}
+              {race.weather === "rain" ? "（悪天候巧者以外は能力低下・落車リスク増）" : "（出走後の疲労蓄積が増える）"}
+            </div>
+          )}
           {!race.stageRace && (
             <div style={{ display: "flex", gap: 3, margin: "6px 0 3px" }}>
               {race.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
@@ -5962,7 +6185,7 @@ function App() {
             </div>
           ))}
         </div>
-        <Btn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む →</Btn>
+        <Btn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む →</Btn>
       </div>
     );
   }
@@ -6177,7 +6400,7 @@ function App() {
             );
           })}
         </div>
-        <Btn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, grade: g.gc.race.grade, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む →</Btn>
+        <Btn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, grade: g.gc.race.grade, weather: g.gc.race.weather, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む →</Btn>
       </div>
     );
   }
@@ -6227,7 +6450,12 @@ function App() {
           <div style={{ marginTop: 10, fontSize: 15, color: C.yellow, fontFamily: FONT_M }}>🎁 クリアポイント +{earnedCP}pt 獲得！</div>
           <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>次回以降の新規ゲームで、難易度の解禁や永続ボーナスに自動反映されます</div>
         </div>
-        <Btn onClick={() => { clearSaveGame(); setG(initGame()); }}>新たなチームで最初から</Btn>
+        {/* v25: 制覇後もこの轍（チーム）を引き継いで周回できるディナスティモード。
+            周を重ねるたびに他チームの地力が上がり、歯応えを保ったまま挑戦を続けられる */}
+        <Btn onClick={() => setG(s => ({ ...s, dynastyLevel: (s.dynastyLevel || 0) + 1, screen: "yearend" }))}>
+          🔁 この轍を継いでさらなる高みへ（{(g.dynastyLevel || 0) + 1}周目へ・他チームがさらに強化される）
+        </Btn>
+        <Btn outline onClick={() => { clearSaveGame(); setG(initGame()); }}>新たなチームで最初から</Btn>
       </div>
     );
   }
