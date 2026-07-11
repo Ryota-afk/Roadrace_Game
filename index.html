@@ -343,6 +343,8 @@ function mlLegendSnapshot(s) {
     name: r.name, type: r.type, background: r.background, team: s.team,
     endYear: s.year, age: r.age, races: (r.raceLog || []).length, wins, podiums,
     salary: s.salary, rivalName: s.rival ? s.rival.name : null, rivalRecord: s.rivalRecord || null,
+    // v26: 複数ライバル制。2人目の好敵手は初対戦を終えている場合のみ記録に残す
+    rival2Name: (s.rival2 && (s.rivalRecord2?.meetings || 0) > 0) ? s.rival2.name : null, rivalRecord2: s.rivalRecord2 || null,
     achievedCount, achievedTotal: ML_ACHIEVEMENTS.length,
     nickname: riderNickname(r), summary: riderCareerSummary({ ...r, farewellYear: s.year, farewellReason: "retired" }),
     retiredAt: Date.now(),
@@ -350,6 +352,36 @@ function mlLegendSnapshot(s) {
 }
 function mlRecordLegend(s) {
   saveMlLegends([...loadMlLegends(), mlLegendSnapshot(s)]);
+}
+// v26: 引退後キャリア（エピローグ）。引退直後に殿堂入りしたスナップショットへ、
+// 選んだ道（監督/完全引退）に応じたフレーバーテキストを後付けで追記する
+function mlSetEpilogue(text) {
+  const legends = loadMlLegends();
+  if (legends.length === 0) return;
+  legends[legends.length - 1] = { ...legends[legends.length - 1], epilogue: text };
+  saveMlLegends(legends);
+}
+function mlEpilogueDirector(s) {
+  const r = s.player;
+  const wins = (r.raceLog || []).filter(e => e.rank === 1).length;
+  const tone = wins >= 10 ? "百戦錬磨の経験を武器に" : wins >= 3 ? "現役時代に培った勘を頼りに" : "現役時代の悔しさを糧に";
+  return `引退後は${s.team}のスポーツディレクターに転身。${tone}後進の指導にあたった。数年後、教え子の一人がプロ入りを果たしたという知らせが届いた。`;
+}
+function mlEpilogueAway(s) {
+  const r = s.player;
+  return `引退後は競技の一線から静かに退き、第二の人生を歩み始めた。${r.name}の名は、あの頃を知るファンの記憶に長く残り続けている。`;
+}
+// v26: 生涯評価（プレステージスコア）。周回プレイをまたいで蓄積される既存の永続データ
+// （シーズンモードの生涯クリアポイント・マイライフの歴代選手記録）を1つのスコアに集約する。
+// 新たな永続ストレージは増やさず、既にある2つの記録源だけから算出する
+function computePrestige() {
+  const meta = loadMeta();
+  const legends = loadMlLegends();
+  const mlWins = legends.reduce((s, l) => s + (l.wins || 0), 0);
+  const mlPodiums = legends.reduce((s, l) => s + (l.podiums || 0), 0);
+  const mlAchieved = legends.reduce((s, l) => s + (l.achievedCount || 0), 0);
+  const score = Math.round(meta.totalEarnedCP * 3 + legends.length * 15 + mlWins * 2 + mlPodiums * 1 + mlAchieved * 5);
+  return { score, totalEarnedCP: meta.totalEarnedCP, legendCount: legends.length, mlWins, mlPodiums, mlAchieved };
 }
 const MONTHS = ["4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
 const RELEGATE_LINE = 15;
@@ -1221,6 +1253,29 @@ const ML_CROSSROADS = {
           };
         },
         resultNote: (player) => hasAbility(player, "glass") ? "この経験から、特殊能力「ガラスの体」が身についてしまった…。" : "" },
+      // v26: リハビリの過ごし方をもう1択増やしてほしいという要望を受けて追加。
+      // 安全策（焦らず段階的に戻す）・早期復帰（リスクあり）に加え、「新しい走り方を模索する」を
+      // 用意した。短期的な能力低下は最も大きいが、後遺症なしで新たな特殊能力を直接獲得できる
+      { label: "新しい走り方を模索する",
+        result: "長い休養の間、これまでとは違う走り方を模索した。踏み込む力は一時的に落ち込んだが、後遺症なく戦列に戻れた。",
+        apply: (player, flags) => {
+          const owned = new Set(player.abilities || []);
+          const eligible = Object.keys(ABILITIES).filter(k => !ABILITIES[k].bad && !owned.has(k));
+          const canAcquire = (player.abilities || []).length < 3 && eligible.length > 0;
+          const picked = canAcquire ? eligible[Math.floor(Math.random() * eligible.length)] : null;
+          return {
+            player: {
+              ...player,
+              flat: Math.max(20, player.flat - 5), climb: Math.max(20, player.climb - 5), sprint: Math.max(20, player.sprint - 5), stamina: Math.max(20, player.stamina - 5), solo: Math.max(20, player.solo - 5),
+              abilities: picked ? [...(player.abilities || []), picked] : (player.abilities || []),
+            },
+            flags: { ...flags, injuryResolved: true },
+          };
+        },
+        resultNote: (player, prevPlayer) => {
+          const newlyAdded = (player.abilities || []).find(id => !(prevPlayer.abilities || []).includes(id));
+          return newlyAdded ? `模索の末、新しい特殊能力「${ABILITIES[newlyAdded].label}」を身につけた！` : "";
+        } },
     ],
   },
   // v17: 結婚した選手にだけ、その後さらに続く家庭の岐路として第一子誕生を用意する
@@ -3313,6 +3368,8 @@ function initMyLife() {
     houseLv: -1, carLv: -1,
     // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
     rival: null, rivalRecord: null,
+    // v26: 複数ライバル制。2人目の好敵手（初対戦を終えるまでUIには出さない）
+    rival2: null, rivalRecord2: null,
     // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
     flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false, mentor: false, mentorName: null, mentorActive: false },
     rewardedAchievements: [],
@@ -3325,7 +3382,7 @@ const ML_SAVE_VERSION = "v12ml";
 const ML_SAVE_FIELDS = [
   "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
-  "rival", "rivalRecord", "flags", "rewardedAchievements",
+  "rival", "rivalRecord", "rival2", "rivalRecord2", "flags", "rewardedAchievements",
 ];
 function saveMyLife(ml) {
   try {
@@ -3355,12 +3412,15 @@ function clearMyLifeSave() {
 // v15: マイライフ専用のライバル選手。キャリア開始時に1名だけ生成し、以後は名前・脚質・
 // 性格・所属チームを固定したまま、レースのたびに現在のクラス／グレードに応じた能力で
 // 登場させる（プレイヤーと同じ月次成長シミュレーションを個別に回す必要をなくすための単純化）
-function mlCreateRival(rng, playerName, playerTeamName) {
-  const otherTeams = MYLIFE_TEAMS.filter(t => t.name !== playerTeamName);
+// v26: 複数ライバル制。2人目のライバル生成時は、既に確保済みの名前・所属チームを
+// bannedNames/bannedTeamsで除外できるようにする
+function mlCreateRival(rng, playerName, playerTeamName, bannedNames, bannedTeams) {
+  const excludeTeams = new Set([playerTeamName, ...(bannedTeams || [])]);
+  const otherTeams = MYLIFE_TEAMS.filter(t => !excludeTeams.has(t.name));
   const team = otherTeams[Math.floor(rng() * otherTeams.length)];
   const keys = Object.keys(TYPES);
   const type = keys[Math.floor(rng() * keys.length)];
-  const banned = new Set([playerName]);
+  const banned = new Set([playerName, ...(bannedNames || [])]);
   const name = pickRiderName(rng, banned);
   const px = rng();
   const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
@@ -3373,7 +3433,7 @@ function mlCreateRival(rng, playerName, playerTeamName) {
 // そのまま再利用するため）。プレイヤー自身のチームメイトは実際のチーム名で登場する
 // v15: rivalとraceMeta.rivalPresentが揃っていれば、ライバルの所属チームの1枠（エース枠）を
 // ライバルの固定アイデンティティ（名前・脚質・性格）に差し替え、isRivalフラグを立てる
-function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year) {
+function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2) {
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
@@ -3408,6 +3468,16 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
         ...teamEntrants[0], id: rival.id, name: rival.name, type: rival.type, abilities: rival.abilities, goldAbilities: rival.goldAbilities,
         flat: rivalStats.flat * rwm, climb: rivalStats.climb * rwm, sprint: rivalStats.sprint * rwm, stamina: rivalStats.stamina * rwm, solo: rivalStats.solo * rwm,
         isRival: true,
+      };
+    }
+    // v26: 複数ライバル制。2人目のライバル（好敵手）は別チームの出走枠を差し替える
+    if (rival2 && raceMeta.rival2Present && d.name === rival2.team && d.name !== myTeamName) {
+      const rival2Stats = newRider(power + 6, rng, { type: rival2.type, banned: nameBanned });
+      const r2wm = rainMul(rival2, raceMeta.weather);
+      teamEntrants[0] = {
+        ...teamEntrants[0], id: rival2.id, name: rival2.name, type: rival2.type, abilities: rival2.abilities, goldAbilities: rival2.goldAbilities,
+        flat: rival2Stats.flat * r2wm, climb: rival2Stats.climb * r2wm, sprint: rival2Stats.sprint * r2wm, stamina: rival2Stats.stamina * r2wm, solo: rival2Stats.solo * r2wm,
+        isRival2: true,
       };
     }
     if (isMyTeam) {
@@ -3978,18 +4048,20 @@ function App() {
   function mlGenRace(year, month, classIdx) {
     if (month === 5 && classIdx >= 1) {
       const wrng = mulberry(year * 401 + month * 7 + 501);
-      return { id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, weather: rollWeather(wrng) };
+      return { id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) };
     }
     if (month === 3 && classIdx >= 2 && (year - 1) % 4 === 0) {
       const wrng = mulberry(year * 401 + month * 7 + 502);
-      return { id: `ml-olympics-${year}`, name: `${year}年目 オリンピック ロードレース`, tmpl: TEMPLATES[3], grade: 4, cls: classIdx, milestone: "olympics", rivalPresent: true, weather: rollWeather(wrng) };
+      return { id: `ml-olympics-${year}`, name: `${year}年目 オリンピック ロードレース`, tmpl: TEMPLATES[3], grade: 4, cls: classIdx, milestone: "olympics", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) };
     }
     const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
     const t = TEMPLATES[Math.floor(rng() * TEMPLATES.length)];
     const grade = month === 11 ? 3 : 1 + Math.floor(rng() * 3);
     // v15: 約45%の確率でその月のレースにライバルが出走してくる（rival自体はキャラ作成時に固定生成済み）
     const rivalPresent = rng() < 0.45;
-    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent, weather: rollWeather(rng) };
+    // v26: 2人目のライバル（好敵手）も独立した確率で出走してくる
+    const rival2Present = rng() < 0.45;
+    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent, rival2Present, weather: rollWeather(rng) };
   }
   const ML_MILESTONE_LABEL = { worlds: { eyebrow: "🌍 世界選手権", color: C.blue }, olympics: { eyebrow: "🥇 オリンピック", color: C.yellow } };
   function mlCreateChar(type, background) {
@@ -4006,9 +4078,12 @@ function App() {
     // v14.3: 経歴ごとの初任給（万円/年）。年俸・監督評価・資産はキャリア開始時に初期化する
     const initialSalary = { highschool: 220, university: 280, corporate: 360 }[background] || 260;
     const rival = mlCreateRival(rng, player.name, team.name);
+    // v26: 複数ライバル制。2人目の好敵手も別チームに固定生成しておくが、最初の対戦まで
+    // 本人には明かされず、レースで実際に相まみえた瞬間に「新たな好敵手」として紹介される
+    const rival2 = mlCreateRival(rng, player.name, team.name, [rival.name], [rival.team]);
     // v25: 新人時代に指導してくれる恩師を1名設定する。在籍から3年目を迎えるまでの間、
     // 練習・出走経験の伸びにボーナスがかかり、3年目に「人生の岐路」として一区切りを迎える
-    const mentorName = pickRiderName(rng, new Set([player.name, rival.name]));
+    const mentorName = pickRiderName(rng, new Set([player.name, rival.name, rival2.name]));
     setMl(s => ({
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
@@ -4018,6 +4093,7 @@ function App() {
       gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
       houseLv: -1, carLv: -1,
       rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
+      rival2, rivalRecord2: { meetings: 0, wins: 0, losses: 0 },
       flags: { ...s.flags, mentorName, mentorActive: true },
       log: [
         `【1年目 4月】${bg.label}として${team.name}に新人選手加入`,
@@ -4042,7 +4118,7 @@ function App() {
     if (mlRaceLockRef.current) return;
     mlRaceLockRef.current = true;
     const race = ml.races[0];
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null, ml.rival, ml.year);
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, ml.directive ? ml.directive.key : null, ml.rival, ml.year, ml.rival2);
     setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
   }
   function mlRaceFinish() {
@@ -4058,6 +4134,8 @@ function App() {
     const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + ml.classIdx * 0.25));
     // v15: このレースにライバルが出走していれば、着順を比較して通算のライバル戦績を更新する
     const rivalEntrant = sim.ranked.find(e => e.isRival);
+    // v26: 複数ライバル制。2人目の好敵手も同様に戦績を追跡する
+    const rival2Entrant = sim.ranked.find(e => e.isRival2);
     setMl(s => {
       // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
       const role = directive ? directive.key : (me.isAce ? "ace" : "support");
@@ -4087,14 +4165,31 @@ function App() {
         };
         rivalOutcome = { name: rivalEntrant.name, rank: rivalEntrant.rank, beat };
       }
-      const log = newlyHit.length > 0
+      // v26: 複数ライバル制。2人目の好敵手は初対戦時だけ「新たな好敵手が現れた」という
+      // 紹介フレーバーを付ける
+      let rivalRecord2 = s.rivalRecord2;
+      let rivalOutcome2 = null;
+      let rival2Intro = false;
+      if (rival2Entrant) {
+        const isFirstMeeting = (rivalRecord2?.meetings || 0) === 0;
+        const beat2 = me.rank < rival2Entrant.rank;
+        rivalRecord2 = {
+          meetings: (rivalRecord2?.meetings || 0) + 1,
+          wins: (rivalRecord2?.wins || 0) + (beat2 ? 1 : 0),
+          losses: (rivalRecord2?.losses || 0) + (beat2 ? 0 : 1),
+        };
+        rivalOutcome2 = { name: rival2Entrant.name, rank: rival2Entrant.rank, beat: beat2 };
+        rival2Intro = isFirstMeeting;
+      }
+      let log = newlyHit.length > 0
         ? [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】人気度が${newlyHit.join("・")}に到達し、個人スポンサー契約で+${popBonus}万円`]
         : s.log;
+      if (rival2Intro) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rival2Entrant.teamName}の${rival2Entrant.name}と初めて同じレースで相まみえた。新たな好敵手になりそうだ`];
       return {
         ...s, player, points: s.points + pts, log,
         managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
-        money: s.money + prize + popBonus, rivalRecord,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, popGain: Math.round(popGain * 10) / 10, popBonus },
+        money: s.money + prize + popBonus, rivalRecord, rivalRecord2,
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus },
         screen: "mylife_result",
       };
     });
@@ -4340,8 +4435,9 @@ function App() {
       if (!pc) return s;
       const cr = ML_CROSSROADS[pc.key];
       const choice = cr.choices[choiceIdx];
-      const { player, flags } = choice.apply(pc.resolvedState.player, s.flags || {});
-      const note = choice.resultNote ? choice.resultNote(player) : "";
+      const prevPlayer = pc.resolvedState.player;
+      const { player, flags } = choice.apply(prevPlayer, s.flags || {});
+      const note = choice.resultNote ? choice.resultNote(player, prevPlayer) : "";
       return {
         ...s,
         pendingCrossroads: { ...pc, resolvedState: { ...pc.resolvedState, player, flags } },
@@ -4668,8 +4764,45 @@ function App() {
       </div>
       <Btn onClick={() => setSuperMode("season")}>🏢 シーズンモード（チーム運営）</Btn>
       <Btn outline onClick={() => setSuperMode("mylife")}>🚴 マイライフモード（選手キャリア）</Btn>
+      <Btn outline color={"#e8a13c"} onClick={() => setSuperMode("prestige")}>🏆 生涯評価を見る</Btn>
     </div>
   );
+
+  // v26: 生涯評価（プレステージスコア）。周回プレイをまたいで蓄積された記録を1画面に集約する
+  if (superMode === "prestige") {
+    const p = computePrestige();
+    return wrap(
+      <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ background: C.panel, borderRadius: 12, padding: 22, borderTop: `4px solid ${"#e8a13c"}`, textAlign: "center" }}>
+          <div style={{ fontSize: 40 }}>🏆</div>
+          <h2 style={{ fontFamily: FONT_D, color: "#e8a13c", fontSize: 26, margin: "8px 0" }}>生涯評価スコア</h2>
+          <div style={{ fontFamily: FONT_M, fontSize: 32, color: C.text, fontWeight: 700 }}>{p.score.toLocaleString()}</div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>シーズンモード・マイライフモード両方のプレイ履歴から算出されます</div>
+        </div>
+        <div>
+          <Eyebrow color={C.blue}>シーズンモード（周回プレイ）</Eyebrow>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, marginTop: 8, fontSize: 12.5, color: C.text, lineHeight: 1.8 }}>
+            生涯獲得クリアポイント：<span style={{ color: C.yellow, fontFamily: FONT_M }}>{p.totalEarnedCP}pt</span>
+          </div>
+        </div>
+        <div>
+          <Eyebrow color={C.red}>マイライフモード（歴代選手）</Eyebrow>
+          <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, fontSize: 12.5, color: C.text }}>
+              引退した選手数：<span style={{ color: C.yellow, fontFamily: FONT_M }}>{p.legendCount}名</span>
+            </div>
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, fontSize: 12.5, color: C.text }}>
+              通算勝利数：<span style={{ color: C.yellow, fontFamily: FONT_M }}>{p.mlWins}勝</span>／通算表彰台：<span style={{ color: C.yellow, fontFamily: FONT_M }}>{p.mlPodiums}回</span>
+            </div>
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, fontSize: 12.5, color: C.text }}>
+              通算実績達成数：<span style={{ color: C.yellow, fontFamily: FONT_M }}>{p.mlAchieved}</span>
+            </div>
+          </div>
+        </div>
+        <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
+      </div>
+    );
+  }
 
   // ================= v14: マイライフモード 画面群 =================
   if (superMode === "mylife") {
@@ -4798,6 +4931,17 @@ function App() {
                 通算対戦成績：{ml.rivalRecord?.meetings || 0}戦 <span style={{ color: C.green }}>{ml.rivalRecord?.wins || 0}勝</span> <span style={{ color: C.red }}>{ml.rivalRecord?.losses || 0}敗</span>
               </div>
               {race.rivalPresent && <div style={{ fontSize: 11, color: C.yellow, marginTop: 3 }}>🔥 今月のレースにライバルも出走してくる</div>}
+            </div>
+          )}
+          {/* v26: 複数ライバル制。2人目の好敵手は初対戦を終えるまでは表示しない（サプライズを残す） */}
+          {ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0 && (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.blue}` }}>
+              <Eyebrow color={C.blue}>好敵手</Eyebrow>
+              <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.rival2.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{ml.rival2.team}・{TYPES[ml.rival2.type].label}）</span></div>
+              <div style={{ fontSize: 11, color: C.sub }}>
+                通算対戦成績：{ml.rivalRecord2?.meetings || 0}戦 <span style={{ color: C.green }}>{ml.rivalRecord2?.wins || 0}勝</span> <span style={{ color: C.red }}>{ml.rivalRecord2?.losses || 0}敗</span>
+              </div>
+              {race.rival2Present && <div style={{ fontSize: 11, color: C.blue, marginTop: 3 }}>🔥 今月のレースに好敵手も出走してくる</div>}
             </div>
           )}
           <div>
@@ -4972,7 +5116,7 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, popGain, popBonus } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
@@ -4989,6 +5133,16 @@ function App() {
             <div style={{ background: rivalOutcome.beat ? "#16241c" : "#241818", border: `1px solid ${rivalOutcome.beat ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
               <Eyebrow color={rivalOutcome.beat ? C.green : C.red}>🔥 ライバル対決 — {rivalOutcome.beat ? "勝利" : "敗北"}</Eyebrow>
               <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{rivalOutcome.name}は{rivalOutcome.rank}位でフィニッシュ。{rivalOutcome.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。"}</div>
+            </div>
+          )}
+          {rivalOutcome2 && (
+            <div style={{ background: rival2Intro ? "#1c2536" : (rivalOutcome2.beat ? "#16241c" : "#241818"), border: `1px solid ${rival2Intro ? C.blue : (rivalOutcome2.beat ? C.green : C.red)}`, borderRadius: 10, padding: "10px 12px" }}>
+              <Eyebrow color={rival2Intro ? C.blue : (rivalOutcome2.beat ? C.green : C.red)}>{rival2Intro ? "🆕 新たな好敵手" : `🔥 好敵手対決 — ${rivalOutcome2.beat ? "勝利" : "敗北"}`}</Eyebrow>
+              <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>
+                {rival2Intro
+                  ? `${rivalOutcome2.name}という選手と初めて同じレースで走った。${rivalOutcome2.rank}位でフィニッシュした彼／彼女は、これから長く意識する存在になりそうだ。`
+                  : `${rivalOutcome2.name}は${rivalOutcome2.rank}位でフィニッシュ。${rivalOutcome2.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。"}`}
+              </div>
             </div>
           )}
           {directive && (
@@ -5246,6 +5400,23 @@ function App() {
               ライバル・{ml.rival.name}（{ml.rival.team}）との通算対戦成績は{ml.rivalRecord?.meetings || 0}戦{ml.rivalRecord?.wins || 0}勝{ml.rivalRecord?.losses || 0}敗だった。
             </div>
           )}
+          {ml.rival2 && (
+            <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.blue}`, lineHeight: 1.6 }}>
+              好敵手・{ml.rival2.name}（{ml.rival2.team}）との通算対戦成績は{ml.rivalRecord2?.meetings || 0}戦{ml.rivalRecord2?.wins || 0}勝{ml.rivalRecord2?.losses || 0}敗だった。
+            </div>
+          )}
+          {/* v26: 引退後キャリア（エピローグ）。監督転身／完全引退を選ぶと殿堂記録に後日談が加わる */}
+          {ml.epilogueText ? (
+            <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.yellow}`, lineHeight: 1.7 }}>
+              {ml.epilogueText}
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ fontSize: 11.5, color: C.sub }}>引退後の道を選ぶと、殿堂の記録に後日談が加わります。</div>
+              <Btn small outline color={C.yellow} onClick={() => { const t = mlEpilogueDirector(ml); mlSetEpilogue(t); setMl(s => ({ ...s, epilogueText: t })); }}>🎓 監督としてチームに残る</Btn>
+              <Btn small outline color={C.sub} onClick={() => { const t = mlEpilogueAway(ml); mlSetEpilogue(t); setMl(s => ({ ...s, epilogueText: t })); }}>🚶 競技から静かに離れる</Btn>
+            </div>
+          )}
           <Btn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</Btn>
           <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>🏛 歴代選手の殿堂を見る</Btn>
           <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
@@ -5276,7 +5447,9 @@ function App() {
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>
                   {leg.team}／通算{leg.races}戦{leg.wins}勝・表彰台{leg.podiums}回／実績{leg.achievedCount}/{leg.achievedTotal}
                   {leg.rivalName && `／ライバル${leg.rivalName}に${leg.rivalRecord?.wins || 0}勝${leg.rivalRecord?.losses || 0}敗`}
+                  {leg.rival2Name && `／好敵手${leg.rival2Name}に${leg.rivalRecord2?.wins || 0}勝${leg.rivalRecord2?.losses || 0}敗`}
                 </div>
+                {leg.epilogue && <div style={{ fontSize: 10.5, color: C.yellow, marginTop: 5, lineHeight: 1.6, fontStyle: "italic" }}>{leg.epilogue}</div>}
               </div>
             ))}
           </div>
