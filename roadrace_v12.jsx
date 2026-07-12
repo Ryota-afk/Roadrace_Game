@@ -390,6 +390,11 @@ function mlLegendSnapshot(s) {
   const wins = (r.raceLog || []).filter(e => e.rank === 1).length;
   const podiums = (r.raceLog || []).filter(e => e.rank <= 3).length;
   const achievedCount = computeAchievements(s).filter(a => a.achieved).length;
+  // v31: 配合（血統）用の系譜データ。この選手を血統IDで識別し、両親・祖先・+値・世代を記録する。
+  // 祖先は深追いしすぎないよう、両親＋その祖先までを最大12件で保持する
+  const retiredAt = Date.now();
+  const bloodId = "b:" + (r.name || "無名") + "#" + retiredAt;
+  const ancestors = Array.isArray(r.ancestorBloodIds) ? r.ancestorBloodIds.slice(0, 12) : [];
   return {
     name: r.name, type: r.type, background: r.background, team: s.team,
     endYear: s.year, age: r.age, races: (r.raceLog || []).length, wins, podiums,
@@ -404,7 +409,10 @@ function mlLegendSnapshot(s) {
     finalAbilities: { flat: Math.round(r.flat), climb: Math.round(r.climb), sprint: Math.round(r.sprint), stamina: Math.round(r.stamina), solo: Math.round(r.solo) },
     finalSubStats: { accel: Math.round(r.accel ?? 50), build: Math.round(r.build ?? 50), mental: Math.round(r.mental ?? 50) },
     growthPow: r.growthPow, specialAbilities: [...(r.abilities || [])], focus: r.focus, overall: overall(r),
-    retiredAt: Date.now(),
+    retiredAt,
+    // v31: 配合（血統）
+    bloodId, ancestors, parents: r.parentBloodIds || null,
+    plusValue: r.plusValue || 0, generation: r.generation || 0,
   };
 }
 // v27: 教え子への継承内容を導く。師匠（殿堂スナップショット）の得意能力・戦績・成長力・
@@ -458,6 +466,75 @@ function protegeInherit(master) {
   // v29: 副ステータスの継承。師の教えに応じた副ステータス補正
   const subBonus = { ...(teaching.sub || {}) };
   return { teaching, keys, abBonus, growthPowBump, lineageTrait, inheritAbility, subBonus, strength };
+}
+// ---------- v31: 配合（血統）システム ----------
+// ウイニングポストの血統・配合・インブリード、DQMの配合（+値累代）を、マイライフの
+// 師弟継承へ落とし込む。2人の殿堂レジェンドを「両親」に選ぶと両方の血を引く教え子が生まれ、
+// 脚質の相性（ニック）、共通祖先による血の濃さ（インブリード）、累代で受け継ぐ+値を持つ。
+function legendBloodId(l) {
+  if (!l) return null;
+  return l.bloodId || (l.name != null ? "n:" + l.name : null);
+}
+// 自身＋記録済み祖先の血統IDの集合（インブリード判定用）
+function legendAncestorSet(l) {
+  const set = new Set();
+  const self = legendBloodId(l); if (self) set.add(self);
+  (l && l.ancestors || []).forEach(a => { if (a) set.add(a); });
+  return set;
+}
+// 脚質ペアの配合相性（ニック）。良相性ほど強い恩恵と看板特性が出る
+const BREED_NICKS = {
+  "SPR+SPR": { rank: "◎", label: "純血スプリンターの配合", ability: "finisher",     ab: { sprint: 5, flat: 2 } },
+  "CLM+CLM": { rank: "◎", label: "純血クライマーの配合",   ability: "mount",        ab: { climb: 5, stamina: 2 } },
+  "TT+TT":   { rank: "◎", label: "純血独走屋の配合",       ability: "soloist",      ab: { solo: 5, stamina: 2 } },
+  "PUN+SPR": { rank: "◎", label: "豪脚パンチャーの黄金配合", ability: "finisher",     ab: { sprint: 4, climb: 3 } },
+  "CLM+TT":  { rank: "◎", label: "独走クライマーの黄金配合", ability: "soloist",      ab: { climb: 4, solo: 3 } },
+  "RUL+SPR": { rank: "◎", label: "平坦最強の黄金配合",       ability: "engine",       ab: { flat: 4, sprint: 3 } },
+  "CLM+PUN": { rank: "○", label: "登坂職人の好配合",         ability: "mount",        ab: { climb: 4, sprint: 1 } },
+  "PUN+TT":  { rank: "○", label: "変幻自在の好配合",         ability: "puncheur",     ab: { climb: 2, solo: 3 } },
+  "RUL+TT":  { rank: "○", label: "鉄壁ルーラーの好配合",     ability: "engine",       ab: { flat: 3, solo: 2 } },
+  "RUL+RUL": { rank: "○", label: "純血ルーラーの配合",       ability: "engine",       ab: { flat: 4, stamina: 2 } },
+  "PUN+PUN": { rank: "○", label: "純血パンチャーの配合",     ability: "puncheur",     ab: { climb: 3, sprint: 2 } },
+  "RUL+PUN": { rank: "○", label: "万能型の好配合",           ability: "allrounder_sp", ab: { flat: 2, climb: 2 } },
+};
+function breedNick(typeA, typeB) {
+  const key = [typeA, typeB].sort().join("+");
+  return BREED_NICKS[key] || { rank: "△", label: "標準的な配合", ability: null, ab: {} };
+}
+// 血の濃さ（インブリード）：両親が共通の祖先を持つほど濃い血のクロスになる
+function breedInbreed(parentA, parentB) {
+  const ga = legendAncestorSet(parentA), gb = legendAncestorSet(parentB);
+  let count = 0; ga.forEach(x => { if (gb.has(x)) count++; });
+  return { count, mergedAncestors: new Set([...ga, ...gb]) };
+}
+// 配合ボーナス一式を算出（両親＝殿堂スナップショット、typeは新人の脚質）
+function mlBreedBonus(parentA, parentB) {
+  const nick = breedNick(parentA.type, parentB.type);
+  const inb = breedInbreed(parentA, parentB);
+  // +値（累代）：両親の+値の平均＋世代加算。DQM的に代を重ねるほど蓄積する
+  const plusValue = Math.round(((parentA.plusValue || 0) + (parentB.plusValue || 0)) / 2) + 2;
+  const plusPer = Math.min(15, plusValue); // 1能力あたりの累代ボーナス（上限15）
+  const abBonus = {};
+  Object.entries(nick.ab || {}).forEach(([k, v]) => { abBonus[k] = (abBonus[k] || 0) + v; });
+  AB_KEYS.forEach(k => { abBonus[k] = (abBonus[k] || 0) + Math.round(plusPer * 0.5); });
+  // 血の濃さボーナス：共通祖先1つにつき全能力+2（上限+8）、看板特性を確定付与
+  const inbreedAb = inb.count > 0 ? (nick.ability || "big") : null;
+  if (inb.count > 0) { const b = Math.min(8, inb.count * 2); AB_KEYS.forEach(k => { abBonus[k] = (abBonus[k] || 0) + b; }); }
+  // 継承特性：ニックの看板特性＋もう片親の良特性＋血の濃さ特性（重複除去は呼び出し側）
+  const extraAbilities = [];
+  if (nick.ability) extraAbilities.push(nick.ability);
+  for (const id of (parentB.specialAbilities || [])) { if (ABILITIES[id] && !ABILITIES[id].bad && !extraAbilities.includes(id)) { extraAbilities.push(id); break; } }
+  if (inbreedAb && !extraAbilities.includes(inbreedAb)) extraAbilities.push(inbreedAb);
+  // 副ステータス：両親の高い方の1/4を上乗せ
+  const subBonus = {};
+  SUB_STAT_KEYS.forEach(k => {
+    const a = (parentA.finalSubStats && parentA.finalSubStats[k]) || 50;
+    const b = (parentB.finalSubStats && parentB.finalSubStats[k]) || 50;
+    subBonus[k] = Math.round((Math.max(a, b) - 50) * 0.25);
+  });
+  const growthBump = nick.rank === "◎";
+  const generation = Math.max(parentA.generation || 0, parentB.generation || 0) + 1;
+  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation };
 }
 function mlRecordLegend(s) {
   saveMlLegends([...loadMlLegends(), mlLegendSnapshot(s)]);
@@ -4798,7 +4875,7 @@ function App() {
     return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent, rival2Present, weather: rollWeather(rng) };
   }
   const ML_MILESTONE_LABEL = { worlds: { eyebrow: "🌍 世界選手権", color: C.blue }, olympics: { eyebrow: "🥇 オリンピック", color: C.yellow } };
-  function mlCreateChar(type, background, master) {
+  function mlCreateChar(type, background, master, partner) {
     const rng = mulberry(Date.now() % 999983);
     const team = MYLIFE_TEAMS[Math.floor(Math.random() * MYLIFE_TEAMS.length)];
     const bg = ML_BACKGROUNDS[background];
@@ -4821,6 +4898,26 @@ function App() {
       if (inh.subBonus) SUB_STAT_KEYS.forEach(k => { if (inh.subBonus[k]) player[k] = Math.max(20, Math.min(95, (player[k] ?? 50) + inh.subBonus[k])); });
       player.master = master.name;
       player.teaching = inh.teaching.label;
+      player.joinOvr = overall(player);
+    }
+    // v31: 配合（血統）。2人目の親（配合相手）が選ばれていれば、両方の血を引く教え子にする
+    let breed = null;
+    if (master && partner) {
+      breed = mlBreedBonus(master, partner);
+      AB_KEYS.forEach(k => { if (breed.abBonus[k]) player[k] = Math.min(96, (player[k] || 0) + breed.abBonus[k]); });
+      SUB_STAT_KEYS.forEach(k => { if (breed.subBonus[k]) player[k] = Math.max(20, Math.min(95, (player[k] ?? 50) + breed.subBonus[k])); });
+      if (breed.growthBump) { const gi = GROWTHPOW_ORDER.indexOf(player.growthPow); if (gi >= 0 && gi < GROWTHPOW_ORDER.length - 1) player.growthPow = GROWTHPOW_ORDER[gi + 1]; }
+      let abils2 = [...(player.abilities || [])];
+      breed.extraAbilities.forEach(id => { if (id && ABILITIES[id] && !abils2.includes(id)) abils2.push(id); });
+      player.abilities = abils2.slice(0, 5); // 配合は特能を最大5つまで受け継げる
+      player.partner = partner.name;
+      player.plusValue = breed.plusValue;
+      player.generation = breed.generation;
+      player.parentBloodIds = [legendBloodId(master), legendBloodId(partner)].filter(Boolean);
+      const anc = new Set(player.parentBloodIds);
+      legendAncestorSet(master).forEach(a => anc.add(a));
+      legendAncestorSet(partner).forEach(a => anc.add(a));
+      player.ancestorBloodIds = [...anc].slice(0, 12);
       player.joinOvr = overall(player);
     }
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
@@ -4847,6 +4944,10 @@ function App() {
       initLog.push(`【1年目 4月】かつての名選手・${master.name}の教え子としてデビュー。師の教え「${inh.teaching.label}」を授かり、${AB_LABEL[inh.keys[0]]}を受け継いだ`);
       initLog.push(`【1年目 4月】継承特性「${ABILITIES[inh.lineageTrait].label}」を身につけている（${inh.teaching.desc}）`);
       if (inh.inheritAbility) initLog.push(`【1年目 4月】さらに師匠直伝の特殊能力「${ABILITIES[inh.inheritAbility].label}」も受け継いだ`);
+      if (breed) {
+        initLog.push(`【1年目 4月】🧬 配合：${master.name}と${partner.name}、二人の血を引く逸材（${breed.nick.rank} ${breed.nick.label}／累代+${breed.plusPer}）`);
+        if (breed.inbreed.count > 0) initLog.push(`【1年目 4月】🩸 共通の祖先を持つ濃い血のクロス（インブリード×${breed.inbreed.count}）。血が結晶し「${ABILITIES[breed.inbreedAb]?.label || breed.inbreedAb}」を宿す`);
+      }
     } else {
       initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
     }
@@ -5923,13 +6024,59 @@ function App() {
                     </div>
                   </div>
                 )}
+                {/* v31: 配合相手（2人目の親）。師匠を選んでいる時だけ表示する */}
+                {master && legends.length >= 2 && (() => {
+                  const pIdx = ml.partnerIdx ?? -1;
+                  const partner = (pIdx >= 0 && pIdx !== idx) ? legends[pIdx] : null;
+                  const breed = partner ? mlBreedBonus(master, partner) : null;
+                  const nickColor = breed ? (breed.nick.rank === "◎" ? C.yellow : breed.nick.rank === "○" ? C.green : C.sub) : C.sub;
+                  return (
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${C.line}` }}>
+                      <Eyebrow color={"#e56cc8"}>🧬 配合相手（もう一人の親・任意）</Eyebrow>
+                      <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px" }}>師匠に加えて2人目の親を選ぶと「配合」になり、両方の血を引く逸材が生まれます。脚質の相性（ニック◎○△）、共通の祖先による血の濃さ（インブリード）、代を重ねるほど蓄積する+値が乗ります。</div>
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <button onClick={() => setMl(s => ({ ...s, partnerIdx: -1 }))}
+                          style={{ textAlign: "left", padding: "8px 12px", borderRadius: 10, cursor: "pointer",
+                            background: pIdx === -1 ? "rgba(255,210,63,0.12)" : C.panel, border: `1.5px solid ${pIdx === -1 ? C.yellow : C.line}` }}>
+                          <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>配合しない（師事のみ）</span>
+                        </button>
+                        {legends.map((leg, i) => i === idx ? null : (
+                          <button key={i} onClick={() => setMl(s => ({ ...s, partnerIdx: i }))}
+                            style={{ textAlign: "left", padding: "8px 12px", borderRadius: 10, cursor: "pointer",
+                              background: pIdx === i ? "rgba(229,108,200,0.16)" : C.panel, border: `1.5px solid ${pIdx === i ? "#e56cc8" : C.line}` }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{leg.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{TYPES[leg.type]?.label || leg.type}）</span></span>
+                              <span style={{ fontSize: 10.5, color: C.sub }}>{(leg.generation || 0) > 0 ? `${leg.generation}代目・` : ""}+{leg.plusValue || 0}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      {breed && (
+                        <div style={{ background: "linear-gradient(180deg,#2e2436,#241d2c)", borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 11.5, color: C.text, lineHeight: 1.7, border: `1px solid #e56cc8` }}>
+                          <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>配合相性：</span><span style={{ color: nickColor, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
+                          <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>血統ボーナス：</span>
+                            累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>
+                            {breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}（血が濃い！）</span>}
+                            {breed.generation > 1 && `・${breed.generation}代目`}
+                          </div>
+                          <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>受け継ぐ特能：</span>
+                            {breed.extraAbilities.length > 0 ? breed.extraAbilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・") : "—"}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
           <Btn onClick={() => {
             const legends = loadMlLegends();
-            const master = (ml.masterIdx ?? -1) >= 0 ? legends[ml.masterIdx] : null;
-            const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice, ml.bgChoice, master); };
+            const mIdx = ml.masterIdx ?? -1;
+            const master = mIdx >= 0 ? legends[mIdx] : null;
+            const pIdx = ml.partnerIdx ?? -1;
+            const partner = (master && pIdx >= 0 && pIdx !== mIdx) ? legends[pIdx] : null;
+            const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice, ml.bgChoice, master, partner); };
             if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate);
             else doCreate();
           }}>この内容でデビュー →</Btn>
@@ -5954,6 +6101,7 @@ function App() {
             </div>
             {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
             {r.master && <div style={{ fontSize: 11, color: C.purple, marginTop: 1 }}>🎓 {r.master}の教え子{r.teaching ? `・師の教え「${r.teaching}」` : ""}</div>}
+            {r.partner && <div style={{ fontSize: 11, color: "#e56cc8", marginTop: 1 }}>🧬 {r.master}×{r.partner}の配合{(r.generation || 0) > 1 ? `・${r.generation}代目` : ""}{(r.plusValue || 0) > 0 ? `・累代+${Math.min(15, r.plusValue)}` : ""}</div>}
             <PersonaLine p={r.personality} />
             <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
