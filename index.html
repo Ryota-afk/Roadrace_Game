@@ -400,8 +400,44 @@ function mlLegendSnapshot(s) {
     rival2Name: (s.rival2 && (s.rivalRecord2?.meetings || 0) > 0) ? s.rival2.name : null, rivalRecord2: s.rivalRecord2 || null,
     achievedCount, achievedTotal: ML_ACHIEVEMENTS.length,
     nickname: riderNickname(r), summary: riderCareerSummary({ ...r, farewellYear: s.year, farewellReason: "retired" }),
+    // v27: 教え子（プロテジェ）システム用。引退時の最終能力・成長力・特殊能力・得意分野を
+    // 記録しておくと、次のプレイでこの選手に師事した新人が能力の一部を引き継げる。
+    // 旧セーブの殿堂選手にはこれらが無いため、読み出し側は type/戦績からのフォールバックを用いる
+    finalAbilities: { flat: Math.round(r.flat), climb: Math.round(r.climb), sprint: Math.round(r.sprint), stamina: Math.round(r.stamina), solo: Math.round(r.solo) },
+    growthPow: r.growthPow, specialAbilities: [...(r.abilities || [])], focus: r.focus, overall: overall(r),
     retiredAt: Date.now(),
   };
+}
+// v27: 教え子への継承内容を導く。師匠（殿堂スナップショット）の得意能力・戦績・成長力・
+// 特殊能力から、新人が受け継ぐ能力ボーナス等を算出する。旧セーブ（能力データ無し）でも
+// type と戦績だけで最低限の継承ができるようフォールバックを用意する
+const TYPE_ABKEYS = {
+  SPR: ["sprint", "flat"], CLM: ["climb", "stamina"], RUL: ["flat", "stamina"],
+  PUN: ["climb", "sprint"], TT: ["solo", "stamina"],
+};
+function protegeInherit(master) {
+  const wins = master.wins || 0, podiums = master.podiums || 0;
+  const strength = Math.min(1, (wins * 2 + podiums) / 40); // 0..1（伝説的な師ほど1に近い）
+  // 引き継ぐ得意能力：最終能力があればその上位2つ、無ければtype由来の代表能力
+  let keys;
+  if (master.finalAbilities) {
+    keys = Object.entries(master.finalAbilities).sort((a, b) => b[1] - a[1]).slice(0, 2).map(e => e[0]);
+  } else {
+    keys = TYPE_ABKEYS[master.type] || ["flat", "stamina"];
+  }
+  const primaryBonus = Math.round(3 + strength * 4); // 3〜7
+  const abBonus = {};
+  abBonus[keys[0]] = primaryBonus;
+  abBonus[keys[1]] = Math.round(primaryBonus * 0.5);
+  // 成長力の底上げ：名だたる名選手（strength高）に師事すると成長力が1段階上がる
+  const growthPowBump = strength >= 0.55;
+  // 特殊能力の継承：師が持っていた良特性を1つだけ受け継ぐ（悪特性は除外・新セーブのみ）
+  let inheritAbility = null;
+  const specials = master.specialAbilities || [];
+  for (const id of specials) {
+    if (ABILITIES[id] && !ABILITIES[id].bad) { inheritAbility = id; break; }
+  }
+  return { keys, abBonus, growthPowBump, inheritAbility, strength };
 }
 function mlRecordLegend(s) {
   saveMlLegends([...loadMlLegends(), mlLegendSnapshot(s)]);
@@ -1573,6 +1609,19 @@ const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
 function mlGrowthCap(year) {
   return Math.min(132, 90 + Math.floor(Math.max(0, (year || 1) - 1)) * 2);
 }
+// v27: 毎月の生活費・税負担。年俸の一定割合＋クルマ・住居のグレード維持費。
+// 年俸が伸びるほど額も増えるので、手取りは頭打ちになり資金のダブつきが抑えられる
+function mlLivingCost(s) {
+  const salaryTax = Math.round((s.salary || 0) / 12 * 0.5);
+  const carUpkeep = Math.max(0, (s.carLv ?? -1) + 1) * 4;
+  const houseUpkeep = Math.max(0, (s.houseLv ?? -1) + 1) * 4;
+  return salaryTax + carUpkeep + houseUpkeep;
+}
+// v27: 私設強化合宿の費用。年次・クラスが上がるほど高額になり、後半のダブついた
+// 資金の受け皿になる（同時に、スケールしていくAIに能力で食らいつく手段にもなる）
+function mlPrivateCampCost(s) {
+  return 120 + Math.max(0, (s.year || 1) - 1) * 40 + (s.classIdx || 0) * 60;
+}
 // v19: 超早熟は稀な自然発生のみで到達できる特別枠のため、育成アイテムでの
 // 到達先には含めない（晩成方向への進行のみ：早熟→普通→晩成→超晩成）
 const GROWTH_ORDER = ["early", "normal", "late", "super_late"];
@@ -2437,6 +2486,21 @@ function growthPhase(r) {
   if (r.age < ps) return { gain: 1.0, dec: 0, tag: "成長期" };
   if (r.age <= pe) return { gain: 0.5, dec: 0, tag: "全盛期" };
   return { gain: 0.1, dec: Math.min(1.2, 0.25 * (r.age - pe)), tag: "衰え期" };
+}
+// v20: ポテンシャル予測レンジ。成長力(growthPow)・成長フェーズ・年齢から
+// 伸びしろの粗い目安（大/中/小）を導く。スカウト査定やロスター表示で「今後どこまで
+// 伸びるか」の指針として提示する（確定値ではなくあくまで予測）
+function potentialHint(r) {
+  const phase = growthPhase(r).tag;
+  const powScore = { S: 3, A: 2, B: 1, C: 0 }[r.growthPow] ?? 1;
+  let score = powScore;
+  if (phase === "成長期") score += 2;
+  else if (phase === "全盛期") score += 1;
+  const [ps] = GROWTH[r.growth].peak;
+  if (r.age < ps - 3) score += 1;
+  if (score >= 5) return { label: "伸びしろ大", color: "#ffd23f" };
+  if (score >= 3) return { label: "伸びしろ中", color: "#35c07e" };
+  return { label: "伸びしろ小", color: "#9aa3b5" };
 }
 
 // ---------- UIパーツ ----------
@@ -4315,12 +4379,26 @@ function App() {
     return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent, rival2Present, weather: rollWeather(rng) };
   }
   const ML_MILESTONE_LABEL = { worlds: { eyebrow: "🌍 世界選手権", color: C.blue }, olympics: { eyebrow: "🥇 オリンピック", color: C.yellow } };
-  function mlCreateChar(type, background) {
+  function mlCreateChar(type, background, master) {
     const rng = mulberry(Date.now() % 999983);
     const team = MYLIFE_TEAMS[Math.floor(Math.random() * MYLIFE_TEAMS.length)];
     const bg = ML_BACKGROUNDS[background];
-    const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set() });
+    // v27: 教え子（プロテジェ）。師匠を選んでいれば、その最終能力・特殊能力・成長力を
+    // 一部引き継いだ状態でデビューする
+    const inh = master ? protegeInherit(master) : null;
+    const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set(), abBonus: inh ? inh.abBonus : undefined });
     player.background = background;
+    if (inh) {
+      if (inh.growthPowBump) {
+        const gi = GROWTHPOW_ORDER.indexOf(player.growthPow);
+        if (gi >= 0 && gi < GROWTHPOW_ORDER.length - 1) player.growthPow = GROWTHPOW_ORDER[gi + 1];
+      }
+      if (inh.inheritAbility && !(player.abilities || []).includes(inh.inheritAbility)) {
+        player.abilities = [...(player.abilities || []), inh.inheritAbility].slice(0, 3);
+      }
+      player.master = master.name;
+      player.joinOvr = overall(player);
+    }
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
     // v25: 個人スポンサー・メディア人気度。チーム年俸とは別枠で、戦績に応じて上がる
     // 知名度が個人スポンサー収入（月極＋節目の一時金）に反映される
@@ -4334,7 +4412,18 @@ function App() {
     const rival2 = mlCreateRival(rng, player.name, team.name, [rival.name], [rival.team]);
     // v25: 新人時代に指導してくれる恩師を1名設定する。在籍から3年目を迎えるまでの間、
     // 練習・出走経験の伸びにボーナスがかかり、3年目に「人生の岐路」として一区切りを迎える
-    const mentorName = pickRiderName(rng, new Set([player.name, rival.name, rival2.name]));
+    // v27: 師匠（プロテジェの師）を選んでいれば、その名選手本人が恩師として指導につく
+    const mentorName = master ? master.name : pickRiderName(rng, new Set([player.name, rival.name, rival2.name]));
+    const initLog = [
+      `【1年目 4月】${bg.label}として${team.name}に新人選手加入`,
+      `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`,
+    ];
+    if (master) {
+      initLog.push(`【1年目 4月】かつての名選手・${master.name}の教え子としてデビュー。師の${AB_LABEL[inh.keys[0]]}を受け継ぎ、直々の指導も受けられる`);
+      if (inh.inheritAbility) initLog.push(`【1年目 4月】師匠仕込みの特殊能力「${ABILITIES[inh.inheritAbility].label}」を最初から身につけている`);
+    } else {
+      initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
+    }
     setMl(s => ({
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
@@ -4345,12 +4434,8 @@ function App() {
       houseLv: -1, carLv: -1,
       rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
       rival2, rivalRecord2: { meetings: 0, wins: 0, losses: 0 },
-      flags: { ...s.flags, mentorName, mentorActive: true },
-      log: [
-        `【1年目 4月】${bg.label}として${team.name}に新人選手加入`,
-        `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`,
-        `【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`,
-      ],
+      flags: { ...s.flags, mentorName, mentorActive: true, master: master ? master.name : null },
+      log: initLog,
       screen: "mylife_main",
     }));
   }
@@ -4616,7 +4701,11 @@ function App() {
       const managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
       // v25: 個人スポンサー収入。人気度10ごとに月+2万円の継続収入が入る（チーム年俸とは別枠）
       const popIncome = Math.floor((s.player.popularity || 0) / 10) * 2;
-      const money = s.money + Math.round(s.salary / 12) + popIncome;
+      // v27: 生活費・税負担。年俸が上がるほど生活水準・税負担も増し、手元に残る額は
+      // 頭打ちになる。高級車・住居のグレードにも維持費がかかる。これによりキャリア後半に
+      // 資金がダブついて緊張感が失われる（＝ヌルゲー化）のを抑える
+      const livingCost = mlLivingCost(s);
+      const money = Math.max(0, s.money + Math.round(s.salary / 12) + popIncome - livingCost);
       if (s.month === 11) {
         player.age += 1;
         const retire = player.age >= 36 || (player.age >= 33 && overall(player) < player.joinOvr * 0.8);
@@ -4871,6 +4960,26 @@ function App() {
     }
     mlUseStock(k);
   }
+  // v27: 私設強化合宿。潤沢な資金を注ぎ込んで狙った能力（focus）を一気に引き上げる、
+  // 繰り返し利用できる資金の使い道。成長キャップは通常の練習と共通なので、伸びしろが
+  // 尽きた選手には効きにくい。疲労も溜まるので連打は難しい
+  function mlPrivateCamp() {
+    setMl(s => {
+      const cost = mlPrivateCampCost(s);
+      if (s.money < cost) return s;
+      const growthCap = mlGrowthCap(s.year);
+      const player = { ...s.player };
+      const before = player[player.focus];
+      addAb(player, player.focus, 6, growthCap);
+      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, 2, growthCap));
+      player.fatigue = Math.min(100, player.fatigue + 12);
+      const gained = Math.round((player[player.focus] - before) * 10) / 10;
+      return {
+        ...s, player, money: s.money - cost,
+        log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】私設強化合宿を実施（-${cost}万円）。${AB_LABEL[player.focus]}を中心に鍛え上げた（${AB_LABEL[player.focus]}+${gained}）`],
+      };
+    });
+  }
   function mlBuyCar() {
     setMl(s => {
       const next = s.carLv + 1;
@@ -5082,7 +5191,7 @@ function App() {
             <Eyebrow>MY LIFE — {CLASSES[ml.classIdx].label} {ml.year}年目 {MONTHS[ml.month]}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{ml.player.name}（{ml.team}）</div>
             <div style={{ fontSize: 11, color: C.sub }}>{ml.points}pt / 昇格権{CLASSES[ml.classIdx].need}pt</div>
-            <div style={{ fontSize: 11, color: C.sub }}>所持金{ml.money}万円・年俸{ml.salary}万円</div>
+            <div style={{ fontSize: 11, color: C.sub }}>所持金{ml.money}万円・年俸{ml.salary}万円（生活費/税 -{mlLivingCost(ml)}万/月）</div>
           </div>
         )}
         {children}
@@ -5208,8 +5317,49 @@ function App() {
               ))}
             </div>
           </div>
+          {(() => {
+            const legends = loadMlLegends();
+            if (legends.length === 0) return null;
+            const idx = ml.masterIdx ?? -1;
+            const master = idx >= 0 ? legends[idx] : null;
+            const inh = master ? protegeInherit(master) : null;
+            return (
+              <div>
+                <Eyebrow color={C.purple}>師匠（歴代の名選手に師事・任意）</Eyebrow>
+                <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px" }}>過去に殿堂入りした選手の教え子としてデビューできます。師の得意能力や特殊能力・成長力の一部を受け継ぎます。</div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <button onClick={() => setMl(s => ({ ...s, masterIdx: -1 }))}
+                    style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                      background: idx === -1 ? "rgba(255,210,63,0.12)" : C.panel, border: `1.5px solid ${idx === -1 ? C.yellow : C.line}` }}>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>師事しない（通常のデビュー）</span>
+                  </button>
+                  {legends.map((leg, i) => (
+                    <button key={i} onClick={() => setMl(s => ({ ...s, masterIdx: i }))}
+                      style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                        background: idx === i ? "rgba(201,139,240,0.14)" : C.panel, border: `1.5px solid ${idx === i ? C.purple : C.line}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{leg.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{TYPES[leg.type]?.label || leg.type}）</span></span>
+                        <span style={{ fontSize: 10.5, color: C.sub }}>{leg.wins || 0}勝/{leg.podiums || 0}表彰台</span>
+                      </div>
+                      {leg.nickname && <div style={{ fontSize: 11, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{leg.nickname}」</div>}
+                    </button>
+                  ))}
+                </div>
+                {inh && (
+                  <div style={{ background: C.panel2, borderRadius: 8, padding: "8px 10px", marginTop: 8, fontSize: 11.5, color: C.text }}>
+                    <span style={{ color: C.purple, fontWeight: 700 }}>継承内容：</span>
+                    {Object.entries(inh.abBonus).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}
+                    {inh.growthPowBump && "・成長力+1段階"}
+                    {inh.inheritAbility && `・特殊能力「${ABILITIES[inh.inheritAbility].label}」`}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <Btn onClick={() => {
-            const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice, ml.bgChoice); };
+            const legends = loadMlLegends();
+            const master = (ml.masterIdx ?? -1) >= 0 ? legends[ml.masterIdx] : null;
+            const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice, ml.bgChoice, master); };
             if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate);
             else doCreate();
           }}>この内容でデビュー →</Btn>
@@ -5231,12 +5381,14 @@ function App() {
               <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
             </div>
             {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
+            {r.master && <div style={{ fontSize: 11, color: C.purple, marginTop: 1 }}>🎓 {r.master}の教え子</div>}
             <PersonaLine p={r.personality} />
             <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
             <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
               <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
               <span>成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></span>
+              {(() => { const pot = potentialHint(r); return <span style={{ color: pot.color }}>{pot.label}</span>; })()}
               <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span><CondFc dir={r.condForecast} /></span>
               {ml.flags?.married && <span style={{ color: C.purple }}>💍 既婚</span>}
             </div>
@@ -5572,7 +5724,7 @@ function App() {
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
             <Eyebrow color={C.green}>SHOP — 所持金 {ml.money}万円</Eyebrow>
-            <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます）</div>
+            <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます・生活費/税 -{mlLivingCost(ml)}万/月）</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
               <span style={{ fontSize: 11, color: C.sub }}>現在の疲労</span>
               <div style={{ width: 90 }}><FatigueBar v={r.fatigue} /></div>
@@ -5628,6 +5780,16 @@ function App() {
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+          <section>
+            <Eyebrow color={"#e8a13c"}>私設強化合宿（何度でも・資金の使い道）</Eyebrow>
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <div>
+                <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>私設強化合宿</div>
+                <div style={{ color: C.sub, fontSize: 11 }}>資金を注ぎ込み{AB_LABEL[r.focus]}を中心に鍛える（{AB_LABEL[r.focus]}+6・他+2、疲労+12）。伸びしろが尽きた選手には効きにくい</div>
+              </div>
+              <Btn small color={"#e8a13c"} disabled={ml.money < mlPrivateCampCost(ml)} onClick={mlPrivateCamp}>{mlPrivateCampCost(ml)}万で実施</Btn>
             </div>
           </section>
           <section>
@@ -6157,6 +6319,7 @@ function App() {
                     {r.age <= 18 && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.green, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🌱 ユース</span>}
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color, border: `1px solid ${t.color}`, borderRadius: 4, padding: "1px 5px" }}>{t.label}</span>
                     <span style={{ marginLeft: 5, fontFamily: FONT_M, fontSize: 12, color: POW[r.growthPow].color }}>成長{r.growthPow}</span>
+                    <span style={{ marginLeft: 5, fontSize: 11, color: potentialHint(r).color }}>{potentialHint(r).label}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <button onClick={() => setCaptain(r.id)} title="主将に任命（自分より2歳以上若い選手の練習効果+10%）"
@@ -6252,7 +6415,7 @@ function App() {
                         </div>
                         <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 13 }}>{sc.ovrMin}〜{sc.ovrMax}<span style={{ fontSize: 9, color: C.sub }}> OVR?</span></span>
                       </div>
-                      <div style={{ fontSize: 11.5, color: C.sub, margin: "3px 0" }}>{sc.tag}・{r.age}歳・{GROWTH[r.growth].label}型・成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></div>
+                      <div style={{ fontSize: 11.5, color: C.sub, margin: "3px 0" }}>{sc.tag}・{r.age}歳・{GROWTH[r.growth].label}型・成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span>・<span style={{ color: potentialHint(r).color }}>{potentialHint(r).label}</span></div>
                       <PersonaLine p={r.personality} />
                       <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
                       <BlurGrid blur={sc.blur} />
