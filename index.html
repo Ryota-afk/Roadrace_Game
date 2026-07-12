@@ -2102,6 +2102,9 @@ function rainMul(r, weather) {
 function effAbilities(r, equip, itemBoost, grade, weather) {
   const fatPen = 1 - Math.max(0, (r.fatigue || 0) - 50) * 0.003;
   const cm = condMul(r.cond || 3);
+  // v29: ピーキング（フォーム）。狙って仕上げた選手はレース当日に能力が底上げされる（±約17%）。
+  // マイライフ専用の概念で、フォーム未設定の選手（AI・シーズン）は50=1.0で無影響
+  const formMul = 1 + ((r.form ?? 50) - 50) / 300;
   const e = {};
   AB_KEYS.forEach(k => { e[k] = r[k]; });
   if (r.parts) {
@@ -2116,7 +2119,7 @@ function effAbilities(r, equip, itemBoost, grade, weather) {
   const mentalBig = grade === 3 ? 1 + (mental - 50) / 600 : 1;
   const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig;
   const wMul = rainMul(r, weather);
-  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul; });
+  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul; });
   // v28: オールラウンダーは全能力を控えめに底上げ（脚質を選ばない万能型）
   if (hasAbility(r, "allrounder_sp")) AB_KEYS.forEach(k => { e[k] += hasGoldAbility(r, "allrounder_sp") ? 4 : 2; });
   // v29: 体格（パワーウェイト）。軽いほど登坂有利・重いほど平坦/独走有利
@@ -4660,6 +4663,7 @@ function App() {
     // v25: 個人スポンサー・メディア人気度。チーム年俸とは別枠で、戦績に応じて上がる
     // 知名度が個人スポンサー収入（月極＋節目の一時金）に反映される
     player.popularity = 0;
+    player.form = 50; // v29: ピーキング用のフォーム（50=平常）
     player.popMilestones = [];
     // v14.3: 経歴ごとの初任給（万円/年）。年俸・監督評価・資産はキャリア開始時に初期化する
     const initialSalary = { highschool: 220, university: 280, corporate: 360 }[background] || 260;
@@ -4910,6 +4914,11 @@ function App() {
       player.streak = 0;
     } else if (mode === "event") {
       player.fatigue = Math.max(0, player.fatigue - 5);
+    } else if (mode === "peak") {
+      // v29: ピーキング。レースに向けたコンディション調整。フォームを高め疲労も少し抜ける
+      // （能力の成長は無く、あくまで「仕上げ」）
+      player.fatigue = Math.max(0, player.fatigue - 12);
+      player.streak = 0;
     } else if (ML_SPECIAL_TRAINING[mode]) {
       // v28: 専門トレーニング。対象2能力を強めに伸ばし、疲労を大きく消費する。
       // メンタル強化（対象能力なし）は全能力をわずかに底上げしつつ調子を整える枠
@@ -4949,6 +4958,12 @@ function App() {
     const dir = (player.condForecast != null) ? player.condForecast : rollCondDir();
     player.cond = Math.max(1, Math.min(5, (player.cond || 3) + dir * swing));
     player.condForecast = rollCondDir();
+    // v29: ピーキング。調整月はフォームが大きく上がり、それ以外の月は基準値(45)へじわじわ戻る。
+    // ＝ピークは維持し続けられず、大レースに合わせて仕上げる駆け引きになる
+    const curForm = player.form ?? 50;
+    player.form = mode === "peak"
+      ? Math.min(100, curForm + 24)
+      : Math.round(curForm + (45 - curForm) * 0.32);
     return player;
   }
   function mlAdvanceMonth(mode) {
@@ -5721,6 +5736,18 @@ function App() {
             </div>
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
             <FatigueBar v={r.fatigue} />
+            {(() => {
+              const form = r.form ?? 50;
+              const fc = form >= 80 ? C.yellow : form >= 62 ? C.green : form >= 40 ? C.sub : "#c86";
+              const fl = form >= 80 ? "ピーク" : form >= 62 ? "好調" : form >= 40 ? "平常" : "低調";
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 10.5, color: C.sub }}>フォーム</span>
+                  <div style={{ flex: 1, height: 5, background: C.line, borderRadius: 3 }}><div style={{ width: `${form}%`, height: 5, background: fc, borderRadius: 3 }} /></div>
+                  <span style={{ fontFamily: FONT_M, fontSize: 11, color: fc, width: 58, textAlign: "right" }}>{Math.round(form)}・{fl}</span>
+                </div>
+              );
+            })()}
             <AbilityGrid r={r} cap={mlGrowthCap(ml.year)} />
             <SubStatLine r={r} />
             <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year)}以上＝限界突破（伸びの上限は経験を積むほど毎年じわじわ上がっていきます）</div>
@@ -5832,6 +5859,7 @@ function App() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（focus中心）</Btn>
               <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養</Btn>
+              <Btn small outline color={"#e8a13c"} onClick={() => mlAdvanceMonth("peak")}>🎯 ピーキング調整（フォームを上げる）</Btn>
               <Btn small outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活イベント</Btn>
               {(ml.player.popularity || 0) >= 20 && (
                 <Btn small outline color={"#e8a13c"} onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事</Btn>
