@@ -396,6 +396,7 @@ function mlLegendSnapshot(s) {
     // 記録しておくと、次のプレイでこの選手に師事した新人が能力の一部を引き継げる。
     // 旧セーブの殿堂選手にはこれらが無いため、読み出し側は type/戦績からのフォールバックを用いる
     finalAbilities: { flat: Math.round(r.flat), climb: Math.round(r.climb), sprint: Math.round(r.sprint), stamina: Math.round(r.stamina), solo: Math.round(r.solo) },
+    finalSubStats: { accel: Math.round(r.accel ?? 50), build: Math.round(r.build ?? 50), mental: Math.round(r.mental ?? 50) },
     growthPow: r.growthPow, specialAbilities: [...(r.abilities || [])], focus: r.focus, overall: overall(r),
     retiredAt: Date.now(),
   };
@@ -415,13 +416,13 @@ const TEACH_KEYS = {
   hill: ["climb", "sprint"], flat: ["flat", "stamina"], power: ["sprint", "stamina"],
 };
 const PROTEGE_TEACHINGS = [
-  { key: "king",    label: "王者の風格", lineage: "big",           keysMode: "top2",   match: m => (m.wins || 0) >= 12, desc: "大舞台で力を発揮し、師の得意能力を色濃く受け継ぐ" },
-  { key: "ironman", label: "鉄人の系譜", lineage: "engine",        keysMode: "power",  match: m => (m.races || 0) >= 90, desc: "消耗に強い無尽蔵のエンジンを受け継ぐ" },
-  { key: "climb",   label: "山脈の記憶", lineage: "mount",         keysMode: "climb",  match: m => m.type === "CLM", desc: "山の申し子の系譜" },
-  { key: "sprint",  label: "豪脚の血統", lineage: "finisher",      keysMode: "sprint", match: m => m.type === "SPR", desc: "ゴール前の鬼の系譜" },
-  { key: "tt",      label: "孤高の走法", lineage: "soloist",       keysMode: "solo",   match: m => m.type === "TT",  desc: "独走屋の系譜" },
-  { key: "punch",   label: "変幻の技",   lineage: "puncheur",      keysMode: "hill",   match: m => m.type === "PUN", desc: "丘陵ハンターの系譜" },
-  { key: "all",     label: "万能の教え", lineage: "allrounder_sp", keysMode: "top2",   match: () => true, desc: "脚質を選ばない万能型の教え" },
+  { key: "king",    label: "王者の風格", lineage: "big",           keysMode: "top2",   sub: { mental: 8 },           match: m => (m.wins || 0) >= 12, desc: "大舞台で力を発揮し、師の得意能力を色濃く受け継ぐ" },
+  { key: "ironman", label: "鉄人の系譜", lineage: "engine",        keysMode: "power",  sub: { mental: 4, build: 3 }, match: m => (m.races || 0) >= 90, desc: "消耗に強い無尽蔵のエンジンを受け継ぐ" },
+  { key: "climb",   label: "山脈の記憶", lineage: "mount",         keysMode: "climb",  sub: { build: -6 },           match: m => m.type === "CLM", desc: "山の申し子の系譜（軽量な体格を受け継ぐ）" },
+  { key: "sprint",  label: "豪脚の血統", lineage: "finisher",      keysMode: "sprint", sub: { accel: 8 },            match: m => m.type === "SPR", desc: "ゴール前の鬼の系譜（鋭い加速を受け継ぐ）" },
+  { key: "tt",      label: "孤高の走法", lineage: "soloist",       keysMode: "solo",   sub: { mental: 4, accel: 3 }, match: m => m.type === "TT",  desc: "独走屋の系譜" },
+  { key: "punch",   label: "変幻の技",   lineage: "puncheur",      keysMode: "hill",   sub: { accel: 6 },            match: m => m.type === "PUN", desc: "丘陵ハンターの系譜" },
+  { key: "all",     label: "万能の教え", lineage: "allrounder_sp", keysMode: "top2",   sub: { accel: 3, mental: 3 }, match: () => true, desc: "脚質を選ばない万能型の教え" },
 ];
 function protegeInherit(master) {
   const wins = master.wins || 0, podiums = master.podiums || 0;
@@ -448,7 +449,9 @@ function protegeInherit(master) {
   for (const id of (master.specialAbilities || [])) {
     if (ABILITIES[id] && !ABILITIES[id].bad && id !== lineageTrait) { inheritAbility = id; break; }
   }
-  return { teaching, keys, abBonus, growthPowBump, lineageTrait, inheritAbility, strength };
+  // v29: 副ステータスの継承。師の教えに応じた副ステータス補正
+  const subBonus = { ...(teaching.sub || {}) };
+  return { teaching, keys, abBonus, growthPowBump, lineageTrait, inheritAbility, subBonus, strength };
 }
 function mlRecordLegend(s) {
   saveMlLegends([...loadMlLegends(), mlLegendSnapshot(s)]);
@@ -1790,6 +1793,27 @@ function randPow(rng, dist) {
   return "C";
 }
 
+// v29: コア5能力とは別の「副ステータス」3種。AB_KEYSには入れず（parts/overall/練習全体への
+// 波及を避けるため）、生成・表示・シムの特定フックにだけ効かせる独立軸。
+//   accel  加速力：アタックの初速・ゴール前の飛び出しの鋭さ（スプリント=トップ速度とは別）
+//   build  体格 ：高いほど重量＝平坦/独走で有利・登坂で不利（パワーウェイトの本質）
+//   mental メンタル：★3など大舞台での能力・調子の安定・勝負どころの粘り
+const SUB_STAT_KEYS = ["accel", "build", "mental"];
+const SUB_STAT_LABEL = { accel: "加速力", build: "体格", mental: "メンタル" };
+function buildDesc(build) { return build >= 66 ? "パワー型" : build >= 45 ? "標準" : "軽量型"; }
+function genSubStats(type, rng, opts = {}) {
+  const j = () => (rng() - 0.5) * 24;
+  const accelBase = { SPR: 68, PUN: 64, RUL: 54, CLM: 44, TT: 42 }[type] ?? 50;
+  const buildBase = { SPR: 68, RUL: 66, PUN: 52, TT: 48, CLM: 34 }[type] ?? 50;
+  const persM = { genius: 8, smart: 5, seeker: 4, artisan: 2 }[opts.personality] ?? 0;
+  const boost = opts.forceProdigy ? 10 : 0;
+  const cl = (v) => Math.max(20, Math.min(95, Math.round(v)));
+  return {
+    accel: cl(accelBase + j() + boost),
+    build: cl(buildBase + j()), // 体格は才能とは無関係なので逸材補正なし
+    mental: cl(48 + (rng() - 0.5) * 40 + persM + boost),
+  };
+}
 function newRider(power, rng, opts = {}) {
   const keys = Object.keys(TYPES);
   const type = opts.type || keys[Math.floor(rng() * keys.length)];
@@ -1823,10 +1847,11 @@ function newRider(power, rng, opts = {}) {
     : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
   let growthPowVal = opts.growthPow || randPow(rng, opts.powDist);
   if (opts.forceProdigy) { personality = "genius"; growthPowVal = "S"; }
+  const sub = genSubStats(type, rng, { personality, forceProdigy: opts.forceProdigy });
   const rider = {
     id: RID++,
     name: pickRiderName(rng, opts.banned),
-    type, ...r, age, growth, growthPow: growthPowVal, abilities, personality,
+    type, ...r, ...sub, age, growth, growthPow: growthPowVal, abilities, personality,
     fatigue: 20 + Math.floor(rng() * 20), cond: 3, condForecast: (rng() < 0.34 ? -1 : rng() < 0.5 ? 0 : 1), injury: 0, streak: 0,
     focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
     prodigy: !!opts.forceProdigy,
@@ -1839,9 +1864,14 @@ function newRider(power, rng, opts = {}) {
 }
 
 function initRoster() {
+  // v12バグ修正: 初期メンバー6名の名前が完全固定されており、新しくゲームを始めても
+  // 毎回同じ名前になってしまうと気になるとのフィードバックを受け、能力値・年齢・役割の
+  // バランスはそのまま維持しつつ、名前だけを新規ゲームのたびにランダム生成するようにした
+  const rng = mulberry(Date.now() % 999983);
   const mk = (name, type, f, c, sp, st, so, age, growth, pow, trait, pers) => {
     const r = {
       id: RID++, name, type, flat: f, climb: c, sprint: sp, stamina: st, solo: so,
+      ...genSubStats(type, rng, { personality: pers }),
       age, growth, growthPow: pow, abilities: trait ? [trait] : [], personality: pers,
       fatigue: 20, cond: 3, condForecast: 0, injury: 0, streak: 0,
       focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
@@ -1849,10 +1879,6 @@ function initRoster() {
     };
     r.joinOvr = overall(r); return r;
   };
-  // v12バグ修正: 初期メンバー6名の名前が完全固定されており、新しくゲームを始めても
-  // 毎回同じ名前になってしまうと気になるとのフィードバックを受け、能力値・年齢・役割の
-  // バランスはそのまま維持しつつ、名前だけを新規ゲームのたびにランダム生成するようにした
-  const rng = mulberry(Date.now() % 999983);
   const banned = new Set();
   const randName = () => pickRiderName(rng, banned);
   return [
@@ -2060,15 +2086,25 @@ function effAbilities(r, equip, itemBoost, grade, weather) {
     });
   }
   // v28: 大舞台適性。big=★3で+6%、nervous(悪特性)=★3で-5%
-  const bigMul = grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1;
+  // v29: メンタルも★3で能力に反映（±約8%）。特性big/nervousと重ねる
+  const mental = r.mental ?? 50;
+  const mentalBig = grade === 3 ? 1 + (mental - 50) / 600 : 1;
+  const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig;
   const wMul = rainMul(r, weather);
   AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul; });
   // v28: オールラウンダーは全能力を控えめに底上げ（脚質を選ばない万能型）
   if (hasAbility(r, "allrounder_sp")) AB_KEYS.forEach(k => { e[k] += hasGoldAbility(r, "allrounder_sp") ? 4 : 2; });
+  // v29: 体格（パワーウェイト）。軽いほど登坂有利・重いほど平坦/独走有利
+  const build = r.build ?? 50;
+  e.climb *= 1 + (50 - build) / 300;
+  e.flat *= 1 + (build - 50) / 350;
+  e.solo *= 1 + (build - 50) / 450;
   e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
   e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
   AB_KEYS.forEach(k => { e[k] = Math.min(135, e[k]); });
   e.type = r.type; e.abilities = r.abilities; e.goldAbilities = r.goldAbilities;
+  // v29: 副ステータスをエントラントにも持たせ、tick計算・最終区間で参照する
+  e.accel = r.accel ?? 50; e.mental = mental; e.build = build;
   return e;
 }
 // 脚質の得意区間ボーナス（形骸化対策）
@@ -2242,6 +2278,8 @@ function tickSpeedFactor(en, segType, mode, steepness) {
   // 知らないsegmentAbilityではなくここで加算する
   if (hasAbility(en, "escape") && mode === "attack") ab += hasGoldAbility(en, "escape") ? 8 : 4;
   if (hasAbility(en, "domestique") && mode === "pull") ab += hasGoldAbility(en, "domestique") ? 6 : 3;
+  // v29: 加速力はアタック（飛び出し・ギャップ埋め）の鋭さに効く
+  if (mode === "attack") ab += ((en.accel ?? 50) - 50) * 0.2;
   let f = 1 + (ab - 70) / 260;
   if (mode === "attack") f *= 1.15;
   f *= energyPenaltyMul(en.energy);
@@ -2456,8 +2494,11 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
             const edgeMul = segType === "sprint" ? 1.7 : 0.9;
             // v28: 「豪脚のラストスパート」は最終区間の追い込みが上乗せされる
             const finishKick = hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0;
+            // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
+            const accelKick = ((en.accel ?? 50) - 50) / 900;
+            const mentalKick = ((en.mental ?? 50) - 50) / 1500;
             const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.035;
-            dist = groupDist * Math.max(0.87, Math.min(1.17, 1 + terrainEdge * edgeMul + sprintEdge + finishKick + luck));
+            dist = groupDist * Math.max(0.85, Math.min(1.19, 1 + terrainEdge * edgeMul + sprintEdge + finishKick + accelKick + mentalKick + luck));
           } else if (segType === "sprint") {
             // 周回途中などの非最終スプリント区間は従来の弱めの着差
             const abilityEdge = ownCapable / groupDist - 1;
@@ -2686,6 +2727,23 @@ function FatigueBar({ v }) {
         <div style={{ position: "absolute", left: "90%", top: -2, width: 1.5, height: 9, background: C.red }} />
       </div>
       <span style={{ fontFamily: FONT_M, fontSize: 11, color: col, width: 26, textAlign: "right" }}>{Math.round(v)}</span>
+    </div>
+  );
+}
+// v29: 副ステータス（加速力・体格・メンタル）の小さな表示。コア能力とは別枠のバッジ行
+function SubStatLine({ r }) {
+  if (r.accel == null && r.build == null && r.mental == null) return null;
+  const col = (v) => v >= 75 ? C.yellow : v >= 55 ? C.green : v >= 40 ? C.sub : "#c86";
+  const item = (label, v) => (
+    <span key={label} style={{ fontSize: 10.5, color: C.sub }}>
+      {label}<span style={{ fontFamily: FONT_M, color: col(v), marginLeft: 2, fontWeight: 700 }}>{Math.round(v)}</span>
+    </span>
+  );
+  return (
+    <div style={{ display: "flex", gap: 10, marginTop: 2, flexWrap: "wrap", alignItems: "center" }}>
+      {item("加速", r.accel ?? 50)}
+      <span style={{ fontSize: 10.5, color: C.sub }}>体格<span style={{ fontFamily: FONT_M, color: col(r.build ?? 50), marginLeft: 2, fontWeight: 700 }}>{Math.round(r.build ?? 50)}</span><span style={{ color: C.sub, marginLeft: 2 }}>({buildDesc(r.build ?? 50)})</span></span>
+      {item("メンタル", r.mental ?? 50)}
     </div>
   );
 }
@@ -4567,6 +4625,8 @@ function App() {
       let abils = [...(player.abilities || [])];
       [inh.lineageTrait, inh.inheritAbility].forEach(id => { if (id && !abils.includes(id)) abils.push(id); });
       player.abilities = abils.slice(0, 4);
+      // v29: 師の教えに応じた副ステータス補正
+      if (inh.subBonus) SUB_STAT_KEYS.forEach(k => { if (inh.subBonus[k]) player[k] = Math.max(20, Math.min(95, (player[k] ?? 50) + inh.subBonus[k])); });
       player.master = master.name;
       player.teaching = inh.teaching.label;
       player.joinOvr = overall(player);
@@ -4858,7 +4918,9 @@ function App() {
     if (flags.mentor) player.fatigue = Math.max(0, player.fatigue - 3);
     // v20: シーズンモードと同様、調子は毎月ランダムに変動する（moody/steady_spがあれば変動幅も反映）
     // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
-    const swing = hasAbility(player, "moody") ? 2 : hasAbility(player, "steady_sp") ? 0.5 : 1;
+    // v29: メンタルが高いほど調子の変動が小さく安定する（低いと不安定）
+    const mentalSteady = Math.max(0.6, Math.min(1.4, 1 - ((player.mental ?? 50) - 50) / 250));
+    const swing = (hasAbility(player, "moody") ? 2 : hasAbility(player, "steady_sp") ? 0.5 : 1) * mentalSteady;
     const dir = (player.condForecast != null) ? player.condForecast : rollCondDir();
     player.cond = Math.max(1, Math.min(5, (player.cond || 3) + dir * swing));
     player.condForecast = rollCondDir();
@@ -5586,6 +5648,7 @@ function App() {
                     <div>
                       <span style={{ color: C.purple, fontWeight: 700 }}>継承：</span>
                       {Object.entries(inh.abBonus).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}
+                      {inh.subBonus && Object.entries(inh.subBonus).map(([k, v]) => `・${SUB_STAT_LABEL[k]}${v >= 0 ? "+" : ""}${v}`).join("")}
                       {inh.growthPowBump && "・成長力+1段階"}
                       <span style={{ color: C.yellow }}>・継承特性「{ABILITIES[inh.lineageTrait].label}」</span>
                       {inh.inheritAbility && `・特殊能力「${ABILITIES[inh.inheritAbility].label}」`}
@@ -5634,6 +5697,7 @@ function App() {
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
             <FatigueBar v={r.fatigue} />
             <AbilityGrid r={r} cap={mlGrowthCap(ml.year)} />
+            <SubStatLine r={r} />
             <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year)}以上＝限界突破（伸びの上限は経験を積むほど毎年じわじわ上がっていきます）</div>
             {(ml.stock.drink > 0 || ml.stock.supp > 0 || ml.stock.tune > 0) && (
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
@@ -6676,6 +6740,7 @@ function App() {
                 <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
                 <FatigueBar v={r.fatigue} />
                 <AbilityGrid r={r} cap={growthCap} />
+                <SubStatLine r={r} />
                 <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>種目別適性</div>
                 <DisciplineGrid r={r} />
                 <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -6756,6 +6821,7 @@ function App() {
                       <PersonaLine p={r.personality} />
                       <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
                       <BlurGrid blur={sc.blur} />
+                      <SubStatLine r={r} />
                       <div style={{ marginTop: 8 }}>
                         <Btn small color={C.green} disabled={g.budget < sc.price || g.roster.length >= rosterMax} onClick={() => signScout(sc)}>
                           {g.roster.length >= rosterMax ? "ロースター満員" : `${sc.price}万円で契約`}
