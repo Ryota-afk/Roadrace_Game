@@ -425,6 +425,7 @@ function mlLegendSnapshot(s) {
   const retiredAt = Date.now();
   const bloodId = "b:" + (r.name || "無名") + "#" + retiredAt;
   const ancestors = Array.isArray(r.ancestorBloodIds) ? r.ancestorBloodIds.slice(0, 12) : [];
+  const arch = mlCareerArchetype(s); // v31.4: 生き様（称号）
   return {
     name: r.name, type: r.type, background: r.background, team: s.team,
     endYear: s.year, age: r.age, races: (r.raceLog || []).length, wins, podiums,
@@ -446,7 +447,7 @@ function mlLegendSnapshot(s) {
     // v31.2: 系統名（旧セーブは名前から生成）
     lineageName: r.lineageName || `${r.name || "無名"}系`,
     // v31.4: キャリアの生き様（称号）
-    careerTitle: mlCareerArchetype(s).title, careerTitleDesc: mlCareerArchetype(s).desc,
+    careerTitle: arch.title, careerTitleDesc: arch.desc, careerArchetypeKey: arch.key,
   };
 }
 // v27: 教え子への継承内容を導く。師匠（殿堂スナップショット）の得意能力・戦績・成長力・
@@ -515,6 +516,34 @@ function legendAncestorSet(l) {
   const self = legendBloodId(l); if (self) set.add(self);
   (l && l.ancestors || []).forEach(a => { if (a) set.add(a); });
   return set;
+}
+// v31.5: 生き様（称号）の血。親のアーキタイプに応じた配合ボーナス（能力・特能・血の格）。
+const ARCH_BREED = {
+  world1:         { ab: { flat: 2, climb: 2, sprint: 2, stamina: 2, solo: 2 }, plus: 3, note: "世界王者の血" },
+  heroMulti:      { ability: "big", ab: { stamina: 2 }, plus: 2, note: "大舞台の英雄の血" },
+  hero:           { ability: "big", note: "勝負師の血" },
+  emperor:        { ab: { flat: 1, climb: 1, sprint: 1, stamina: 1, solo: 1 }, plus: 2, note: "帝王の血" },
+  specialist_SPR: { ab: { sprint: 4 }, ability: "finisher", note: "豪脚の血" },
+  specialist_CLM: { ab: { climb: 4 }, ability: "mount", note: "山岳の血" },
+  specialist_RUL: { ab: { flat: 4 }, ability: "flatlander", note: "平坦の血" },
+  specialist_PUN: { ab: { climb: 2, sprint: 2 }, ability: "puncheur", note: "丘陵の血" },
+  specialist_TT:  { ab: { solo: 4 }, ability: "soloist", note: "独走の血" },
+  domestique:     { ab: { stamina: 3 }, ability: "domestique", note: "献身の血" },
+  nearly:         { sub: { mental: 8 }, note: "雪辱の血" },
+  ironman:        { ab: { stamina: 4 }, ability: "iron", note: "鉄人の血" },
+  latebloom:      { ab: { stamina: 2 }, note: "遅咲きの血" },
+};
+function legendArchetypeKey(leg) {
+  if (leg && leg.careerArchetypeKey) return leg.careerArchetypeKey;
+  if (!leg) return null;
+  if ((leg.wins || 0) >= 25) return "emperor";
+  if ((leg.wins || 0) >= 8) return "specialist_" + leg.type;
+  if ((leg.podiums || 0) >= 12 && (leg.wins || 0) <= 3) return "nearly";
+  return null;
+}
+function archBreedBonus(leg) {
+  const key = legendArchetypeKey(leg);
+  return (key && ARCH_BREED[key]) ? { ...ARCH_BREED[key], key } : null;
 }
 // 脚質ペアの配合相性（ニック）。良相性ほど強い恩恵と看板特性が出る
 const BREED_NICKS = {
@@ -588,7 +617,19 @@ function mlBreedBonus(parentA, parentB) {
   const upB = ["CLM", "PUN"].includes(parentB.type), spB = ["SPR", "RUL"].includes(parentB.type);
   if ((upA && spB) || (spA && upB)) exclusive.push("hybrid");
   if (generation >= 4) exclusive.push("dynasty");
-  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive };
+  // v31.5: 生き様（称号）の血。両親のアーキタイプに応じて能力・特能・副ステ・血の格を上乗せ。
+  // 名血（世界王者・帝王・英雄）ほど能力ボーナスが厚く、脚質専門家は得意能力を色濃く伝える。
+  const archNotes = [];
+  [parentA, parentB].forEach(par => {
+    const ab = archBreedBonus(par);
+    if (!ab) return;
+    archNotes.push(ab.note);
+    Object.entries(ab.ab || {}).forEach(([k, v]) => { abBonus[k] = (abBonus[k] || 0) + v; });
+    if (ab.sub) SUB_STAT_KEYS.forEach(k => { if (ab.sub[k]) subBonus[k] = (subBonus[k] || 0) + ab.sub[k]; });
+    if (ab.ability && ABILITIES[ab.ability] && !extraAbilities.includes(ab.ability)) extraAbilities.push(ab.ability);
+    if (ab.plus) AB_KEYS.forEach(k => { abBonus[k] = (abBonus[k] || 0) + ab.plus; });
+  });
+  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes };
 }
 // v31.1: 血統IDから表示名を得る（殿堂に記録のない祖先はIDから名前部分を抽出）
 function bloodIdToName(id, map) {
@@ -4097,30 +4138,105 @@ function worldRankTier(rank) {
   if (rank <= 200) return { label: "世界の登竜門", color: "#9aa3b5" };
   return { label: "無名の挑戦者", color: "#9aa3b5" };
 }
-// アンビション（達成目標のはしご）。上から順に達成していく。
-const ML_AMBITIONS = [
-  { key: "firstwin",  label: "プロ初勝利を挙げる",            metric: "careerWins",    target: 1,  reward: { money: 60,  pop: 3 } },
-  { key: "podium10",  label: "通算 表彰台10回",              metric: "careerPodiums", target: 10, reward: { money: 120, pop: 4 } },
-  { key: "top50",     label: "世界ランク TOP50入り",         metric: "rankAtMost",    target: 50, reward: { money: 150, pop: 6 } },
-  { key: "wins10",    label: "通算10勝",                    metric: "careerWins",    target: 10, reward: { money: 200, ab: 2 } },
-  { key: "bigwin",    label: "グレード3以上のレースで勝利",    metric: "careerBigWins", target: 1,  reward: { money: 220, pop: 8 } },
-  { key: "top10",     label: "世界ランク TOP10入り",         metric: "rankAtMost",    target: 10, reward: { money: 320, ab: 2, growth: 1 } },
-  { key: "title1",    label: "世界選手権か五輪で優勝",         metric: "careerTitles",  target: 1,  reward: { money: 500, pop: 15, ab: 2 } },
-  { key: "monument5", label: "グレード3以上を通算5勝",        metric: "careerBigWins", target: 5,  reward: { money: 420, ab: 3 } },
-  { key: "worldno1",  label: "世界ランク1位に立つ",           metric: "rankAtMost",    target: 1,  reward: { money: 800, pop: 20, ab: 3, growth: 1 } },
-  { key: "wins30",    label: "通算30勝（生けるレジェンド）",   metric: "careerWins",    target: 30, reward: { money: 700, ab: 4 } },
-];
+// v31.5: 世界ランキングの閲覧用ボード。年数に応じた基準曲線から各順位の持ち点を逆算し、
+// 名前は決定論的に生成（同じ年・順位なら同じ名前）。上位10＋自分の周辺＋ライバルを返す。
+function mlWorldBoard(ml) {
+  const year = ml.year || 1;
+  const P1 = 360 + (year - 1) * 52;
+  const myRank = ml.worldRank;
+  const myPts = Math.round(ml.worldPoints || 0);
+  const ptsAt = (rank) => Math.round(P1 * Math.pow(rank, -0.72));
+  const nameAt = (rank) => pickRiderName(mulberry(year * 100003 + rank * 131 + 7), null);
+  const rivalRankOf = (rv, seedOff) => {
+    if (!rv) return null;
+    let rank = 2 + Math.floor(mulberry(strHash((rv.name || "") + seedOff))() * 45);
+    if (myRank != null && rank === myRank) rank += 1;
+    return rank;
+  };
+  const rivalRank = rivalRankOf(ml.rival, 11);
+  const rival2Rank = (ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0) ? rivalRankOf(ml.rival2, 29) : null;
+  const labelFor = (rank) => {
+    if (myRank != null && rank === myRank) return { name: (ml.player && ml.player.name) || "あなた", isPlayer: true };
+    if (rivalRank === rank && ml.rival) return { name: ml.rival.name, isRival: true };
+    if (rival2Rank === rank && ml.rival2) return { name: ml.rival2.name, isRival2: true };
+    return { name: nameAt(rank) };
+  };
+  const entry = (rank) => ({ rank, pts: (myRank != null && rank === myRank) ? myPts : ptsAt(rank), ...labelFor(rank) });
+  const top = [];
+  for (let r = 1; r <= 10; r++) top.push(entry(r));
+  const around = [];
+  if (myRank != null && myRank > 12) { for (let r = myRank - 2; r <= myRank + 2; r++) { if (r >= 1) around.push(entry(r)); } }
+  return { top, around, myRank, myPts, rivalRank, rival2Rank };
+}
+// v31.5: アンビションを「生き方（路線）」ごとに分岐させ、道中から個性が出るようにした。
+// 勝利の道・大舞台の道・献身の道・世界の道の4路線を用意し、路線ごとに目標のはしごが異なる。
+const ML_AMBITION_PATHS = {
+  victory: {
+    label: "勝利の道", icon: "🏆", color: "#ffd23f",
+    desc: "とにかく勝つ。勝ち星を積み上げて絶対的エースを目指す生き方。",
+    rungs: [
+      { key: "v_first", label: "プロ初勝利を挙げる",           metric: "careerWins", target: 1,  reward: { money: 60,  pop: 3 } },
+      { key: "v5",      label: "通算5勝",                     metric: "careerWins", target: 5,  reward: { money: 120, pop: 4 } },
+      { key: "v10",     label: "通算10勝",                    metric: "careerWins", target: 10, reward: { money: 220, ab: 2 } },
+      { key: "v20",     label: "通算20勝",                    metric: "careerWins", target: 20, reward: { money: 420, ab: 3 } },
+      { key: "v30",     label: "通算30勝（生けるレジェンド）",  metric: "careerWins", target: 30, reward: { money: 700, ab: 4, growth: 1 } },
+    ],
+  },
+  bigstage: {
+    label: "大舞台の道", icon: "🎌", color: "#e8a13c",
+    desc: "格上のレースと世界の大舞台で栄光をつかむ、勝負師の生き方。",
+    rungs: [
+      { key: "b_pod",    label: "初表彰台",                    metric: "careerPodiums", target: 1, reward: { money: 60,  pop: 3 } },
+      { key: "b_big",    label: "グレード3以上のレースで勝利",   metric: "careerBigWins", target: 1, reward: { money: 220, pop: 8 } },
+      { key: "b_big3",   label: "グレード3以上を通算3勝",       metric: "careerBigWins", target: 3, reward: { money: 380, ab: 2 } },
+      { key: "b_title",  label: "世界選手権か五輪で優勝",        metric: "careerTitles",  target: 1, reward: { money: 600, pop: 15, ab: 2 } },
+      { key: "b_title3", label: "大舞台で通算3勝（伝説の英雄）",  metric: "careerTitles",  target: 3, reward: { money: 900, pop: 25, ab: 3, growth: 1 } },
+    ],
+  },
+  devotion: {
+    label: "献身の道", icon: "🤝", color: "#4f8fe8",
+    desc: "自分の勝利より仲間とチームのために走る、名脇役の生き方。",
+    rungs: [
+      { key: "d10",     label: "アシスト役で10戦走る",         metric: "supportRaces", target: 10, reward: { money: 80,  pop: 3 } },
+      { key: "d_pod",   label: "それでも通算表彰台10回",        metric: "careerPodiums", target: 10, reward: { money: 160, ab: 1 } },
+      { key: "d30",     label: "アシスト役で通算30戦",         metric: "supportRaces", target: 30, reward: { money: 280, ab: 2 } },
+      { key: "d60",     label: "アシスト役で通算60戦",         metric: "supportRaces", target: 60, reward: { money: 450, ab: 2, growth: 1 } },
+      { key: "d_pod20", label: "献身を貫き通算表彰台20回",      metric: "careerPodiums", target: 20, reward: { money: 600, ab: 3 } },
+    ],
+  },
+  world: {
+    label: "世界の道", icon: "🌍", color: "#35c07e",
+    desc: "世界ランキングを駆け上がり、世界の頂点を極める生き方。",
+    rungs: [
+      { key: "w50", label: "世界ランク TOP50入り", metric: "rankAtMost", target: 50, reward: { money: 150, pop: 6 } },
+      { key: "w20", label: "世界ランク TOP20入り", metric: "rankAtMost", target: 20, reward: { money: 260, pop: 8 } },
+      { key: "w10", label: "世界ランク TOP10入り", metric: "rankAtMost", target: 10, reward: { money: 380, ab: 2, growth: 1 } },
+      { key: "w3",  label: "世界ランク TOP3入り",  metric: "rankAtMost", target: 3,  reward: { money: 550, ab: 3 } },
+      { key: "w1",  label: "世界ランク1位に立つ",   metric: "rankAtMost", target: 1,  reward: { money: 900, pop: 25, ab: 3, growth: 1 } },
+    ],
+  },
+};
+const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world"];
+function mlAmbitionPath(ml) { return ML_AMBITION_PATHS[ml.ambitionPath] || ML_AMBITION_PATHS.victory; }
 function mlAmbitionMetricValue(ml, metric) {
   if (metric === "careerWins") return ml.careerWins || 0;
   if (metric === "careerPodiums") return ml.careerPodiums || 0;
   if (metric === "careerBigWins") return ml.careerBigWins || 0;
   if (metric === "careerTitles") return ml.careerTitles || 0;
   if (metric === "rankAtMost") return ml.worldRank == null ? 999 : ml.worldRank;
+  if (metric === "supportRaces") return ((ml.player && ml.player.raceLog) || []).filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
   return 0;
 }
 function mlCurrentAmbition(ml) {
+  const rungs = mlAmbitionPath(ml).rungs;
   const idx = ml.ambitionIdx || 0;
-  return idx < ML_AMBITIONS.length ? ML_AMBITIONS[idx] : null;
+  return idx < rungs.length ? rungs[idx] : null;
+}
+// 指定路線で、現在の到達状況からまだ達成していない最初の段（路線切替時のindex決定に使う）
+function mlFirstUnmetRung(ml, pathKey) {
+  const rungs = (ML_AMBITION_PATHS[pathKey] || ML_AMBITION_PATHS.victory).rungs;
+  for (let i = 0; i < rungs.length; i++) { if (!mlAmbitionCleared(ml, rungs[i])) return i; }
+  return rungs.length;
 }
 function mlAmbitionCleared(ml, amb) {
   if (!amb) return false;
@@ -4213,7 +4329,7 @@ function initMyLife() {
     pendingOffseason: null, offseasonResultText: null,
     // v30: 世界ランキング＆キャリア・アンビション
     worldPoints: 0, worldRank: null, worldRankBest: null,
-    ambitionIdx: 0, ambitionDone: [],
+    ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory", // v31.5: 生き方（路線）
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
   };
 }
@@ -4224,7 +4340,7 @@ const ML_SAVE_FIELDS = [
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
   "rival", "rivalRecord", "rival2", "rivalRecord2", "flags", "rewardedAchievements",
   // v30: 世界ランキング＆キャリア・アンビション
-  "worldPoints", "worldRank", "worldRankBest", "ambitionIdx", "ambitionDone",
+  "worldPoints", "worldRank", "worldRankBest", "ambitionIdx", "ambitionDone", "ambitionPath",
   "careerWins", "careerPodiums", "careerBigWins", "careerTitles",
 ];
 function saveMyLife(ml) {
@@ -4252,6 +4368,11 @@ function loadMyLifeGame() {
     if (parsed.state.careerWins == null && merged.player && Array.isArray(merged.player.raceLog)) {
       merged.careerWins = merged.player.raceLog.filter(e => e.rank === 1).length;
       merged.careerPodiums = merged.player.raceLog.filter(e => e.rank <= 3).length;
+    }
+    // v31.5: 路線（生き方）未設定の旧セーブは勝利の道に置き、到達状況から現在の段を決める
+    if (parsed.state.ambitionPath == null) {
+      merged.ambitionPath = "victory";
+      merged.ambitionIdx = mlFirstUnmetRung(merged, "victory");
     }
     return merged;
   } catch (e) { return null; }
@@ -5098,7 +5219,7 @@ function App() {
       flags: { ...s.flags, mentorName, mentorActive: true, master: master ? master.name : null },
       // v30: 世界ランキング＆アンビションを新規キャリア用に初期化
       worldPoints: 0, worldRank: null, worldRankBest: null,
-      ambitionIdx: 0, ambitionDone: [],
+      ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory",
       careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
       log: initLog,
       screen: "mylife_main",
@@ -5257,9 +5378,9 @@ function App() {
       let ambitionDone = s.ambitionDone || [];
       let ambitionCleared = null;
       let ambMoney = 0;
-      const curAmb = ambitionIdx < ML_AMBITIONS.length ? ML_AMBITIONS[ambitionIdx] : null;
-      // 判定は更新後の到達値で行う（順位・通算勝利等を反映した一時ビュー）
-      const progressedMl = { ...s, worldRank, careerWins, careerPodiums, careerBigWins, careerTitles };
+      // 判定は更新後の到達値で行う（順位・通算勝利・アシスト出走数等を反映した一時ビュー）
+      const progressedMl = { ...s, player, worldRank, careerWins, careerPodiums, careerBigWins, careerTitles };
+      const curAmb = mlCurrentAmbition(progressedMl); // 現在の路線・段の目標
       if (curAmb && mlAmbitionCleared(progressedMl, curAmb)) {
         const rw = applyAmbitionReward(curAmb.reward, player, 0);
         ambMoney = rw.money;
@@ -6231,6 +6352,9 @@ function App() {
                             <div style={{ color: "#e56cc8", fontWeight: 700 }}>🩸 配合限定特能：{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</div>
                           )}
                           <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>継承する系統：</span>{master.lineageName || `${master.name}系`}</div>
+                          {breed.archNotes && breed.archNotes.length > 0 && (
+                            <div style={{ color: "#e8a13c" }}>🩸 血の格：{breed.archNotes.join("・")}</div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -6308,13 +6432,18 @@ function App() {
               </div>
             )}
           </div>
-          {/* v30: 世界ランキング＆キャリア・アンビション。中盤以降も追い続けられる長期目標を常設 */}
+          {/* v30/v31.5: 世界ランキング＆キャリア・アンビション（生き方＝路線で目標が分岐） */}
           {(() => {
             const tier = worldRankTier(ml.worldRank);
+            const path = mlAmbitionPath(ml);
             const amb = mlCurrentAmbition(ml);
+            const idx = ml.ambitionIdx || 0;
             return (
               <div style={{ background: "linear-gradient(180deg,#2a2740,#22202f)", borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.purple}` }}>
-                <Eyebrow color={C.purple}>🌍 世界ランキング＆アンビション</Eyebrow>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Eyebrow color={C.purple}>🌍 世界ランキング＆アンビション</Eyebrow>
+                  <Btn small outline color={C.green} onClick={() => setMl(s => ({ ...s, screen: "mylife_ranking" }))}>📊 ランキングを見る</Btn>
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 5 }}>
                   <span style={{ fontFamily: FONT_D, fontSize: 13.5, color: C.text }}>
                     世界ランク <span style={{ fontFamily: FONT_M, fontSize: 18, color: tier.color, fontWeight: 700 }}>{ml.worldRank == null ? "—" : `${ml.worldRank}位`}</span>
@@ -6323,9 +6452,24 @@ function App() {
                   <span style={{ fontSize: 10.5, color: C.sub, fontFamily: FONT_M }}>{Math.round(ml.worldPoints || 0)}pt{ml.worldRankBest != null ? `／自己最高 ${ml.worldRankBest}位` : ""}</span>
                 </div>
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: path.color, fontWeight: 700 }}>{path.icon} {path.label}</span>
+                    <button onClick={() => setMl(s => ({ ...s, showPathChooser: !s.showPathChooser }))} style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 6, color: C.sub, cursor: "pointer", fontSize: 10, padding: "2px 8px" }}>🔀 生き方を変える</button>
+                  </div>
+                  {ml.showPathChooser && (
+                    <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
+                      {ML_AMBITION_PATH_KEYS.map(pk => { const p = ML_AMBITION_PATHS[pk]; const cur = (ml.ambitionPath || "victory") === pk; return (
+                        <button key={pk} onClick={() => setMl(s => ({ ...s, ambitionPath: pk, ambitionIdx: mlFirstUnmetRung(s, pk), showPathChooser: false }))}
+                          style={{ textAlign: "left", padding: "6px 9px", borderRadius: 8, cursor: "pointer", background: cur ? "rgba(255,210,63,0.1)" : C.panel, border: `1.5px solid ${cur ? p.color : C.line}` }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: p.color }}>{p.icon} {p.label}{cur ? "（選択中）" : ""}</div>
+                          <div style={{ fontSize: 10, color: C.sub }}>{p.desc}</div>
+                        </button>
+                      ); })}
+                    </div>
+                  )}
                   {amb ? (
                     <>
-                      <div style={{ fontSize: 10.5, color: C.sub }}>🎯 いま目指す目標（アンビション）</div>
+                      <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>🎯 いま目指す目標</div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 2 }}>
                         <span style={{ fontFamily: FONT_D, fontSize: 13, color: "#e8a13c", fontWeight: 700 }}>{amb.label}</span>
                         <span style={{ fontFamily: FONT_M, fontSize: 12, color: C.text }}>{mlAmbitionProgressText(ml, amb)}</span>
@@ -6333,9 +6477,9 @@ function App() {
                       <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>達成報酬：{[amb.reward.money ? `資金+${amb.reward.money}万` : null, amb.reward.pop ? `人気+${amb.reward.pop}` : null, amb.reward.ab ? `全能力+${amb.reward.ab}` : null, amb.reward.growth ? "成長力UP" : null].filter(Boolean).join("・")}</div>
                     </>
                   ) : (
-                    <div style={{ fontSize: 12, color: C.yellow, fontWeight: 700 }}>🏆 全アンビション達成 — あなたは生けるレジェンドだ</div>
+                    <div style={{ fontSize: 12, color: C.yellow, fontWeight: 700, marginTop: 6 }}>🏆 「{path.label}」を極めた！別の生き方に挑戦できます</div>
                   )}
-                  <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>達成済み {ml.ambitionDone ? ml.ambitionDone.length : 0} / {ML_AMBITIONS.length}</div>
+                  <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>{path.label}の達成度 {Math.min(idx, path.rungs.length)} / {path.rungs.length}</div>
                 </div>
               </div>
             );
@@ -7042,6 +7186,52 @@ function App() {
       );
     }
 
+    // v31.5: 世界ランキング閲覧画面
+    if (ml.screen === "mylife_ranking" && ml.player) {
+      const board = mlWorldBoard(ml);
+      const tier = worldRankTier(ml.worldRank);
+      const Row = ({ e }) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 6,
+          background: e.isPlayer ? "rgba(255,210,63,0.14)" : e.isRival ? "rgba(224,80,80,0.1)" : e.isRival2 ? "rgba(79,143,232,0.1)" : "transparent",
+          border: e.isPlayer ? `1px solid ${C.yellow}` : "1px solid transparent" }}>
+          <span style={{ fontFamily: FONT_M, fontSize: 12, width: 34, textAlign: "right", color: e.rank <= 3 ? C.yellow : e.rank <= 10 ? C.green : C.sub, fontWeight: 700 }}>{e.rank}位</span>
+          <span style={{ flex: 1, fontSize: 12, color: e.isPlayer ? C.yellow : C.text, fontWeight: e.isPlayer ? 700 : 400 }}>
+            {e.name}{e.isPlayer ? " ●（あなた）" : e.isRival ? " 🔥ライバル" : e.isRival2 ? " 🔥好敵手" : ""}
+          </span>
+          <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>{e.pts}pt</span>
+        </div>
+      );
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "linear-gradient(180deg,#2a2740,#22202f)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
+            <Eyebrow color={C.purple}>🌍 世界ランキング（{ml.year}年目）</Eyebrow>
+            <div style={{ fontFamily: FONT_D, fontSize: 20, color: tier.color, fontWeight: 700, margin: "6px 0 2px" }}>
+              あなたは 世界{ml.worldRank == null ? "ランク外" : `${ml.worldRank}位`}
+            </div>
+            <div style={{ fontSize: 12, color: C.sub }}>{tier.label}／{Math.round(ml.worldPoints || 0)}pt{ml.worldRankBest != null ? `／自己最高 ${ml.worldRankBest}位` : ""}</div>
+            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4 }}>成績（着順×グレード）でポイントを獲得。年ごとに一部減衰し、世界1位の基準点は年々上がります。</div>
+          </div>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "8px 10px", border: `1px solid ${C.line}` }}>
+            <div style={{ fontSize: 11, color: C.sub, fontWeight: 700, marginBottom: 4 }}>🏆 世界トップ10</div>
+            <div style={{ display: "grid", gap: 2 }}>{board.top.map((e, i) => <Row key={i} e={e} />)}</div>
+          </div>
+          {board.around.length > 0 && (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "8px 10px", border: `1px solid ${C.line}` }}>
+              <div style={{ fontSize: 11, color: C.sub, fontWeight: 700, marginBottom: 4 }}>📍 あなたの周辺</div>
+              <div style={{ display: "grid", gap: 2 }}>{board.around.map((e, i) => <Row key={i} e={e} />)}</div>
+            </div>
+          )}
+          {(board.rivalRank != null || board.rival2Rank != null) && (
+            <div style={{ fontSize: 11, color: C.sub }}>
+              {board.rivalRank != null && ml.rival && <div>🔥 ライバル {ml.rival.name}：世界{board.rivalRank}位</div>}
+              {board.rival2Rank != null && ml.rival2 && <div>🔥 好敵手 {ml.rival2.name}：世界{board.rival2Rank}位</div>}
+            </div>
+          )}
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
+        </div>
+      );
+    }
+
     if (ml.screen === "mylife_legends") {
       const allLegends = loadMlLegends();
       const legends = [...allLegends].reverse();
@@ -7474,6 +7664,7 @@ function App() {
                         <div>相性 <span style={{ color: breed.nick.rank === "◎" ? C.yellow : breed.nick.rank === "○" ? C.green : C.sub, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
                         <div>累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>{breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}</span>}{breed.goldInherit && breed.goldInherit.length > 0 && <span style={{ color: C.yellow }}>・✨金特クロス</span>}{breed.exclusive && breed.exclusive.length > 0 && <span style={{ color: "#e56cc8" }}>・🩸{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</span>}</div>
                         <div style={{ color: C.sub }}>継承特能：{breed.extraAbilities.length ? breed.extraAbilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・") : "—"}</div>
+                        {breed.archNotes && breed.archNotes.length > 0 && <div style={{ color: "#e8a13c" }}>血の格：{breed.archNotes.join("・")}</div>}
                       </div>
                     )}
                     <Btn small color={"#e56cc8"} disabled={!breed || g.budget < 40} onClick={() => askConfirm(`${legA.name}×${legB.name}の配合で血統ユースを確保しますか？契約金40万円（年1回のユース枠を消費）。`, () => signBredYouth(legA, legB))}>
