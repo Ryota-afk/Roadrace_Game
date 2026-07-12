@@ -2757,6 +2757,36 @@ function SubStatLine({ r }) {
     </div>
   );
 }
+// v29: 出走表。sim.entrantsをチームごとにまとめて一覧表示する（シーズン・マイライフ共用）
+function StartListPanel({ entrants }) {
+  const teams = {};
+  entrants.forEach(e => { (teams[e.teamName] = teams[e.teamName] || { color: e.color, list: [] }).list.push(e); });
+  const rows = Object.entries(teams).sort((a, b) => {
+    const ap = a[1].list.some(e => e.team === "PLAYER") ? 0 : 1;
+    const bp = b[1].list.some(e => e.team === "PLAYER") ? 0 : 1;
+    return ap - bp;
+  });
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ fontSize: 11, color: C.sub }}>出走 {entrants.length}名 / {rows.length}チーム（👑=エース）</div>
+      {rows.map(([tn, t]) => {
+        const isPlayerTeam = t.list.some(e => e.team === "PLAYER");
+        return (
+          <div key={tn} style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", borderLeft: `3px solid ${t.color}` }}>
+            <div style={{ fontFamily: FONT_D, fontWeight: 700, color: isPlayerTeam ? C.yellow : C.text, fontSize: 13 }}>{tn}{isPlayerTeam ? "（自チーム）" : ""}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 3 }}>
+              {t.list.map((e, i) => (
+                <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : (e.isRival || e.isRival2) ? C.red : C.text }}>
+                  {e.isAce ? "👑 " : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 // v15: 1選手が複数の特殊能力を保有できるようになったため、バッジ付きの行を複数表示する。
 // v15フェーズ2: 金特化した能力は★付きの金色バッジで区別する
 function TraitLine({ abilities, goldAbilities }) {
@@ -4395,7 +4425,8 @@ function App() {
     const itemBoost = { wheel: g.sel.useWheel, suit: g.sel.useSuit };
     // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
     const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
-    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName);
+    // v29: 出走表用に事前生成した相手チーム布陣があればそれを使い、顔ぶれを一致させる
+    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, g.pendingAiTeams, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName);
     setG(s => ({
       ...s, result: sim,
       gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,
@@ -4719,7 +4750,8 @@ function App() {
       directiveKey = race.nationalRole;
     }
     const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2);
-    setMl(s => ({ ...s, result: sim, screen: "mylife_race" }));
+    // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
+    setMl(s => ({ ...s, result: sim, screen: "mylife_startlist" }));
   }
   // v27: ラストレース演出。引退前に「最後のレース」を特別に用意し、有終の美を飾れるようにする。
   // 脚質に合ったコースのグレード4エキシビションとして、両ライバルも駆けつける最高の舞台にする
@@ -6030,6 +6062,16 @@ function App() {
       );
     }
 
+    // v29: 出走表（マイライフ）。レース本番前に顔ぶれを確認できる
+    if (ml.screen === "mylife_startlist" && ml.result) return mlWrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <Eyebrow color={C.purple}>🏁 出走表 — {ml.result.raceMeta.name}</Eyebrow>
+        <div style={{ fontSize: 11.5, color: C.sub }}>{ml.result.raceMeta.tmpl.kind}・{"★".repeat(ml.result.raceMeta.grade)}・{TYPES[ml.result.raceMeta.tmpl.favors].label}有利</div>
+        <StartListPanel entrants={ml.result.entrants} />
+        <Btn onClick={() => setMl(s => ({ ...s, screen: "mylife_race" }))}>🏁 レースを始める</Btn>
+        <Btn outline color={C.sub} onClick={() => { mlRaceLockRef.current = false; setMl(s => ({ ...s, result: null, screen: "mylife_main" })); }}>← 出走を取りやめる</Btn>
+      </div>
+    );
     if (ml.screen === "mylife_race" && ml.result) return mlWrap(
       <div>
         <div style={{ marginBottom: 8 }}><Eyebrow color={ml.inLastRace ? "#e8a13c" : C.red}>{ml.inLastRace ? "🏁 LAST RACE — " : "LIVE — "}{ml.result.raceMeta.name}</Eyebrow></div>
@@ -6696,7 +6738,10 @@ function App() {
                     ? <span style={{ fontSize: 12, color: C.red }}>🔒 {r.lockReason}</span>
                     : <Btn small disabled={!enough} onClick={() => setG(s => {
                         const defN = Math.max(r.tmpl.squadMin, Math.min(r.tmpl.squadMax, healthy.length));
-                        return { ...s, sel: { ...s.sel, raceId: r.id, starters: [], ace: null, roles: {}, squadN: defN }, screen: "lineup" };
+                        // v29: 出走表用に相手チームの布陣を先に生成してキャッシュ。実際のレースでも
+                        // このfixedAiTeamsを再利用するので、出走表と本番の顔ぶれが一致する
+                        const { aiTeams } = buildSim(r, healthy, null, {}, s.equip, {}, s.classIdx, undefined, r.stageRace ? "day1" : undefined, { chaseMode: "normal", aceEarly: false }, s.difficulty, s.rivalAlumni, s.dynastyLevel, s.teamName);
+                        return { ...s, sel: { ...s.sel, raceId: r.id, starters: [], ace: null, roles: {}, squadN: defN }, pendingAiTeams: aiTeams, screen: "lineup" };
                       })}>
                         {enough ? "このレースに出場" : `出走可能${healthy.length}名（最低${r.tmpl.squadMin}名必要）`}
                       </Btn>}
@@ -7536,6 +7581,22 @@ function App() {
     );
   }
 
+  // v29: 出走表（シーズン）。事前生成した相手チーム布陣＋現在の自チーム選抜を一覧表示
+  if (g.screen === "startlist") {
+    const race = g.races.find(r => r.id === g.sel.raceId);
+    const playerEntrants = g.roster.filter(r => (g.sel.starters || []).includes(r.id))
+      .map(r => ({ name: r.name, type: r.type, teamName: g.teamName || "あなたのチーム", color: C.yellow, team: "PLAYER", isAce: r.id === g.sel.ace }));
+    const aiEntrants = (g.pendingAiTeams || []).flat();
+    return wrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <Eyebrow color={C.purple}>🏁 出走表 — {race ? race.name : ""}</Eyebrow>
+        {playerEntrants.length === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>まだ自チームの出走メンバーを選んでいません。相手の布陣を見て編成を決めましょう。</div>}
+        <StartListPanel entrants={[...playerEntrants, ...aiEntrants]} />
+        <Btn onClick={() => setG(s => ({ ...s, screen: "lineup" }))}>← 編成に戻る</Btn>
+      </div>
+    );
+  }
+
   if (g.screen === "lineup") {
     const race = g.races.find(r => r.id === g.sel.raceId);
     const N = g.sel.squadN || race.tmpl.squadMin;
@@ -7709,6 +7770,7 @@ function App() {
           </section>
         )}
         <div style={{ display: "grid", gap: 8 }}>
+          {g.pendingAiTeams && <Btn outline color={C.purple} onClick={() => setG(s => ({ ...s, screen: "startlist" }))}>🏁 出走表（他チームの布陣）を見る</Btn>}
           <Btn disabled={!ready} onClick={() => startRace(true)}>観戦しながらスタート 🏁</Btn>
           <Btn outline disabled={!ready} onClick={() => startRace(false)}>結果だけ見る（スキップ）</Btn>
           <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
