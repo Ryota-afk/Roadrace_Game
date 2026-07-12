@@ -3907,6 +3907,87 @@ function clearSaveGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* noop */ }
 }
 
+// ---------- v30: 世界ランキング＆キャリア・アンビション ----------
+// マイライフの中盤以降「やることがない／目標がなくなる」という課題への打開策。
+// (1) 世界ランキング：レース成績で持ち点を稼ぎ、キャリアを通じて順位を上げていく。
+//     年ごとに一部が減衰し（＝直近の成績ほど重視／休むと落ちる）、世界1位の基準点は
+//     年々上がる（新世代の台頭）ため、上位維持には走り続ける必要があり練習が形骸化しない。
+// (2) アンビション：段階的に提示される長期目標。達成すると報酬（資金・人気・能力・成長力）を
+//     得て次の目標へ進む。常に「次に目指すもの」がある状態を作る。
+function worldPointsForFinish(rank, grade) {
+  const gradePts = { 1: 16, 2: 34, 3: 66, 4: 130 }[grade] || 16;
+  const place = rank === 1 ? 1 : rank === 2 ? 0.7 : rank === 3 ? 0.55
+    : rank <= 5 ? 0.4 : rank <= 10 ? 0.25 : rank <= 20 ? 0.12 : 0.05;
+  return Math.round(gradePts * place);
+}
+function computeWorldRank(points, year) {
+  if (!points || points <= 1) return 300;
+  const P1 = 360 + (year - 1) * 52; // 世界1位相当の持ち点（年々上昇）
+  if (points >= P1) return 1;
+  const rank = Math.ceil(Math.pow(P1 / points, 1 / 0.72));
+  return Math.max(1, Math.min(300, rank));
+}
+function worldRankTier(rank) {
+  if (rank == null) return { label: "ランク外", color: "#9aa3b5" };
+  if (rank === 1) return { label: "世界王者", color: "#ffd23f" };
+  if (rank <= 3) return { label: "世界トップ3", color: "#ffd23f" };
+  if (rank <= 10) return { label: "世界トップ10", color: "#35c07e" };
+  if (rank <= 30) return { label: "世界の常連", color: "#35c07e" };
+  if (rank <= 80) return { label: "世界で戦う男", color: "#4f8fe8" };
+  if (rank <= 200) return { label: "世界の登竜門", color: "#9aa3b5" };
+  return { label: "無名の挑戦者", color: "#9aa3b5" };
+}
+// アンビション（達成目標のはしご）。上から順に達成していく。
+const ML_AMBITIONS = [
+  { key: "firstwin",  label: "プロ初勝利を挙げる",            metric: "careerWins",    target: 1,  reward: { money: 60,  pop: 3 } },
+  { key: "podium10",  label: "通算 表彰台10回",              metric: "careerPodiums", target: 10, reward: { money: 120, pop: 4 } },
+  { key: "top50",     label: "世界ランク TOP50入り",         metric: "rankAtMost",    target: 50, reward: { money: 150, pop: 6 } },
+  { key: "wins10",    label: "通算10勝",                    metric: "careerWins",    target: 10, reward: { money: 200, ab: 2 } },
+  { key: "bigwin",    label: "グレード3以上のレースで勝利",    metric: "careerBigWins", target: 1,  reward: { money: 220, pop: 8 } },
+  { key: "top10",     label: "世界ランク TOP10入り",         metric: "rankAtMost",    target: 10, reward: { money: 320, ab: 2, growth: 1 } },
+  { key: "title1",    label: "世界選手権か五輪で優勝",         metric: "careerTitles",  target: 1,  reward: { money: 500, pop: 15, ab: 2 } },
+  { key: "monument5", label: "グレード3以上を通算5勝",        metric: "careerBigWins", target: 5,  reward: { money: 420, ab: 3 } },
+  { key: "worldno1",  label: "世界ランク1位に立つ",           metric: "rankAtMost",    target: 1,  reward: { money: 800, pop: 20, ab: 3, growth: 1 } },
+  { key: "wins30",    label: "通算30勝（生けるレジェンド）",   metric: "careerWins",    target: 30, reward: { money: 700, ab: 4 } },
+];
+function mlAmbitionMetricValue(ml, metric) {
+  if (metric === "careerWins") return ml.careerWins || 0;
+  if (metric === "careerPodiums") return ml.careerPodiums || 0;
+  if (metric === "careerBigWins") return ml.careerBigWins || 0;
+  if (metric === "careerTitles") return ml.careerTitles || 0;
+  if (metric === "rankAtMost") return ml.worldRank == null ? 999 : ml.worldRank;
+  return 0;
+}
+function mlCurrentAmbition(ml) {
+  const idx = ml.ambitionIdx || 0;
+  return idx < ML_AMBITIONS.length ? ML_AMBITIONS[idx] : null;
+}
+function mlAmbitionCleared(ml, amb) {
+  if (!amb) return false;
+  const v = mlAmbitionMetricValue(ml, amb.metric);
+  return amb.metric === "rankAtMost" ? v <= amb.target : v >= amb.target;
+}
+function mlAmbitionProgressText(ml, amb) {
+  if (!amb) return "";
+  if (amb.metric === "rankAtMost") return `現在 世界${ml.worldRank == null ? "—" : ml.worldRank}位 ／ 目標 ${amb.target}位以内`;
+  return `${mlAmbitionMetricValue(ml, amb.metric)} / ${amb.target}`;
+}
+const GROWTH_POW_LADDER = ["C", "B", "A", "S"];
+function bumpGrowthPow(pow, steps = 1) {
+  let i = GROWTH_POW_LADDER.indexOf(pow);
+  if (i < 0) return pow;
+  return GROWTH_POW_LADDER[Math.min(GROWTH_POW_LADDER.length - 1, i + steps)];
+}
+// アンビション達成の報酬を適用し、達成テキストを返す（player/money を破壊的に受け取り更新して返す）
+function applyAmbitionReward(reward, player, money) {
+  const parts = [];
+  let newMoney = money;
+  if (reward.money) { newMoney += reward.money; parts.push(`資金+${reward.money}万円`); }
+  if (reward.pop) { player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + reward.pop)); parts.push(`人気+${reward.pop}`); }
+  if (reward.ab) { AB_KEYS.forEach(k => addAb(player, k, reward.ab, 130)); parts.push(`全能力+${reward.ab}`); }
+  if (reward.growth) { player.growthPow = bumpGrowthPow(player.growthPow, reward.growth); parts.push(`成長力→${player.growthPow}`); }
+  return { money: newMoney, text: parts.join("・") };
+}
 // ---------- v14: マイライフモード（選手1人のキャリア） ----------
 // v9〜v13のシーズンモード（チーム運営）とは完全に別のセーブ・状態を持つ、
 // 選手1人の視点でB1からのキャリアを歩む新モード。既存のTYPES/ABILITIES/PERSONALITIES/
@@ -3933,6 +4014,10 @@ function initMyLife() {
     rewardedAchievements: [],
     pendingCrossroads: null, crossroadsResultText: null,
     pendingOffseason: null, offseasonResultText: null,
+    // v30: 世界ランキング＆キャリア・アンビション
+    worldPoints: 0, worldRank: null, worldRankBest: null,
+    ambitionIdx: 0, ambitionDone: [],
+    careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
   };
 }
 const ML_SAVE_KEY = "roadrace_v12_mylife_save";
@@ -3941,6 +4026,9 @@ const ML_SAVE_FIELDS = [
   "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
   "rival", "rivalRecord", "rival2", "rivalRecord2", "flags", "rewardedAchievements",
+  // v30: 世界ランキング＆キャリア・アンビション
+  "worldPoints", "worldRank", "worldRankBest", "ambitionIdx", "ambitionDone",
+  "careerWins", "careerPodiums", "careerBigWins", "careerTitles",
 ];
 function saveMyLife(ml) {
   try {
@@ -3961,7 +4049,14 @@ function loadMyLifeGame() {
     const base = initMyLife();
     if (parsed.state.player && parsed.state.player.id >= RID) RID = parsed.state.player.id + 1;
     if (parsed.state.rival && parsed.state.rival.id >= RID) RID = parsed.state.rival.id + 1;
-    return { ...base, ...parsed.state, sel: base.sel, result: null, resultInfo: null };
+    const merged = { ...base, ...parsed.state, sel: base.sel, result: null, resultInfo: null };
+    // v30: 旧セーブ移行。世界ランキング／アンビションの通算カウンタが未保存なら、
+    // これまでの戦績ログから通算勝利・表彰台を補完する（グレード依存のbigWinsは補完不可のため0）
+    if (parsed.state.careerWins == null && merged.player && Array.isArray(merged.player.raceLog)) {
+      merged.careerWins = merged.player.raceLog.filter(e => e.rank === 1).length;
+      merged.careerPodiums = merged.player.raceLog.filter(e => e.rank <= 3).length;
+    }
+    return merged;
   } catch (e) { return null; }
 }
 function clearMyLifeSave() {
@@ -4766,6 +4861,10 @@ function App() {
       rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
       rival2, rivalRecord2: { meetings: 0, wins: 0, losses: 0 },
       flags: { ...s.flags, mentorName, mentorActive: true, master: master ? master.name : null },
+      // v30: 世界ランキング＆アンビションを新規キャリア用に初期化
+      worldPoints: 0, worldRank: null, worldRankBest: null,
+      ambitionIdx: 0, ambitionDone: [],
+      careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
       log: initLog,
       screen: "mylife_main",
     }));
@@ -4910,11 +5009,37 @@ function App() {
         ? [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】人気度が${newlyHit.join("・")}に到達し、個人スポンサー契約で+${popBonus}万円`]
         : s.log;
       if (rival2Intro) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rival2Entrant.teamName}の${rival2Entrant.name}と初めて同じレースで相まみえた。新たな好敵手になりそうだ`];
+      // v30: 世界ランキング更新＆キャリア・アンビション判定
+      const wpGain = worldPointsForFinish(me.rank, race.grade);
+      const worldPoints = (s.worldPoints || 0) + wpGain;
+      const worldRank = computeWorldRank(worldPoints, s.year);
+      const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
+      const careerWins = (s.careerWins || 0) + (me.rank === 1 ? 1 : 0);
+      const careerPodiums = (s.careerPodiums || 0) + (me.rank <= 3 ? 1 : 0);
+      const careerBigWins = (s.careerBigWins || 0) + (me.rank === 1 && race.grade >= 3 ? 1 : 0);
+      const careerTitles = (s.careerTitles || 0) + (me.rank === 1 && race.milestone ? 1 : 0);
+      let ambitionIdx = s.ambitionIdx || 0;
+      let ambitionDone = s.ambitionDone || [];
+      let ambitionCleared = null;
+      let ambMoney = 0;
+      const curAmb = ambitionIdx < ML_AMBITIONS.length ? ML_AMBITIONS[ambitionIdx] : null;
+      // 判定は更新後の到達値で行う（順位・通算勝利等を反映した一時ビュー）
+      const progressedMl = { ...s, worldRank, careerWins, careerPodiums, careerBigWins, careerTitles };
+      if (curAmb && mlAmbitionCleared(progressedMl, curAmb)) {
+        const rw = applyAmbitionReward(curAmb.reward, player, 0);
+        ambMoney = rw.money;
+        ambitionCleared = { label: curAmb.label, rewardText: rw.text };
+        ambitionIdx = ambitionIdx + 1;
+        ambitionDone = [...ambitionDone, curAmb.key];
+        log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🎯アンビション「${curAmb.label}」を達成！（${rw.text}）`];
+      }
       return {
         ...s, player, points: s.points + pts, log,
         managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
-        money: s.money + prize + popBonus, rivalRecord, rivalRecord2,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus },
+        money: s.money + prize + popBonus + ambMoney, rivalRecord, rivalRecord2,
+        worldPoints, worldRank, worldRankBest, careerWins, careerPodiums, careerBigWins, careerTitles,
+        ambitionIdx, ambitionDone,
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared },
         screen: "mylife_result",
       };
     });
@@ -5102,6 +5227,10 @@ function App() {
         // v17: 引退以外でキャリアが続く年は、必ずオフシーズンの過ごし方を選ばせる。
         // 人生の岐路イベントの判定はオフシーズンの選択を終えたあと（mlContinueAfterOffseason）で行う
         const finalizeYearEnd = (nextState) => {
+          // v30: 世界ランキングの持ち点は年ごとに一部減衰し、翌年の（強くなった）基準で
+          // 順位を引き直す。休むと順位が落ちるため、上位維持には走り続ける必要がある
+          const decayedWP = Math.round((s.worldPoints || 0) * 0.72);
+          nextState = { ...nextState, worldPoints: decayedWP, worldRank: computeWorldRank(decayedWP, nextState.year) };
           const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState };
           if (declining) {
             return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval,
@@ -5862,6 +5991,38 @@ function App() {
               </div>
             )}
           </div>
+          {/* v30: 世界ランキング＆キャリア・アンビション。中盤以降も追い続けられる長期目標を常設 */}
+          {(() => {
+            const tier = worldRankTier(ml.worldRank);
+            const amb = mlCurrentAmbition(ml);
+            return (
+              <div style={{ background: "linear-gradient(180deg,#2a2740,#22202f)", borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.purple}` }}>
+                <Eyebrow color={C.purple}>🌍 世界ランキング＆アンビション</Eyebrow>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 5 }}>
+                  <span style={{ fontFamily: FONT_D, fontSize: 13.5, color: C.text }}>
+                    世界ランク <span style={{ fontFamily: FONT_M, fontSize: 18, color: tier.color, fontWeight: 700 }}>{ml.worldRank == null ? "—" : `${ml.worldRank}位`}</span>
+                    <span style={{ fontSize: 11, color: tier.color, marginLeft: 6 }}>{tier.label}</span>
+                  </span>
+                  <span style={{ fontSize: 10.5, color: C.sub, fontFamily: FONT_M }}>{Math.round(ml.worldPoints || 0)}pt{ml.worldRankBest != null ? `／自己最高 ${ml.worldRankBest}位` : ""}</span>
+                </div>
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+                  {amb ? (
+                    <>
+                      <div style={{ fontSize: 10.5, color: C.sub }}>🎯 いま目指す目標（アンビション）</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 2 }}>
+                        <span style={{ fontFamily: FONT_D, fontSize: 13, color: "#e8a13c", fontWeight: 700 }}>{amb.label}</span>
+                        <span style={{ fontFamily: FONT_M, fontSize: 12, color: C.text }}>{mlAmbitionProgressText(ml, amb)}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>達成報酬：{[amb.reward.money ? `資金+${amb.reward.money}万` : null, amb.reward.pop ? `人気+${amb.reward.pop}` : null, amb.reward.ab ? `全能力+${amb.reward.ab}` : null, amb.reward.growth ? "成長力UP" : null].filter(Boolean).join("・")}</div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: C.yellow, fontWeight: 700 }}>🏆 全アンビション達成 — あなたは生けるレジェンドだ</div>
+                  )}
+                  <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>達成済み {ml.ambitionDone ? ml.ambitionDone.length : 0} / {ML_AMBITIONS.length}</div>
+                </div>
+              </div>
+            );
+          })()}
           {ml.directive && (
             <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
               <Eyebrow color={C.blue}>監督指示</Eyebrow>
@@ -6154,7 +6315,7 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
@@ -6171,7 +6332,24 @@ function App() {
                 🏅 {courseRecord.kind}のコースレコード更新！（指数{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・あなた" : ""}）
               </div>
             )}
+            {/* v30: 世界ランキングの増減 */}
+            {wpGain != null && (
+              <div style={{ fontSize: 11.5, color: C.purple, marginTop: 4 }}>
+                🌍 世界ランキングポイント +{wpGain}
+                {worldRankPrev != null && worldRank != null && worldRank < worldRankPrev
+                  ? `／世界ランク ${worldRankPrev}位 → ${worldRank}位（${worldRankPrev - worldRank}ランクUP！）`
+                  : worldRank != null ? `／現在 世界${worldRank}位` : ""}
+              </div>
+            )}
           </div>
+          {/* v30: アンビション達成バナー */}
+          {ambitionCleared && (
+            <div style={{ background: "linear-gradient(180deg,#33301a,#2a2416)", border: `1.5px solid #e8a13c`, borderRadius: 12, padding: "12px 14px" }}>
+              <Eyebrow color={"#e8a13c"}>🎯 アンビション達成！</Eyebrow>
+              <div style={{ fontFamily: FONT_D, fontSize: 15, color: "#ffd23f", fontWeight: 700, margin: "5px 0 3px" }}>{ambitionCleared.label}</div>
+              <div style={{ fontSize: 12, color: C.green }}>達成報酬：{ambitionCleared.rewardText}</div>
+            </div>
+          )}
           {natRole && (
             <div style={{ background: natFulfilled ? "#16241c" : "#241818", border: `1px solid ${natFulfilled ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
               <Eyebrow color={natFulfilled ? C.green : C.red}>🎌 代表での役割（{natRole === "ace" ? "エース" : "アシスト"}） — {natFulfilled ? "任務達成" : "任務未達"}</Eyebrow>
