@@ -2207,16 +2207,25 @@ function canPull(en, segType) {
 }
 
 // AIチームの役割自動割り当て（5役割・先頭=エース）
+// v28: ゴール勝負の駆け引きを反映。最終スプリントは実力（スプリント能力）で決まるため、
+// スプリントが弱点の選手ほど集団ゴールでは分が悪く、早めの逃げ（breakaway）に活路を求める。
+// 逆にスプリントが武器の選手は集団に残ってゴールスプリントを待つ
 function assignAIRoles(members, squadN) {
   const roles = {};
   members.forEach((r, i) => {
     if (i === 0 || squadN < 3) { roles[r.id] = "lead"; return; }
     const roll = Math.random();
-    if (r.type === "CLM" && roll < 0.3) roles[r.id] = "breakaway";
-    else if (r.type === "CLM") roles[r.id] = "mountain";
-    else if (r.type === "TT" && roll < 0.3) roles[r.id] = "breakaway";
-    else if (r.type === "SPR" || r.type === "RUL") roles[r.id] = roll < 0.15 ? "breakaway" : "flat";
-    else roles[r.id] = roll < 0.2 ? "breakaway" : "sub";
+    // スプリントがその選手の武器か弱点かを、他能力のピークとの差で測る。
+    // sprintGap=0 → スプリントが最強（集団ゴール向き・ほぼ逃げない）
+    // sprintGap大 → スプリントが弱点（集団ゴールで不利・早逃げに出やすい）
+    const peak = Math.max(r.flat, r.climb, r.sprint, r.stamina, r.solo);
+    const sprintGap = peak - r.sprint;
+    const breakawayChance = Math.min(0.65, 0.06 + sprintGap * 0.022);
+    if (roll < breakawayChance) { roles[r.id] = "breakaway"; return; }
+    // 逃げないなら地形・脚質に応じた集団内の役割（ゴールスプリントに残る）
+    if (r.type === "CLM") roles[r.id] = "mountain";
+    else if (r.type === "SPR" || r.type === "RUL") roles[r.id] = "flat";
+    else roles[r.id] = "sub";
   });
   if (squadN >= 3) {
     const hasLead = members.slice(1).some(r => roles[r.id] === "lead" || roles[r.id] === "sub" || roles[r.id] === "flat" || roles[r.id] === "mountain");
@@ -2353,9 +2362,15 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
           // スプリント区間に限り、各選手自身のスプリント適性（ownCapable/groupDistの比）と
           // 小さな運要素を反映した微差を加え、集団のままでも着差にばらつきが出るようにする
           if (segType === "sprint") {
+            // v28: ゴールスプリント区間はスプリント能力の差をそのまま着差に反映する。
+            // とくに最終区間（カメラが切り替わる勝負どころ）では差を大きく取り、
+            // 強いスプリンターが集団ゴールを制し、弱い選手ははっきり遅れるようにする
+            const isFinalSprint = segInfo.idx === course.finalIdx;
             const abilityEdge = ownCapable / groupDist - 1;
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.05;
-            dist = groupDist * Math.max(0.94, Math.min(1.06, 1 + abilityEdge * 0.6 + luck));
+            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * (isFinalSprint ? 0.035 : 0.05);
+            const edgeMul = isFinalSprint ? 1.7 : 0.6;
+            const range = isFinalSprint ? 0.13 : 0.06;
+            dist = groupDist * Math.max(1 - range, Math.min(1 + range, 1 + abilityEdge * edgeMul + luck));
           } else {
             dist = groupDist;
           }
