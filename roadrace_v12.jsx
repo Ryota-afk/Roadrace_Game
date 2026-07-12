@@ -2083,7 +2083,7 @@ function computeStandings(g) {
     const seasonTotal = Math.round(need * strength * 1.35);
     return { name: t.name, color: t.color, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
   });
-  rows.push({ name: "あなたのチーム", color: C.yellow, pts: g.points, isPlayer: true });
+  rows.push({ name: g.teamName || "あなたのチーム", color: C.yellow, pts: g.points, isPlayer: true });
   rows.sort((a, b) => b.pts - a.pts);
   return rows;
 }
@@ -2484,7 +2484,7 @@ function teamChemistryTier(squad) {
 // ---------- buildSim：選手構築＋コース生成＋ティックシミュレーション実行 ----------
 // fixedAiTeams を渡すとAI選手を再利用する（GCステージレースの2日目用）
 // dayTag を渡すとコース生成のシードに反映される（同じraceMetaでも日ごとに別コースにする）
-function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel) {
+function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel, teamName) {
   // v13: 難易度による他チームの強さ補正（aiMul）。省略時はnormal相当
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   // v25: グランファイナル制覇後の周回（ディナスティ）モード。周を重ねるたびに他チームの
@@ -2499,7 +2499,7 @@ function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fix
     const role = roles[r.id] || "lead";
     riders.push({
       id: r.id, name: r.name, type: r.type, abilities: r.abilities, age: r.age, chemMul: chemTier.mul, ...e,
-      team: "PLAYER", teamName: "あなたのチーム", color: C.yellow,
+      team: "PLAYER", teamName: teamName || "あなたのチーム", color: C.yellow,
       isAce: r.id === aceId, role,
     });
   });
@@ -3579,6 +3579,8 @@ function initGame() {
   const rosterNames = roster.map(r => r.name);
   return {
     screen: "intro", tab: "home",
+    // v28: 自チーム名（プレイヤーが命名できる。未設定なら既定名）
+    teamName: "あなたのチーム",
     year: 1, month: 0, classIdx: 0, points: 0, budget: 300,
     roster,
     equip: { frame: 0, wheels: 0, facility: 0 },
@@ -3644,7 +3646,7 @@ const SAVE_FIELDS = [
   "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
   "camp", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
-  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed", "obCoach", "homeRegion",
+  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed", "obCoach", "homeRegion", "teamName",
 ];
 function serializeState(g) {
   const out = {};
@@ -3861,6 +3863,8 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const askConfirm = (message, onConfirm) => setConfirmDialog({ message, onConfirm });
   const stage2LockRef = useRef(false);
+  // v28: 新規ゲーム開始時のチーム名入力
+  const [teamNameChoice, setTeamNameChoice] = useState("");
   // v13: 新規ゲーム開始時の難易度選択（newgame_setup画面用。永続ボーナスは選択不要で自動適用）
   const [diffChoice, setDiffChoice] = useState("easy");
   const clearAwardedRef = useRef(false);
@@ -4237,7 +4241,7 @@ function App() {
     const itemBoost = { wheel: g.sel.useWheel, suit: g.sel.useSuit };
     // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
     const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
-    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel);
+    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, undefined, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName);
     setG(s => ({
       ...s, result: sim,
       gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,
@@ -4276,7 +4280,7 @@ function App() {
       const aceId = gc.starters.length === 1 ? gc.starters[0] : (s.sel.ace || gc.aceId);
       const roles = s.sel.roles || gc.roles;
       // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty, undefined, s.dynastyLevel);
+      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty, undefined, s.dynastyLevel, s.teamName);
       simResult = sim; raceRef = gc.race;
       return {
         ...s, roster: roster2, result: sim,
@@ -5279,7 +5283,7 @@ function App() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <Eyebrow>{cls.label} — {g.year}年目 {MONTHS[g.month]}{g.dynastyLevel > 0 ? ` ／ 🔁 ディナスティ${g.dynastyLevel}周目` : ""}</Eyebrow>
-          <div style={{ fontFamily: FONT_D, fontSize: 18, fontWeight: 700, color: C.text }}>チーム運営 v12</div>
+          <div style={{ fontFamily: FONT_D, fontSize: 18, fontWeight: 700, color: C.text }}>{g.teamName || "あなたのチーム"}</div>
           {g.sponsor && <div style={{ fontSize: 10.5, color: C.sub }}>SPONSOR: {g.sponsor.name}（月+{g.sponsor.monthly}万／ノルマ{g.sponsor.norma}pt／未達-{g.sponsor.penalty}万／指定レース{g.sponsor.mandatesMet}済{g.sponsor.mandatesMissed > 0 ? `・見送り${g.sponsor.mandatesMissed}` : ""}）</div>}
           <div style={{ fontSize: 10.5, color: C.sub }}>
             選手維持費 -{g.roster.length * UPKEEP_PER_RIDER}万/月（{g.roster.length}名）
@@ -6279,6 +6283,13 @@ function App() {
           <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>過去のプレイでクリアするたびに貯まっていく生涯合計値です。一度到達した永続ボーナス・難易度は消費しても失われません。</div>
         </div>
         <div>
+          <Eyebrow>チーム名</Eyebrow>
+          <input type="text" value={teamNameChoice} maxLength={16} placeholder="あなたのチーム"
+            onChange={e => setTeamNameChoice(e.target.value)}
+            style={{ width: "100%", boxSizing: "border-box", marginTop: 6, background: C.panel2, color: C.text, border: `1.5px solid ${C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
+          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>レース・順位表・記録に表示されます（未入力なら「あなたのチーム」・後からショップで変更可）。</div>
+        </div>
+        <div>
           <Eyebrow>難易度を選択</Eyebrow>
           <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
             {DIFFICULTIES.map(d => {
@@ -6342,7 +6353,8 @@ function App() {
           <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>解禁するとシーズン・マイライフ両モードのカレンダーに登場します。</div>
         </div>
         <Btn onClick={() => {
-          const base = applyCpMilestones({ ...initGame(), difficulty: diffChoice }, meta.totalEarnedCP);
+          const name = teamNameChoice.trim();
+          const base = applyCpMilestones({ ...initGame(), difficulty: diffChoice, teamName: name || "あなたのチーム" }, meta.totalEarnedCP);
           setG({ ...base, screen: "scoutpolicy_initial" });
         }}>この内容でゲーム開始 →</Btn>
         <Btn outline color={C.red} onClick={() => {
@@ -6625,6 +6637,14 @@ function App() {
     if (g.tab === "shop") {
       body = (
         <div style={{ display: "grid", gap: 14 }}>
+          <section>
+            <Eyebrow color={C.yellow}>🏳 チーム名</Eyebrow>
+            <input type="text" value={g.teamName || ""} maxLength={16} placeholder="あなたのチーム"
+              onChange={e => { const v = e.target.value; setG(s => ({ ...s, teamName: v })); }}
+              onBlur={e => { if (!e.target.value.trim()) setG(s => ({ ...s, teamName: "あなたのチーム" })); }}
+              style={{ width: "100%", boxSizing: "border-box", marginTop: 6, background: C.panel2, color: C.text, border: `1.5px solid ${C.line}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, fontFamily: FONT_B }} />
+            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>いつでも変更できます（16文字まで）。</div>
+          </section>
           {g.month === 0 && (
             <section>
               <Eyebrow color={C.green}>APRIL DRAFT — 新人スカウト（方針：{SCOUT_POLICIES[g.scoutPolicy].label}）</Eyebrow>
