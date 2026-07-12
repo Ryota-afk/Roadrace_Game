@@ -623,14 +623,16 @@ const EQUIP_COST = [40, 70, 110, 160, 220];
 // v11: スタッフ雇用（equipの買い切りとは異なり、レベルに応じた月給制。
 // クラスが上がるほど雇用できるレベル上限が増える）
 const STAFF_ROLES = {
-  manager: { label: "監督", desc: "スポンサー契約の条件が良くなる（月収UP・ノルマ緩和）" },
-  trainer: { label: "トレーナー", desc: "練習の成長効果がアップする（恒常）" },
-  doctor:  { label: "ドクター", desc: "故障の発生率が下がり、故障期間も短縮される" },
+  manager: { label: "監督", desc: "スポンサー契約が好条件に（Lvごと月収+12%・ノルマ-8%・成功報酬+10%）" },
+  trainer: { label: "トレーナー", desc: "練習の成長効果がアップする（Lvごと+12%・恒常）" },
+  doctor:  { label: "ドクター", desc: "故障の発生率が下がり（Lvごと-22%）、故障期間も大きく短縮される" },
   // v28: スカウトスタッフ。新人スカウト候補の能力ブレ幅（＝査定の不確かさ）を減らし、
   // 逸材（成長S確定の隠し玉）の発掘率も上げる。スカウト方針とは別枠で査定精度を高める役割
-  scout:   { label: "スカウト", desc: "新人候補の能力査定が正確になり（ブレ幅減）、逸材の発掘率も上がる" },
+  scout:   { label: "スカウト", desc: "新人候補の査定が正確になり（Lvごとブレ-30%）、逸材の発掘率も大きく上がる" },
 };
-const STAFF_MAX_BY_CLASS = [0, 1, 3];
+// v29バグ修正: スカウト等のスタッフがPRO到達までまともに機能せず「今更感」があるという
+// 指摘を受け、B1（最初のクラス）から各スタッフをLv1雇用できるよう解禁時期を前倒しした
+const STAFF_MAX_BY_CLASS = [1, 2, 3];
 const STAFF_SALARY_PER_LV = 12; // 万円/月・レベル1つあたり（月給制、昇格なし＝買い切り費用は無し）
 function staffSalaryTotal(staff) {
   if (!staff) return 0;
@@ -1914,7 +1916,7 @@ function genScouts(classIdx, seed, policy = "balance", existingNames, scoutLv = 
   const specs = scoutSpecs(policy, count);
   const prodigyRng = mulberry(seed + 999);
   // v28: スカウトスタッフのレベルに応じて逸材（成長S確定）の発掘率が上がる
-  const hasProdigy = prodigyRng() < PRODIGY_CHANCE_BY_CLASS[classIdx] * (1 + scoutLv * 0.5);
+  const hasProdigy = prodigyRng() < PRODIGY_CHANCE_BY_CLASS[classIdx] * (1 + scoutLv * 0.6);
   const prodigyIdx = hasProdigy ? Math.floor(prodigyRng() * count) : -1;
   // v12バグ修正: 候補一覧の中で名前が被らないよう、既存ロースターの名前も避けつつ
   // 同じバッチ内で使った名前を集合に積み上げていく
@@ -1927,7 +1929,7 @@ function genScouts(classIdx, seed, policy = "balance", existingNames, scoutLv = 
     const r = newRider(base * s.mul, rng, opts);
     if (s.age <= 18) r.growth = rng() < 0.6 ? "late" : r.growth;
     // v28: スカウトスタッフのレベルで査定のブレ幅が縮む（lv3で約25%まで）
-    const blurMul = Math.max(0.25, 1 - scoutLv * 0.25);
+    const blurMul = Math.max(0.2, 1 - scoutLv * 0.28);
     const blur = {};
     AB_KEYS.forEach(k => {
       const d = (6 + rng() * 9) * blurMul;
@@ -2110,7 +2112,10 @@ function effAbilities(r, equip, itemBoost, grade, weather) {
   e.solo *= 1 + (build - 50) / 450;
   e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
   e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
-  AB_KEYS.forEach(k => { e[k] = Math.min(135, e[k]); });
+  // v29バグ修正: 万一いずれかの能力値が欠損（旧セーブ等でundefined）していると
+  // NaNがシミュレーション全体（finishTime等）に伝播し、最終的にレース描画がクラッシュして
+  // 画面が真っ暗になる恐れがあった。非有限値は安全な既定値(50)に丸めて必ず有限にする
+  AB_KEYS.forEach(k => { e[k] = Number.isFinite(e[k]) ? Math.min(135, e[k]) : 50; });
   e.type = r.type; e.abilities = r.abilities; e.goldAbilities = r.goldAbilities;
   // v29: 副ステータスをエントラントにも持たせ、tick計算・最終区間で参照する
   e.accel = r.accel ?? 50; e.mental = mental; e.build = build;
@@ -3285,8 +3290,9 @@ function FinalSprintCinematic({ contenders }) {
           const x = W / 2 + (i - (contenders.length - 1) / 2) * 11 + wobble;
           return (
             <g key={c.id} transform={`translate(${x},${y})`}>
+              {c.isPlayer && <circle r={c.isAce ? 10.5 : 8.5} fill="none" stroke="#27d3ff" strokeWidth="2" />}
               <circle r={c.isAce ? 8 : 6} fill={c.color} stroke="#14171d" strokeWidth="1.5" />
-              {c.isPlayer && <circle r="2" fill="#14171d" />}
+              {c.isPlayer && <circle r="2.2" fill="#14171d" />}
             </g>
           );
         })}
@@ -3295,6 +3301,34 @@ function FinalSprintCinematic({ contenders }) {
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>{contenders.length > 1 ? "🏁 ゴールスプリント" : "🏁 単独ゴール"}</div>
     </div>
   );
+}
+// v29バグ修正: レース演出（RaceView）の描画中に万一の例外が起きても、
+// 「画面が真っ暗になって進行不能」という致命的な詰みを絶対に発生させないためのエラー境界。
+// レース結果（着順・タイム）はRaceViewの描画とは無関係に、シミュレーション段階
+// （simulateTicks + rankSim）で既に確定済みなので、演出がこけても結果へは必ず進める。
+// 例外時は自動で結果画面へ送る（フォールバックのボタンも用意し、二重に詰み防止）。
+class RaceErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { crashed: false }; }
+  static getDerivedStateFromError() { return { crashed: true }; }
+  componentDidCatch(err) {
+    // 自動復帰：次のティックで結果画面へ進める（描画中のsetState連鎖を避けて遅延実行）
+    if (this.props.onRecover) setTimeout(() => { try { this.props.onRecover(); } catch (e) {} }, 400);
+  }
+  render() {
+    if (this.state.crashed) {
+      return (
+        <div style={{ display: "grid", gap: 12, padding: 16, background: C.panel, borderRadius: 12, border: `1px solid ${C.line}` }}>
+          <div style={{ fontFamily: FONT_D, fontSize: 15, color: C.yellow, fontWeight: 700 }}>🏁 レースは終了しました</div>
+          <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
+            レース中継の描画で問題が発生しましたが、着順・記録はすでに確定しています。
+            そのまま結果画面へお進みください（進行への影響はありません）。
+          </div>
+          <Btn onClick={this.props.onRecover}>結果を見る →</Btn>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 function RaceView({ sim, onFinish }) {
   const [hud, setHud] = useState({ top: [], seg: "", clock: 0, done: false, comment: "", gap: null });
@@ -3696,8 +3730,12 @@ function RaceView({ sim, onFinish }) {
                     )}
                     {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
                     {r.slot === 1 && r.mode === "draft" && <circle r={r.isAce ? 7.5 : 6} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
+                    {/* v29バグ修正: 自分がエースでない（白マーカー）ときにアシスト仲間と見分けが
+                        つかないという指摘に対応。自分の印には常に水色の識別リングを重ね、
+                        エースかどうかに関わらず一目で自分だとわかるようにする */}
+                    {r.isPlayer && <circle r={r.isAce ? 8 : 6.5} fill="none" stroke="#27d3ff" strokeWidth="1.8" />}
                     <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
-                    {r.isPlayer && <circle r="1.5" fill="#14171d" />}
+                    {r.isPlayer && <circle r="1.7" fill="#14171d" />}
                   </g>
                 );
               })}
@@ -3717,15 +3755,16 @@ function RaceView({ sim, onFinish }) {
                     {camMode === r.id && <circle r="9" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
                     {r.mode === "attack" && <circle r="7" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
                     {r.slot === 1 && r.mode === "draft" && <circle r={r.isAce ? 6.5 : 5} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
+                    {r.isPlayer && <circle r={r.isAce ? 7 : 5.5} fill="none" stroke="#27d3ff" strokeWidth="1.6" />}
                     <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
-                    {r.isPlayer && <circle r="1.3" fill="#14171d" />}
+                    {r.isPlayer && <circle r="1.5" fill="#14171d" />}
                   </g>
                 );
               })}
             </svg>
           </div>
           <div style={{ fontSize: 10, color: C.sub, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <span>● 黄色＝エース</span><span>○ 白＝自チームのアシスト</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
+            <span>● 黄色＝エース</span><span>○ 白＝自チームのアシスト</span><span style={{ color: "#27d3ff" }}>◎ 水色リング＝あなた</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
             <span style={{ color: C.yellow }}>点線＝次に牽引予定</span><span style={{ color: C.green }}>◎ 緑丸＝カメラで追跡中の選手</span>
             <span style={{ color: C.yellow }}>黄線＝アシストがエースを牽引中</span><span style={{ color: C.yellow }}>点滅リング＝エース発射</span>
             <span>選手はそれぞれ独立して集団内を漂う（巡航時は団子状、高強度区間ほど縦に伸びる）／中心から離れて動かなくなったら千切れかけ</span>
@@ -4198,21 +4237,23 @@ function App() {
         // v29: メンタルは大舞台の経験で育つ（格上ほど大きく）
         growSub(n, "mental", 0.3 * raceGradeMul * Math.max(0.25, ph.gain));
         // v11: ドクター（staff.doctor）は故障の発生率を下げ、発生した場合も期間を短縮する
+        // v29バグ修正: 効果が体感しづらいという指摘を受け、発生率減・期間短縮ともに強化
         const doctorLv = state.staff?.doctor || 0;
+        const injCut = Math.round(doctorLv * 0.8); // 故障期間の短縮量（Lv3で3ヶ月短縮）
         if (n.streak >= 3) {
-          n.injury = Math.max(1, 1 + (Math.random() < 0.5 ? 1 : 0) + injExtra - Math.floor(doctorLv / 2));
+          n.injury = Math.max(1, 1 + (Math.random() < 0.5 ? 1 : 0) + injExtra - injCut);
           n.streak = 0;
           state._injured.push(`${n.name} が3連闘の無理がたたり故障（${n.injury}ヶ月離脱）`);
         } else if (n.fatigue > 90) {
-          const p = (0.3 + (n.fatigue - 90) * 0.04) * injMul * (1 - doctorLv * 0.15);
+          const p = (0.3 + (n.fatigue - 90) * 0.04) * injMul * Math.max(0.1, 1 - doctorLv * 0.22);
           if (Math.random() < p) {
-            n.injury = Math.max(1, 1 + (Math.random() < 0.4 ? 1 : 0) + injExtra - Math.floor(doctorLv / 2));
+            n.injury = Math.max(1, 1 + (Math.random() < 0.4 ? 1 : 0) + injExtra - injCut);
             n.streak = 0;
             state._injured.push(`${n.name} が疲労の蓄積で故障（${n.injury}ヶ月離脱）`);
           }
-        } else if (raceInfo.weather === "rain" && Math.random() < (hasAbility(n, "rain_sp") ? 0.02 : 0.06)) {
+        } else if (raceInfo.weather === "rain" && Math.random() < (hasAbility(n, "rain_sp") ? 0.02 : 0.06) * Math.max(0.1, 1 - doctorLv * 0.22)) {
           // v25: 雨天レースは悪天候巧者を持たない選手に一定確率で落車リスクを上乗せする
-          n.injury = Math.max(1, 1 + (Math.random() < 0.3 ? 1 : 0) + injExtra - Math.floor(doctorLv / 2));
+          n.injury = Math.max(1, 1 + (Math.random() < 0.3 ? 1 : 0) + injExtra - injCut);
           n.streak = 0;
           state._injured.push(`${n.name} が雨天のレースで落車、負傷離脱（${n.injury}ヶ月）`);
         }
@@ -4292,8 +4333,12 @@ function App() {
         const managerLv = s.staff?.manager || 0;
         const nextOffers = genSponsors(classIdx, year).map(o => ({
           ...o,
-          monthly: Math.round(o.monthly * (1 + managerLv * 0.06)),
-          norma: Math.max(5, Math.round(o.norma * (1 - managerLv * 0.04))),
+          // v29バグ修正: 監督スタッフの効果が体感しづらいという指摘を受け、契約条件への
+          // 反映を強化（月収・成功報酬UP／ノルマ・失敗ペナルティ減）
+          monthly: Math.round(o.monthly * (1 + managerLv * 0.12)),
+          norma: Math.max(5, Math.round(o.norma * (1 - managerLv * 0.08))),
+          bonus: Math.round((o.bonus || 0) * (1 + managerLv * 0.10)),
+          penalty: Math.max(0, Math.round((o.penalty || 0) * (1 - managerLv * 0.10))),
         }));
         // v13: 年度の総括を歴史記録として1件積む（クラス・最終ポイント・昇格/降格・
         // チャンピオンシップ最高位）
@@ -6099,7 +6144,9 @@ function App() {
     if (ml.screen === "mylife_race" && ml.result) return mlWrap(
       <div>
         <div style={{ marginBottom: 8 }}><Eyebrow color={ml.inLastRace ? "#e8a13c" : C.red}>{ml.inLastRace ? "🏁 LAST RACE — " : "LIVE — "}{ml.result.raceMeta.name}</Eyebrow></div>
-        <RaceView sim={ml.result} onFinish={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish} />
+        <RaceErrorBoundary onRecover={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish}>
+          <RaceView sim={ml.result} onFinish={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish} />
+        </RaceErrorBoundary>
         <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>● 印＝あなた。位置が近い選手同士が自然にグループを作ります。</div>
       </div>
     );
@@ -7066,10 +7113,10 @@ function App() {
                 { label: "エアロフレーム", lv: g.equip.frame, max: 5, effect: `平坦 +${g.equip.frame * 6}%`, color: C.blue },
                 { label: "軽量ホイール", lv: g.equip.wheels, max: 5, effect: `登坂 +${g.equip.wheels * 6}%`, color: C.red },
                 { label: "トレーニング設備", lv: g.equip.facility, max: 5, effect: `練習効果 +${g.equip.facility * 15}%`, color: C.green },
-                { label: "監督", lv: g.staff.manager, max: 3, effect: g.staff.manager > 0 ? `月収+${g.staff.manager * 6}%・ノルマ-${g.staff.manager * 4}%` : "未雇用", color: C.yellow },
+                { label: "監督", lv: g.staff.manager, max: 3, effect: g.staff.manager > 0 ? `月収+${g.staff.manager * 12}%・ノルマ-${g.staff.manager * 8}%・報酬+${g.staff.manager * 10}%` : "未雇用", color: C.yellow },
                 { label: "トレーナー", lv: g.staff.trainer, max: 3, effect: g.staff.trainer > 0 ? `練習成長 +${g.staff.trainer * 12}%` : "未雇用", color: C.green },
-                { label: "ドクター", lv: g.staff.doctor, max: 3, effect: g.staff.doctor > 0 ? `故障率 -${g.staff.doctor * 15}%` : "未雇用", color: "#6fa8dc" },
-                { label: "スカウト", lv: g.staff.scout || 0, max: 3, effect: (g.staff.scout || 0) > 0 ? `査定ブレ -${(g.staff.scout || 0) * 25}%・逸材率UP` : "未雇用", color: C.purple },
+                { label: "ドクター", lv: g.staff.doctor, max: 3, effect: g.staff.doctor > 0 ? `故障率 -${g.staff.doctor * 22}%・離脱-${Math.round(g.staff.doctor * 0.8)}ヶ月` : "未雇用", color: "#6fa8dc" },
+                { label: "スカウト", lv: g.staff.scout || 0, max: 3, effect: (g.staff.scout || 0) > 0 ? `査定ブレ -${(g.staff.scout || 0) * 28}%・逸材率+${(g.staff.scout || 0) * 60}%` : "未雇用", color: C.purple },
               ].map((row, i) => (
                 <div key={i} style={{ background: C.panel, borderRadius: 8, padding: "7px 10px", border: `1px solid ${C.line}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -7809,7 +7856,9 @@ function App() {
       <div style={{ marginBottom: 8 }}>
         <Eyebrow color={C.red}>LIVE — {g.result.raceMeta.name}{g.gc && g.gc.race.stageRace ? `（${g.gc.stage}日目）` : ""}</Eyebrow>
       </div>
-      <RaceView sim={g.result} onFinish={raceFinishHandler} />
+      <RaceErrorBoundary onRecover={raceFinishHandler}>
+        <RaceView sim={g.result} onFinish={raceFinishHandler} />
+      </RaceErrorBoundary>
       <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>
         ● 印＝あなたのチーム／黄ジャージ＝エース。位置が近い選手同士が自然にグループを作り、千切れ・吸収・ローテーションが発生します。
       </div>
@@ -8140,4 +8189,5 @@ function App() {
 
 function t_label(type) { return TYPES[type]?.label || type; }
 
+export default App;
 export default App;
