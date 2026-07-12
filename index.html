@@ -1895,7 +1895,7 @@ const GROWTH_ORDER = ["early", "normal", "late", "super_late"];
 const ML_STOCK_ITEMS = {
   drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
   supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },
-  tune:  { label: "コンディション調整", desc: "調子を1段階アップ", price: 20, condDelta: 1 },
+  tune:  { label: "フォーム調整剤", desc: "フォームを+12（レース前の仕上げに）", price: 20, formDelta: 12 },
   // v15フェーズ2: 成長力・成長タイプを底上げする消耗品
   growthPowUp: { label: "才能開花プログラム", desc: "成長力を1段階アップ（C→B→A→S）", price: 180, growthPowUp: true },
   growthShift: { label: "晩成型トレーニング理論", desc: "成長タイプを1段階「晩成」寄りに変更（早熟→普通→晩成→超晩成）", price: 150, growthShiftUp: true },
@@ -1906,7 +1906,7 @@ const ML_SPECIAL_TRAINING = {
   altitude: { label: "🏔 高地合宿", keys: ["stamina", "solo"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "スタミナ・独走を集中的に鍛える（疲労大）" },
   sprintcamp: { label: "⚡ スプリント特訓", keys: ["sprint", "flat"], gainMul: 1.7, fatigue: 20, cond: 0, desc: "スプリント・平坦＋加速力を集中的に鍛える" },
   climbcamp: { label: "⛰ クライム合宿", keys: ["climb", "stamina"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "登坂・スタミナを集中的に鍛える（疲労大）" },
-  mental: { label: "🧘 メンタル強化", keys: [], gainMul: 0.4, fatigue: 6, cond: 1, desc: "メンタルを重点強化＋全能力わずか底上げ・調子+1（疲労小）" },
+  mental: { label: "🧘 メンタル強化", keys: [], gainMul: 0.4, fatigue: 6, cond: 1, desc: "メンタルを重点強化＋全能力わずか底上げ・フォーム+8（疲労小）" },
 };
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
@@ -5333,7 +5333,7 @@ function App() {
       const ph2 = growthPhase(player);
       if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
       player.fatigue = Math.min(100, player.fatigue + spec.fatigue);
-      if (spec.cond) player.cond = Math.max(1, Math.min(5, player.cond + spec.cond));
+      if (spec.cond) player.form = Math.min(100, (player.form ?? 50) + spec.cond * 8); // v31.3: 調子→フォームに統合
       player.streak = 0;
     }
     if (houseLv >= 0) player.fatigue = Math.max(0, player.fatigue - ML_HOUSES[houseLv].fatigueBonus);
@@ -5346,20 +5346,22 @@ function App() {
     if (flags.hasChild && !flags.childFocusedCareer) player.fatigue = Math.max(0, player.fatigue - 3);
     // v18: 若手のメンターになると、後進を気にかける充実感から疲労がわずかに抜けやすくなる
     if (flags.mentor) player.fatigue = Math.max(0, player.fatigue - 3);
-    // v20: シーズンモードと同様、調子は毎月ランダムに変動する（moody/steady_spがあれば変動幅も反映）
-    // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
-    // v29: メンタルが高いほど調子の変動が小さく安定する（低いと不安定）
+    // v31.3: 「調子(cond)」と「フォーム(form)」は、どちらも当日の能力を上下させる二重の指標で
+    // 分かりづらいという指摘を受け、マイライフではフォーム(0-100)に一本化した。調子は中立(3)に
+    // 固定して能力への二重補正を止め、月々の好不調の波・予報・ピーキングをすべてフォームに集約する。
+    player.cond = 3;
     const mentalSteady = Math.max(0.6, Math.min(1.4, 1 - ((player.mental ?? 50) - 50) / 250));
-    const swing = (hasAbility(player, "moody") ? 2 : hasAbility(player, "steady_sp") ? 0.5 : 1) * mentalSteady;
-    const dir = (player.condForecast != null) ? player.condForecast : rollCondDir();
-    player.cond = Math.max(1, Math.min(5, (player.cond || 3) + dir * swing));
-    player.condForecast = rollCondDir();
-    // v29: ピーキング。調整月はフォームが大きく上がり、それ以外の月は基準値(45)へじわじわ戻る。
-    // ＝ピークは維持し続けられず、大レースに合わせて仕上げる駆け引きになる
+    // 毎月の波の大きさ（moodyは激しく、精密機械/steady_spは小さく、メンタルが高いほど安定）
+    const swingMag = (hasAbility(player, "moody") ? 10 : hasAbility(player, "steady_sp") ? 3 : 6) * mentalSteady;
+    const dir = (player.formForecast != null) ? player.formForecast : rollCondDir();
     const curForm = player.form ?? 50;
-    player.form = mode === "peak"
-      ? Math.min(100, curForm + 24)
-      : Math.round(curForm + (45 - curForm) * 0.32);
+    // ピーキング調整の月はフォームが大きく上がる。それ以外は基準値(48)へ戻りつつ月々の波が乗る
+    // ＝ピークは維持し続けられず、大レースに合わせて仕上げる駆け引きになる
+    const nextForm = mode === "peak"
+      ? curForm + 24
+      : curForm + (48 - curForm) * 0.30 + dir * swingMag;
+    player.form = Math.max(0, Math.min(100, Math.round(nextForm)));
+    player.formForecast = rollCondDir(); // 翌月の波の向きを予報
     return player;
   }
   function mlAdvanceMonth(mode) {
@@ -5668,7 +5670,7 @@ function App() {
       const it = ML_STOCK_ITEMS[k];
       const player = { ...s.player };
       if (it.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + it.fatigueDelta));
-      if (it.condDelta) player.cond = Math.max(1, Math.min(5, player.cond + it.condDelta));
+      if (it.formDelta) player.form = Math.max(0, Math.min(100, (player.form ?? 50) + it.formDelta));
       // v15フェーズ2: 成長力・成長タイプを1段階アップさせる消耗品
       if (it.growthPowUp) {
         const idx = GROWTHPOW_ORDER.indexOf(player.growthPow);
@@ -5691,8 +5693,8 @@ function App() {
       askConfirm(`疲労は現在${Math.round(player.fatigue)}です。${it.label}を使うと回復量の一部（約${wasted}）が無駄になります。それでも使いますか？`, () => mlUseStock(k));
       return;
     }
-    if (player && it.condDelta && player.cond >= 5) {
-      askConfirm(`調子は既に最高潮（↑↑）です。${it.label}を使っても変化しません。それでも使いますか？`, () => mlUseStock(k));
+    if (player && it.formDelta && (player.form ?? 50) >= 92) {
+      askConfirm(`フォームは既にほぼピーク（${Math.round(player.form ?? 50)}）です。${it.label}を使っても大半が無駄になります。それでも使いますか？`, () => mlUseStock(k));
       return;
     }
     mlUseStock(k);
@@ -6232,7 +6234,6 @@ function App() {
               <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
               <span>成長<span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span></span>
               {(() => { const pot = potentialHint(r); return <span style={{ color: pot.color }}>{pot.label}</span>; })()}
-              <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span><CondFc dir={r.condForecast} /></span>
               {ml.flags?.married && <span style={{ color: C.purple }}>💍 既婚</span>}
             </div>
             <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
@@ -6243,7 +6244,7 @@ function App() {
               const fl = form >= 80 ? "ピーク" : form >= 62 ? "好調" : form >= 40 ? "平常" : "低調";
               return (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 10.5, color: C.sub }}>フォーム</span>
+                  <span style={{ fontSize: 10.5, color: C.sub }}>フォーム（好不調）<CondFc dir={r.formForecast} /></span>
                   <div style={{ flex: 1, height: 5, background: C.line, borderRadius: 3 }}><div style={{ width: `${form}%`, height: 5, background: fc, borderRadius: 3 }} /></div>
                   <span style={{ fontFamily: FONT_M, fontSize: 11, color: fc, width: 58, textAlign: "right" }}>{Math.round(form)}・{fl}</span>
                 </div>
@@ -6259,7 +6260,7 @@ function App() {
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                 {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("drink")}>{ML_STOCK_ITEMS.drink.label}(-30) ×{ml.stock.drink}</Btn>}
                 {ml.stock.supp > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("supp")}>{ML_STOCK_ITEMS.supp.label}(-60) ×{ml.stock.supp}</Btn>}
-                {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("tune")}>{ML_STOCK_ITEMS.tune.label}(調子+1) ×{ml.stock.tune}</Btn>}
+                {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("tune")}>{ML_STOCK_ITEMS.tune.label}(フォーム+12) ×{ml.stock.tune}</Btn>}
               </div>
             )}
           </div>
@@ -6396,8 +6397,7 @@ function App() {
             <div style={{ background: C.panel2, borderRadius: 8, padding: "6px 10px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 11 }}>
               <span style={{ color: C.sub }}>選択の目安 ▶</span>
               <span>疲労 <b style={{ color: r.fatigue > 90 ? C.red : r.fatigue > 60 ? "#e8a13c" : C.green, fontFamily: FONT_M }}>{Math.round(r.fatigue)}</b></span>
-              <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span><CondFc dir={r.condForecast} /></span>
-              <span>フォーム <b style={{ color: (r.form ?? 50) >= 80 ? C.yellow : (r.form ?? 50) >= 62 ? C.green : C.sub, fontFamily: FONT_M }}>{Math.round(r.form ?? 50)}</b></span>
+              <span>フォーム <b style={{ color: (r.form ?? 50) >= 80 ? C.yellow : (r.form ?? 50) >= 62 ? C.green : C.sub, fontFamily: FONT_M }}>{Math.round(r.form ?? 50)}</b><CondFc dir={r.formForecast} /></span>
               <span>OVR <b style={{ color: C.yellow, fontFamily: FONT_M }}>{overall(r)}</b></span>
             </div>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
@@ -6522,8 +6522,9 @@ function App() {
             <Card>出走した場合は、レースで使った区間の種目に応じた「出走経験」でも能力が伸び、レースのグレードが高いほど伸びが大きくなります。またキャリアを重ねるほど対戦相手（AI選手）の地力も底上げされていくため、成長を怠るとだんだん勝てなくなっていきます。</Card>
           </Section>
 
-          <Section color={C.red} title="疲労・調子">
-            <Card>出走で疲労+40（車のグレードや「鉄人」「回復力」等で軽減）。調子は→／↗／↑↑／↘／↓↓の5段階で毎月ランダムに変動します。疲労が60未満なら急いで回復させる必要はなく、90を超えると要注意です。</Card>
+          <Section color={C.red} title="疲労・フォーム">
+            <Card>出走で疲労+40（車のグレードや「鉄人」「回復力」等で軽減）。疲労が60未満なら急いで回復させる必要はなく、90を超えると要注意です。</Card>
+            <Card>フォーム（好不調・0〜100）はレース当日の能力を最大±17%上下させる好不調の指標です。毎月ゆるやかに基準値へ戻りつつ波打ち、「🎯ピーキング調整」で大きく上がります（狙ったレースに合わせて仕上げ、ピークは長く維持できません）。フォーム調整剤（ショップ）でも上げられます。「ムラっ気」は波が激しく、「精密機械」やメンタルが高い選手は安定します。予報アイコンで翌月の傾向がわかります。</Card>
             <Card>結婚・子供の有無・一戸建て以上の住居・メンター就任などのライフイベントは、毎月の疲労回復量にわずかな恒常ボーナスを与えます。</Card>
           </Section>
 
@@ -6678,7 +6679,7 @@ function App() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
               <span style={{ fontSize: 11, color: C.sub }}>現在の疲労</span>
               <div style={{ width: 90 }}><FatigueBar v={r.fatigue} /></div>
-              <span style={{ fontSize: 11, color: C.sub }}>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span></span>
+              <span style={{ fontSize: 11, color: C.sub }}>フォーム <span style={{ color: (r.form ?? 50) >= 80 ? C.yellow : (r.form ?? 50) >= 62 ? C.green : C.sub, fontFamily: FONT_M }}>{Math.round(r.form ?? 50)}</span></span>
             </div>
           </div>
           <section>
