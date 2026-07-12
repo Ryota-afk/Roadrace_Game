@@ -420,6 +420,8 @@ function mlLegendSnapshot(s) {
     plusValue: r.plusValue || 0, generation: r.generation || 0,
     // v31.2: 系統名（旧セーブは名前から生成）
     lineageName: r.lineageName || `${r.name || "無名"}系`,
+    // v31.4: キャリアの生き様（称号）
+    careerTitle: mlCareerArchetype(s).title, careerTitleDesc: mlCareerArchetype(s).desc,
   };
 }
 // v27: 教え子への継承内容を導く。師匠（殿堂スナップショット）の得意能力・戦績・成長力・
@@ -1125,18 +1127,23 @@ function riderNickname(r) {
   const wins = log.filter(e => e.rank === 1).length;
   const podiums = log.filter(e => e.rank <= 3).length;
   const races = log.length;
-  if (wins >= 8) return "伝説の勝ち師";
+  const supR = log.filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
+  const aceR = log.filter(e => ["ace", "lead"].includes(e.role)).length;
+  const abs = { flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo };
+  const top = Object.entries(abs).sort((a, b) => b[1] - a[1])[0][0];
+  // v31.4: 「勝ち星が多い＝みんな伝説の勝ち師」で没個性化していたため、勝利数上位は
+  // 脚質を冠した称号にし、役割（献身のアシスト）や取りこぼし（悲運）も拾って多様化する
+  const byTypeKing = { flat: "平坦の帝王", climb: "山岳の覇者", sprint: "豪脚のゴールハンター", stamina: "無尽蔵の機関車", solo: "独走の求道者" };
+  const byType = { flat: "巡航の職人", climb: "山岳の申し子", sprint: "スプリンター", stamina: "鉄の脚", solo: "独走屋" };
+  if (supR >= 10 && supR >= aceR * 1.5 && wins <= 4) return "献身のアシスト";
+  if (podiums >= 10 && wins <= 2) return "悲運の名脇役";
+  if (wins >= 8) return byTypeKing[top] || "常勝の帝王";
   if (wins >= 5) return "常勝の帝王";
   if (wins >= 3) return "勝利の申し子";
   if (podiums >= 12) return "表彰台の主";
   if (podiums >= 6) return "表彰台の常連";
   if (races >= 12 && podiums === 0) return "苦労人";
   if (r.prodigy) return "将来を嘱望された逸材";
-  const abs = { flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo };
-  const top = Object.entries(abs).sort((a, b) => b[1] - a[1])[0][0];
-  const byType = {
-    flat: "巡航の職人", climb: "山岳の覇者", sprint: "ゴールハンター", stamina: "鉄の脚", solo: "独走の求道者",
-  };
   return byType[top] || "無名の挑戦者";
 }
 // v13.3: 以前はフレーバーテキストが脚質・性格・特性をそのまま言い換えるだけで、
@@ -4116,6 +4123,43 @@ function applyAmbitionReward(reward, player, money) {
   if (reward.growth) { player.growthPow = bumpGrowthPow(player.growthPow, reward.growth); parts.push(`成長力→${player.growthPow}`); }
   return { money: newMoney, text: parts.join("・") };
 }
+// v31.4: キャリアの生き様（アーキタイプ／称号）。「最終的にみんな伝説の勝ち師になり没個性化する」
+// という指摘に対応。勝利数だけでなく、役割（エース/アシスト）・脚質・大舞台タイトル・世界ランク・
+// 表彰台率・在籍年数・成長タイプから、その選手が「どんな伝説だったか」を1つに定めて称える。
+function mlCareerArchetype(s) {
+  const r = s.player || {};
+  const log = r.raceLog || [];
+  const races = log.length;
+  const wins = (s.careerWins != null) ? s.careerWins : log.filter(e => e.rank === 1).length;
+  const podiums = (s.careerPodiums != null) ? s.careerPodiums : log.filter(e => e.rank <= 3).length;
+  const titles = s.careerTitles || 0;
+  const worldBest = s.worldRankBest;
+  const years = s.year || 1;
+  const age = r.age || 30;
+  const aceR = log.filter(e => ["ace", "lead"].includes(e.role)).length;
+  const supR = log.filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
+  const type = r.type;
+  const SPEC = {
+    SPR: { t: "豪脚のスプリント王", d: "ゴール前の爆発力で数々の集団スプリントを制した、生粋のフィニッシャー。" },
+    CLM: { t: "山岳の魔術師", d: "峠という峠で栄光を掴んだ、天性のクライマー。" },
+    RUL: { t: "平坦の絶対王者", d: "風を切り裂くパワーで平坦路を支配した、鉄壁のルーラー。" },
+    PUN: { t: "丘陵の変幻自在", d: "起伏あるコースを知性と脚で攻略し続けた、したたかなパンチャー。" },
+    TT:  { t: "孤高のタイムトライアリスト", d: "時計と戦い、独走で幾多の勝利を刻んだ孤高の求道者。" },
+  };
+  if (worldBest === 1) return { key: "world1", title: "世界の頂に立った者", desc: "世界ランキングの頂点を極め、一時代を築いた絶対王者。", color: C.yellow };
+  if (titles >= 2) return { key: "heroMulti", title: "大舞台の英雄", desc: "世界選手権・五輪の大舞台で幾度も頂点に立った、記憶に刻まれる英雄。", color: C.yellow };
+  if (titles >= 1) return { key: "hero", title: "大一番の勝負師", desc: "ここぞの大舞台で栄冠をつかんだ、勝負強さの人。", color: "#e8a13c" };
+  if (wins >= 25) return { key: "emperor", title: "常勝の帝王", desc: "数えきれない勝利を積み上げた、記録に残る絶対的エース。", color: C.yellow };
+  if (wins >= 8) { const sp = SPEC[type] || { t: "勝利の職人", d: "堅実に勝ちを積み上げた実力者。" }; return { key: "specialist_" + type, title: sp.t, desc: sp.d, color: C.green }; }
+  if (supR >= 12 && supR >= aceR * 1.5 && wins <= 4) return { key: "domestique", title: "不屈のアシスト職人", desc: "自らの勝利より仲間の勝利を優先し、チームを陰で支え続けた名脇役。", color: C.blue };
+  if (podiums >= 12 && wins <= 3) return { key: "nearly", title: "悲運の名脇役", desc: "幾度も表彰台に立ちながら、最高の一段には手が届かなかった、愛されるべき選手。", color: C.purple };
+  if (years >= 12 || age >= 36) return { key: "ironman", title: "鉄人", desc: "長きにわたり第一線で走り続けた、稀有なる持久力の持ち主。", color: "#6fa8dc" };
+  if ((r.growth === "late" || r.growth === "super_late") && wins >= 2) return { key: "latebloom", title: "遅咲きの雑草魂", desc: "長い下積みを経て、キャリア後半に花開いた苦労人。", color: C.green };
+  if (wins >= 3) return { key: "winner", title: "勝利を知る者", desc: "確かな勝ち星を残した、記憶に残るレーサー。", color: C.green };
+  if (podiums >= 6) return { key: "podium", title: "表彰台の常連", desc: "安定して上位に絡み続けた、堅実な実力者。", color: C.sub };
+  if (races >= 15) return { key: "journeyman", title: "生涯一レーサー", desc: "派手さはなくとも、最後までペダルを回し続けた職人。", color: C.sub };
+  return { key: "challenger", title: "名もなき挑戦者", desc: "短くも自分の走りを貫いた、一人の挑戦者。", color: C.sub };
+}
 // ---------- v14: マイライフモード（選手1人のキャリア） ----------
 // v9〜v13のシーズンモード（チーム運営）とは完全に別のセーブ・状態を持つ、
 // 選手1人の視点でB1からのキャリアを歩む新モード。既存のTYPES/ABILITIES/PERSONALITIES/
@@ -6906,12 +6950,19 @@ function App() {
       const r = ml.player;
       const wins = (r.raceLog || []).filter(e => e.rank === 1).length;
       const podiums = (r.raceLog || []).filter(e => e.rank <= 3).length;
+      const arch = mlCareerArchetype(ml);
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 18, borderTop: `4px solid ${C.yellow}`, textAlign: "center" }}>
             <div style={{ fontSize: 40 }}>🏁</div>
             <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 22, margin: "8px 0" }}>{r.name} 引退</h2>
             {riderNickname(r) && <div style={{ fontSize: 13, color: C.purple, fontStyle: "italic" }}>「{riderNickname(r)}」</div>}
+            {/* v31.4: キャリアの生き様（称号）。どんな伝説だったかを引退セレモニーで称える */}
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
+              <div style={{ fontSize: 10.5, color: C.sub }}>この選手の生き様</div>
+              <div style={{ fontFamily: FONT_D, fontSize: 19, fontWeight: 700, color: arch.color, margin: "3px 0" }}>― {arch.title} ―</div>
+              <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.6 }}>{arch.desc}</div>
+            </div>
           </div>
           {ml.lastRaceResult && (
             <div style={{ background: "rgba(232,161,60,0.1)", borderRadius: 10, padding: "10px 12px", border: `1.5px solid #e8a13c` }}>
@@ -7010,6 +7061,7 @@ function App() {
                   <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>{leg.endYear}年目引退・{leg.age}歳</span>
                 </div>
                 {leg.nickname && <div style={{ fontSize: 11.5, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{leg.nickname}」</div>}
+                {leg.careerTitle && <div style={{ fontSize: 11.5, color: "#e8a13c", fontWeight: 700, marginTop: 2 }} title={leg.careerTitleDesc || ""}>― {leg.careerTitle} ―</div>}
                 <div style={{ fontSize: 11, color: C.text, marginTop: 4, lineHeight: 1.6 }}>{leg.summary}</div>
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>
                   {leg.team}／通算{leg.races}戦{leg.wins}勝・表彰台{leg.podiums}回／実績{leg.achievedCount}/{leg.achievedTotal}
