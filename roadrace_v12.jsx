@@ -5613,40 +5613,52 @@ function App() {
               })}
             </div>
           </div>
+          {/* v28: 縦積みになりすぎたボタン群を「今月のアクション（月を消費）」「メニュー（画面表示）」
+              「その他・キャリア管理」の3グループに整理。二次的なものは折り返す小ボタンにまとめる */}
           <div style={{ display: "grid", gap: 8 }}>
+            <Eyebrow color={C.green}>🎬 今月のアクション（1つ選ぶと1ヶ月進みます）</Eyebrow>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
-            <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習する（focus中心・疲労+）</Btn>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（focus中心）</Btn>
+              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養</Btn>
+              <Btn small outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活イベント</Btn>
+              {(ml.player.popularity || 0) >= 20 && (
+                <Btn small outline color={"#e8a13c"} onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事</Btn>
+              )}
+            </div>
             <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 10px" }}>
-              <Eyebrow color={C.blue}>🎯 専門トレーニング（狙いを絞って強化）</Eyebrow>
-              <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+              <Eyebrow color={C.blue}>🎯 専門トレーニング（狙いを絞って強化・1ヶ月消費）</Eyebrow>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                 {Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
-                  <Btn key={k} small outline color={C.blue} onClick={() => mlAdvanceMonth(k)}>{sp.label}｜{sp.desc}</Btn>
+                  <Btn key={k} small outline color={C.blue} onClick={() => mlAdvanceMonth(k)} title={sp.desc}>{sp.label}</Btn>
                 ))}
               </div>
             </div>
-            <Btn outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養する（疲労回復のみ）</Btn>
-            <Btn outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活のイベントを受ける</Btn>
-            {(ml.player.popularity || 0) >= 20 && (
-              <Btn outline color={"#e8a13c"} onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事を受ける（人気度で報酬UP・その月は競技に集中できない）</Btn>
-            )}
-            <Btn outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップに行く</Btn>
-            <Btn outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>
-              🏆 実績を見る（{computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}達成）
-            </Btn>
-            <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑を見る</Btn>
-            <Btn outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコードを見る</Btn>
-            <Btn outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプを見る</Btn>
-            {ml.flags?.mentor
-              ? <div style={{ fontSize: 11.5, color: C.yellow, textAlign: "center" }}>🎖 チームの精神的支柱（毎月疲労-3／監督評価の伸び+0.3）</div>
-              : r.age >= 30 && (
-                <Btn outline color={C.yellow} onClick={() => askConfirm("若手のメンターになりますか？（毎月の疲労回復と監督評価の伸びが恒常的に上がります。一度なると元には戻せません）", mlBecomeMentor)}>
-                  🎖 若手のメンターになる
-                </Btn>
-              )}
           </div>
-          <Btn outline color={"#e8a13c"} onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースを走って引退する</Btn>
-          <Btn outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>そのまま静かに引退する</Btn>
-          <Btn outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
+          <div>
+            <Eyebrow color={C.sub}>📂 メニュー（開くだけ・月は進みません）</Eyebrow>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+              <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップ</Btn>
+              <Btn small outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>🏆 実績 {computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}</Btn>
+              <Btn small outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑</Btn>
+              <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコード</Btn>
+              <Btn small outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプ</Btn>
+            </div>
+          </div>
+          <div>
+            <Eyebrow color={C.sub}>⚙ その他・キャリア管理</Eyebrow>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6, alignItems: "center" }}>
+              {ml.flags?.mentor
+                ? <span style={{ fontSize: 11.5, color: C.yellow }}>🎖 チームの精神的支柱（毎月疲労-3／評価+0.3）</span>
+                : r.age >= 30 && (
+                  <Btn small outline color={C.yellow} onClick={() => askConfirm("若手のメンターになりますか？（毎月の疲労回復と監督評価の伸びが恒常的に上がります。一度なると元には戻せません）", mlBecomeMentor)}>🎖 メンターになる</Btn>
+                )}
+              <Btn small outline color={"#e8a13c"} onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
+              <Btn small outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🚪 静かに引退</Btn>
+              <Btn small outline color={C.red} onClick={() => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>🔄 最初からやり直す</Btn>
+              <Btn small outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
+            </div>
+          </div>
         </div>
       );
     }
@@ -5962,7 +5974,6 @@ function App() {
             </div>
           </section>
           <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
-          <Btn outline color={C.red} onClick={() => askConfirm("マイライフを最初からやり直しますか？保存データも消えます。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>マイライフをリセット</Btn>
         </div>
       );
     }
@@ -6447,10 +6458,11 @@ function App() {
             );
           })}
           <Btn outline color={C.sub} onClick={() => advanceMonth(null)}>翌月へ進む（今月は休養：全員の疲労-50）</Btn>
-          <Btn outline color={C.blue} onClick={() => setG(s => ({ ...s, screen: "program" }))}>📅 年間レースプログラムを見る</Btn>
-          <Btn outline color={C.purple} onClick={() => setG(s => ({ ...s, screen: "standings" }))}>📊 今季のチーム順位表を見る</Btn>
-          <Btn outline color={"#e8a13c"} onClick={() => setG(s => ({ ...s, screen: "trophy" }))}>🏆 トロフィールームを見る</Btn>
-          <div style={{ display: "flex", gap: 8 }}>
+          {/* v28: 縦積みだった閲覧・管理系ボタンを折り返しの小ボタン群にまとめて縦の長さを圧縮 */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <Btn small outline color={C.blue} onClick={() => setG(s => ({ ...s, screen: "program" }))}>📅 年間プログラム</Btn>
+            <Btn small outline color={C.purple} onClick={() => setG(s => ({ ...s, screen: "standings" }))}>📊 順位表</Btn>
+            <Btn small outline color={"#e8a13c"} onClick={() => setG(s => ({ ...s, screen: "trophy" }))}>🏆 トロフィールーム</Btn>
             <Btn small outline color={C.green} onClick={() => {
               const ok = saveGame(g);
               setG(s => ({ ...s, log: [...s.log, ok ? `【${MONTHS[s.month]}】セーブしました` : "セーブに失敗しました（ブラウザの保存領域を確認してください）"] }));
