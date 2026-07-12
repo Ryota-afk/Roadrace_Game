@@ -606,6 +606,9 @@ const STAFF_ROLES = {
   manager: { label: "監督", desc: "スポンサー契約の条件が良くなる（月収UP・ノルマ緩和）" },
   trainer: { label: "トレーナー", desc: "練習の成長効果がアップする（恒常）" },
   doctor:  { label: "ドクター", desc: "故障の発生率が下がり、故障期間も短縮される" },
+  // v28: スカウトスタッフ。新人スカウト候補の能力ブレ幅（＝査定の不確かさ）を減らし、
+  // 逸材（成長S確定の隠し玉）の発掘率も上げる。スカウト方針とは別枠で査定精度を高める役割
+  scout:   { label: "スカウト", desc: "新人候補の能力査定が正確になり（ブレ幅減）、逸材の発掘率も上がる" },
 };
 const STAFF_MAX_BY_CLASS = [0, 1, 3];
 const STAFF_SALARY_PER_LV = 12; // 万円/月・レベル1つあたり（月給制、昇格なし＝買い切り費用は無し）
@@ -1826,13 +1829,14 @@ function scoutSpecs(policy, count) {
   for (let i = 5; i < count; i++) extra.push({ age: 20 + (i % 6), mul: 0.9 + (i % 4) * 0.05, priceMul: 0.85 + (i % 4) * 0.1 });
   return [...base5, ...extra];
 }
-function genScouts(classIdx, seed, policy = "balance", existingNames) {
+function genScouts(classIdx, seed, policy = "balance", existingNames, scoutLv = 0) {
   const rng = mulberry(seed);
   const base = CLASSES[classIdx].scout;
   const count = SCOUT_COUNT_BY_CLASS[classIdx];
   const specs = scoutSpecs(policy, count);
   const prodigyRng = mulberry(seed + 999);
-  const hasProdigy = prodigyRng() < PRODIGY_CHANCE_BY_CLASS[classIdx];
+  // v28: スカウトスタッフのレベルに応じて逸材（成長S確定）の発掘率が上がる
+  const hasProdigy = prodigyRng() < PRODIGY_CHANCE_BY_CLASS[classIdx] * (1 + scoutLv * 0.5);
   const prodigyIdx = hasProdigy ? Math.floor(prodigyRng() * count) : -1;
   // v12バグ修正: 候補一覧の中で名前が被らないよう、既存ロースターの名前も避けつつ
   // 同じバッチ内で使った名前を集合に積み上げていく
@@ -1844,9 +1848,11 @@ function genScouts(classIdx, seed, policy = "balance", existingNames) {
     if (i === prodigyIdx) opts.forceProdigy = true;
     const r = newRider(base * s.mul, rng, opts);
     if (s.age <= 18) r.growth = rng() < 0.6 ? "late" : r.growth;
+    // v28: スカウトスタッフのレベルで査定のブレ幅が縮む（lv3で約25%まで）
+    const blurMul = Math.max(0.25, 1 - scoutLv * 0.25);
     const blur = {};
     AB_KEYS.forEach(k => {
-      const d = 6 + rng() * 9;
+      const d = (6 + rng() * 9) * blurMul;
       blur[k] = { min: Math.max(20, Math.round(r[k] - d)), max: Math.min(94, Math.round(r[k] + d)) };
     });
     const ovrMin = Math.round(AB_KEYS.reduce((a, k) => a + blur[k].min, 0) / 5);
@@ -2386,16 +2392,24 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
           // ゴールタイムが不自然なほど大量に完全一致してしまう（差が均質すぎる問題）。
           // スプリント区間に限り、各選手自身のスプリント適性（ownCapable/groupDistの比）と
           // 小さな運要素を反映した微差を加え、集団のままでも着差にばらつきが出るようにする
-          if (segType === "sprint") {
-            // v28: ゴールスプリント区間はスプリント能力の差をそのまま着差に反映する。
-            // とくに最終区間（カメラが切り替わる勝負どころ）では差を大きく取り、
-            // 強いスプリンターが集団ゴールを制し、弱い選手ははっきり遅れるようにする
-            const isFinalSprint = segInfo.idx === course.finalIdx;
+          const isFinalSeg = segInfo.idx === course.finalIdx;
+          if (isFinalSeg) {
+            // v28: 最終区間（カメラが切り替わる勝負どころ）は、そこまで生き残った選手同士の
+            // ゴール前の掛け合いをスプリント能力で決める。山頂フィニッシュなどスプリント以外で
+            // 終わるコースでも、地形適性（ownCapable＝登坂等）で集団に残れるかは従来通り決まり、
+            // 残った選手の中ではスプリント力の finishing kick が着差になる。
+            // 登坂力が無ければ最終区間の手前（climb区間）で千切れて集団に残れない
+            const terrainEdge = ownCapable / groupDist - 1;
+            // sprint区間はownCapableが既にスプリントなので二重計上を避け係数を半分に
+            const sprintEdge = (segType === "sprint" ? 0.5 : 1) * (en.sprint - 70) / 260;
+            const edgeMul = segType === "sprint" ? 1.7 : 0.9;
+            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.035;
+            dist = groupDist * Math.max(0.87, Math.min(1.13, 1 + terrainEdge * edgeMul + sprintEdge + luck));
+          } else if (segType === "sprint") {
+            // 周回途中などの非最終スプリント区間は従来の弱めの着差
             const abilityEdge = ownCapable / groupDist - 1;
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * (isFinalSprint ? 0.035 : 0.05);
-            const edgeMul = isFinalSprint ? 1.7 : 0.6;
-            const range = isFinalSprint ? 0.13 : 0.06;
-            dist = groupDist * Math.max(1 - range, Math.min(1 + range, 1 + abilityEdge * edgeMul + luck));
+            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.05;
+            dist = groupDist * Math.max(0.94, Math.min(1.06, 1 + abilityEdge * 0.6 + luck));
           } else {
             dist = groupDist;
           }
@@ -3593,7 +3607,7 @@ function initGame() {
     year: 1, month: 0, classIdx: 0, points: 0, budget: 300,
     roster,
     equip: { frame: 0, wheels: 0, facility: 0 },
-    staff: { manager: 0, trainer: 0, doctor: 0 },
+    staff: { manager: 0, trainer: 0, doctor: 0, scout: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
     partsInv: {},
     camp: false,
@@ -4142,7 +4156,7 @@ function App() {
           ...s, roster: survivors, classIdx, points: 0, year, month: 0,
           budget: s.budget + income + delta - upkeep - staffSalary,
           sponsor: null, sponsorOffers: nextOffers,
-          scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name)),
+          scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name), s.staff?.scout || 0),
           faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
           tradeOffers: genTradeOffers(classIdx, year * 1471 + 37, survivors),
           races: genMonthRaces(year, 0, classIdx, 0, null, []),
@@ -5166,9 +5180,9 @@ function App() {
   };
   // v11: スタッフは買い切りではなく月給制。レベルを上げると翌月から月給が増える（即時の費用はない）
   const hireStaff = (k) => {
-    const lv = g.staff[k];
+    const lv = g.staff[k] || 0;
     if (lv >= staffMax) return;
-    setG(s => ({ ...s, staff: { ...s.staff, [k]: lv + 1 } }));
+    setG(s => ({ ...s, staff: { ...s.staff, [k]: (s.staff[k] || 0) + 1 } }));
   };
   // v27: 引退選手のスタッフ登用。殿堂入りOBを月給制で専属コーチに迎える（1名まで）
   const hireObCoach = (hof) => {
@@ -6390,7 +6404,7 @@ function App() {
       {/* v12バグ修正: initGame()の初期スカウト候補を先にランダム化しても、ここで固定シード4001を
           使ってgenScoutsを呼び直し上書きしていたため、方針決定ボタンを押すと結局毎回同じ顔ぶれに
           戻ってしまっていた。ここも新規ゲームのたびに変わる乱数シードを使うよう修正 */}
-      <Btn onClick={() => setG(s => ({ ...s, scouts: genScouts(0, Date.now() % 999983, s.scoutPolicy, s.roster.map(r => r.name)), screen: "sponsor" }))}>この方針で決定 → スポンサー選択へ</Btn>
+      <Btn onClick={() => setG(s => ({ ...s, scouts: genScouts(0, Date.now() % 999983, s.scoutPolicy, s.roster.map(r => r.name), s.staff?.scout || 0), screen: "sponsor" }))}>この方針で決定 → スポンサー選択へ</Btn>
     </div>
   );
 
@@ -6782,6 +6796,7 @@ function App() {
                 { label: "監督", lv: g.staff.manager, max: 3, effect: g.staff.manager > 0 ? `月収+${g.staff.manager * 6}%・ノルマ-${g.staff.manager * 4}%` : "未雇用", color: C.yellow },
                 { label: "トレーナー", lv: g.staff.trainer, max: 3, effect: g.staff.trainer > 0 ? `練習成長 +${g.staff.trainer * 12}%` : "未雇用", color: C.green },
                 { label: "ドクター", lv: g.staff.doctor, max: 3, effect: g.staff.doctor > 0 ? `故障率 -${g.staff.doctor * 15}%` : "未雇用", color: "#6fa8dc" },
+                { label: "スカウト", lv: g.staff.scout || 0, max: 3, effect: (g.staff.scout || 0) > 0 ? `査定ブレ -${(g.staff.scout || 0) * 25}%・逸材率UP` : "未雇用", color: C.purple },
               ].map((row, i) => (
                 <div key={i} style={{ background: C.panel, borderRadius: 8, padding: "7px 10px", border: `1px solid ${C.line}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -6824,7 +6839,7 @@ function App() {
             ) : (
               <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
                 {Object.entries(STAFF_ROLES).map(([k, st]) => {
-                  const lv = g.staff[k];
+                  const lv = g.staff[k] || 0;
                   return (
                     <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
