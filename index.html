@@ -101,24 +101,34 @@ const ABILITIES = {
   flatlander:  { label: "平坦の職人", desc: "平坦区間で能力+4", category: "地形適性" },
   sprinter_sp: { label: "スプリント巧者", desc: "ゴールスプリント区間で能力+4", category: "地形適性" },
   soloist:     { label: "独走の求道者", desc: "TT区間で能力+4", category: "地形適性" },
+  // v28: 万能型の地形適性。全区間で控えめに底上げする（脚質を選ばないオールラウンダー）
+  allrounder_sp:{ label: "オールラウンダー", desc: "全ての区間で能力+2", category: "地形適性" },
   // 展開・役割
   escape:      { label: "逃げ屋", desc: "アタック（逃げ）中の能力+4", category: "展開・役割" },
   domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },
   closer:      { label: "勝負師", desc: "ゴールスプリント・山頂フィニッシュで能力+4", category: "展開・役割" },
   crosswind_sp:{ label: "横風耐性", desc: "横風区間でのドラフト消耗が軽減される", category: "展開・役割" },
   rain_sp:     { label: "悪天候巧者", desc: "雨天レースでの能力低下が軽減され、落車のリスクも下がる", category: "展開・役割" },
+  // v28: 最終スプリント区間（勝負どころ）での追い込みが鋭くなる
+  finisher:    { label: "豪脚のラストスパート", desc: "最終スプリント区間での追い込みが強くなる", category: "展開・役割" },
   // メンタル・大舞台
   big:         { label: "大舞台に強い", desc: "★3レースで全能力+6%", category: "メンタル" },
+  // v28: 大舞台に弱い（★3で能力低下）。悪特性
+  nervous:     { label: "大舞台に弱い", desc: "★3レースで全能力-5%", category: "メンタル", bad: true },
   // フィジカル
   iron:        { label: "鉄人", desc: "出走疲労が軽減される", category: "フィジカル" },
   recover:     { label: "回復力", desc: "毎月さらに疲労-15", category: "フィジカル" },
   tough:       { label: "頑丈", desc: "怪我の発生率が半分（3連闘は防げない）", category: "フィジカル" },
   steady_sp:   { label: "精密機械", desc: "調子の変動が小さく安定する", category: "フィジカル" },
+  // v28: レース中のエネルギー消耗が軽い（長丁場・逃げで垂れにくい）
+  engine:      { label: "無尽蔵のエンジン", desc: "レース中のエネルギー消耗が軽くなる", category: "フィジカル" },
   glass:       { label: "ガラスの体", desc: "怪我の発生率2倍・離脱期間+1ヶ月", category: "フィジカル", bad: true },
   moody:       { label: "ムラっ気", desc: "調子の変動が激しい", category: "フィジカル", bad: true },
   // 成長
   trainer:     { label: "練習の虫", desc: "練習効果+20%", category: "成長" },
   lateblow_sp: { label: "遅咲き", desc: "28歳以降の練習効果+15%", category: "成長" },
+  // v28: 若い頃の伸びが良い（マイライフの25歳以下で練習・出走経験+15%）
+  genius_sp:   { label: "天才肌", desc: "25歳以下の練習・出走経験の伸びが+15%", category: "成長" },
   lazy_sp:     { label: "練習嫌い", desc: "練習効果-20%", category: "成長", bad: true },
 };
 function hasAbility(r, id) { return !!(r && r.abilities && r.abilities.includes(id)); }
@@ -155,6 +165,10 @@ const GOLD_CONDITIONS = {
   closer:      r => countWins(r) >= 8,
   escape:      r => countRoleUses(r, e => e.role === "breakaway") >= 5,
   domestique:  r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)) >= 8,
+  // v28: 新特殊能力の金特条件
+  finisher:    r => countWins(r) >= 8,
+  engine:      r => (r.raceLog || []).length >= 30,
+  allrounder_sp: r => countWins(r) >= 6,
 };
 // 保有する特殊能力のうち、条件を満たしたものだけを金特化する。新たに金特化があれば
 // 変更後のオブジェクトを返し（呼び出し側で差分検知してログ表示に使える）、無ければ引数をそのまま返す
@@ -182,6 +196,9 @@ const ACQUIRE_CONDITIONS = {
   domestique:  r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)) >= 5,
   iron:        r => (r.raceLog || []).length >= 15,
   big:         r => (r.raceLog || []).some(e => (e.name.includes("世界選手権") || e.name.includes("オリンピック")) && e.rank <= 3),
+  // v28: 新特殊能力の後天習得条件
+  finisher:    r => countWins(r) >= 5,
+  engine:      r => (r.raceLog || []).length >= 20,
 };
 // 保有枠（0〜3）に空きがあり、条件を満たす未保有の能力が一つでもあれば、月ごとに
 // 15%の確率でその中から1つを新規習得する。変更があれば新オブジェクトを、無ければ引数をそのまま返す
@@ -415,29 +432,48 @@ const TYPE_ABKEYS = {
   SPR: ["sprint", "flat"], CLM: ["climb", "stamina"], RUL: ["flat", "stamina"],
   PUN: ["climb", "sprint"], TT: ["solo", "stamina"],
 };
+// v28: 「師の教え」＝メンター継承のアーキタイプ。師匠の脚質・戦績に応じて、伝授される
+// 得意能力の方向性・継承特性（lineage）・成長力が変わる。パターンを増やして師匠ごとに
+// 教え子の個性が変わるようにする。keysModeは伸ばす能力2つ、lineageは継承する看板特性
+const TEACH_KEYS = {
+  climb: ["climb", "stamina"], sprint: ["sprint", "flat"], solo: ["solo", "stamina"],
+  hill: ["climb", "sprint"], flat: ["flat", "stamina"], power: ["sprint", "stamina"],
+};
+const PROTEGE_TEACHINGS = [
+  { key: "king",    label: "王者の風格", lineage: "big",           keysMode: "top2",   match: m => (m.wins || 0) >= 12, desc: "大舞台で力を発揮し、師の得意能力を色濃く受け継ぐ" },
+  { key: "ironman", label: "鉄人の系譜", lineage: "engine",        keysMode: "power",  match: m => (m.races || 0) >= 90, desc: "消耗に強い無尽蔵のエンジンを受け継ぐ" },
+  { key: "climb",   label: "山脈の記憶", lineage: "mount",         keysMode: "climb",  match: m => m.type === "CLM", desc: "山の申し子の系譜" },
+  { key: "sprint",  label: "豪脚の血統", lineage: "finisher",      keysMode: "sprint", match: m => m.type === "SPR", desc: "ゴール前の鬼の系譜" },
+  { key: "tt",      label: "孤高の走法", lineage: "soloist",       keysMode: "solo",   match: m => m.type === "TT",  desc: "独走屋の系譜" },
+  { key: "punch",   label: "変幻の技",   lineage: "puncheur",      keysMode: "hill",   match: m => m.type === "PUN", desc: "丘陵ハンターの系譜" },
+  { key: "all",     label: "万能の教え", lineage: "allrounder_sp", keysMode: "top2",   match: () => true, desc: "脚質を選ばない万能型の教え" },
+];
 function protegeInherit(master) {
   const wins = master.wins || 0, podiums = master.podiums || 0;
   const strength = Math.min(1, (wins * 2 + podiums) / 40); // 0..1（伝説的な師ほど1に近い）
-  // 引き継ぐ得意能力：最終能力があればその上位2つ、無ければtype由来の代表能力
+  const teaching = PROTEGE_TEACHINGS.find(t => t.match(master)) || PROTEGE_TEACHINGS[PROTEGE_TEACHINGS.length - 1];
+  // 伸ばす得意能力：top2は師の最終能力の上位2つ（無ければtype由来）、それ以外はkeysMode指定
   let keys;
-  if (master.finalAbilities) {
-    keys = Object.entries(master.finalAbilities).sort((a, b) => b[1] - a[1]).slice(0, 2).map(e => e[0]);
+  if (teaching.keysMode === "top2") {
+    keys = master.finalAbilities
+      ? Object.entries(master.finalAbilities).sort((a, b) => b[1] - a[1]).slice(0, 2).map(e => e[0])
+      : (TYPE_ABKEYS[master.type] || ["flat", "stamina"]);
   } else {
-    keys = TYPE_ABKEYS[master.type] || ["flat", "stamina"];
+    keys = TEACH_KEYS[teaching.keysMode] || ["flat", "stamina"];
   }
   const primaryBonus = Math.round(3 + strength * 4); // 3〜7
   const abBonus = {};
   abBonus[keys[0]] = primaryBonus;
-  abBonus[keys[1]] = Math.round(primaryBonus * 0.5);
-  // 成長力の底上げ：名だたる名選手（strength高）に師事すると成長力が1段階上がる
+  abBonus[keys[1]] = (abBonus[keys[1]] || 0) + Math.round(primaryBonus * 0.5);
   const growthPowBump = strength >= 0.55;
-  // 特殊能力の継承：師が持っていた良特性を1つだけ受け継ぐ（悪特性は除外・新セーブのみ）
+  // 継承特性：師の教えの看板特性（lineage）を必ず受け継ぐ。
+  // さらに師本人が良特性を持っていれば、それとは別に1つ受け継ぐ（最大2特性＝手厚い継承）
+  const lineageTrait = teaching.lineage;
   let inheritAbility = null;
-  const specials = master.specialAbilities || [];
-  for (const id of specials) {
-    if (ABILITIES[id] && !ABILITIES[id].bad) { inheritAbility = id; break; }
+  for (const id of (master.specialAbilities || [])) {
+    if (ABILITIES[id] && !ABILITIES[id].bad && id !== lineageTrait) { inheritAbility = id; break; }
   }
-  return { keys, abBonus, growthPowBump, inheritAbility, strength };
+  return { teaching, keys, abBonus, growthPowBump, lineageTrait, inheritAbility, strength };
 }
 function mlRecordLegend(s) {
   saveMlLegends([...loadMlLegends(), mlLegendSnapshot(s)]);
@@ -2048,9 +2084,12 @@ function effAbilities(r, equip, itemBoost, grade, weather) {
       if (pid && PARTS[pid]) Object.entries(PARTS[pid].ab).forEach(([k, v]) => { e[k] += v; });
     });
   }
-  const bigMul = (hasAbility(r, "big") && grade === 3) ? 1.06 : 1;
+  // v28: 大舞台適性。big=★3で+6%、nervous(悪特性)=★3で-5%
+  const bigMul = grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1;
   const wMul = rainMul(r, weather);
   AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul; });
+  // v28: オールラウンダーは全能力を控えめに底上げ（脚質を選ばない万能型）
+  if (hasAbility(r, "allrounder_sp")) AB_KEYS.forEach(k => { e[k] += hasGoldAbility(r, "allrounder_sp") ? 4 : 2; });
   e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
   e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
   AB_KEYS.forEach(k => { e[k] = Math.min(135, e[k]); });
@@ -2253,7 +2292,9 @@ function groupShelterMul(n) {
 }
 const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこない位置）での基礎回復量/tick
 function energyDrain(en, mode, segType, steepness) {
-  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType);
+  // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（金特で更に軽減）
+  const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88) : 1;
+  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul;
 }
 // 役割ごとに「今この地形で牽引役になれるか」
 // v12バグ修正: エネルギーが尽きているかどうかは"sub"ロールしかチェックしておらず、
@@ -2438,8 +2479,10 @@ function simulateTicks(course, riders, fromTick, directive, noGroup) {
             // sprint区間はownCapableが既にスプリントなので二重計上を避け係数を半分に
             const sprintEdge = (segType === "sprint" ? 0.5 : 1) * (en.sprint - 70) / 260;
             const edgeMul = segType === "sprint" ? 1.7 : 0.9;
+            // v28: 「豪脚のラストスパート」は最終区間の追い込みが上乗せされる
+            const finishKick = hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0;
             const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.035;
-            dist = groupDist * Math.max(0.87, Math.min(1.13, 1 + terrainEdge * edgeMul + sprintEdge + luck));
+            dist = groupDist * Math.max(0.87, Math.min(1.17, 1 + terrainEdge * edgeMul + sprintEdge + finishKick + luck));
           } else if (segType === "sprint") {
             // 周回途中などの非最終スプリント区間は従来の弱めの着差
             const abilityEdge = ownCapable / groupDist - 1;
@@ -4544,10 +4587,13 @@ function App() {
         const gi = GROWTHPOW_ORDER.indexOf(player.growthPow);
         if (gi >= 0 && gi < GROWTHPOW_ORDER.length - 1) player.growthPow = GROWTHPOW_ORDER[gi + 1];
       }
-      if (inh.inheritAbility && !(player.abilities || []).includes(inh.inheritAbility)) {
-        player.abilities = [...(player.abilities || []), inh.inheritAbility].slice(0, 3);
-      }
+      // v28: 「師の教え」の看板特性(lineage)＋師本人の良特性(inheritAbility)を継承。
+      // 教え子は継承分により特殊能力を最大4つまで持てる（通常上限3より1多い＝メンターの恩恵）
+      let abils = [...(player.abilities || [])];
+      [inh.lineageTrait, inh.inheritAbility].forEach(id => { if (id && !abils.includes(id)) abils.push(id); });
+      player.abilities = abils.slice(0, 4);
       player.master = master.name;
+      player.teaching = inh.teaching.label;
       player.joinOvr = overall(player);
     }
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
@@ -4570,8 +4616,9 @@ function App() {
       `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`,
     ];
     if (master) {
-      initLog.push(`【1年目 4月】かつての名選手・${master.name}の教え子としてデビュー。師の${AB_LABEL[inh.keys[0]]}を受け継ぎ、直々の指導も受けられる`);
-      if (inh.inheritAbility) initLog.push(`【1年目 4月】師匠仕込みの特殊能力「${ABILITIES[inh.inheritAbility].label}」を最初から身につけている`);
+      initLog.push(`【1年目 4月】かつての名選手・${master.name}の教え子としてデビュー。師の教え「${inh.teaching.label}」を授かり、${AB_LABEL[inh.keys[0]]}を受け継いだ`);
+      initLog.push(`【1年目 4月】継承特性「${ABILITIES[inh.lineageTrait].label}」を身につけている（${inh.teaching.desc}）`);
+      if (inh.inheritAbility) initLog.push(`【1年目 4月】さらに師匠直伝の特殊能力「${ABILITIES[inh.inheritAbility].label}」も受け継いだ`);
     } else {
       initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
     }
@@ -4767,7 +4814,8 @@ function App() {
       const raceExpKeys = (ctx && ctx.raceExpKeys) || [];
       const raceGradeMul = (ctx && ctx.raceGrade) ? (GRADE_MUL[ctx.raceGrade] || 1) : 1;
       // v25: 新人時代に恩師の指導を受けている間は、出走経験の伸びにもボーナスがかかる
-      const mentorMul = flags.mentorActive ? 1.15 : 1;
+      // v28: 「天才肌」は25歳以下の伸びが+15%
+      const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1);
       const ph = growthPhase(player);
       raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
       // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
@@ -4782,6 +4830,8 @@ function App() {
       // v17: 育児をパートナーに任せて競技優先を選んだ場合、練習効果がわずかに上乗せされる
       const abMul = (hasAbility(player, "trainer") ? 1.2 : hasAbility(player, "lazy_sp") ? 0.8 : 1)
         * (hasAbility(player, "lateblow_sp") && player.age >= 28 ? 1.15 : 1)
+        // v28: 「天才肌」は25歳以下の練習効果+15%（遅咲きの逆で若手向け）
+        * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
         * (flags.childFocusedCareer ? 1.05 : 1)
         // v25: 新人時代に恩師の指導を受けている間は練習効果+15%
         * (flags.mentorActive ? 1.15 : 1);
@@ -5556,11 +5606,15 @@ function App() {
                   ))}
                 </div>
                 {inh && (
-                  <div style={{ background: C.panel2, borderRadius: 8, padding: "8px 10px", marginTop: 8, fontSize: 11.5, color: C.text }}>
-                    <span style={{ color: C.purple, fontWeight: 700 }}>継承内容：</span>
-                    {Object.entries(inh.abBonus).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}
-                    {inh.growthPowBump && "・成長力+1段階"}
-                    {inh.inheritAbility && `・特殊能力「${ABILITIES[inh.inheritAbility].label}」`}
+                  <div style={{ background: C.panel2, borderRadius: 8, padding: "8px 10px", marginTop: 8, fontSize: 11.5, color: C.text, lineHeight: 1.7 }}>
+                    <div><span style={{ color: C.purple, fontWeight: 700 }}>師の教え：</span>{inh.teaching.label}<span style={{ color: C.sub, fontSize: 10.5 }}>（{inh.teaching.desc}）</span></div>
+                    <div>
+                      <span style={{ color: C.purple, fontWeight: 700 }}>継承：</span>
+                      {Object.entries(inh.abBonus).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}
+                      {inh.growthPowBump && "・成長力+1段階"}
+                      <span style={{ color: C.yellow }}>・継承特性「{ABILITIES[inh.lineageTrait].label}」</span>
+                      {inh.inheritAbility && `・特殊能力「${ABILITIES[inh.inheritAbility].label}」`}
+                    </div>
                   </div>
                 )}
               </div>
@@ -5591,7 +5645,7 @@ function App() {
               <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
             </div>
             {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
-            {r.master && <div style={{ fontSize: 11, color: C.purple, marginTop: 1 }}>🎓 {r.master}の教え子</div>}
+            {r.master && <div style={{ fontSize: 11, color: C.purple, marginTop: 1 }}>🎓 {r.master}の教え子{r.teaching ? `・師の教え「${r.teaching}」` : ""}</div>}
             <PersonaLine p={r.personality} />
             <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
             <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{riderFlavorText(r)}</div>
