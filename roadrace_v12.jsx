@@ -4040,6 +4040,9 @@ function App() {
   // アプリ内で完結する確認モーダルに置き換える
   const [confirmDialog, setConfirmDialog] = useState(null);
   const askConfirm = (message, onConfirm) => setConfirmDialog({ message, onConfirm });
+  // v29: 選手名の変更用モーダル（アプリ内完結のテキスト入力）
+  const [renameState, setRenameState] = useState(null); // { title, value, onCommit }
+  const openRename = (title, current, onCommit) => setRenameState({ title, value: current || "", onCommit });
   const stage2LockRef = useRef(false);
   // v28: 新規ゲーム開始時のチーム名入力
   const [teamNameChoice, setTeamNameChoice] = useState("");
@@ -5529,6 +5532,23 @@ function App() {
       ))}
     </div>
   );
+  // v29: 選手名変更モーダル（wrap/mlWrap両方で表示する共用JSX）
+  const commitRename = () => { const v = (renameState.value || "").trim(); if (v) renameState.onCommit(v); setRenameState(null); };
+  const renameModal = renameState && (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
+      <div style={{ background: C.panel, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", border: `1px solid ${C.line}` }}>
+        <div style={{ color: C.text, fontSize: 14, marginBottom: 12 }}>{renameState.title}</div>
+        <input type="text" autoFocus value={renameState.value} maxLength={12}
+          onChange={e => setRenameState(s => ({ ...s, value: e.target.value }))}
+          onKeyDown={e => { if (e.key === "Enter") commitRename(); }}
+          style={{ width: "100%", boxSizing: "border-box", background: C.panel2, color: C.text, border: `1.5px solid ${C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+          <Btn small outline color={C.sub} onClick={() => setRenameState(null)}>キャンセル</Btn>
+          <Btn small color={C.green} onClick={commitRename}>変更</Btn>
+        </div>
+      </div>
+    </div>
+  );
   const wrap = (children, withNav) => (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT_B }}>
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "6px 14px 40px" }}>
@@ -5536,6 +5556,7 @@ function App() {
         {withNav && <Nav />}
         {children}
       </div>
+      {renameModal}
       {/* v12バグ修正: window.confirm()に頼らない、アプリ内完結の確認モーダル */}
       {confirmDialog && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
@@ -5565,6 +5586,7 @@ function App() {
         )}
         {children}
       </div>
+      {renameModal}
       {confirmDialog && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", border: `1px solid ${C.line}` }}>
@@ -5751,7 +5773,9 @@ function App() {
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}</span>
+              <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}
+                <button onClick={() => openRename("あなたの選手名を変更", r.name, v => setMl(s => ({ ...s, player: { ...s.player, name: v } })))} title="名前を変更" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, marginLeft: 4, padding: 0, opacity: 0.7 }}>✏️</button>
+              </span>
               <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
             </div>
             {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
@@ -6806,6 +6830,7 @@ function App() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
                   <div>
                     <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}</span>
+                    <button onClick={() => openRename("選手名を変更", r.name, v => setG(s => ({ ...s, roster: s.roster.map(x => x.id === r.id ? { ...x, name: v } : x) })))} title="名前を変更" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, marginLeft: 4, padding: 0, opacity: 0.7 }}>✏️</button>
                     {r.id === g.captainId && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.yellow, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🎖 主将</span>}
                     {r.age <= 18 && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.green, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🌱 ユース</span>}
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color, border: `1px solid ${t.color}`, borderRadius: 4, padding: "1px 5px" }}>{t.label}</span>
