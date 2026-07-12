@@ -251,6 +251,12 @@ const persMul = (r, k) => (PERSONALITIES[r.personality]?.mul[k]) || 1;
 // 呼び出し側が省略した場合は既存バランス通り88のまま
 const softFactor = (v, cap = 88) => (v < cap ? 1 : Math.exp(-(v - cap) / 4));
 const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * softFactor(r[k], cap); };
+// v29: 副ステータス（加速力・メンタル）の育成。ソフトキャップ88でじわっと伸び止まり、上限94。
+// 成長フェーズの伸び率（ph.gain）を掛けるので、若手ほど伸びやすく衰え期はほぼ伸びない
+function growSub(r, key, amount) {
+  const v = r[key] ?? 50;
+  r[key] = Math.min(94, v + amount * softFactor(v, 88));
+}
 const COND_ARROW = ["↓↓", "↘", "→", "↗", "↑↑"];
 const COND_COLOR = ["#7a8296", "#8fa0b8", "#9aa3b5", "#7dd0a0", "#35c07e"];
 // v27: コンディション予報。来月の調子変動の向き（-1下降/0安定/+1上昇）を事前に示す。
@@ -1773,9 +1779,9 @@ const ML_STOCK_ITEMS = {
 // 対象2能力を強く伸ばす代わりに疲労が大きい。メンタル強化は能力より調子を整える枠
 const ML_SPECIAL_TRAINING = {
   altitude: { label: "🏔 高地合宿", keys: ["stamina", "solo"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "スタミナ・独走を集中的に鍛える（疲労大）" },
-  sprintcamp: { label: "⚡ スプリント特訓", keys: ["sprint", "flat"], gainMul: 1.7, fatigue: 20, cond: 0, desc: "スプリント・平坦を集中的に鍛える" },
+  sprintcamp: { label: "⚡ スプリント特訓", keys: ["sprint", "flat"], gainMul: 1.7, fatigue: 20, cond: 0, desc: "スプリント・平坦＋加速力を集中的に鍛える" },
   climbcamp: { label: "⛰ クライム合宿", keys: ["climb", "stamina"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "登坂・スタミナを集中的に鍛える（疲労大）" },
-  mental: { label: "🧘 メンタル強化", keys: [], gainMul: 0.4, fatigue: 6, cond: 1, desc: "全能力をわずかに底上げしつつ調子を整える（疲労小・調子+1）" },
+  mental: { label: "🧘 メンタル強化", keys: [], gainMul: 0.4, fatigue: 6, cond: 1, desc: "メンタルを重点強化＋全能力わずか底上げ・調子+1（疲労小）" },
 };
 // v10: 種目別複合適性スコア（OVR計算式自体は変更せず、表示専用の追加指標）
 const DISCIPLINES = {
@@ -4160,6 +4166,10 @@ function App() {
           // 指定能力の成長にトレードオフ（×0.9）。指定外はさらに絞って14%
           addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus) * obMul(n.focus), growthCap);
           AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k) * obMul(k), growthCap));
+          // v29: シーズンでも練習で加速力・メンタルがわずかに伸びる（focusがsprint/flatなら加速に厚め）
+          const subG = 0.24 * ph.gain * POW[n.growthPow].mul;
+          growSub(n, "accel", subG * (n.focus === "sprint" || n.focus === "flat" ? 1.3 : 0.7));
+          growSub(n, "mental", subG * 0.6);
           n.fatigue = Math.min(100, n.fatigue + 6);
         }
         const ph2 = growthPhase(n);
@@ -4177,6 +4187,8 @@ function App() {
         // 基礎係数を引き上げた上、格上のレース（グレードが高い）ほど得るものが大きくなるようにした
         const raceGradeMul = GRADE_MUL[raceInfo.grade] || 1;
         raceInfo.expKeys.forEach(k => addAb(n, k, 1.0 * raceGradeMul * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k), growthCap));
+        // v29: メンタルは大舞台の経験で育つ（格上ほど大きく）
+        growSub(n, "mental", 0.3 * raceGradeMul * Math.max(0.25, ph.gain));
         // v11: ドクター（staff.doctor）は故障の発生率を下げ、発生した場合も期間を短縮する
         const doctorLv = state.staff?.doctor || 0;
         if (n.streak >= 3) {
@@ -4885,6 +4897,8 @@ function App() {
       const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1);
       const ph = growthPhase(player);
       raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
+      // v29: メンタルは「大舞台の経験」で育つ。格上のレースほど大きく伸びる
+      growSub(player, "mental", 0.35 * raceGradeMul * Math.max(0.25, ph.gain));
       // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
       if (raceWeather === "rain" && Math.random() < (hasAbility(player, "rain_sp") ? 0.02 : 0.06)) {
         player.fatigue = Math.min(100, player.fatigue + 15);
@@ -4910,6 +4924,10 @@ function App() {
       AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), growthCap));
       const ph2 = growthPhase(player);
       if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
+      // v29: 通常練習でも加速力・メンタルがわずかに伸びる（focusがsprint/flatなら加速に厚め）
+      const subG = 0.28 * ph.gain * POW[player.growthPow].mul;
+      growSub(player, "accel", subG * (player.focus === "sprint" || player.focus === "flat" ? 1.3 : 0.7));
+      growSub(player, "mental", subG * 0.6);
       player.fatigue = Math.max(0, player.fatigue - 15);
       player.streak = 0;
     } else if (mode === "rest") {
@@ -4937,6 +4955,10 @@ function App() {
       } else {
         AB_KEYS.forEach(k => addAb(player, k, base * 0.18 * persMul(player, k) * coachMul(k), growthCap));
       }
+      // v29: 専門トレの副ステータス育成。スプリント特訓＝加速力、メンタル強化＝メンタルを重点的に鍛える
+      const subBase = ph.gain * POW[player.growthPow].mul;
+      if (mode === "sprintcamp") growSub(player, "accel", 1.6 * subBase);
+      if (mode === "mental") growSub(player, "mental", 1.8 * subBase);
       const ph2 = growthPhase(player);
       if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
       player.fatigue = Math.min(100, player.fatigue + spec.fatigue);
