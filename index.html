@@ -4560,6 +4560,7 @@ const ML_TACTICS = {
   wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", chaseMode: "push",   aceEarly: false, desc: "逃げを許さず集団を保ち、ゴール勝負に持ち込む（スプリント型向き）" },
   early:      { label: "💨 早めに逃げる",               chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "序盤から飛び出して逃げ切りを狙う（スプリントが苦手な選手向き）" },
   aggressive: { label: "⚔ 積極的に仕掛ける",            chaseMode: "normal", aceEarly: true,  desc: "終盤の勝負どころで自ら仕掛ける（エース時）" },
+  assist:     { label: "🤝 アシストに徹する",            chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
 function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic) {
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
@@ -4651,13 +4652,15 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
       // 指示のない特別な区分（積極的な走り等）の場合のみ、従来通り能力比較で自動判定する
       const topAbility = Math.max(...teamEntrants.map(e => e.flat + e.climb + e.sprint + e.stamina + e.solo));
       const playerTotal = playerEff.flat + playerEff.climb + playerEff.sprint + playerEff.stamina + playerEff.solo;
+      const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
       let playerIsAce;
-      if (directiveKey === "ace") playerIsAce = true;
+      // v33.6: 「アシストに徹する」を選べば監督指示に関わらず献身役に固定できる（献身の道の運ゲー解消）
+      if (tac.playerAssist) playerIsAce = false;
+      else if (directiveKey === "ace") playerIsAce = true;
       else if (directiveKey === "support" || directiveKey === "experience") playerIsAce = false;
       else playerIsAce = playerTotal >= topAbility;
       if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
       // v32（条件付き作戦）：早めに逃げる作戦なら、プレイヤーを逃げ要員として飛び出させる
-      const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
       const playerRole = tac.playerBreakaway ? "breakaway" : (playerIsAce ? "lead" : "sub");
       riders.push({
         id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: player.goldAbilities, ...playerEff,
@@ -5558,8 +5561,11 @@ function App() {
     // v14.3: 監督指示を全うできたかどうかで監督評価が増減する。賞金はクラス倍率に応じて即時支給
     // v33.5: セーブから復元した監督指示はJSONでcheck関数が失われているため、キーで正規テーブルから引き直す
     const directive = ml.directive ? (MANAGER_DIRECTIVES[ml.directive.key] || ml.directive) : null;
-    const fulfilled = (directive && typeof directive.check === "function") ? directive.check(me.rank, sim.ranked.length) : false;
-    const evalDelta = directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0;
+    // v33.6: 「アシストに徹する」を選んだ場合は監督指示ではなく献身の走りとして評価する。
+    // 献身は自らの着順を犠牲にする行為なので、監督評価は下げず（むしろ小幅加点）運ゲーにしない
+    const assistChosen = !!(ML_TACTICS[ml.tactic] && ML_TACTICS[ml.tactic].playerAssist);
+    const fulfilled = assistChosen ? true : ((directive && typeof directive.check === "function") ? directive.check(me.rank, sim.ranked.length) : false);
+    const evalDelta = assistChosen ? 3 : (directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0);
     const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + ml.classIdx * 0.25));
     // v15: このレースにライバルが出走していれば、着順を比較して通算のライバル戦績を更新する
     const rivalEntrant = sim.ranked.find(e => e.isRival);
@@ -5577,7 +5583,9 @@ function App() {
     const natPopBonus = natRole ? (natFulfilled ? (natRole === "ace" ? 8 : 5) : 0) : 0;
     setMl(s => {
       // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
-      const role = directive ? directive.key : (me.isAce ? "ace" : "support");
+      // v33.6: ただし「アシストに徹する」を選んだ場合は監督指示に関わらず献身役として記録し、
+      // 献身の道（アンビション）へ確実にカウントされるようにする（監督指示待ちの運ゲーを解消）
+      const role = assistChosen ? "support" : (directive ? directive.key : (me.isAce ? "ace" : "support"));
       // v25: 個人スポンサー・メディア人気度。着順が良いほど、また規模の大きいレースほど伸びる
       // v28: 代表の役割を全うすれば名声（人気度）が上乗せされる
       const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade] + natPopBonus;
@@ -7064,6 +7072,26 @@ function App() {
           <Section color={C.blue} title="監督指示・監督評価">
             <Card>毎月、監督から「エースとして表彰台を狙え」「積極的な走りで上位進出せよ」「アシストとしてチームを支えよ」「経験を積むために出走せよ」のいずれかの指示が出ます。達成すると監督評価が上がり、未達成だと下がります。監督評価が高いほど「エース」指示が出やすくなります。</Card>
             <Card>監督評価は年俸交渉や移籍オファーの内容にも影響します。練習をこなす、住環境を整える等でも少しずつ上がります。</Card>
+          </Section>
+
+          <Section color={"#4f8fe8"} title="レース作戦（出走前に選択）">
+            <Card>出走前に作戦を選べます（結果に反映）：<span style={{ color: C.text }}>🚩標準</span>（流れ任せ）／<span style={{ color: C.text }}>⏳末脚温存</span>（集団維持でゴール勝負・スプリント型向き）／<span style={{ color: C.text }}>💨早めに逃げる</span>（自ら逃げに乗る・逃げ実績稼ぎにも）／<span style={{ color: C.text }}>⚔積極的に仕掛ける</span>（エース時の終盤アタック）。監督指示とは別に、あなた自身の意思で展開を作れます。</Card>
+            <Card><span style={{ color: C.text }}>🤝アシストに徹する</span>＝自分の勝ちを捨ててエースを支える献身の走り。<b style={{ color: "#4f8fe8" }}>監督指示がエースでも、この作戦を選べば必ずアシスト戦としてカウントされ、監督評価も下がりません。</b>「献身の道（アンビション）」を狙うなら、監督の指示待ちにせず自分でこの作戦を選んで積み上げてください。</Card>
+          </Section>
+
+          <Section color={"#e8a13c"} title="世界ランキングとアンビション（生き様）">
+            <Card>レースの着順・グレードに応じて世界ランキングポイントが入り、世界ランクが上下します。上位を目指すのが長期の大目標です。</Card>
+            <Card>「生き方（アンビション）」は4つの道から選べます：<span style={{ color: C.text }}>🏆勝利の道</span>（勝利数）／<span style={{ color: C.text }}>🎭大舞台の道</span>（★の高いレース）／<span style={{ color: C.text }}>🤝献身の道</span>（アシスト戦数＝上の🤝作戦で積む）／<span style={{ color: C.text }}>🌍世界の道</span>（世界ランク）。道ごとに目標のはしごが異なり、達成報酬（資金・能力・成長力）が入ります。「🔀生き方を変える」でいつでも切替できます。</Card>
+            <Card>引退時のキャリア傾向から「生き様（称号）」が決まり、殿堂記録に残ります。これが次のプレイの配合（生き様の血）にも影響します。</Card>
+          </Section>
+
+          <Section color={"#e56cc8"} title="配合・血統（教え子／殿堂）">
+            <Card>キャラ作成時、殿堂の名選手を<span style={{ color: C.text }}>師匠（1人）＝教え子</span>、さらに<span style={{ color: C.text }}>配合相手（2人目）＝血を引く子</span>として選べます。両親の脚質相性（ニック）・血の濃さ・累代+値・生き様の血などから恩恵が決まります。</Card>
+            <Card><b style={{ color: "#e56cc8" }}>爆発力＆配合評価（SS〜D）</b>：配合の質を1つの数値に集約した評価。ボーナスは初期能力ではなく<span style={{ color: C.text }}>伸びしろ（成長力・才能キャップ）</span>に還元されます＝生まれた瞬間は普通でも、育てると化けます。</Card>
+            <Card><b style={{ color: C.red }}>危険度</b>：共通の祖先を持つ濃い配合（インブリード）は爆発力が上がる一方、稀に「ガラスの体」を持って生まれるリスクがあります。両親の健康な血（鉄人・頑丈・高スタミナ）と血脈の多様性で軽減されます。ハイリスク・ハイリターンの駆け引きです。</Card>
+            <Card><b style={{ color: "#e8a13c" }}>系統確立＋因子</b>：同じ系統名の名選手を代々輩出すると、血統が「確立→名門→大系統」と成長します（プレイをまたいで蓄積）。確立した系統を継ぐ子孫は因子として伸びしろ＋系統特能を受け取り、大系統ではその因子が金特で発現します。</Card>
+            <Card><b style={{ color: C.yellow }}>特殊配合</b>：特定の血の組み合わせ（例：二人の世界王者＝絶対王者の系譜、登坂型×平地型＝万能王の血脈 など）は、唯一無二の名血（金枠の称号＋金特）を確定で生みます。いろいろな組み合わせを試してみてください。</Card>
+            <Card>これらの恩恵は<span style={{ color: C.text }}>金特クロス・配合限定特能</span>とあわせて配合プレビューに表示されます。シーズンモードでも「血統ユース」で同じ仕組みの原石を確保できます。</Card>
           </Section>
 
           <Section color={C.purple} title="年俸・契約・移籍オファー">
