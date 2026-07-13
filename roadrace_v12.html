@@ -2982,8 +2982,8 @@ function StartListPanel({ entrants }) {
             <div style={{ fontFamily: FONT_D, fontWeight: 700, color: isPlayerTeam ? C.yellow : C.text, fontSize: 13 }}>{tn}{isPlayerTeam ? "（自チーム）" : ""}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 3 }}>
               {t.list.map((e, i) => (
-                <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : (e.isRival || e.isRival2) ? C.red : C.text }}>
-                  {e.isAce ? "👑 " : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
+                <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : (e.isRival || e.isRival2) ? C.red : C.text }}>
+                  {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
                 </span>
               ))}
             </div>
@@ -4331,6 +4331,8 @@ function initMyLife() {
     worldPoints: 0, worldRank: null, worldRankBest: null,
     ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory", // v31.5: 生き方（路線）
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
+    // v32: 固定チームメイト・条件付き作戦・キャリアグラフ用の年次記録
+    teammates: [], tactic: "balanced", careerHistory: [],
   };
 }
 const ML_SAVE_KEY = "roadrace_v12_mylife_save";
@@ -4342,6 +4344,7 @@ const ML_SAVE_FIELDS = [
   // v30: 世界ランキング＆キャリア・アンビション
   "worldPoints", "worldRank", "worldRankBest", "ambitionIdx", "ambitionDone", "ambitionPath",
   "careerWins", "careerPodiums", "careerBigWins", "careerTitles",
+  "teammates", "tactic", "careerHistory",
 ];
 function saveMyLife(ml) {
   try {
@@ -4374,6 +4377,13 @@ function loadMyLifeGame() {
       merged.ambitionPath = "victory";
       merged.ambitionIdx = mlFirstUnmetRung(merged, "victory");
     }
+    // v32: 固定チームメイト未設定の旧セーブは、現所属チームのメンバーを今生成する
+    if ((!merged.teammates || merged.teammates.length === 0) && merged.player && merged.team) {
+      const trng = mulberry(Date.now() % 999983 + 7);
+      merged.teammates = mlGenTeammates(trng, merged.team, 3, [merged.player.name], merged.year || 1);
+    }
+    if (!merged.tactic) merged.tactic = "balanced";
+    if (!Array.isArray(merged.careerHistory)) merged.careerHistory = [];
     return merged;
   } catch (e) { return null; }
 }
@@ -4399,12 +4409,35 @@ function mlCreateRival(rng, playerName, playerTeamName, bannedNames, bannedTeams
   const abilities = rollAbilities(rng);
   return { id: RID++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, abilities };
 }
+// v32（固定チームメイト）：所属チームの固定メンバーを生成する。名前・脚質・性格・特性・
+// 加入年を固定アイデンティティとして持ち、以後レースには現在の地力で登場する（保存対象）。
+function mlGenTeammates(rng, teamName, count, bannedNames, year) {
+  const banned = new Set(bannedNames || []);
+  const typeKeys = Object.keys(TYPES);
+  const list = [];
+  for (let i = 0; i < count; i++) {
+    const type = typeKeys[Math.floor(rng() * typeKeys.length)];
+    const name = pickRiderName(rng, banned);
+    const px = rng();
+    const personality = px < 0.35 ? "normal" : ["hotblood", "seeker", "artisan", "free", "smart", "genius"][Math.floor(rng() * 6)];
+    list.push({ id: RID++, name, type, personality, abilities: rollAbilities(rng), team: teamName, joinYear: year || 1, winsForMe: 0 });
+  }
+  return list;
+}
 // v14: マイライフのレースは6チーム全部をAI生成し、プレイヤーの選手だけを
 // 「PLAYER」チームタグ付きの1名として混ぜる（RaceView等の既存カメラ・強調表示ロジックを
 // そのまま再利用するため）。プレイヤー自身のチームメイトは実際のチーム名で登場する
 // v15: rivalとraceMeta.rivalPresentが揃っていれば、ライバルの所属チームの1枠（エース枠）を
 // ライバルの固定アイデンティティ（名前・脚質・性格）に差し替え、isRivalフラグを立てる
-function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2) {
+// v32: TACTICS＝出走前に選ぶ条件付き作戦（ノーリスクの疑似無線）。simulateTicksが解釈する
+// directiveと、プレイヤー自身の立ち回り（早め逃げ）へマッピングする。結果に実際に影響する。
+const ML_TACTICS = {
+  balanced:   { label: "🚩 標準（流れに任せる）",       chaseMode: "normal", aceEarly: false, desc: "特別な仕掛けはせず、脚質と展開に任せる" },
+  wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", chaseMode: "push",   aceEarly: false, desc: "逃げを許さず集団を保ち、ゴール勝負に持ち込む（スプリント型向き）" },
+  early:      { label: "💨 早めに逃げる",               chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "序盤から飛び出して逃げ切りを狙う（スプリントが苦手な選手向き）" },
+  aggressive: { label: "⚔ 積極的に仕掛ける",            chaseMode: "normal", aceEarly: true,  desc: "終盤の勝負どころで自ら仕掛ける（エース時）" },
+};
+function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic) {
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
@@ -4417,11 +4450,33 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
   const nameBanned = new Set([player.name]);
   const riders = [];
   const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+  // v32（世界の統合）：歴代殿堂選手を、AIチームのエース枠に一定確率で紛れ込ませる。
+  // 過去の自分やライバルの血を引く名選手たちと、同じレースで再会できる。
+  const legendPool = loadMlLegends().filter(l => l && l.finalAbilities);
+  const legendTeams = {}; // teamName -> legend
+  if (legendPool.length > 0) {
+    const nLeg = rng() < 0.55 ? (rng() < 0.35 ? 2 : 1) : 0;
+    const otherTeams = MYLIFE_TEAMS.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team));
+    const shuffled = [...legendPool].sort(() => rng() - 0.5).slice(0, nLeg);
+    const teamsForLeg = [...otherTeams].sort(() => rng() - 0.5).slice(0, nLeg);
+    shuffled.forEach((leg, i) => { if (teamsForLeg[i]) legendTeams[teamsForLeg[i].name] = leg; });
+  }
   MYLIFE_TEAMS.forEach(d => {
     const isMyTeam = d.name === myTeamName;
     const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
     const members = [];
-    for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
+    // v32（固定チームメイト）：自分のチームは、保存済みの固定メンバーを現在の地力で登場させる
+    if (isMyTeam && teammates && teammates.length) {
+      teammates.slice(0, Math.max(1, aiSquadN)).forEach((tm, i) => {
+        const st = newRider(power + (i === 0 ? 4 : 0), rng, { type: tm.type, banned: nameBanned });
+        st.id = tm.id; st.name = tm.name; st.type = tm.type; st.personality = tm.personality || st.personality;
+        if (tm.abilities) st.abilities = tm.abilities;
+        members.push(st);
+      });
+      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned }));
+    } else {
+      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
+    }
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
     const teamEntrants = members.map((r, i) => {
@@ -4453,6 +4508,20 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
         isRival2: true,
       };
     }
+    // v32（世界の統合）：このチームに歴代殿堂選手が割り当てられていればエース枠に差し替える
+    if (legendTeams[d.name] && !isMyTeam) {
+      const leg = legendTeams[d.name];
+      const legStats = newRider(power + 8, rng, { type: leg.type, banned: nameBanned });
+      legStats.abilities = leg.specialAbilities || legStats.abilities;
+      AB_KEYS.forEach(k => { if (leg.finalAbilities && leg.finalAbilities[k] != null) legStats[k] = leg.finalAbilities[k]; });
+      SUB_STAT_KEYS.forEach(k => { if (leg.finalSubStats && leg.finalSubStats[k] != null) legStats[k] = leg.finalSubStats[k]; });
+      const le = effAbilities(legStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+      teamEntrants[0] = {
+        ...teamEntrants[0], ...le,
+        id: legStats.id, name: leg.name, type: leg.type, abilities: legStats.abilities, goldAbilities: legStats.goldAbilities,
+        isLegend: true, legendTitle: leg.careerTitle || null,
+      };
+    }
     if (isMyTeam) {
       // v14.3: 監督指示が「エース」「アシスト／経験」であれば役割はそれに従って強制する。
       // 指示のない特別な区分（積極的な走り等）の場合のみ、従来通り能力比較で自動判定する
@@ -4463,16 +4532,21 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
       else if (directiveKey === "support" || directiveKey === "experience") playerIsAce = false;
       else playerIsAce = playerTotal >= topAbility;
       if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
+      // v32（条件付き作戦）：早めに逃げる作戦なら、プレイヤーを逃げ要員として飛び出させる
+      const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
+      const playerRole = tac.playerBreakaway ? "breakaway" : (playerIsAce ? "lead" : "sub");
       riders.push({
         id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: player.goldAbilities, ...playerEff,
         team: "PLAYER", teamName: myTeamName, color: C.yellow,
-        isAce: playerIsAce, role: playerIsAce ? "lead" : "sub", isPlayerChar: true,
+        isAce: playerIsAce, role: playerRole, isPlayerChar: true,
       });
     }
     teamEntrants.forEach(en => riders.push(en));
   });
   const sim = { entrants: riders, riders, course, groupMode: "full", raceMeta, breakSurvived: false };
-  simulateTicks(course, riders, 0, { chaseMode: "normal", aceEarly: false }, false);
+  // v32（条件付き作戦）：選択した作戦をレース全体の指示（集団牽引の強さ・エース発射）へ反映
+  const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
+  simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
   rankSim(sim);
   return sim;
 }
@@ -5221,6 +5295,9 @@ function App() {
       worldPoints: 0, worldRank: null, worldRankBest: null,
       ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory",
       careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
+      // v32: 固定チームメイト・作戦・キャリア記録
+      teammates: mlGenTeammates(rng, team.name, 3, [player.name, rival.name, rival2.name], 1),
+      tactic: "balanced", careerHistory: [],
       log: initLog,
       screen: "mylife_main",
     }));
@@ -5252,7 +5329,7 @@ function App() {
     } else if (race.milestone && race.nationalRole) {
       directiveKey = race.nationalRole;
     }
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2);
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
     setMl(s => ({ ...s, result: sim, screen: "mylife_startlist" }));
   }
@@ -5264,7 +5341,7 @@ function App() {
     const tmplByType = { SPR: TEMPLATES[0], CLM: TEMPLATES[3], RUL: TEMPLATES[2], PUN: TEMPLATES[2], TT: TEMPLATES[5] };
     const tmpl = tmplByType[ml.player.type] || TEMPLATES[2];
     const meta = { id: `ml-lastrace-${ml.year}`, name: `${ml.player.name} 引退記念ラストレース`, tmpl, grade: 4, cls: ml.classIdx, rivalPresent: true, rival2Present: true, weather: "clear", isLastRace: true };
-    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, "easy", undefined, "ace", ml.rival, ml.year, ml.rival2);
+    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive");
     setMl(s => ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
   }
   function mlLastRaceFinish() {
@@ -5588,7 +5665,9 @@ function App() {
           // v30: 世界ランキングの持ち点は年ごとに一部減衰し、翌年の（強くなった）基準で
           // 順位を引き直す。休むと順位が落ちるため、上位維持には走り続ける必要がある
           const decayedWP = Math.round((s.worldPoints || 0) * 0.72);
-          nextState = { ...nextState, worldPoints: decayedWP, worldRank: computeWorldRank(decayedWP, nextState.year) };
+          // v32（キャリアグラフ）：この年の到達値を年次記録に積む（OVR・世界ランク・通算成績の推移）
+          const histEntry = { year: s.year, ovr: overall(player), worldRank: s.worldRank, worldBest: s.worldRankBest, wins: s.careerWins || 0, podiums: s.careerPodiums || 0 };
+          nextState = { ...nextState, worldPoints: decayedWP, worldRank: computeWorldRank(decayedWP, nextState.year), careerHistory: [...(s.careerHistory || []), histEntry] };
           const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState };
           if (declining) {
             return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval,
@@ -5704,7 +5783,11 @@ function App() {
           ? `${offer.team}への移籍に伴い${CLASSES[classIdx].label}に昇格した！`
           : `${offer.team}への移籍に伴い${CLASSES[classIdx].label}に降格となった`];
       }
-      return { ...s, team: offer.team, classIdx, races, directive, salary, money, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
+      // v32: 移籍で所属が変わったら固定チームメイトも新チームの顔ぶれに一新する
+      const newTeammates = offer.team !== s.team
+        ? mlGenTeammates(mulberry(Date.now() % 999983 + s.year * 13), offer.team, 3, [s.player.name, s.rival?.name, s.rival2?.name].filter(Boolean), s.year)
+        : s.teammates;
+      return { ...s, team: offer.team, classIdx, races, directive, salary, money, teammates: newTeammates, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
     });
   }
   // v17: オフシーズンの過ごし方を確定する。年度末処理はpendingOffseasonに既に計算済みなので、
@@ -6588,6 +6671,19 @@ function App() {
               <span>フォーム <b style={{ color: (r.form ?? 50) >= 80 ? C.yellow : (r.form ?? 50) >= 62 ? C.green : C.sub, fontFamily: FONT_M }}>{Math.round(r.form ?? 50)}</b><CondFc dir={r.formForecast} /></span>
               <span>OVR <b style={{ color: C.yellow, fontFamily: FONT_M }}>{overall(r)}</b></span>
             </div>
+            {/* v32（条件付き作戦＝ノーリスク無線）：出走前に作戦を選ぶと、結果に実際に反映される */}
+            <div style={{ background: C.panel2, borderRadius: 8, padding: "7px 10px" }}>
+              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>📻 レース作戦（結果に反映されます）</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {Object.entries(ML_TACTICS).map(([k, t]) => (
+                  <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
+                    style={{ padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 10.5, fontWeight: 700,
+                      background: (ml.tactic || "balanced") === k ? "rgba(255,210,63,0.14)" : C.panel, color: (ml.tactic || "balanced") === k ? C.yellow : C.sub,
+                      border: `1.5px solid ${(ml.tactic || "balanced") === k ? C.yellow : C.line}` }}>{t.label}</button>
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>{(ML_TACTICS[ml.tactic] || ML_TACTICS.balanced).desc}</div>
+            </div>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（focus中心）</Btn>
@@ -6612,6 +6708,8 @@ function App() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
               <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップ</Btn>
               <Btn small outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>🏆 実績 {computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}</Btn>
+              <Btn small outline color={C.green} onClick={() => setMl(s => ({ ...s, screen: "mylife_teamroster" }))}>👥 チーム名鑑</Btn>
+              <Btn small outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_graph" }))}>📈 キャリアグラフ</Btn>
               <Btn small outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑</Btn>
               <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコード</Btn>
               <Btn small outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプ</Btn>
@@ -7186,6 +7284,71 @@ function App() {
       );
     }
 
+    // v32: チーム名鑑（固定チームメイトの確認画面）
+    if (ml.screen === "mylife_teamroster" && ml.player) {
+      const mates = ml.teammates || [];
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.green}` }}>
+            <Eyebrow color={C.green}>👥 チーム名鑑 — {ml.team}</Eyebrow>
+            <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>あなたと同じチームを走る固定メンバーです。移籍すると顔ぶれが変わります。</div>
+          </div>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.yellow}` }}>
+            <div style={{ fontFamily: FONT_D, fontWeight: 700, color: C.yellow }}>★ {ml.player.name}（あなた）<span style={{ fontSize: 10.5, color: TYPES[ml.player.type]?.color, marginLeft: 6 }}>{TYPES[ml.player.type]?.label}</span><span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub, marginLeft: 8 }}>OVR {overall(ml.player)}</span></div>
+          </div>
+          {mates.length === 0 && <div style={{ fontSize: 12, color: C.sub }}>チームメイトの記録がありません。</div>}
+          {mates.map((tm, i) => (
+            <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}` }}>
+              <div style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{tm.name}<span style={{ fontSize: 10.5, color: TYPES[tm.type]?.color, marginLeft: 6 }}>{TYPES[tm.type]?.label}</span></div>
+              <PersonaLine p={tm.personality} />
+              {tm.abilities && tm.abilities.length > 0 && <div style={{ fontSize: 10.5, color: C.purple, marginTop: 2 }}>{tm.abilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</div>}
+              {(tm.winsForMe || 0) > 0 && <div style={{ fontSize: 10.5, color: C.green, marginTop: 2 }}>あなたのアシストとして {tm.winsForMe} 勝を支えた</div>}
+            </div>
+          ))}
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
+        </div>
+      );
+    }
+    // v32: キャリアグラフ（OVR・世界ランクの推移）
+    if (ml.screen === "mylife_graph" && ml.player) {
+      const hist = [...(ml.careerHistory || []), { year: ml.year, ovr: overall(ml.player), worldRank: ml.worldRank, wins: ml.careerWins || 0, podiums: ml.careerPodiums || 0 }];
+      const W = 320, H = 160, padL = 24, padR = 24, padT = 14, padB = 22;
+      const years = hist.map(h => h.year);
+      const minY = Math.min(...years), maxY = Math.max(...years);
+      const xAt = (yr) => maxY === minY ? W / 2 : padL + (yr - minY) / (maxY - minY) * (W - padL - padR);
+      const ovrs = hist.map(h => h.ovr || 0);
+      const ovrMin = Math.min(...ovrs) - 3, ovrMax = Math.max(...ovrs) + 3;
+      const yOvr = (v) => H - padB - ((v - ovrMin) / Math.max(1, ovrMax - ovrMin)) * (H - padT - padB);
+      const rankPts = hist.filter(h => h.worldRank != null);
+      const ranks = rankPts.map(h => h.worldRank);
+      const rMin = ranks.length ? Math.min(...ranks) : 1, rMax = ranks.length ? Math.max(...ranks) : 100;
+      const yRank = (v) => padT + ((v - rMin) / Math.max(1, rMax - rMin)) * (H - padT - padB);
+      const ovrPath = hist.map((h, i) => `${i === 0 ? "M" : "L"}${xAt(h.year).toFixed(1)},${yOvr(h.ovr || 0).toFixed(1)}`).join(" ");
+      const rankPath = rankPts.map((h, i) => `${i === 0 ? "M" : "L"}${xAt(h.year).toFixed(1)},${yRank(h.worldRank).toFixed(1)}`).join(" ");
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.blue}` }}>
+            <Eyebrow color={C.blue}>📈 キャリアグラフ</Eyebrow>
+            <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>年ごとのOVRと世界ランクの推移。年度をまたぐごとに記録されます。</div>
+          </div>
+          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 6px", border: `1px solid ${C.line}` }}>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}>
+              <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={C.line} />
+              <path d={ovrPath} fill="none" stroke={C.yellow} strokeWidth="2" />
+              {hist.map((h, i) => <circle key={i} cx={xAt(h.year)} cy={yOvr(h.ovr || 0)} r="2.5" fill={C.yellow} />)}
+              {rankPath && <path d={rankPath} fill="none" stroke={C.green} strokeWidth="2" strokeDasharray="3,2" />}
+              {rankPts.map((h, i) => <circle key={`r${i}`} cx={xAt(h.year)} cy={yRank(h.worldRank)} r="2.5" fill={C.green} />)}
+              {hist.map((h, i) => <text key={`t${i}`} x={xAt(h.year)} y={H - 6} fontSize="8" fill={C.sub} textAnchor="middle">{h.year}</text>)}
+            </svg>
+            <div style={{ fontSize: 10.5, color: C.sub, display: "flex", gap: 14, justifyContent: "center", marginTop: 2 }}>
+              <span style={{ color: C.yellow }}>― OVR</span><span style={{ color: C.green }}>┈ 世界ランク（上ほど上位）</span>
+            </div>
+          </div>
+          {hist.length <= 1 && <div style={{ fontSize: 11, color: C.sub }}>年度を進めるとグラフが伸びていきます。</div>}
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
+        </div>
+      );
+    }
     // v31.5: 世界ランキング閲覧画面
     if (ml.screen === "mylife_ranking" && ml.player) {
       const board = mlWorldBoard(ml);
