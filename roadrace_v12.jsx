@@ -6700,7 +6700,13 @@ function App() {
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}
-                <button onClick={() => openRename("あなたの選手名を変更", r.name, v => setMl(s => ({ ...s, player: { ...s.player, name: v } })))} title="名前を変更" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, marginLeft: 4, padding: 0, opacity: 0.7 }}>✏️</button>
+                <button onClick={() => openRename("あなたの選手名を変更", r.name, v => setMl(s => {
+                  const p = s.player;
+                  // v33.7: 自分が始祖の系統（＝自分の名前から生まれた系統）は改名に追従させる。
+                  // 師匠・配合で継いだ系統名は先祖の名なのでそのまま維持する
+                  const isFounderLineage = !!p.lineageName && p.lineageName === `${p.name}系`;
+                  return { ...s, player: { ...p, name: v, lineageName: isFounderLineage ? `${v}系` : p.lineageName } };
+                }))} title="名前を変更" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, marginLeft: 4, padding: 0, opacity: 0.7 }}>✏️</button>
               </span>
               <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
             </div>
