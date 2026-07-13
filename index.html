@@ -648,7 +648,19 @@ function mlBreedBonus(parentA, parentB) {
   const matingGrade = bakuhatsu >= 30 ? "SS" : bakuhatsu >= 23 ? "S" : bakuhatsu >= 16 ? "A" : bakuhatsu >= 10 ? "B" : bakuhatsu >= 5 ? "C" : "D";
   const growthSteps = bakuhatsu >= 24 ? 2 : bakuhatsu >= 13 ? 1 : 0; // 成長力の底上げ段数
   const talentCap = Math.min(8, Math.floor(Math.max(0, bakuhatsu - 16) / 3)); // 才能：限界突破の上乗せ
-  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes, bakuhatsu, matingGrade, growthSteps, talentCap };
+  // v33.2: 危険度（インブリードの代償）。血が濃いほど虚弱・故障持ちで生まれるリスクが上がる。
+  // 両親の健康な血（鉄人・頑丈）と、血脈の多様性（活性化配合）でリスクは和らぐ。
+  let healthMit = 0;
+  [parentA, parentB].forEach(par => {
+    const sa = par.specialAbilities || [];
+    if (sa.includes("tough")) healthMit += 18;
+    if (sa.includes("iron")) healthMit += 10;
+    const stam = (par.finalAbilities && par.finalAbilities.stamina) || 0;
+    if (stam >= 85) healthMit += 6;
+  });
+  const danger = Math.max(0, Math.min(95, Math.round(inb.count * 22 + Math.max(0, inb.count - 1) * 8 - diversityBaku * 1.5 - healthMit)));
+  const dangerLabel = danger >= 60 ? "激" : danger >= 38 ? "高" : danger >= 18 ? "中" : danger > 0 ? "低" : "無";
+  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes, bakuhatsu, matingGrade, growthSteps, talentCap, danger, dangerLabel, healthMit };
 }
 // v31.1: 血統IDから表示名を得る（殿堂に記録のない祖先はIDから名前部分を抽出）
 function bloodIdToName(id, map) {
@@ -5260,6 +5272,12 @@ function App() {
         player.goldAbilities = [...(player.goldAbilities || [])];
         breed.goldInherit.forEach(id => { if (player.abilities.includes(id) && !player.goldAbilities.includes(id)) player.goldAbilities.push(id); });
       }
+      // v33.2: 危険度。濃い血の代償として、稀に「ガラスの体」を持って生まれる（頑丈を継いでいれば発症しない）
+      player.matingDanger = breed.danger || 0;
+      if (breed.danger > 0 && !player.abilities.includes("tough") && !player.abilities.includes("glass") && Math.random() * 100 < breed.danger) {
+        player.abilities = [...player.abilities, "glass"]; // 呪いは通常枠と別枠で背負う
+        player.fragileBorn = true;
+      }
       player.partner = partner.name;
       player.plusValue = breed.plusValue;
       player.generation = breed.generation;
@@ -5301,6 +5319,7 @@ function App() {
         if (breed.inbreed.count > 0) initLog.push(`【1年目 4月】🩸 共通の祖先を持つ濃い血のクロス（インブリード×${breed.inbreed.count}）。血が結晶し「${ABILITIES[breed.inbreedAb]?.label || breed.inbreedAb}」を宿す`);
         (breed.goldInherit || []).forEach(id => { if (player.abilities.includes(id)) initLog.push(`【1年目 4月】✨ 金特クロス！両親の血が重なり、特殊能力「${ABILITIES[id]?.label || id}」を最初から金特で受け継いだ`); });
         (breed.exclusive || []).forEach(id => { if (player.abilities.includes(id)) initLog.push(`【1年目 4月】🩸 配合限定特能「${ABILITIES[id]?.label || id}」を血に宿して誕生した`); });
+        if (player.fragileBorn) initLog.push(`【1年目 4月】⚠️ 濃すぎる血の代償か、生まれつき体が脆く「ガラスの体」を抱えている…健康管理が鍵になる`);
       }
       if (player.lineageName) initLog.push(`【1年目 4月】この血統は「${player.lineageName}」と呼ばれている`);
     } else {
@@ -6142,10 +6161,18 @@ function App() {
       rookie.talentCap = breed.talentCap || 0;
       rookie.bakuhatsu = breed.bakuhatsu || 0;
       rookie.matingGrade = breed.matingGrade || "D";
+      // v33.2: 危険度。濃い血の代償で稀にガラスの体を持って生まれる（頑丈を継いでいれば発症しない）
+      rookie.matingDanger = breed.danger || 0;
+      let fragileNote = "";
+      if (breed.danger > 0 && !rookie.abilities.includes("tough") && !rookie.abilities.includes("glass") && rng() * 100 < breed.danger) {
+        rookie.abilities = [...rookie.abilities, "glass"];
+        rookie.fragileBorn = true;
+        fragileNote = "・⚠️ガラスの体";
+      }
       const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・✨金特クロス` : "";
       return {
         ...s, roster: [...s.roster, rookie], budget: s.budget - 40, youthUsed: true,
-        log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}）`],
+        log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}${fragileNote}）`],
       };
     });
     setBreedYouthSel(null);
@@ -6458,6 +6485,11 @@ function App() {
                           <div style={{ fontSize: 10.5, color: "#9ae6b4", marginBottom: 3 }}>
                             {breed.growthSteps > 0 && `成長力+${breed.growthSteps}段`}{breed.growthSteps > 0 && breed.talentCap > 0 && "・"}{breed.talentCap > 0 && `才能キャップ+${breed.talentCap}`}{(breed.growthSteps > 0 || breed.talentCap > 0) ? "（生まれた時は普通でも育てると化ける）" : "素質は平凡（配合の質を上げると化ける）"}
                           </div>
+                          {breed.danger > 0 && (
+                            <div style={{ fontSize: 10.5, color: breed.danger >= 38 ? C.red : "#e8a13c", marginBottom: 3 }}>
+                              ⚠️ 危険度 <span style={{ fontWeight: 700 }}>{breed.dangerLabel}</span>（約{breed.danger}%）：稀に「ガラスの体」を持って生まれる{breed.healthMit > 0 ? "／健康な血で軽減済" : "。頑丈・鉄人の血を持つ親で軽減できる"}
+                            </div>
+                          )}
                           <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>配合相性：</span><span style={{ color: nickColor, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
                           <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>血統ボーナス：</span>
                             累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>
@@ -7869,6 +7901,7 @@ function App() {
                           <span style={{ fontSize: 10, color: C.sub }}>爆発力 <span style={{ fontFamily: FONT_M, color: C.yellow }}>{breed.bakuhatsu}</span></span>
                           {(breed.growthSteps > 0 || breed.talentCap > 0) && <span style={{ fontSize: 10, color: "#9ae6b4" }}>{breed.growthSteps > 0 ? `成長力+${breed.growthSteps}` : ""}{breed.growthSteps > 0 && breed.talentCap > 0 ? "・" : ""}{breed.talentCap > 0 ? `才能+${breed.talentCap}` : ""}</span>}
                         </div>
+                        {breed.danger > 0 && <div style={{ color: breed.danger >= 38 ? C.red : "#e8a13c", fontSize: 10.5 }}>⚠️ 危険度 {breed.dangerLabel}（約{breed.danger}%）ガラスの体リスク{breed.healthMit > 0 ? "（健康な血で軽減）" : ""}</div>}
                         <div>相性 <span style={{ color: breed.nick.rank === "◎" ? C.yellow : breed.nick.rank === "○" ? C.green : C.sub, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
                         <div>累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>{breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}</span>}{breed.goldInherit && breed.goldInherit.length > 0 && <span style={{ color: C.yellow }}>・✨金特クロス</span>}{breed.exclusive && breed.exclusive.length > 0 && <span style={{ color: "#e56cc8" }}>・🩸{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</span>}</div>
                         <div style={{ color: C.sub }}>継承特能：{breed.extraAbilities.length ? breed.extraAbilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・") : "—"}</div>
