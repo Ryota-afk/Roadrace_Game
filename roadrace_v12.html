@@ -412,6 +412,64 @@ function loadMlLegends() {
 function saveMlLegends(list) {
   try { localStorage.setItem(ML_LEGENDS_KEY, JSON.stringify(list)); } catch (e) { /* noop */ }
 }
+// v33.3: 系統確立レジストリ。プレイをまたいで系統名ごとの累積実績を記録し、血統が
+// 「未確立→確立→名門→大系統」と育っていく。確立した系統は子孫に因子（伸びしろ＋系統特能）を授ける。
+const ML_BLOODLINE_KEY = "roadrace_v12_bloodlines";
+function loadBloodlines() {
+  try { const raw = localStorage.getItem(ML_BLOODLINE_KEY); const o = raw ? JSON.parse(raw) : {}; return (o && typeof o === "object") ? o : {}; }
+  catch (e) { return {}; }
+}
+function saveBloodlines(obj) {
+  try { localStorage.setItem(ML_BLOODLINE_KEY, JSON.stringify(obj)); } catch (e) { /* noop */ }
+}
+// 殿堂入りした選手の系統実績を累積する（引退＝殿堂入りのタイミングで呼ぶ）
+function mlRegisterBloodline(leg) {
+  if (!leg || !leg.lineageName) return;
+  const all = loadBloodlines();
+  const key = leg.lineageName;
+  const rec = all[key] || { name: key, count: 0, wins: 0, podiums: 0, bestOverall: 0, abilityCounts: {}, members: [] };
+  rec.count += 1;
+  rec.wins += (leg.wins || 0);
+  rec.podiums += (leg.podiums || 0);
+  rec.bestOverall = Math.max(rec.bestOverall || 0, leg.overall || 0);
+  (leg.specialAbilities || []).forEach(id => { if (ABILITIES[id] && !ABILITIES[id].bad) rec.abilityCounts[id] = (rec.abilityCounts[id] || 0) + 1; });
+  if (leg.name && !rec.members.includes(leg.name)) rec.members.push(leg.name);
+  if (rec.members.length > 20) rec.members = rec.members.slice(-20);
+  all[key] = rec;
+  saveBloodlines(all);
+}
+// 系統の格（確立度）。系統は「複数の名選手を輩出する」ことで初めて確立する（＝血の継続が必要）
+function mlBloodlineTier(rec) {
+  if (!rec) return { tier: 0, label: "未確立", score: 0 };
+  const score = (rec.count || 0) * 6 + (rec.wins || 0) * 0.4 + (rec.bestOverall || 0) * 0.12;
+  let tier = 0;
+  if ((rec.count || 0) >= 5 && score >= 60) tier = 3;
+  else if ((rec.count || 0) >= 3 && score >= 36) tier = 2;
+  else if ((rec.count || 0) >= 2 && score >= 18) tier = 1;
+  const label = ["未確立", "確立", "名門", "大系統"][tier];
+  return { tier, label, score: Math.round(score) };
+}
+// 系統の因子（最も色濃く受け継がれてきた特能）
+function mlBloodlineFactor(rec) {
+  if (!rec || !rec.abilityCounts) return null;
+  let best = null, bc = 1;
+  Object.entries(rec.abilityCounts).forEach(([id, c]) => { if (c > bc && ABILITIES[id]) { bc = c; best = id; } });
+  return best;
+}
+// 系統確立ボーナス（子孫が受け取る因子）。爆発力と同じく行き先は伸びしろ（才能キャップ・成長力）＋系統特能
+function mlBloodlineBonus(lineageName) {
+  if (!lineageName) return null;
+  const rec = loadBloodlines()[lineageName];
+  if (!rec) return null;
+  const t = mlBloodlineTier(rec);
+  if (t.tier <= 0) return null;
+  return {
+    tier: t.tier, label: t.label, rec, factor: mlBloodlineFactor(rec),
+    talentCap: t.tier,               // +1 / +2 / +3
+    growthSteps: t.tier >= 2 ? 1 : 0, // 名門以上は成長力も底上げ
+    factorGold: t.tier >= 3,          // 大系統は因子を金特で伝える
+  };
+}
 // v15: 引退の瞬間（強制引退・自主引退どちらも）にこのスナップショットを記録する。
 // computeAchievements/riderNickname/riderCareerSummaryは全てファイル後方で定義されるが、
 // 実際に呼ばれるのは選手が引退した実行時（スクリプト全体の評価が終わった後）なので問題ない
@@ -682,7 +740,9 @@ function breedNickTableRows() {
     .sort((a, b) => (a.rank === b.rank ? 0 : a.rank === "◎" ? -1 : b.rank === "◎" ? 1 : a.rank === "○" ? -1 : 1));
 }
 function mlRecordLegend(s) {
-  saveMlLegends([...loadMlLegends(), mlLegendSnapshot(s)]);
+  const snap = mlLegendSnapshot(s);
+  saveMlLegends([...loadMlLegends(), snap]);
+  mlRegisterBloodline(snap); // v33.3: 系統確立レジストリへ実績を累積
 }
 // v26: 引退後キャリア（エピローグ）。引退直後に殿堂入りしたスナップショットへ、
 // 選んだ道（監督/完全引退）に応じたフレーバーテキストを後付けで追記する
@@ -5290,6 +5350,27 @@ function App() {
     }
     // v31.2: 系統名（血統の系統）。師匠／親の系統を継ぎ、いなければ自分が始祖となって新系統を興す
     player.lineageName = master ? (master.lineageName || `${master.name}系`) : `${player.name}系`;
+    // v33.3: 系統確立ボーナス（因子）。確立した系統を継ぐ子孫は伸びしろ＋系統特能を受け取る
+    let bloodlineNote = null;
+    const blb = mlBloodlineBonus(player.lineageName);
+    if (blb) {
+      player.bloodlineTier = blb.tier;
+      player.talentCap = (player.talentCap || 0) + blb.talentCap;
+      if (blb.growthSteps) player.growthPow = bumpGrowthPow(player.growthPow, blb.growthSteps);
+      let gotFactor = false;
+      if (blb.factor && ABILITIES[blb.factor]) {
+        if (!(player.abilities || []).includes(blb.factor) && (player.abilities || []).length < 5) {
+          player.abilities = [...(player.abilities || []), blb.factor];
+          gotFactor = true;
+        }
+        // 大系統は系統因子を金特へ昇華する（既に持っていても金特化）
+        if (blb.factorGold && (player.abilities || []).includes(blb.factor)) {
+          player.goldAbilities = [...(player.goldAbilities || [])];
+          if (!player.goldAbilities.includes(blb.factor)) { player.goldAbilities.push(blb.factor); gotFactor = true; }
+        }
+      }
+      bloodlineNote = { tier: blb.tier, label: blb.label, factor: gotFactor ? blb.factor : null, gold: blb.factorGold && (player.abilities || []).includes(blb.factor) };
+    }
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
     // v25: 個人スポンサー・メディア人気度。チーム年俸とは別枠で、戦績に応じて上がる
     // 知名度が個人スポンサー収入（月極＋節目の一時金）に反映される
@@ -5322,6 +5403,10 @@ function App() {
         if (player.fragileBorn) initLog.push(`【1年目 4月】⚠️ 濃すぎる血の代償か、生まれつき体が脆く「ガラスの体」を抱えている…健康管理が鍵になる`);
       }
       if (player.lineageName) initLog.push(`【1年目 4月】この血統は「${player.lineageName}」と呼ばれている`);
+      if (bloodlineNote) {
+        initLog.push(`【1年目 4月】🏛 「${player.lineageName}」は${bloodlineNote.label}した名門血統。その因子を受け継いで生まれた（伸びしろ上昇）`);
+        if (bloodlineNote.factor) initLog.push(`【1年目 4月】🧬 系統因子「${ABILITIES[bloodlineNote.factor]?.label || bloodlineNote.factor}」${bloodlineNote.gold ? "を金特で" : "を"}発現している`);
+      }
     } else {
       initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
     }
@@ -6169,10 +6254,24 @@ function App() {
         rookie.fragileBorn = true;
         fragileNote = "・⚠️ガラスの体";
       }
+      // v33.3: 系統確立ボーナス。名門系統を継ぐユースは因子（伸びしろ＋系統特能）を受け取る
+      rookie.lineageName = legA.lineageName || `${legA.name}系`;
+      let lineNote = "";
+      const yblb = mlBloodlineBonus(rookie.lineageName);
+      if (yblb) {
+        rookie.bloodlineTier = yblb.tier;
+        rookie.talentCap = (rookie.talentCap || 0) + yblb.talentCap;
+        if (yblb.growthSteps) rookie.growthPow = bumpGrowthPow(rookie.growthPow, yblb.growthSteps);
+        if (yblb.factor && ABILITIES[yblb.factor]) {
+          if (!rookie.abilities.includes(yblb.factor) && rookie.abilities.length < 5) rookie.abilities = [...rookie.abilities, yblb.factor];
+          if (yblb.factorGold && rookie.abilities.includes(yblb.factor)) { rookie.goldAbilities = [...(rookie.goldAbilities || [])]; if (!rookie.goldAbilities.includes(yblb.factor)) rookie.goldAbilities.push(yblb.factor); }
+        }
+        lineNote = `・🏛${yblb.label}`;
+      }
       const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・✨金特クロス` : "";
       return {
         ...s, roster: [...s.roster, rookie], budget: s.budget - 40, youthUsed: true,
-        log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}${fragileNote}）`],
+        log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}${fragileNote}${lineNote}）`],
       };
     });
     setBreedYouthSel(null);
@@ -6505,7 +6604,9 @@ function App() {
                           {breed.exclusive && breed.exclusive.length > 0 && (
                             <div style={{ color: "#e56cc8", fontWeight: 700 }}>🩸 配合限定特能：{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</div>
                           )}
-                          <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>継承する系統：</span>{master.lineageName || `${master.name}系`}</div>
+                          <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>継承する系統：</span>{master.lineageName || `${master.name}系`}
+                            {(() => { const rec = loadBloodlines()[master.lineageName || `${master.name}系`]; const t = rec ? mlBloodlineTier(rec) : null; if (!t || t.tier <= 0) return null; const fac = mlBloodlineFactor(rec); return <span style={{ color: "#e8a13c", fontWeight: 700 }}>　🏛{t.label}系統（因子：伸びしろ+{t.tier}{fac ? `・${ABILITIES[fac]?.label || fac}` : ""}{t.tier >= 3 ? "★金" : ""}）</span>; })()}
+                          </div>
                           {breed.archNotes && breed.archNotes.length > 0 && (
                             <div style={{ color: "#e8a13c" }}>🩸 血の格：{breed.archNotes.join("・")}</div>
                           )}
@@ -7520,7 +7621,9 @@ function App() {
                 {leg.epilogue && <div style={{ fontSize: 10.5, color: C.yellow, marginTop: 5, lineHeight: 1.6, fontStyle: "italic" }}>{leg.epilogue}</div>}
                 {leg.autobiography && <div style={{ fontSize: 11, color: C.purple, marginTop: 5, lineHeight: 1.6, fontStyle: "italic" }}>📖「{leg.autobiography}」</div>}
                 {leg.master && <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>🎓 {leg.master}の教え子{leg.partner ? `・🧬${leg.partner}との配合` : ""}</div>}
-                {leg.lineageName && <div style={{ fontSize: 10.5, color: "#c98bf0", marginTop: 2 }}>🩸 {leg.lineageName}</div>}
+                {leg.lineageName && <div style={{ fontSize: 10.5, color: "#c98bf0", marginTop: 2 }}>🩸 {leg.lineageName}
+                  {(() => { const rec = loadBloodlines()[leg.lineageName]; const t = rec ? mlBloodlineTier(rec) : null; if (!t || t.tier <= 0) return null; return <span style={{ color: "#e8a13c", fontWeight: 700 }}>　🏛{t.label}（{rec.count}名・{rec.wins}勝）</span>; })()}
+                </div>}
                 {/* v31.2: 殿堂記録の削除。誤って残った記録や整理のために1件ずつ消せる */}
                 <div style={{ marginTop: 6, textAlign: "right" }}>
                   <button onClick={() => askConfirm(`殿堂記録から「${leg.name}」を削除しますか？この操作は取り消せません（血統の親として選べなくなります）。`, () => {
