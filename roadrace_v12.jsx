@@ -481,6 +481,8 @@ function mlLegendSnapshot(s) {
     lineageName: r.lineageName || `${r.name || "無名"}系`,
     // v31.4: キャリアの生き様（称号）
     careerTitle: arch.title, careerTitleDesc: arch.desc, careerArchetypeKey: arch.key,
+    // v33.4: 特殊配合の称号（あれば）
+    specialMatingTitle: r.specialMating ? r.specialMating.title : null,
   };
 }
 // v27: 教え子への継承内容を導く。師匠（殿堂スナップショット）の得意能力・戦績・成長力・
@@ -577,6 +579,33 @@ function legendArchetypeKey(leg) {
 function archBreedBonus(leg) {
   const key = legendArchetypeKey(leg);
   return (key && ARCH_BREED[key]) ? { ...ARCH_BREED[key], key } : null;
+}
+// v33.4: 特殊配合（DQM由来）。特定の血の組み合わせは、あらかじめ定められた唯一無二の名血
+// （金枠）を確定で生む。爆発力・危険度とは別枠。行き先は伸びしろ＋称号＋金特に限定する。
+const ML_SPECIAL_MATINGS = [
+  { key: "absolute_king", title: "絶対王者の系譜", color: "#ffd24a", gold: "big", talent: 4, growth: 1,
+    note: "二人の世界王者の血が交わり、頂点に立つ宿命を負って生まれた",
+    test: c => c.keys.filter(k => k === "world1").length >= 2 },
+  { key: "hero_emperor", title: "覇道義侠録", color: "#ff9f43", gold: "big", talent: 3, growth: 1,
+    note: "帝王の覇道と英雄の義侠、二つの生き様が一人に宿る",
+    test: c => c.keys.includes("emperor") && (c.keys.includes("hero") || c.keys.includes("heroMulti")) },
+  { key: "iron_blood", title: "不屈の鉄血", color: "#8fb4c8", gold: "iron", talent: 2, growth: 0, extra: "tough",
+    note: "鉄人の血を二重に受け継ぎ、決して壊れぬ肉体を得た",
+    test: c => (c.keys.filter(k => k === "ironman").length + c.abs.filter(a => a === "iron").length) >= 2 },
+  { key: "all_rounder", title: "万能王の血脈", color: "#9ae6b4", gold: "engine", talent: 3, growth: 1,
+    note: "登坂と平地、相反する才能が融合し、地形を選ばぬ万能王が生まれた",
+    test: c => { const up = k => k === "specialist_CLM" || k === "specialist_PUN"; const sp = k => k === "specialist_SPR" || k === "specialist_RUL" || k === "specialist_TT"; return (up(c.keys[0]) && sp(c.keys[1])) || (sp(c.keys[0]) && up(c.keys[1])); } },
+  { key: "pure_blood", title: "純血の極み", color: "#ff5db1", gold: null, talent: 4, growth: 1, factorGold: true,
+    note: "同じ系統の血が極限まで濃縮され、純血の頂点が結晶した",
+    test: c => c.lineA && c.lineB && c.lineA === c.lineB && Math.min(c.genA, c.genB) >= 4 },
+];
+function mlSpecialMating(parentA, parentB) {
+  if (!parentA || !parentB) return null;
+  const keys = [legendArchetypeKey(parentA), legendArchetypeKey(parentB)];
+  const abs = [...(parentA.specialAbilities || []), ...(parentB.specialAbilities || [])];
+  const ctx = { keys, abs, lineA: parentA.lineageName, lineB: parentB.lineageName, genA: parentA.generation || 0, genB: parentB.generation || 0 };
+  for (const sm of ML_SPECIAL_MATINGS) { try { if (sm.test(ctx)) return sm; } catch (e) { /* noop */ } }
+  return null;
 }
 // 脚質ペアの配合相性（ニック）。良相性ほど強い恩恵と看板特性が出る
 const BREED_NICKS = {
@@ -693,7 +722,9 @@ function mlBreedBonus(parentA, parentB) {
   });
   const danger = Math.max(0, Math.min(95, Math.round(inb.count * 22 + Math.max(0, inb.count - 1) * 8 - diversityBaku * 1.5 - healthMit)));
   const dangerLabel = danger >= 60 ? "激" : danger >= 38 ? "高" : danger >= 18 ? "中" : danger > 0 ? "低" : "無";
-  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes, bakuhatsu, matingGrade, growthSteps, talentCap, danger, dangerLabel, healthMit };
+  // v33.4: 特殊配合（唯一無二の名血）
+  const special = mlSpecialMating(parentA, parentB);
+  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes, bakuhatsu, matingGrade, growthSteps, talentCap, danger, dangerLabel, healthMit, special };
 }
 // v31.1: 血統IDから表示名を得る（殿堂に記録のない祖先はIDから名前部分を抽出）
 function bloodIdToName(id, map) {
@@ -5307,6 +5338,18 @@ function App() {
         player.goldAbilities = [...(player.goldAbilities || [])];
         breed.goldInherit.forEach(id => { if (player.abilities.includes(id) && !player.goldAbilities.includes(id)) player.goldAbilities.push(id); });
       }
+      // v33.4: 特殊配合。特定の血の組み合わせで、唯一無二の名血（金枠）を確定発現する
+      if (breed.special) {
+        const sm = breed.special;
+        player.specialMating = { key: sm.key, title: sm.title, color: sm.color, note: sm.note, factorGold: !!sm.factorGold };
+        player.talentCap = (player.talentCap || 0) + (sm.talent || 0);
+        if (sm.growth) player.growthPow = bumpGrowthPow(player.growthPow, sm.growth);
+        if (sm.extra && ABILITIES[sm.extra] && !(player.abilities || []).includes(sm.extra) && (player.abilities || []).length < 6) player.abilities = [...(player.abilities || []), sm.extra];
+        if (sm.gold && ABILITIES[sm.gold]) {
+          if (!(player.abilities || []).includes(sm.gold) && (player.abilities || []).length < 6) player.abilities = [...(player.abilities || []), sm.gold];
+          if ((player.abilities || []).includes(sm.gold)) { player.goldAbilities = [...(player.goldAbilities || [])]; if (!player.goldAbilities.includes(sm.gold)) player.goldAbilities.push(sm.gold); }
+        }
+      }
       // v33.2: 危険度。濃い血の代償として、稀に「ガラスの体」を持って生まれる（頑丈を継いでいれば発症しない）
       player.matingDanger = breed.danger || 0;
       if (breed.danger > 0 && !player.abilities.includes("tough") && !player.abilities.includes("glass") && Math.random() * 100 < breed.danger) {
@@ -5346,6 +5389,14 @@ function App() {
       }
       bloodlineNote = { tier: blb.tier, label: blb.label, factor: gotFactor ? blb.factor : null, gold: blb.factorGold && (player.abilities || []).includes(blb.factor) };
     }
+    // v33.4: 純血の極み（特殊配合）は系統因子を金特へ昇華する。系統因子が無ければ得意脚質特能を金特化
+    if (player.specialMating && player.specialMating.factorGold) {
+      const fac = (blb && blb.factor) || { climb: "mount", sprint: "finisher", flat: "flatlander", solo: "soloist" }[master ? master.focus : player.focus];
+      if (fac && ABILITIES[fac]) {
+        if (!(player.abilities || []).includes(fac) && (player.abilities || []).length < 6) player.abilities = [...(player.abilities || []), fac];
+        if ((player.abilities || []).includes(fac)) { player.goldAbilities = [...(player.goldAbilities || [])]; if (!player.goldAbilities.includes(fac)) player.goldAbilities.push(fac); }
+      }
+    }
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
     // v25: 個人スポンサー・メディア人気度。チーム年俸とは別枠で、戦績に応じて上がる
     // 知名度が個人スポンサー収入（月極＋節目の一時金）に反映される
@@ -5382,6 +5433,7 @@ function App() {
         initLog.push(`【1年目 4月】🏛 「${player.lineageName}」は${bloodlineNote.label}した名門血統。その因子を受け継いで生まれた（伸びしろ上昇）`);
         if (bloodlineNote.factor) initLog.push(`【1年目 4月】🧬 系統因子「${ABILITIES[bloodlineNote.factor]?.label || bloodlineNote.factor}」${bloodlineNote.gold ? "を金特で" : "を"}発現している`);
       }
+      if (player.specialMating) initLog.push(`【1年目 4月】🌟 特殊配合『${player.specialMating.title}』発動！${player.specialMating.note}`);
     } else {
       initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
     }
@@ -5479,8 +5531,9 @@ function App() {
     const race = ml.races[0];
     const pts = Math.round((PTS[me.rank - 1] || 0) * GRADE_MUL[race.grade]);
     // v14.3: 監督指示を全うできたかどうかで監督評価が増減する。賞金はクラス倍率に応じて即時支給
-    const directive = ml.directive;
-    const fulfilled = directive ? directive.check(me.rank, sim.ranked.length) : false;
+    // v33.5: セーブから復元した監督指示はJSONでcheck関数が失われているため、キーで正規テーブルから引き直す
+    const directive = ml.directive ? (MANAGER_DIRECTIVES[ml.directive.key] || ml.directive) : null;
+    const fulfilled = (directive && typeof directive.check === "function") ? directive.check(me.rank, sim.ranked.length) : false;
     const evalDelta = directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0;
     const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + ml.classIdx * 0.25));
     // v15: このレースにライバルが出走していれば、着順を比較して通算のライバル戦績を更新する
@@ -6221,6 +6274,21 @@ function App() {
       rookie.talentCap = breed.talentCap || 0;
       rookie.bakuhatsu = breed.bakuhatsu || 0;
       rookie.matingGrade = breed.matingGrade || "D";
+      // v33.4: 特殊配合。唯一無二の名血を確定発現
+      let specialNote = "";
+      if (breed.special) {
+        const sm = breed.special;
+        rookie.specialMating = { key: sm.key, title: sm.title, color: sm.color };
+        rookie.talentCap = (rookie.talentCap || 0) + (sm.talent || 0);
+        if (sm.growth) rookie.growthPow = bumpGrowthPow(rookie.growthPow, sm.growth);
+        const goldId = sm.gold || (sm.factorGold ? ({ climb: "mount", sprint: "finisher", flat: "flatlander", solo: "soloist" }[legA.focus] || "engine") : null);
+        if (sm.extra && ABILITIES[sm.extra] && !rookie.abilities.includes(sm.extra) && rookie.abilities.length < 6) rookie.abilities = [...rookie.abilities, sm.extra];
+        if (goldId && ABILITIES[goldId]) {
+          if (!rookie.abilities.includes(goldId) && rookie.abilities.length < 6) rookie.abilities = [...rookie.abilities, goldId];
+          if (rookie.abilities.includes(goldId)) { rookie.goldAbilities = [...(rookie.goldAbilities || [])]; if (!rookie.goldAbilities.includes(goldId)) rookie.goldAbilities.push(goldId); }
+        }
+        specialNote = `・🌟${sm.title}`;
+      }
       // v33.2: 危険度。濃い血の代償で稀にガラスの体を持って生まれる（頑丈を継いでいれば発症しない）
       rookie.matingDanger = breed.danger || 0;
       let fragileNote = "";
@@ -6246,7 +6314,7 @@ function App() {
       const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・✨金特クロス` : "";
       return {
         ...s, roster: [...s.roster, rookie], budget: s.budget - 40, youthUsed: true,
-        log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}${fragileNote}${lineNote}）`],
+        log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}${fragileNote}${lineNote}${specialNote}）`],
       };
     });
     setBreedYouthSel(null);
@@ -6551,6 +6619,12 @@ function App() {
                       </div>
                       {breed && (
                         <div style={{ background: "linear-gradient(180deg,#2e2436,#241d2c)", borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 11.5, color: C.text, lineHeight: 1.7, border: `1px solid #e56cc8` }}>
+                          {breed.special && (
+                            <div style={{ background: "linear-gradient(90deg,#3a2f10,#2b2410)", border: `1px solid ${breed.special.color}`, borderRadius: 6, padding: "6px 8px", marginBottom: 6 }}>
+                              <div style={{ color: breed.special.color, fontWeight: 800, fontSize: 12.5 }}>🌟 特殊配合『{breed.special.title}』</div>
+                              <div style={{ fontSize: 10, color: C.sub, marginTop: 1 }}>{breed.special.note}</div>
+                            </div>
+                          )}
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                             <span style={{ fontWeight: 700, color: "#e56cc8" }}>配合評価</span>
                             <span style={{ fontFamily: FONT_M, fontWeight: 800, fontSize: 17, color: mlGradeColor(breed.matingGrade), textShadow: "0 0 6px rgba(0,0,0,.4)" }}>{breed.matingGrade}</span>
@@ -6625,7 +6699,8 @@ function App() {
             {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
             {r.master && <div style={{ fontSize: 11, color: C.purple, marginTop: 1 }}>🎓 {r.master}の教え子{r.teaching ? `・師の教え「${r.teaching}」` : ""}</div>}
             {r.partner && <div style={{ fontSize: 11, color: "#e56cc8", marginTop: 1 }}>🧬 {r.master}×{r.partner}の配合{(r.generation || 0) > 1 ? `・${r.generation}代目` : ""}{(r.plusValue || 0) > 0 ? `・累代+${Math.min(15, r.plusValue)}` : ""}</div>}
-            {r.lineageName && <div style={{ fontSize: 10.5, color: "#c98bf0", marginTop: 1 }}>🩸 {r.lineageName}</div>}
+            {r.lineageName && <div style={{ fontSize: 10.5, color: "#c98bf0", marginTop: 1 }}>🩸 {r.lineageName}{r.bloodlineTier ? `　🏛${["", "確立", "名門", "大系統"][r.bloodlineTier]}系統` : ""}</div>}
+            {r.specialMating && <div style={{ fontSize: 10.5, color: r.specialMating.color || C.yellow, fontWeight: 700, marginTop: 1 }}>🌟 特殊配合『{r.specialMating.title}』</div>}
             <PersonaLine p={r.personality} />
             <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
@@ -7599,6 +7674,7 @@ function App() {
                 {leg.lineageName && <div style={{ fontSize: 10.5, color: "#c98bf0", marginTop: 2 }}>🩸 {leg.lineageName}
                   {(() => { const rec = loadBloodlines()[leg.lineageName]; const t = rec ? mlBloodlineTier(rec) : null; if (!t || t.tier <= 0) return null; return <span style={{ color: "#e8a13c", fontWeight: 700 }}>　🏛{t.label}（{rec.count}名・{rec.wins}勝）</span>; })()}
                 </div>}
+                {leg.specialMatingTitle && <div style={{ fontSize: 10.5, color: "#ffd24a", fontWeight: 700, marginTop: 1 }}>🌟 {leg.specialMatingTitle}</div>}
                 {/* v31.2: 殿堂記録の削除。誤って残った記録や整理のために1件ずつ消せる */}
                 <div style={{ marginTop: 6, textAlign: "right" }}>
                   <button onClick={() => askConfirm(`殿堂記録から「${leg.name}」を削除しますか？この操作は取り消せません（血統の親として選べなくなります）。`, () => {
@@ -7979,6 +8055,7 @@ function App() {
                           <span style={{ fontSize: 10, color: C.sub }}>爆発力 <span style={{ fontFamily: FONT_M, color: C.yellow }}>{breed.bakuhatsu}</span></span>
                           {(breed.growthSteps > 0 || breed.talentCap > 0) && <span style={{ fontSize: 10, color: "#9ae6b4" }}>{breed.growthSteps > 0 ? `成長力+${breed.growthSteps}` : ""}{breed.growthSteps > 0 && breed.talentCap > 0 ? "・" : ""}{breed.talentCap > 0 ? `才能+${breed.talentCap}` : ""}</span>}
                         </div>
+                        {breed.special && <div style={{ color: breed.special.color, fontWeight: 800 }}>🌟 特殊配合『{breed.special.title}』</div>}
                         {breed.danger > 0 && <div style={{ color: breed.danger >= 38 ? C.red : "#e8a13c", fontSize: 10.5 }}>⚠️ 危険度 {breed.dangerLabel}（約{breed.danger}%）ガラスの体リスク{breed.healthMit > 0 ? "（健康な血で軽減）" : ""}</div>}
                         <div>相性 <span style={{ color: breed.nick.rank === "◎" ? C.yellow : breed.nick.rank === "○" ? C.green : C.sub, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
                         <div>累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>{breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}</span>}{breed.goldInherit && breed.goldInherit.length > 0 && <span style={{ color: C.yellow }}>・✨金特クロス</span>}{breed.exclusive && breed.exclusive.length > 0 && <span style={{ color: "#e56cc8" }}>・🩸{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</span>}</div>
