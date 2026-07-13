@@ -545,6 +545,10 @@ function breedInbreed(parentA, parentB) {
   let count = 0; ga.forEach(x => { if (gb.has(x)) count++; });
   return { count, mergedAncestors: new Set([...ga, ...gb]) };
 }
+// v33: 配合評価グレードの表示色
+function mlGradeColor(g) {
+  return g === "SS" ? "#ff5db1" : g === "S" ? "#ffd24a" : g === "A" ? "#ff9f43" : g === "B" ? "#6cc8e5" : g === "C" ? "#9aa7b4" : "#7a828c";
+}
 // 配合ボーナス一式を算出（両親＝殿堂スナップショット、typeは新人の脚質）
 function mlBreedBonus(parentA, parentB) {
   const nick = breedNick(parentA.type, parentB.type);
@@ -595,6 +599,7 @@ function mlBreedBonus(parentA, parentB) {
   // v31.5: 生き様（称号）の血。両親のアーキタイプに応じて能力・特能・副ステ・血の格を上乗せ。
   // 名血（世界王者・帝王・英雄）ほど能力ボーナスが厚く、脚質専門家は得意能力を色濃く伝える。
   const archNotes = [];
+  let archBaku = 0; // 名血ボーナス（爆発力用）
   [parentA, parentB].forEach(par => {
     const ab = archBreedBonus(par);
     if (!ab) return;
@@ -603,8 +608,22 @@ function mlBreedBonus(parentA, parentB) {
     if (ab.sub) SUB_STAT_KEYS.forEach(k => { if (ab.sub[k]) subBonus[k] = (subBonus[k] || 0) + ab.sub[k]; });
     if (ab.ability && ABILITIES[ab.ability] && !extraAbilities.includes(ab.ability)) extraAbilities.push(ab.ability);
     if (ab.plus) AB_KEYS.forEach(k => { abBonus[k] = (abBonus[k] || 0) + ab.plus; });
+    const bakuByKey = { world1: 6, heroMulti: 5, hero: 4, emperor: 4, domestique: 1, nearly: 1, ironman: 1, latebloom: 1 };
+    archBaku += (bakuByKey[ab.key] != null ? bakuByKey[ab.key] : (String(ab.key).startsWith("specialist_") ? 2 : 1));
   });
-  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes };
+  // v33: 爆発力（ウイポ由来）。ニック・血の濃さ・累代・世代・名血・金特クロス・配合限定特能を
+  // 1つの数値に集約し、産駒の「素質＝伸びしろ」を決める。フラットな初期能力盛りではなく、
+  // 成長力(growthPow)と才能キャップ(talentCap)へ変換して「育てると化ける」形にする。
+  const nickBaku = nick.rank === "◎" ? 8 : nick.rank === "○" ? 4 : 0;
+  const inbreedBaku = Math.min(12, inb.count * 4);
+  const diversityBaku = Math.min(8, Math.max(0, (inb.mergedAncestors ? inb.mergedAncestors.size : 0) - 2) * 2); // 血脈活性化（多様性）
+  const legacyBaku = Math.min(10, Math.round(plusPer * 0.6) + Math.max(0, generation - 1));
+  const specialBaku = goldInherit.length * 4 + exclusive.length * 3;
+  const bakuhatsu = Math.round(nickBaku + inbreedBaku + diversityBaku + legacyBaku + specialBaku + archBaku);
+  const matingGrade = bakuhatsu >= 30 ? "SS" : bakuhatsu >= 23 ? "S" : bakuhatsu >= 16 ? "A" : bakuhatsu >= 10 ? "B" : bakuhatsu >= 5 ? "C" : "D";
+  const growthSteps = bakuhatsu >= 24 ? 2 : bakuhatsu >= 13 ? 1 : 0; // 成長力の底上げ段数
+  const talentCap = Math.min(8, Math.floor(Math.max(0, bakuhatsu - 16) / 3)); // 才能：限界突破の上乗せ
+  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes, bakuhatsu, matingGrade, growthSteps, talentCap };
 }
 // v31.1: 血統IDから表示名を得る（殿堂に記録のない祖先はIDから名前部分を抽出）
 function bloodIdToName(id, map) {
@@ -1747,10 +1766,10 @@ function mlRollCrossroads(s, player) {
 const ML_OFFSEASON_CHOICES = [
   { key: "domestic", label: "国内で自主トレーニングに励む", desc: "堅実に基礎を積む。伸びは控えめだが安全",
     result: "オフシーズンは国内で黙々と走り込み、着実に地力を蓄えた。",
-    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, mlGrowthCap(year))); return p; } },
+    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, mlGrowthCap(year, p))); return p; } },
   { key: "overseas", label: "海外武者修行に出る", desc: "レベルの高い環境に飛び込む。伸びは大きいが疲労が残る",
     result: "海外の強豪選手たちに揉まれ、大きく成長する手応えを掴んだ。ただし疲労が抜けきらないまま新シーズンを迎えることになった。",
-    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, mlGrowthCap(year))); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
+    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, mlGrowthCap(year, p))); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
   { key: "rest", label: "心身をしっかり休める", desc: "疲労を大きくリセットして万全の状態で新シーズンへ",
     result: "オフシーズンをゆっくり過ごし、心身ともにリフレッシュして新シーズンを迎える。",
     apply: (player) => ({ ...player, fatigue: Math.max(0, player.fatigue - 40) }) },
@@ -1896,8 +1915,10 @@ const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
 // cap未満なら効果1倍・cap超で指数関数的に急減するという「壁」の構造そのものが原因のため、
 // 経過年数に応じて上限自体をじわじわ引き上げ、長いキャリアを通して壁に本当の意味で
 // 到達しない（＝練習が最後まで意味を持ち続ける）ようにする
-function mlGrowthCap(year) {
-  return Math.min(132, 90 + Math.floor(Math.max(0, (year || 1) - 1)) * 2);
+function mlGrowthCap(year, player) {
+  // v33: 配合の才能キャップ（talentCap）は選手固有の限界突破分。生まれ持った素質で天井が上がる
+  const talent = (player && player.talentCap) ? player.talentCap : 0;
+  return Math.min(140, 90 + Math.floor(Math.max(0, (year || 1) - 1)) * 2 + talent);
 }
 // v27: 毎月の生活費・税負担。年俸の一定割合＋クルマ・住居のグレード維持費。
 // 年俸が伸びるほど額も増えるので、手取りは頭打ちになり資金のダブつきが抑えられる
@@ -5198,7 +5219,12 @@ function App() {
       breed = mlBreedBonus(master, partner);
       AB_KEYS.forEach(k => { if (breed.abBonus[k]) player[k] = Math.min(96, (player[k] || 0) + breed.abBonus[k]); });
       SUB_STAT_KEYS.forEach(k => { if (breed.subBonus[k]) player[k] = Math.max(20, Math.min(95, (player[k] ?? 50) + breed.subBonus[k])); });
-      if (breed.growthBump) { const gi = GROWTHPOW_ORDER.indexOf(player.growthPow); if (gi >= 0 && gi < GROWTHPOW_ORDER.length - 1) player.growthPow = GROWTHPOW_ORDER[gi + 1]; }
+      // v33: 爆発力（配合評価）は初期能力ではなく「伸びしろ」に還元する。生まれた瞬間は普通でも育てると化ける
+      if (breed.growthSteps) player.growthPow = bumpGrowthPow(player.growthPow, breed.growthSteps);
+      else if (breed.growthBump) player.growthPow = bumpGrowthPow(player.growthPow, 1);
+      player.talentCap = breed.talentCap || 0;
+      player.bakuhatsu = breed.bakuhatsu || 0;
+      player.matingGrade = breed.matingGrade || "D";
       // 金特クロス・配合限定特能は最優先で保持する（枠上限で溢れないように先頭へ）
       let abils2 = [...(breed.goldInherit || []), ...(breed.exclusive || []), ...(player.abilities || [])];
       breed.extraAbilities.forEach(id => { if (id && ABILITIES[id] && !abils2.includes(id)) abils2.push(id); });
@@ -5463,7 +5489,7 @@ function App() {
     const carLv = ctx ? ctx.carLv : -1;
     const houseLv = ctx ? ctx.houseLv : -1;
     const flags = (ctx && ctx.flags) || {};
-    const growthCap = mlGrowthCap(ctx && ctx.year);
+    const growthCap = mlGrowthCap(ctx && ctx.year, player);
     if (mode === "race") {
       const carCut = carLv >= 0 ? (1 - ML_CARS[carLv].raceFatigueCut) : 1;
       const chefCut = gear.chef ? 0.9 : 1;
@@ -5929,7 +5955,7 @@ function App() {
     setMl(s => {
       const cost = mlPrivateCampCost(s);
       if (s.money < cost) return s;
-      const growthCap = mlGrowthCap(s.year);
+      const growthCap = mlGrowthCap(s.year, s.player);
       const player = { ...s.player };
       const before = player[player.focus];
       addAb(player, player.focus, 6, growthCap);
@@ -6085,7 +6111,12 @@ function App() {
       abils = abils.filter((id, i) => abils.indexOf(id) === i);
       rookie.abilities = abils.slice(0, 5);
       if (breed.goldInherit && breed.goldInherit.length) { rookie.goldAbilities = [...(rookie.goldAbilities || [])]; breed.goldInherit.forEach(id => { if (rookie.abilities.includes(id) && !rookie.goldAbilities.includes(id)) rookie.goldAbilities.push(id); }); }
-      if (breed.growthBump) { const gi = GROWTHPOW_ORDER.indexOf(rookie.growthPow); if (gi >= 0 && gi < GROWTHPOW_ORDER.length - 1) rookie.growthPow = GROWTHPOW_ORDER[gi + 1]; }
+      // v33: 爆発力は伸びしろへ。ユースは元々成長力A/S＋才能キャップで大器化する
+      if (breed.growthSteps) rookie.growthPow = bumpGrowthPow(rookie.growthPow, breed.growthSteps);
+      else if (breed.growthBump) rookie.growthPow = bumpGrowthPow(rookie.growthPow, 1);
+      rookie.talentCap = breed.talentCap || 0;
+      rookie.bakuhatsu = breed.bakuhatsu || 0;
+      rookie.matingGrade = breed.matingGrade || "D";
       const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・✨金特クロス` : "";
       return {
         ...s, roster: [...s.roster, rookie], budget: s.budget - 40, youthUsed: true,
@@ -6394,6 +6425,14 @@ function App() {
                       </div>
                       {breed && (
                         <div style={{ background: "linear-gradient(180deg,#2e2436,#241d2c)", borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 11.5, color: C.text, lineHeight: 1.7, border: `1px solid #e56cc8` }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontWeight: 700, color: "#e56cc8" }}>配合評価</span>
+                            <span style={{ fontFamily: FONT_M, fontWeight: 800, fontSize: 17, color: mlGradeColor(breed.matingGrade), textShadow: "0 0 6px rgba(0,0,0,.4)" }}>{breed.matingGrade}</span>
+                            <span style={{ fontSize: 10.5, color: C.sub }}>爆発力 <span style={{ fontFamily: FONT_M, color: C.yellow }}>{breed.bakuhatsu}</span></span>
+                          </div>
+                          <div style={{ fontSize: 10.5, color: "#9ae6b4", marginBottom: 3 }}>
+                            {breed.growthSteps > 0 && `成長力+${breed.growthSteps}段`}{breed.growthSteps > 0 && breed.talentCap > 0 && "・"}{breed.talentCap > 0 && `才能キャップ+${breed.talentCap}`}{(breed.growthSteps > 0 || breed.talentCap > 0) ? "（生まれた時は普通でも育てると化ける）" : "素質は平凡（配合の質を上げると化ける）"}
+                          </div>
                           <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>配合相性：</span><span style={{ color: nickColor, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
                           <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>血統ボーナス：</span>
                             累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>
@@ -6476,9 +6515,9 @@ function App() {
                 </div>
               );
             })()}
-            <AbilityGrid r={r} cap={mlGrowthCap(ml.year)} />
+            <AbilityGrid r={r} cap={mlGrowthCap(ml.year, r)} />
             <SubStatLine r={r} />
-            <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year)}以上＝限界突破（伸びの上限は経験を積むほど毎年じわじわ上がっていきます）</div>
+            <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year, r)}以上＝限界突破（伸びの上限は経験を積むほど毎年じわじわ上がっていきます）{r.talentCap ? `／才能キャップ+${r.talentCap}` : ""}</div>
             {/* v30: フレーバーテキストは特能と能力値の間に挟まって視認性を損ねていたため、
                 カード末尾の独立したプロフィール欄（区切り線付き）に移動した */}
             <div style={{ fontSize: 11, color: C.sub, fontStyle: "italic", marginTop: 8, paddingTop: 6, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>{riderFlavorText(r)}</div>
@@ -7799,6 +7838,12 @@ function App() {
                     {sel.a === sel.b && <div style={{ fontSize: 10.5, color: C.red }}>※ 異なる2名を選んでください</div>}
                     {breed && (
                       <div style={{ background: C.panel2, borderRadius: 8, padding: "7px 9px", fontSize: 11, color: C.text, lineHeight: 1.7 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ color: C.sub }}>配合評価</span>
+                          <span style={{ fontFamily: FONT_M, fontWeight: 800, fontSize: 15, color: mlGradeColor(breed.matingGrade) }}>{breed.matingGrade}</span>
+                          <span style={{ fontSize: 10, color: C.sub }}>爆発力 <span style={{ fontFamily: FONT_M, color: C.yellow }}>{breed.bakuhatsu}</span></span>
+                          {(breed.growthSteps > 0 || breed.talentCap > 0) && <span style={{ fontSize: 10, color: "#9ae6b4" }}>{breed.growthSteps > 0 ? `成長力+${breed.growthSteps}` : ""}{breed.growthSteps > 0 && breed.talentCap > 0 ? "・" : ""}{breed.talentCap > 0 ? `才能+${breed.talentCap}` : ""}</span>}
+                        </div>
                         <div>相性 <span style={{ color: breed.nick.rank === "◎" ? C.yellow : breed.nick.rank === "○" ? C.green : C.sub, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
                         <div>累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>{breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}</span>}{breed.goldInherit && breed.goldInherit.length > 0 && <span style={{ color: C.yellow }}>・✨金特クロス</span>}{breed.exclusive && breed.exclusive.length > 0 && <span style={{ color: "#e56cc8" }}>・🩸{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</span>}</div>
                         <div style={{ color: C.sub }}>継承特能：{breed.extraAbilities.length ? breed.extraAbilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・") : "—"}</div>
@@ -9135,5 +9180,4 @@ function App() {
 
 function t_label(type) { return TYPES[type]?.label || type; }
 
-export default App;
 export default App;
