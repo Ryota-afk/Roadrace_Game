@@ -4561,6 +4561,7 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
     const teamsForLeg = [...otherTeams].sort(() => rng() - 0.5).slice(0, nLeg);
     shuffled.forEach((leg, i) => { if (teamsForLeg[i]) legendTeams[teamsForLeg[i].name] = leg; });
   }
+  let assistedAceRef = null; // v33.8: アシスト宣言時に献身で押し上げた自チームのエース
   MYLIFE_TEAMS.forEach(d => {
     const isMyTeam = d.name === myTeamName;
     const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
@@ -4635,6 +4636,18 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
       else if (directiveKey === "support" || directiveKey === "experience") playerIsAce = false;
       else playerIsAce = playerTotal >= topAbility;
       if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
+      // v33.8: アシストに徹する＝チームのエース（先頭のチームメイト）を献身で押し上げる。
+      // 牽引・風除け・ボトルの恩恵を、自分の地力＋「献身のアシスト」特能に応じてエースの決め所へ還元する。
+      if (tac.playerAssist && !playerIsAce) {
+        const ace = teamEntrants.find(e => e.isAce);
+        if (ace) {
+          const contrib = (playerTotal / 5 - 55) * 0.16 + (hasAbility(player, "domestique") ? (hasGoldAbility(player, "domestique") ? 5 : 3) : 0);
+          const boost = Math.max(2, Math.min(10, Math.round(contrib)));
+          AB_KEYS.forEach(k => { ace[k] = Math.min(99, (ace[k] || 0) + boost); });
+          ace.assistBoost = boost;
+          assistedAceRef = ace;
+        }
+      }
       // v32（条件付き作戦）：早めに逃げる作戦なら、プレイヤーを逃げ要員として飛び出させる
       const playerRole = tac.playerBreakaway ? "breakaway" : (playerIsAce ? "lead" : "sub");
       riders.push({
@@ -4650,6 +4663,8 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
   const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
   simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
   rankSim(sim);
+  // v33.8: 献身で押し上げたエースの最終着順を結果画面に渡す
+  if (assistedAceRef) sim.assistedAce = { name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
   return sim;
 }
 
@@ -5632,13 +5647,27 @@ function App() {
         ambitionDone = [...ambitionDone, curAmb.key];
         log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🎯アンビション「${curAmb.label}」を達成！（${rw.text}）`];
       }
+      // v33.8: 献身の走りの成果。支えたエースが上位に入れば名アシストとして評価・人気・報酬が上乗せされる
+      let assistOutcome = null, assistPop = 0, assistEval = 0, assistMoney = 0;
+      if (sim.assistedAce) {
+        const ar = sim.assistedAce.rank;
+        const success = ar <= 3;
+        assistOutcome = { name: sim.assistedAce.name, rank: ar, success };
+        if (success) {
+          assistPop = ar === 1 ? 2.5 : 1.5; assistEval = ar === 1 ? 4 : 2; assistMoney = ar === 1 ? 30 : 15;
+          log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 あなたの献身の牽引でエース${sim.assistedAce.name}が${ar}位！名アシストとして称えられた（人気+${assistPop}・評価+${assistEval}・+${assistMoney}万円）`];
+        } else {
+          log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 エース${sim.assistedAce.name}を最後まで牽引したが${ar}位。報われない走りになった`];
+        }
+      }
+      if (assistPop) player.popularity = Math.max(0, Math.min(100, player.popularity + assistPop));
       return {
         ...s, player, points: s.points + pts, log,
-        managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta)),
-        money: s.money + prize + popBonus + ambMoney, rivalRecord, rivalRecord2,
+        managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta + assistEval)),
+        money: s.money + prize + popBonus + ambMoney + assistMoney, rivalRecord, rivalRecord2,
         worldPoints, worldRank, worldRankBest, careerWins, careerPodiums, careerBigWins, careerTitles,
         ambitionIdx, ambitionDone,
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared },
+        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared, assistOutcome },
         screen: "mylife_result",
       };
     });
@@ -7057,7 +7086,7 @@ function App() {
 
           <Section color={"#4f8fe8"} title="レース作戦（出走前に選択）">
             <Card>出走前に作戦を選べます（結果に反映）：<span style={{ color: C.text }}>🚩標準</span>（流れ任せ）／<span style={{ color: C.text }}>⏳末脚温存</span>（集団維持でゴール勝負・スプリント型向き）／<span style={{ color: C.text }}>💨早めに逃げる</span>（自ら逃げに乗る・逃げ実績稼ぎにも）／<span style={{ color: C.text }}>⚔積極的に仕掛ける</span>（エース時の終盤アタック）。監督指示とは別に、あなた自身の意思で展開を作れます。</Card>
-            <Card><span style={{ color: C.text }}>🤝アシストに徹する</span>＝自分の勝ちを捨ててエースを支える献身の走り。<b style={{ color: "#4f8fe8" }}>監督指示がエースでも、この作戦を選べば必ずアシスト戦としてカウントされ、監督評価も下がりません。</b>「献身の道（アンビション）」を狙うなら、監督の指示待ちにせず自分でこの作戦を選んで積み上げてください。</Card>
+            <Card><span style={{ color: C.text }}>🤝アシストに徹する</span>＝自分の勝ちを捨ててエースを支える献身の走り。あなたが牽引・風除けを担うことで<b style={{ color: "#4f8fe8" }}>チームのエースが実際に押し上げられ</b>、エースが表彰台に入れば名アシストとして人気・監督評価・報酬が上乗せされます（あなたの地力や「献身のアシスト」特能が高いほど効果大）。<b style={{ color: "#4f8fe8" }}>監督指示がエースでも必ずアシスト戦としてカウントされ、監督評価も下がりません。</b>「献身の道（アンビション）」を狙うなら、監督の指示待ちにせず自分でこの作戦を選んで積み上げてください。</Card>
           </Section>
 
           <Section color={"#e8a13c"} title="世界ランキングとアンビション（生き様）">
@@ -7139,7 +7168,7 @@ function App() {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
@@ -7179,6 +7208,16 @@ function App() {
               <Eyebrow color={natFulfilled ? C.green : C.red}>🎌 代表での役割（{natRole === "ace" ? "エース" : "アシスト"}） — {natFulfilled ? "任務達成" : "任務未達"}</Eyebrow>
               <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>
                 {natFulfilled ? `期待に応える走りで代表の役割を全うした。名声が高まった（人気度+${natPopBonus}）。` : "代表の役割を果たしきれず、悔しい結果となった。"}
+              </div>
+            </div>
+          )}
+          {assistOutcome && (
+            <div style={{ background: assistOutcome.success ? "#16241c" : "#241818", border: `1px solid ${assistOutcome.success ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
+              <Eyebrow color={assistOutcome.success ? C.green : C.red}>🤝 献身の走り — {assistOutcome.success ? "エースを勝利に導いた" : "報われず"}</Eyebrow>
+              <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>
+                {assistOutcome.success
+                  ? `あなたの牽引・風除けでエース${assistOutcome.name}が${assistOutcome.rank}位でフィニッシュ。名アシストとして称えられた（人気・監督評価・報酬に上乗せ）。`
+                  : `最後までエース${assistOutcome.name}を牽引したが${assistOutcome.rank}位。勝たせられなかったが、その献身は仲間が見ている。`}
               </div>
             </div>
           )}
