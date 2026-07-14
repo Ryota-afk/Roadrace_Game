@@ -864,6 +864,14 @@ function unlockedTemplates() {
   const cp = loadMeta().totalEarnedCP;
   return [...TEMPLATES, ...UNLOCK_TEMPLATES.filter(t => cp >= t.unlockCP)];
 }
+// v33.11: モニュメント（ワンデー・クラシック）。毎年決まった月に開催される、格式高い一発勝負の
+// 古典レース。長く消耗の激しいコースで脚質と地力が問われる。勝てば「クラシックの覇者」への道。
+// month は MONTHS 配列のインデックス（0=4月）。世界選手権(5=9月)・五輪(3)・最終戦(11)と重ならない月に配置
+const ML_MONUMENTS = [
+  { id: "pave", month: 1, name: "石畳の古典《春の地獄》", grade: 3, tmpl: { kind: "石畳クラシック", favors: "RUL", squadMin: 1, squadMax: 5, segs: [["flat", 520, 30], ["hill", 300, 14], ["flat", 500, 26], ["hill", 260, 12], ["sprint", 120, 4]] } },
+  { id: "ardennes", month: 4, name: "丘陵の古典《アルデンヌ》", grade: 3, tmpl: { kind: "丘陵クラシック", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 420, 24], ["hill", 420, 16], ["hill", 440, 16], ["hill", 300, 12], ["sprint", 120, 4]] } },
+  { id: "autumn", month: 6, name: "山岳の古典《秋の女王》", grade: 3, tmpl: { kind: "山岳クラシック", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["flat", 360, 22], ["climb", 560, 13], ["hill", 300, 12], ["climb", 420, 12], ["mtn", 160, 4]] } },
+];
 function groupModeFor(squadN) {
   if (squadN === 1) return "solo";
   if (squadN === 2) return "pelotonOnly";
@@ -4478,6 +4486,9 @@ function mlCareerArchetype(s) {
   if (worldBest === 1) return { key: "world1", title: "世界の頂に立った者", desc: "世界ランキングの頂点を極め、一時代を築いた絶対王者。", color: C.yellow };
   if (titles >= 2) return { key: "heroMulti", title: "大舞台の英雄", desc: "世界選手権・五輪の大舞台で幾度も頂点に立った、記憶に刻まれる英雄。", color: C.yellow };
   if (titles >= 1) return { key: "hero", title: "大一番の勝負師", desc: "ここぞの大舞台で栄冠をつかんだ、勝負強さの人。", color: "#e8a13c" };
+  // v33.11: モニュメント（クラシック）制覇に特化したキャリア
+  if ((s.careerClassics || 0) >= 3) return { key: "classicKing", title: "クラシックの覇者", desc: "格式高いモニュメントを幾度も制した、古典レースの申し子。", color: "#e8a13c" };
+  if ((s.careerClassics || 0) >= 1 && wins < 8) return { key: "classicHunter", title: "石畳の古豪", desc: "消耗の激しい一発勝負の古典で栄冠をつかんだ、タフネスの体現者。", color: C.green };
   if (wins >= 25) return { key: "emperor", title: "常勝の帝王", desc: "数えきれない勝利を積み上げた、記録に残る絶対的エース。", color: C.yellow };
   if (wins >= 8) { const sp = SPEC[type] || { t: "勝利の職人", d: "堅実に勝ちを積み上げた実力者。" }; return { key: "specialist_" + type, title: sp.t, desc: sp.d, color: C.green }; }
   if (supR >= 12 && supR >= aceR * 1.5 && wins <= 4) return { key: "domestique", title: "不屈のアシスト職人", desc: "自らの勝利より仲間の勝利を優先し、チームを陰で支え続けた名脇役。", color: C.blue };
@@ -4532,7 +4543,7 @@ const ML_SAVE_FIELDS = [
   "rival", "rivalRecord", "rival2", "rivalRecord2", "flags", "rewardedAchievements",
   // v30: 世界ランキング＆キャリア・アンビション
   "worldPoints", "worldRank", "worldRankBest", "worldSeed", "ambitionIdx", "ambitionDone", "ambitionPath",
-  "careerWins", "careerPodiums", "careerBigWins", "careerTitles",
+  "careerWins", "careerPodiums", "careerBigWins", "careerTitles", "careerClassics",
   "teammates", "tactic", "careerHistory",
 ];
 function saveMyLife(ml) {
@@ -5388,6 +5399,12 @@ function App() {
       const wrng = mulberry(year * 401 + month * 7 + 502);
       return { id: `ml-olympics-${year}`, name: `${year}年目 オリンピック ロードレース`, tmpl: TEMPLATES[3], grade: 4, cls: classIdx, milestone: "olympics", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) };
     }
+    // v33.11: モニュメント（クラシック）。特定の月は格式高いワンデー古典が開催される
+    const mon = ML_MONUMENTS.find(m => m.month === month);
+    if (mon) {
+      const mrng = mulberry(year * 401 + month * 7 + 613);
+      return { id: `ml-mon-${mon.id}-${year}`, name: `${year}年目 ${mon.name}`, tmpl: mon.tmpl, grade: mon.grade, cls: classIdx, monument: mon.id, monumentName: mon.name, rivalPresent: true, rival2Present: mrng() < 0.5, weather: rollWeather(mrng) };
+    }
     const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
     const pool = unlockedTemplates();
     const t = pool[Math.floor(rng() * pool.length)];
@@ -5723,6 +5740,7 @@ function App() {
       const careerPodiums = (s.careerPodiums || 0) + (me.rank <= 3 ? 1 : 0);
       const careerBigWins = (s.careerBigWins || 0) + (me.rank === 1 && race.grade >= 3 ? 1 : 0);
       const careerTitles = (s.careerTitles || 0) + (me.rank === 1 && race.milestone ? 1 : 0);
+      const careerClassics = (s.careerClassics || 0) + (me.rank === 1 && race.monument ? 1 : 0); // v33.11: モニュメント制覇数
       let ambitionIdx = s.ambitionIdx || 0;
       let ambitionDone = s.ambitionDone || [];
       let ambitionCleared = null;
@@ -5756,7 +5774,7 @@ function App() {
         ...s, player, points: s.points + pts, log,
         managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta + assistEval)),
         money: s.money + prize + popBonus + ambMoney + assistMoney, rivalRecord, rivalRecord2,
-        worldPoints, worldRank, worldRankBest, careerWins, careerPodiums, careerBigWins, careerTitles,
+        worldPoints, worldRank, worldRankBest, careerWins, careerPodiums, careerBigWins, careerTitles, careerClassics,
         ambitionIdx, ambitionDone,
         resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared, assistOutcome },
         screen: "mylife_result",
@@ -6977,12 +6995,13 @@ function App() {
             </select>
           </div>
           <div style={{
-            background: race.milestone ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
-            border: `1.5px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.line}`,
+            background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
+            border: `1.5px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.line}`,
           }}>
-            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.green}>{race.milestone ? ML_MILESTONE_LABEL[race.milestone].eyebrow : "今月のレース"}</Eyebrow>
+            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.green}>{race.milestone ? ML_MILESTONE_LABEL[race.milestone].eyebrow : race.monument ? "🏛️ モニュメント（クラシック）" : "今月のレース"}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0" }}>{race.name}</div>
             <div style={{ fontSize: 11.5, color: C.sub }}>{race.tmpl.kind}・{"★".repeat(race.grade)}・{TYPES[race.tmpl.favors].label}有利</div>
+            {race.monument && <div style={{ fontSize: 11, color: "#e8a13c", marginTop: 3, fontWeight: 700 }}>格式高い一発勝負の古典。長く消耗の激しいコースで真の実力が問われる。制覇すれば「クラシックの覇者」への道が開ける。</div>}
             {race.weather && race.weather !== "clear" && (
               <div style={{ fontSize: 11.5, color: race.weather === "rain" ? C.blue : C.red, marginTop: 2 }}>
                 {WEATHER[race.weather].icon} 天候：{WEATHER[race.weather].label}
@@ -7208,6 +7227,11 @@ function App() {
             <Card>🌍世界選手権：クラスA以上なら毎年9月に選出されます。🥇オリンピック：PROクラスかつ4年に一度だけ、3月に選出されます。どちらもグレード4（通常の最高格付けの1.3倍相当）の一発勝負で、ライバルも代表入りしてきます。</Card>
           </Section>
 
+          <Section color={"#e8a13c"} title="モニュメント（ワンデー・クラシック）">
+            <Card>🏛️ 毎年決まった月に、格式高い一発勝負の古典レース「モニュメント」が開催されます：<span style={{ color: C.text }}>石畳の古典《春の地獄》</span>（5月・ルーラー有利）／<span style={{ color: C.text }}>丘陵の古典《アルデンヌ》</span>（8月・パンチャー有利）／<span style={{ color: C.text }}>山岳の古典《秋の女王》</span>（10月・クライマー有利）。いずれも長く消耗の激しいコースで、脚質と地力が問われます。</Card>
+            <Card>モニュメントを制覇するとキャリアに刻まれ、複数勝てば引退時に「クラシックの覇者」「石畳の古豪」といった生き様（称号）が付きます。ステージレースや集団スプリントとはひと味違う、古典ならではの重みのある一戦です。</Card>
+          </Section>
+
           <Section color={C.green} title="人生の岐路・オフシーズンの過ごし方">
             <Card>年度末には必ず「オフシーズンの過ごし方」を3択（国内自主トレ・海外武者修行・休養）から選びます。海外武者修行はハイリスクハイリターン（伸び大・疲労も増加）です。</Card>
             <Card>それとは別に、結婚・大きな怪我・第一子誕生・新人時代の恩師との別れといった「人生の岐路」が、条件を満たすと年度末に低確率（恩師との別れのみ確定）で発生し、一度きりの選択とその後ずっと続く恒常効果をもたらします。</Card>
@@ -7263,8 +7287,8 @@ function App() {
       const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: race.milestone ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : C.yellow}` }}>
-            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : undefined}>{race.milestone ? `${ML_MILESTONE_LABEL[race.milestone].eyebrow} RESULT` : "RESULT"} — {race.name}</Eyebrow>
+          <div style={{ background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.yellow}` }}>
+            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : undefined}>{race.milestone ? `${ML_MILESTONE_LABEL[race.milestone].eyebrow} RESULT` : race.monument ? "🏛️ モニュメント RESULT" : "RESULT"} — {race.name}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
             <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt ／ 賞金 +{prize}万円</div>
             {popGain > 0 && (
