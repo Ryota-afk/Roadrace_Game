@@ -4,5 +4,6 @@
 !.gitignore
 !roadrace_*
 !index.html
+!DEVLOG.md
 # 検証用オフラインハーネス（vendor版React/import除去済み）は本番ではないため追跡しない
 roadrace_v12_test.html
