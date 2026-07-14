@@ -3114,8 +3114,8 @@ function StartListPanel({ entrants }) {
             <div style={{ fontFamily: FONT_D, fontWeight: 700, color: isPlayerTeam ? C.yellow : C.text, fontSize: 13 }}>{tn}{isPlayerTeam ? "（自チーム）" : ""}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 3 }}>
               {t.list.map((e, i) => (
-                <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : (e.isRival || e.isRival2) ? C.red : C.text }}>
-                  {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
+                <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : e.isWorldStar ? "#4f8fe8" : (e.isRival || e.isRival2) ? C.red : C.text }}>
+                  {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.isWorldStar ? `🌍${e.worldRank}位 ` : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
                 </span>
               ))}
             </div>
@@ -4663,7 +4663,7 @@ const ML_TACTICS = {
   aggressive: { label: "⚔ 積極的に仕掛ける",            chaseMode: "normal", aceEarly: true,  desc: "終盤の勝負どころで自ら仕掛ける（エース時）" },
   assist:     { label: "🤝 アシストに徹する",            chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
-function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic) {
+function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars) {
   const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
@@ -4686,6 +4686,19 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
     const shuffled = [...legendPool].sort(() => rng() - 0.5).slice(0, nLeg);
     const teamsForLeg = [...otherTeams].sort(() => rng() - 0.5).slice(0, nLeg);
     shuffled.forEach((leg, i) => { if (teamsForLeg[i]) legendTeams[teamsForLeg[i].name] = leg; });
+  }
+  // v33.12（A-3）：世界ランキング上位の永続スターを、実際のレースに名前付きで出走させる。
+  // グレードが高いほど強豪が集う。殿堂・ライバルのチームとは重ならないよう割り当てる。
+  const worldStarTeams = {}; // teamName -> { star, rank }
+  if (worldStars && worldStars.length) {
+    const nWant = ({ 1: 1, 2: 2, 3: 3, 4: 4 }[raceMeta.grade] || 1) - Object.keys(legendTeams).length;
+    if (nWant > 0) {
+      const avail = MYLIFE_TEAMS.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team) && !legendTeams[d.name]);
+      const pool = worldStars.slice(0, Math.min(worldStars.length, nWant * 3));
+      const chosen = [...pool].sort(() => rng() - 0.5).slice(0, Math.min(nWant, avail.length));
+      const teamsForStar = [...avail].sort(() => rng() - 0.5);
+      chosen.forEach((st, i) => { if (teamsForStar[i]) worldStarTeams[teamsForStar[i].name] = { star: st, rank: worldStars.indexOf(st) + 1 }; });
+    }
   }
   let assistedAceRef = null; // v33.8: アシスト宣言時に献身で押し上げた自チームのエース
   MYLIFE_TEAMS.forEach(d => {
@@ -4747,6 +4760,19 @@ function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, da
         ...teamEntrants[0], ...le,
         id: legStats.id, name: leg.name, type: leg.type, abilities: legStats.abilities, goldAbilities: legStats.goldAbilities,
         isLegend: true, legendTitle: leg.careerTitle || null,
+      };
+    }
+    // v33.12（A-3）：世界ランキングのスターをエース枠に差し替える（isLegendと排他）
+    if (worldStarTeams[d.name] && !isMyTeam && !legendTeams[d.name]) {
+      const { star, rank } = worldStarTeams[d.name];
+      const wsStats = newRider(power, rng, { type: star.type, banned: nameBanned });
+      const keyset = TYPE_ABKEYS[star.type] || [];
+      AB_KEYS.forEach(k => { wsStats[k] = Math.max(40, Math.min(98, Math.round(star.rating - 8 + (keyset.includes(k) ? 8 : 0) + rng() * 5))); });
+      const we = effAbilities(wsStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+      teamEntrants[0] = {
+        ...teamEntrants[0], ...we,
+        id: wsStats.id, name: star.name, type: star.type, abilities: wsStats.abilities, goldAbilities: wsStats.goldAbilities,
+        isWorldStar: true, worldRank: rank, bloodOf: star.bloodOf || null,
       };
     }
     if (isMyTeam) {
@@ -5637,7 +5663,8 @@ function App() {
     } else if (race.milestone && race.nationalRole) {
       directiveKey = race.nationalRole;
     }
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic);
+    const worldStars = mlWorldStarsForYear(ml.worldSeed, ml.year, loadMlLegends());
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, worldStars);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
     setMl(s => ({ ...s, result: sim, screen: "mylife_startlist" }));
   }
@@ -7227,6 +7254,7 @@ function App() {
           <Section color={"#e8a13c"} title="世界ランキングとアンビション（生き様）">
             <Card>レースの着順・グレードに応じて世界ランキングポイントが入り、世界ランクが上下します。上位を目指すのが長期の大目標です。</Card>
             <Card>🌍 世界のペロトンは<b style={{ color: "#4f8fe8" }}>生きています</b>。世界ランキングの選手たちは実在の名前を持ち、毎年 加齢・成長・衰え・引退を繰り返して世代交代します（名選手の血を継ぐ2世が台頭することも）。ランキング画面の「今年の世界の動き」で新王者・引退・新星をチェックできます。さらに<b style={{ color: "#e8a13c" }}>あなたが殿堂に残した名選手・確立した系統の血は、次のキャリアの世界に🩸血統として流入</b>し、世界の頂点を争います。</Card>
+            <Card>🌍 世界ランキング上位のスターは<b style={{ color: "#4f8fe8" }}>実際のあなたのレースにも出走してきます</b>（出走表に「🌍◯位」で表示）。格の高いレース（世界選手権・モニュメント等）ほど強豪が集います。世界の強豪と直接ぶつかり、打ち破ってのし上がっていきましょう。</Card>
             <Card>「生き方（アンビション）」は4つの道から選べます：<span style={{ color: C.text }}>🏆勝利の道</span>（勝利数）／<span style={{ color: C.text }}>🎭大舞台の道</span>（★の高いレース）／<span style={{ color: C.text }}>🤝献身の道</span>（アシスト戦数＝上の🤝作戦で積む）／<span style={{ color: C.text }}>🌍世界の道</span>（世界ランク）。道ごとに目標のはしごが異なり、達成報酬（資金・能力・成長力）が入ります。「🔀生き方を変える」でいつでも切替できます。</Card>
             <Card>引退時のキャリア傾向から「生き様（称号）」が決まり、殿堂記録に残ります。これが次のプレイの配合（生き様の血）にも影響します。</Card>
           </Section>

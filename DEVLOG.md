@@ -183,6 +183,8 @@ executablePath: /opt/pw-browsers/chromium-1194/chrome-linux/chrome  （args:['--
 | `ca54130` | **A-1**：世界ランキングを世代交代する永続ペロトンに |
 | `20dc260` | **A-2**：殿堂の血が世界のペロトンへ🩸流入 |
 | `e98092f` | **C-1**：モニュメント（ワンデー・クラシック）3種を追加 |
+| (DEVLOG) | 引き継ぎ文書 DEVLOG.md 追加＋実装済み機能インベントリ |
+| `A-3` | 世界ランキングのスターが実際のレースに出走（出走表に🌍◯位表示、グレードで人数増減。`buildMyLifeSim` に worldStars 注入、`worldStarTeams`） |
 
 ---
 
