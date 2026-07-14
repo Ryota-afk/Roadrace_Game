@@ -4238,14 +4238,30 @@ function mlMakeWorldStar(rng, year, opts) {
     growth: opts.growth || (rng() < 0.25 ? "S" : rng() < 0.6 ? "A" : "B"),
     debutYear: opts.debutYear != null ? opts.debutYear : year,
     lineage: opts.lineage || null,
+    bloodOf: opts.bloodOf || null, // v33.10: あなたの殿堂・血統から世界へ流入した選手
   };
 }
-function mlWorldStarsForYear(seed, targetYear) {
+function mlWorldStarsForYear(seed, targetYear, legendPool) {
   const s0 = ((seed || 777) >>> 0);
   const initRng = mulberry(s0);
+  // v33.10: あなたの殿堂の名選手・確立した系統の血が、次世代として世界のペロトンに流入する
+  const legs = (legendPool || []).slice().sort((a, b) => (b.overall || 0) - (a.overall || 0)).slice(0, 8);
   let stars = [];
   for (let i = 0; i < WORLD_STAR_COUNT; i++) {
-    stars.push(mlMakeWorldStar(initRng, 1, { age: 21 + Math.floor(initRng() * 12), rating: 74 + Math.floor(initRng() * 21), wins: Math.floor(initRng() * 14) }));
+    if (i < legs.length && initRng() < 0.85) {
+      const leg = legs[i];
+      const surname = (leg.name || "名家 選手").split(" ")[0];
+      stars.push(mlMakeWorldStar(initRng, 1, {
+        name: surname + " " + GIVEN_ALL[Math.floor(initRng() * GIVEN_ALL.length)],
+        type: leg.type,
+        age: 21 + Math.floor(initRng() * 10),
+        rating: Math.max(72, Math.min(97, Math.round((leg.overall || 80) - 4 + initRng() * 8))),
+        wins: Math.floor(initRng() * 10),
+        bloodOf: leg.lineageName || (surname + "系"),
+      }));
+    } else {
+      stars.push(mlMakeWorldStar(initRng, 1, { age: 21 + Math.floor(initRng() * 12), rating: 74 + Math.floor(initRng() * 21), wins: Math.floor(initRng() * 14) }));
+    }
   }
   const ty = Math.max(1, targetYear || 1);
   for (let y = 2; y <= ty; y++) {
@@ -4265,21 +4281,21 @@ function mlWorldStarsForYear(seed, targetYear) {
     stars = stars.map(st => {
       const retire = st.age >= 35 || (st.age >= 32 && st.rating < 62) || st.rating < 44;
       if (!retire) return st;
-      const inherit = yr() < 0.4;
+      const inherit = yr() < 0.4 || !!st.bloodOf; // 殿堂の血を引くスターは必ず後継を残す
       const surname = (st.name || "無名 選手").split(" ")[0];
       const childName = inherit ? (surname + " " + GIVEN_ALL[Math.floor(yr() * GIVEN_ALL.length)]) : pickRiderName(yr, null);
-      return mlMakeWorldStar(yr, y, { name: childName, type: inherit ? st.type : undefined, age: 19 + Math.floor(yr() * 3), rating: 70 + Math.floor(yr() * 16), lineage: inherit ? st.name : null });
+      return mlMakeWorldStar(yr, y, { name: childName, type: inherit ? st.type : undefined, age: 19 + Math.floor(yr() * 3), rating: 70 + Math.floor(yr() * 16), lineage: inherit ? st.name : null, bloodOf: inherit ? st.bloodOf : null });
     });
   }
   return stars.sort((a, b) => b.rating - a.rating);
 }
 // 前年との比較で「今年の世界の動き」を抽出（新王者・引退・新星の台頭）
-function mlWorldNews(seed, year) {
+function mlWorldNews(seed, year, legendPool) {
   if (!year || year < 2) return [];
-  const prev = mlWorldStarsForYear(seed, year - 1);
-  const cur = mlWorldStarsForYear(seed, year);
+  const prev = mlWorldStarsForYear(seed, year - 1, legendPool);
+  const cur = mlWorldStarsForYear(seed, year, legendPool);
   const news = [];
-  if (cur[0] && (!prev[0] || prev[0].id !== cur[0].id)) news.push(`👑 ${cur[0].name}（${cur[0].age}歳・${TYPES[cur[0].type]?.label || cur[0].type}）が世界ランキング首位に立った`);
+  if (cur[0] && (!prev[0] || prev[0].id !== cur[0].id)) news.push(`👑 ${cur[0].name}（${cur[0].age}歳・${TYPES[cur[0].type]?.label || cur[0].type}）が世界ランキング首位に立った${cur[0].bloodOf ? `。${cur[0].bloodOf}の血が世界の頂点へ` : ""}`);
   const curIds = new Set(cur.map(s => s.id));
   const retired = prev.filter(s => !curIds.has(s.id)).sort((a, b) => b.wins - a.wins);
   if (retired[0]) news.push(`🏁 ${retired[0].name}が現役を退いた（通算${retired[0].wins}勝）`);
@@ -4314,7 +4330,8 @@ function mlWorldBoard(ml) {
   const myPts = Math.round(ml.worldPoints || 0);
   const ptsAt = (rank) => Math.round(P1 * Math.pow(rank, -0.72));
   // v33.9: 生きた世界。各順位は永続的な世界のスター（加齢・世代交代する）で埋める
-  const stars = mlWorldStarsForYear(ml.worldSeed, year);
+  // v33.10: あなたの殿堂の血も流入させる
+  const stars = mlWorldStarsForYear(ml.worldSeed, year, (typeof loadMlLegends === "function" ? loadMlLegends() : []));
   const starAt = (rank) => stars[rank - 1] || null;
   const nameAt = (rank) => { const st = starAt(rank); return st ? st.name : pickRiderName(mulberry(year * 100003 + rank * 131 + 7), null); };
   const rivalRankOf = (rv, seedOff) => {
@@ -4330,7 +4347,7 @@ function mlWorldBoard(ml) {
     if (rivalRank === rank && ml.rival) return { name: ml.rival.name, isRival: true };
     if (rival2Rank === rank && ml.rival2) return { name: ml.rival2.name, isRival2: true };
     const st = starAt(rank);
-    return st ? { name: st.name, star: { age: st.age, wins: st.wins, type: st.type, lineage: st.lineage } } : { name: nameAt(rank) };
+    return st ? { name: st.name, star: { age: st.age, wins: st.wins, type: st.type, lineage: st.lineage, bloodOf: st.bloodOf } } : { name: nameAt(rank) };
   };
   const entry = (rank) => ({ rank, pts: (myRank != null && rank === myRank) ? myPts : ptsAt(rank), ...labelFor(rank) });
   const top = [];
@@ -7165,6 +7182,7 @@ function App() {
 
           <Section color={"#e8a13c"} title="世界ランキングとアンビション（生き様）">
             <Card>レースの着順・グレードに応じて世界ランキングポイントが入り、世界ランクが上下します。上位を目指すのが長期の大目標です。</Card>
+            <Card>🌍 世界のペロトンは<b style={{ color: "#4f8fe8" }}>生きています</b>。世界ランキングの選手たちは実在の名前を持ち、毎年 加齢・成長・衰え・引退を繰り返して世代交代します（名選手の血を継ぐ2世が台頭することも）。ランキング画面の「今年の世界の動き」で新王者・引退・新星をチェックできます。さらに<b style={{ color: "#e8a13c" }}>あなたが殿堂に残した名選手・確立した系統の血は、次のキャリアの世界に🩸血統として流入</b>し、世界の頂点を争います。</Card>
             <Card>「生き方（アンビション）」は4つの道から選べます：<span style={{ color: C.text }}>🏆勝利の道</span>（勝利数）／<span style={{ color: C.text }}>🎭大舞台の道</span>（★の高いレース）／<span style={{ color: C.text }}>🤝献身の道</span>（アシスト戦数＝上の🤝作戦で積む）／<span style={{ color: C.text }}>🌍世界の道</span>（世界ランク）。道ごとに目標のはしごが異なり、達成報酬（資金・能力・成長力）が入ります。「🔀生き方を変える」でいつでも切替できます。</Card>
             <Card>引退時のキャリア傾向から「生き様（称号）」が決まり、殿堂記録に残ります。これが次のプレイの配合（生き様の血）にも影響します。</Card>
           </Section>
@@ -7729,12 +7747,13 @@ function App() {
           <span style={{ fontFamily: FONT_M, fontSize: 12, width: 34, textAlign: "right", color: e.rank <= 3 ? C.yellow : e.rank <= 10 ? C.green : C.sub, fontWeight: 700 }}>{e.rank}位</span>
           <span style={{ flex: 1, fontSize: 12, color: e.isPlayer ? C.yellow : C.text, fontWeight: e.isPlayer ? 700 : 400 }}>
             {e.name}{e.isPlayer ? " ●（あなた）" : e.isRival ? " 🔥ライバル" : e.isRival2 ? " 🔥好敵手" : ""}
-            {e.star && <span style={{ fontSize: 10, color: C.sub }}>　{TYPES[e.star.type]?.label || e.star.type}・{e.star.age}歳・通算{e.star.wins}勝{e.star.lineage ? "・血統" : ""}</span>}
+            {e.star && <span style={{ fontSize: 10, color: C.sub }}>　{TYPES[e.star.type]?.label || e.star.type}・{e.star.age}歳・通算{e.star.wins}勝</span>}
+            {e.star && e.star.bloodOf && <span style={{ fontSize: 10, color: "#e8a13c", fontWeight: 700 }}>　🩸{e.star.bloodOf}</span>}
           </span>
           <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>{e.pts}pt</span>
         </div>
       );
-      const worldNews = mlWorldNews(ml.worldSeed, ml.year);
+      const worldNews = mlWorldNews(ml.worldSeed, ml.year, loadMlLegends());
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: "linear-gradient(180deg,#2a2740,#22202f)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
