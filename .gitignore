@@ -5,5 +5,15 @@
 !roadrace_*
 !index.html
 !DEVLOG.md
+# --- モジュール分割＋Viteビルド（v12 移行）---
+!package.json
+!package-lock.json
+!vite.config.js
+!src/
+!src/**
+# node_modules/ dist/ は allowlist しない＝ふつうに無視される
 # 検証用オフラインハーネス（vendor版React/import除去済み）は本番ではないため追跡しない
 roadrace_v12_test.html
+# ビルド生成物・依存
+node_modules/
+dist/

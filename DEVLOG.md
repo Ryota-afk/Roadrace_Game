@@ -15,63 +15,68 @@
 
 ---
 
-## 1. ファイル構成と開発フロー（重要）
-- **`roadrace_v12.html`** … 唯一の編集対象・真実の源（約9,200行）
-- **`index.html`** … `roadrace_v12.html` の完全コピー（デプロイ用）
-- **`roadrace_v12.jsx`** … 本体の `<script>` 中身のみを抜き出したミラー
-- `roadrace_v12_test.html` … 検証用オフラインハーネス。**gitignore済み・コミットしない**
+## 1. ファイル構成と開発フロー（重要 / v12モジュール移行後）
+**2026-07 に単一HTMLからモジュール分割＋Viteビルドへ移行した（経緯は §8）。真実の源は `src/` に移り、`roadrace_v12.html`/`.jsx` は廃止。**
 
-### 編集→同期→コミット→push の手順
+- **`src/`** … 唯一の編集対象・真実の源
+  - `src/main.jsx` … 本体（移行直後は旧scriptを丸ごと保持。Phase 1以降でモジュールへ分割していく）
+  - `src/index.html` … Viteの入口HTMLテンプレート（薄い雛形）
+  - `src/data/` `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … 分割後の配置（Phase 1〜3）
+- **`index.html`（リポジトリ直下）** … `npm run build` が生成する**自己完結の単一HTML成果物**（デプロイ用）。React/JSXはビルド時に変換・バンドル済みで**CDNもBabelも不要**。手で編集しない
+- `package.json` / `vite.config.js` / `package-lock.json` … ビルド定義
+- `dist/`, `node_modules/` … gitignore（追跡しない）
+- `roadrace_v5〜v11.*` … 過去バージョンのアーカイブ（触らない）
+- `roadrace_v12_test.html` … （旧）検証ハーネス。**もう不要**（§2参照）。gitignore済み
+
+### 編集→ビルド→コミット→push の手順
 ```bash
-# 1) roadrace_v12.html を編集したら、ミラー2つを再生成
-cp roadrace_v12.html index.html
-awk '/^import React, \{ useState/{f=1} f{print} /^export default App;/{if(f)exit}' roadrace_v12.html > roadrace_v12.jsx
+# 1) src/ を編集（対象モジュールだけ読めばよい＝トークン激減）
 
-# 2) コミット（日本語メッセージ）。末尾に必ず以下のトレーラを付ける
+# 2) ビルド（index.html を再生成）。Node/npm 必須。初回のみ npm install
+npm install          # 初回だけ
+npm run build        # vite build && cp dist/index.html index.html
+
+# 3) コミット（日本語メッセージ）。末尾に必ず以下のトレーラを付ける
 #    Co-Authored-By: Claude ...
 #    Claude-Session: https://claude.ai/code/session_...
-git add roadrace_v12.html roadrace_v12.jsx index.html
+git add -A            # src/ と生成された index.html を両方コミット
 git commit -F - <<'EOF'
 （日本語の要約タイトル）
 
 （本文）
 EOF
 
-# 3) push（作業ブランチ）
+# 4) push（作業ブランチ）
 git push -u origin claude/roadrace-v9-continuation-imtukw
 ```
 - 作業ブランチ：**`claude/roadrace-v9-continuation-imtukw`**（default へ直push禁止）
 - コミットメッセージは日本語。モデル識別子はリポジトリに書かない。
+- **`index.html` は生成物**。src を直したら必ず `npm run build` してから両方コミット（＝新しい二重管理を作らない）。
 
 ---
 
-## 2. 検証（Playwright）— CDN遮断環境での必須ワークアラウンド
-このクラウド環境は **esm.sh / unpkg が proxy にブロックされる**ため、本体のCDN読み込み版はブラウザで開けない。
-検証は「React/Babel をnpmからローカルvendorしたオフライン版」を作って行う。
+## 2. 検証（Playwright）— ビルド成果物をそのままテスト
+**移行でCDN依存が消えたため、vendor版React差し替えハックは不要になった。** `npm run build` が出す
+`index.html` は自己完結（React/JSXバンドル済み・CDN/Babel不参照）なので、クラウド環境でも本物をそのまま開ける。
 
 ```bash
-# 一度だけ：vendorを用意（vendor/ は gitignore配下）
-mkdir -p vendor
-# scratchpadで npm i react@18.2.0 react-dom@18.2.0 @babel/standalone@7.24.7 して
-# react.development.js / react-dom.development.js / babel.min.js を vendor/ にコピー
+# 1) ビルド
+npm run build
 
-# 毎回：本体→テスト版へ変換（importmap を vendorスクリプトに、import文を globals分割代入に、末尾 export default App を除去）
-cp roadrace_v12.html roadrace_v12_test.html
-python3 で以下の置換を適用：
-  <script type="importmap">…</script> + unpkg babel  →  vendor/react, react-dom, babel の3つの<script src>
-  `import { createRoot } from "react-dom/client"; import React,{...} from "react";`
-    →  `const { createRoot } = ReactDOM; const { useState, useRef, useEffect, useMemo } = React;`
-  `export default App;\ncreateRoot`  →  `createRoot`
+# 2) サーバ（リポジトリ直下を配信）
+npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで200を待つ
 
-# サーバ（落ちてたら再起動）
-setsid nohup npx http-server -p 8844 -s -c-1 > /tmp/http-server.log 2>&1 < /dev/null & disown
-
-# Playwright
-executablePath: /opt/pw-browsers/chromium-1194/chrome-linux/chrome  （args:['--no-sandbox']）
-テストは scratchpad に置く。console の [BABEL] deoptimised と favicon 404 は無視してよい。
+# 3) Playwright（scratchpad に置く）
+#    executablePath: /opt/pw-browsers/chromium-1194/chrome-linux/chrome  （args:['--no-sandbox']）
+#    playwright本体は /opt/node22/lib/node_modules にある。scratchpad の node_modules に
+#    シンボリックリンクを張ると import できる：
+#      ln -sfn /opt/node22/lib/node_modules/playwright      node_modules/playwright
+#      ln -sfn /opt/node22/lib/node_modules/playwright-core node_modules/playwright-core
+#    favicon の 404 は無視してよい（[BABEL] deopt はもう出ない）。
 ```
 テストのコツ：作戦ピッカーは**メイン画面**（「このレースに出場する」ボタンの上）にあるので、
 作戦を選んでから出場する。controlled input は `page.fill` を使う（`inp.value=` はReactに効かない）。
+旧 `roadrace_v12_test.html` ハーネスは不要（消してよい）。
 
 ---
 
@@ -219,3 +224,38 @@ executablePath: /opt/pw-browsers/chromium-1194/chrome-linux/chrome  （args:['--
 「当面は微調整のみ」なら 1 のままでも可。
 
 **次アクション候補**：機能追加(C-2)より先に、この移行の是非を決める → やるなら移行プランを別途作成しDEVLOGに追記。
+
+**→ 決定（2026-07）**：選択肢2を採用。Phase 0〜3を実行することにした。詳細は §8。
+
+---
+
+## 8. モジュール分割＋Viteビルド移行プラン（採用・進行中）
+§7 の選択肢2を採用。**Vite + `vite-plugin-singlefile` で「自己完結の単一 `index.html`」を出力**する方式。
+「配布は単一HTML1枚」という手軽さを保ったまま、オーサリングをモジュール化する。
+
+### 方針の要点
+- ソースは `src/*.jsx`（実import/export）。`npm run build` が `dist/index.html`（全インライン）を生成し、
+  それをリポジトリ直下 `index.html` へコピー＝デプロイ成果物。GitHub Pages の経路は不変。
+- **廃止できたもの**：`.jsx`手作業ミラー／実行時Babel（起動時コンパイル）／実行時CDN依存（esm.sh/unpkg）。
+- **副産物**：CDN依存が消えたのでクラウド環境で本物の成果物を直接Playwrightできる（vendor版Reactハック不要）。
+- **代償**：編集後に `npm run build` が要る（Node必須）。`index.html` は生成物なので手編集しない。
+
+### 段階（各Phaseは独立コミット・独立検証。いつ止めても壊れない）
+- **Phase 0（完了）**：ビルド土台の敷設。コード再編ゼロ。旧 `<script>` 本体を `src/main.jsx` へ丸ごと移動
+  （挙動不変・verbatim）、`src/index.html`＝Vite入口テンプレート、`package.json`/`vite.config.js` 追加、
+  `.gitignore` 整備、`.jsx`ミラーと旧 `roadrace_v12.html` を廃止（内容は `src/` と git 履歴に保全）。
+  Playwrightで両モード起動を検証（実エラー0）。
+- **Phase 1 (a)**：静的データを `src/data/` へ。デザイントークン(C/FONT_*)・TYPES・ABILITIES・GOLD_CONDITIONS・
+  PERSONALITIES・CLASSES・DIFFICULTIES・配合テーブル(BREED_NICKS/ARCH_BREED/ML_SPECIAL_MATINGS)・
+  TEMPLATES/VENUES/GRAND_TOURS/ITEMS/EQUIPS・localStorageキー定数。低リスク。
+- **Phase 2 (b)**：純ロジック。`src/sim/`(simulateTicks/effAbilities/assignAIRoles)、`src/breeding/`、
+  `src/world/`、`src/state/`(init/save/load/buildMyLifeSim)。sim/breeding/world は App非依存の純関数で綺麗に切れる。
+- **Phase 3**：`RaceView`（既にトップレベル独立コンポーネント・約457行）を `src/components/RaceView.jsx` へ。
+
+### 各Phaseの検証手順（必須）
+`npm run build` → http-server 配信 → Playwrightで①両モード起動②実コンソールエラー0③代表フロー。
+分割はモジュール単位で少しずつ→ビルド→煙テスト→コミットを繰り返す。
+
+### 今回のスコープ外（今後の判断）
+- **Phase 4 (c)**：App(約4,819行)の画面分解（`src/screens/`へprops/context化）。費用対効果を見て別途。
+- GitHub Actions でビルドしてコミットレス化する案（初手は生成 `index.html` をコミットする方式で最小リスク）。
