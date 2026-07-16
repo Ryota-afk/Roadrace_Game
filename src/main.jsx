@@ -1,6 +1,14 @@
 import { createRoot } from "react-dom/client";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 
+// ---- 静的データ（src/data/*）----
+import { C, FONT_D, FONT_B, FONT_M } from "./data/theme.js";
+import { TYPES, TYPE_ROLE_FIT, AB_KEYS, AB_LABEL, AB_COLOR, GROWTH, POW, ABILITIES, PERSONALITIES, COND_ARROW, COND_COLOR, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL } from "./data/abilities.js";
+import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "./data/progression.js";
+import { TYPE_ABKEYS, TEACH_KEYS, PROTEGE_TEACHINGS, ARCH_BREED, ML_SPECIAL_MATINGS, BREED_NICKS } from "./data/breeding.js";
+import { MONTHS, RELEGATE_LINE, ROSTER_MAX_BY_CLASS, SCOUT_COUNT_BY_CLASS, PRODIGY_CHANCE_BY_CLASS, UPKEEP_PER_RIDER, ROLES, CHASE_MODES, SEG_COMMENTARY, FINISH_COMMENTARY, TEMPLATES, UNLOCK_TEMPLATES, ML_MONUMENTS, VENUES, REGIONS, VENUE_REGION, HOME_ABILITY_BONUS, OVERSEAS_VENUES, GRAND_TOURS, SEG_LABEL, SEG_COLOR, SEG_AB } from "./data/course.js";
+import { ITEMS, EQUIPS, EQUIP_COST } from "./data/items.js";
+
 /* =========================================================
    ロードレース・プロチーム運営 v12
    v11からの変更（詳細は roadrace_design_v12.md 参照）：
@@ -27,91 +35,14 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 ========================================================= */
 
 // ---------- デザイントークン ----------
-const C = {
-  bg: "#14171d", panel: "#1e232e", panel2: "#262c3a", line: "#3a4356",
-  text: "#f0efe9", sub: "#9aa3b5",
-  yellow: "#ffd23f", green: "#35c07e", red: "#e8544f", blue: "#4f8fe8", purple: "#c98bf0",
-};
-const FONT_D = "'Avenir Next Condensed','Arial Narrow','Noto Sans JP',sans-serif";
-const FONT_B = "'Hiragino Sans','Noto Sans JP','Meiryo',sans-serif";
-const FONT_M = "ui-monospace,'SF Mono',Menlo,monospace";
 
 // ---------- 基本定義 ----------
-const TYPES = {
-  SPR: { label: "スプリンター", color: C.green, affinity: { sprint: 5 } },
-  CLM: { label: "クライマー", color: C.red, affinity: { climb: 5, mtn: 5 } },
-  RUL: { label: "ルーラー", color: C.blue, affinity: { flat: 4 } },
-  PUN: { label: "パンチャー", color: C.purple, affinity: { hill: 5 } },
-  TT:  { label: "独走屋(TT)", color: "#e8a13c", affinity: { tt: 6 } },
-};
 // 役割適性（合わないと roleMismatchPenalty）
-const TYPE_ROLE_FIT = {
-  mountain: ["CLM", "PUN"],
-  flat: ["SPR", "RUL"],
-};
-const AB_KEYS = ["flat", "climb", "sprint", "stamina", "solo"];
-const AB_LABEL = { flat: "平坦", climb: "登坂", sprint: "ｽﾌﾟﾘﾝﾄ", stamina: "ｽﾀﾐﾅ", solo: "独走" };
-const AB_COLOR = { flat: C.blue, climb: C.red, sprint: C.green, stamina: "#c9a13c", solo: C.purple };
 
-const GROWTH = {
-  early: { label: "早熟", peak: [21, 25] },
-  normal: { label: "普通", peak: [24, 29] },
-  late: { label: "晩成", peak: [28, 33] },
-  // v19: 早熟・晩成それぞれの極端形。superEarly/超晩成は通常の3タイプよりさらに
-  // ピークが偏っており、ごく稀にしか出現しない（newRiderの生成時に低確率で抽選）
-  super_early: { label: "超早熟", peak: [18, 21] },
-  super_late: { label: "超晩成", peak: [32, 38] },
-};
-const POW = {
-  S: { mul: 1.6, color: "#ffd23f" }, A: { mul: 1.3, color: "#35c07e" },
-  B: { mul: 1.0, color: "#4f8fe8" }, C: { mul: 0.7, color: "#9aa3b5" },
-};
 // v15: 特殊能力システム（パワプロ風）。以前は選手ごとに1枠だけの「特性」だったが、
 // 0〜3個を保有できる「特殊能力」に拡張した。categoryは今後の特殊能力ファイル（図鑑）用の分類。
 // bad:true は悪特性。escape/domestique/closerは旧バージョンでは付与されるだけで効果が
 // 実装されていなかった（死んだ特性）ため、今回きちんと効果を持たせた
-const ABILITIES = {
-  // 地形適性
-  mount:       { label: "山の申し子", desc: "山岳・山頂フィニッシュ区間で能力+4", category: "地形適性" },
-  puncheur:    { label: "丘陵ハンター", desc: "丘陵区間で能力+4", category: "地形適性" },
-  flatlander:  { label: "平坦の職人", desc: "平坦区間で能力+4", category: "地形適性" },
-  sprinter_sp: { label: "スプリント巧者", desc: "ゴールスプリント区間で能力+4", category: "地形適性" },
-  soloist:     { label: "独走の求道者", desc: "TT区間で能力+4", category: "地形適性" },
-  // v28: 万能型の地形適性。全区間で控えめに底上げする（脚質を選ばないオールラウンダー）
-  allrounder_sp:{ label: "オールラウンダー", desc: "全ての区間で能力+2", category: "地形適性" },
-  // 展開・役割
-  escape:      { label: "逃げ屋", desc: "アタック（逃げ）中の能力+4", category: "展開・役割" },
-  domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },
-  closer:      { label: "勝負師", desc: "ゴールスプリント・山頂フィニッシュで能力+4", category: "展開・役割" },
-  crosswind_sp:{ label: "横風耐性", desc: "横風区間でのドラフト消耗が軽減される", category: "展開・役割" },
-  rain_sp:     { label: "悪天候巧者", desc: "雨天レースでの能力低下が軽減され、落車のリスクも下がる", category: "展開・役割" },
-  // v28: 最終スプリント区間（勝負どころ）での追い込みが鋭くなる
-  finisher:    { label: "豪脚のラストスパート", desc: "最終スプリント区間での追い込みが強くなる", category: "展開・役割" },
-  // メンタル・大舞台
-  big:         { label: "大舞台に強い", desc: "★3レースで全能力+6%", category: "メンタル" },
-  // v28: 大舞台に弱い（★3で能力低下）。悪特性
-  nervous:     { label: "大舞台に弱い", desc: "★3レースで全能力-5%", category: "メンタル", bad: true },
-  // フィジカル
-  iron:        { label: "鉄人", desc: "出走疲労が軽減される", category: "フィジカル" },
-  recover:     { label: "回復力", desc: "毎月さらに疲労-15", category: "フィジカル" },
-  tough:       { label: "頑丈", desc: "怪我の発生率が半分（3連闘は防げない）", category: "フィジカル" },
-  steady_sp:   { label: "精密機械", desc: "調子の変動が小さく安定する", category: "フィジカル" },
-  // v28: レース中のエネルギー消耗が軽い（長丁場・逃げで垂れにくい）
-  engine:      { label: "無尽蔵のエンジン", desc: "レース中のエネルギー消耗が軽くなる", category: "フィジカル" },
-  glass:       { label: "ガラスの体", desc: "怪我の発生率2倍・離脱期間+1ヶ月", category: "フィジカル", bad: true },
-  moody:       { label: "ムラっ気", desc: "調子の変動が激しい", category: "フィジカル", bad: true },
-  // 成長
-  trainer:     { label: "練習の虫", desc: "練習効果+20%", category: "成長" },
-  lateblow_sp: { label: "遅咲き", desc: "28歳以降の練習効果+15%", category: "成長" },
-  // v28: 若い頃の伸びが良い（マイライフの25歳以下で練習・出走経験+15%）
-  genius_sp:   { label: "天才肌", desc: "25歳以下の練習・出走経験の伸びが+15%", category: "成長" },
-  lazy_sp:     { label: "練習嫌い", desc: "練習効果-20%", category: "成長", bad: true },
-  // v31.2: 配合限定特能（breedOnly）。通常のスカウト・後天習得では絶対に出現せず、
-  // 特定条件の配合でしか手に入らない血統の証。TraitLineでは金色枠で表示する
-  sireline:    { label: "系統の申し子", desc: "全区間で能力+3（配合限定）", category: "配合限定", breedOnly: true },
-  hybrid:      { label: "二刀流", desc: "丘陵・山岳・スプリント区間で能力+5（配合限定）", category: "配合限定", breedOnly: true },
-  dynasty:     { label: "覇道の血脈", desc: "全能力+2・スタミナ+3（配合限定）", category: "配合限定", breedOnly: true },
-};
 function hasAbility(r, id) { return !!(r && r.abilities && r.abilities.includes(id)); }
 // v15: 保有数は0〜3個（多いほど稀）。逸材(forceProdigy)は2〜3個確定・悪特性を含まない
 function rollAbilities(rng, opts = {}) {
@@ -217,15 +148,6 @@ function noteAbilityDiscovery(riders) {
   });
   if (changed) saveAbilityFile({ normal: [...normalSet], gold: [...goldSet] });
 }
-const PERSONALITIES = {
-  normal:   { label: "普通", desc: "クセなし", mul: {} },
-  genius:   { label: "天才", desc: "全能力が伸びやすい", mul: { flat: 1.25, climb: 1.25, sprint: 1.25, stamina: 1.25, solo: 1.25 } },
-  hotblood: { label: "熱血", desc: "ｽﾌﾟﾘﾝﾄ↑ 登坂↓", mul: { sprint: 1.4, climb: 0.7 } },
-  seeker:   { label: "求道者", desc: "登坂↑ ｽﾌﾟﾘﾝﾄ↓", mul: { climb: 1.4, sprint: 0.7 } },
-  artisan:  { label: "職人", desc: "ｽﾀﾐﾅ↑ 独走↑ ｽﾌﾟﾘﾝﾄ↓", mul: { stamina: 1.35, solo: 1.15, sprint: 0.85 } },
-  free:     { label: "自由人", desc: "独走↑ ｽﾀﾐﾅ↓", mul: { solo: 1.4, stamina: 0.7 } },
-  smart:    { label: "秀才", desc: "平坦↑ 登坂↓", mul: { flat: 1.3, climb: 0.9 } },
-};
 const persMul = (r, k) => (PERSONALITIES[r.personality]?.mul[k]) || 1;
 // v8: 収束・インフレ対策でソフトキャップを強化（90→88から発動、減衰も急に）
 // v13: 難易度ごとの成長上限（DIFFICULTIES.growthCap）をしきい値として渡せるように変更。
@@ -238,36 +160,20 @@ function growSub(r, key, amount) {
   const v = r[key] ?? 50;
   r[key] = Math.min(94, v + amount * softFactor(v, 88));
 }
-const COND_ARROW = ["↓↓", "↘", "→", "↗", "↑↑"];
-const COND_COLOR = ["#7a8296", "#8fa0b8", "#9aa3b5", "#7dd0a0", "#35c07e"];
 // v27: コンディション予報。来月の調子変動の向き（-1下降/0安定/+1上昇）を事前に示す。
 // 予報どおりに翌月の調子が動くよう、予報を保持して翌月に実際の変動として適用する
-const COND_FC_ARROW = ["↘", "→", "↗"];
-const COND_FC_COLOR = ["#8fa0b8", "#9aa3b5", "#7dd0a0"];
-const COND_FC_LABEL = ["下降ぎみ", "安定", "上向き"];
 // 元の調子変動と同じ確率分布（下降34%／安定33%／上昇33%）で向きを1つ引く
 function rollCondDir() {
   return Math.random() < 0.34 ? -1 : Math.random() < 0.5 ? 0 : 1;
 }
 const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];
 
-const CLASSES = [
-  { id: "B1", label: "クラス B1", prizeMul: 1.0, need: 45, scout: 58 },
-  { id: "A",  label: "クラス A",  prizeMul: 2.0, need: 50, scout: 66 },
-  { id: "PRO", label: "PRO", prizeMul: 3.5, need: 60, scout: 74 },
-];
 // v13: 周回プレイ（クリアポイント）＋難易度テーマ。難易度は他チームの強さ（aiMul）と
 // 選手成長のソフトキャップ閾値（growthCap、softFactorのしきい値）に反映する。
 // needCPは「これまでの生涯獲得クリアポイント合計」で解禁するため、後でポイントを
 // 使い切っても一度解禁した難易度が再ロックされることはない。
 // v13.1: フィードバックを受け、難易度間の差をより大きく。成長上限は難易度が上がるほど
 // 「インフレ」して選手も強くなる代わりに、他チームはそれ以上のペースで強くなる設計に変更
-const DIFFICULTIES = [
-  { id: "easy", label: "イージー", desc: "他チームはかなり控えめ。まずはここでクリアを目指そう", aiMul: 0.80, growthCap: 88, needCP: 0 },
-  { id: "normal", label: "ノーマル", desc: "標準的な強さ。歯応えのある本来のバランス", aiMul: 1.0, growthCap: 94, needCP: 4 },
-  { id: "hard", label: "ハード", desc: "他チームは強豪揃い。選手の成長上限も上がるが、相手はさらに本気を出してくる", aiMul: 1.25, growthCap: 102, needCP: 10 },
-  { id: "oni", label: "鬼", desc: "完全な無理ゲー。成長上限は大幅に上がるが、他チームは化け物揃い。生半可な覚悟でクリアできると思うな", aiMul: 1.55, growthCap: 112, needCP: 20 },
-];
 // v13.2: 消費型の特典は「だんだん強くなる実感」が薄いというフィードバックを受け、
 // 累積型（一度到達した閾値の特典は以後ずっと有効・使っても減らない）に作り直した。
 // 難易度解禁と同じ「生涯獲得クリアポイント合計」で判定するため、しきい値を超えた
@@ -355,12 +261,6 @@ function recordCourseResult(kind, length, winnerTime, holder, isPlayer, year) {
 // プレイをまたいで永続的に集計する。グランツール総合優勝・グランファイナル制覇（シーズン）、
 // 世界選手権優勝・オリンピック優勝（マイライフ）を数える
 const TITLES_KEY = "roadrace_v12_titles";
-const TITLE_DEFS = [
-  { key: "grandTour", label: "グランツール総合優勝", icon: "🌍" },
-  { key: "grandFinal", label: "グランファイナル制覇", icon: "🏆" },
-  { key: "worlds", label: "世界選手権優勝", icon: "🌐" },
-  { key: "olympics", label: "オリンピック優勝", icon: "🥇" },
-];
 function loadTitles() {
   try { const raw = localStorage.getItem(TITLES_KEY); const o = raw ? JSON.parse(raw) : {}; return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; }
 }
@@ -489,26 +389,9 @@ function mlLegendSnapshot(s) {
 // v27: 教え子への継承内容を導く。師匠（殿堂スナップショット）の得意能力・戦績・成長力・
 // 特殊能力から、新人が受け継ぐ能力ボーナス等を算出する。旧セーブ（能力データ無し）でも
 // type と戦績だけで最低限の継承ができるようフォールバックを用意する
-const TYPE_ABKEYS = {
-  SPR: ["sprint", "flat"], CLM: ["climb", "stamina"], RUL: ["flat", "stamina"],
-  PUN: ["climb", "sprint"], TT: ["solo", "stamina"],
-};
 // v28: 「師の教え」＝メンター継承のアーキタイプ。師匠の脚質・戦績に応じて、伝授される
 // 得意能力の方向性・継承特性（lineage）・成長力が変わる。パターンを増やして師匠ごとに
 // 教え子の個性が変わるようにする。keysModeは伸ばす能力2つ、lineageは継承する看板特性
-const TEACH_KEYS = {
-  climb: ["climb", "stamina"], sprint: ["sprint", "flat"], solo: ["solo", "stamina"],
-  hill: ["climb", "sprint"], flat: ["flat", "stamina"], power: ["sprint", "stamina"],
-};
-const PROTEGE_TEACHINGS = [
-  { key: "king",    label: "王者の風格", lineage: "big",           keysMode: "top2",   sub: { mental: 8 },           match: m => (m.wins || 0) >= 12, desc: "大舞台で力を発揮し、師の得意能力を色濃く受け継ぐ" },
-  { key: "ironman", label: "鉄人の系譜", lineage: "engine",        keysMode: "power",  sub: { mental: 4, build: 3 }, match: m => (m.races || 0) >= 90, desc: "消耗に強い無尽蔵のエンジンを受け継ぐ" },
-  { key: "climb",   label: "山脈の記憶", lineage: "mount",         keysMode: "climb",  sub: { build: -6 },           match: m => m.type === "CLM", desc: "山の申し子の系譜（軽量な体格を受け継ぐ）" },
-  { key: "sprint",  label: "豪脚の血統", lineage: "finisher",      keysMode: "sprint", sub: { accel: 8 },            match: m => m.type === "SPR", desc: "ゴール前の鬼の系譜（鋭い加速を受け継ぐ）" },
-  { key: "tt",      label: "孤高の走法", lineage: "soloist",       keysMode: "solo",   sub: { mental: 4, accel: 3 }, match: m => m.type === "TT",  desc: "独走屋の系譜" },
-  { key: "punch",   label: "変幻の技",   lineage: "puncheur",      keysMode: "hill",   sub: { accel: 6 },            match: m => m.type === "PUN", desc: "丘陵ハンターの系譜" },
-  { key: "all",     label: "万能の教え", lineage: "allrounder_sp", keysMode: "top2",   sub: { accel: 3, mental: 3 }, match: () => true, desc: "脚質を選ばない万能型の教え" },
-];
 function protegeInherit(master) {
   const wins = master.wins || 0, podiums = master.podiums || 0;
   const strength = Math.min(1, (wins * 2 + podiums) / 40); // 0..1（伝説的な師ほど1に近い）
@@ -554,21 +437,6 @@ function legendAncestorSet(l) {
   return set;
 }
 // v31.5: 生き様（称号）の血。親のアーキタイプに応じた配合ボーナス（能力・特能・血の格）。
-const ARCH_BREED = {
-  world1:         { ab: { flat: 2, climb: 2, sprint: 2, stamina: 2, solo: 2 }, plus: 3, note: "世界王者の血" },
-  heroMulti:      { ability: "big", ab: { stamina: 2 }, plus: 2, note: "大舞台の英雄の血" },
-  hero:           { ability: "big", note: "勝負師の血" },
-  emperor:        { ab: { flat: 1, climb: 1, sprint: 1, stamina: 1, solo: 1 }, plus: 2, note: "帝王の血" },
-  specialist_SPR: { ab: { sprint: 4 }, ability: "finisher", note: "豪脚の血" },
-  specialist_CLM: { ab: { climb: 4 }, ability: "mount", note: "山岳の血" },
-  specialist_RUL: { ab: { flat: 4 }, ability: "flatlander", note: "平坦の血" },
-  specialist_PUN: { ab: { climb: 2, sprint: 2 }, ability: "puncheur", note: "丘陵の血" },
-  specialist_TT:  { ab: { solo: 4 }, ability: "soloist", note: "独走の血" },
-  domestique:     { ab: { stamina: 3 }, ability: "domestique", note: "献身の血" },
-  nearly:         { sub: { mental: 8 }, note: "雪辱の血" },
-  ironman:        { ab: { stamina: 4 }, ability: "iron", note: "鉄人の血" },
-  latebloom:      { ab: { stamina: 2 }, note: "遅咲きの血" },
-};
 function legendArchetypeKey(leg) {
   if (leg && leg.careerArchetypeKey) return leg.careerArchetypeKey;
   if (!leg) return null;
@@ -583,23 +451,6 @@ function archBreedBonus(leg) {
 }
 // v33.4: 特殊配合（DQM由来）。特定の血の組み合わせは、あらかじめ定められた唯一無二の名血
 // （金枠）を確定で生む。爆発力・危険度とは別枠。行き先は伸びしろ＋称号＋金特に限定する。
-const ML_SPECIAL_MATINGS = [
-  { key: "absolute_king", title: "絶対王者の系譜", color: "#ffd24a", gold: "big", talent: 4, growth: 1,
-    note: "二人の世界王者の血が交わり、頂点に立つ宿命を負って生まれた",
-    test: c => c.keys.filter(k => k === "world1").length >= 2 },
-  { key: "hero_emperor", title: "覇道義侠録", color: "#ff9f43", gold: "big", talent: 3, growth: 1,
-    note: "帝王の覇道と英雄の義侠、二つの生き様が一人に宿る",
-    test: c => c.keys.includes("emperor") && (c.keys.includes("hero") || c.keys.includes("heroMulti")) },
-  { key: "iron_blood", title: "不屈の鉄血", color: "#8fb4c8", gold: "iron", talent: 2, growth: 0, extra: "tough",
-    note: "鉄人の血を二重に受け継ぎ、決して壊れぬ肉体を得た",
-    test: c => (c.keys.filter(k => k === "ironman").length + c.abs.filter(a => a === "iron").length) >= 2 },
-  { key: "all_rounder", title: "万能王の血脈", color: "#9ae6b4", gold: "engine", talent: 3, growth: 1,
-    note: "登坂と平地、相反する才能が融合し、地形を選ばぬ万能王が生まれた",
-    test: c => { const up = k => k === "specialist_CLM" || k === "specialist_PUN"; const sp = k => k === "specialist_SPR" || k === "specialist_RUL" || k === "specialist_TT"; return (up(c.keys[0]) && sp(c.keys[1])) || (sp(c.keys[0]) && up(c.keys[1])); } },
-  { key: "pure_blood", title: "純血の極み", color: "#ff5db1", gold: null, talent: 4, growth: 1, factorGold: true,
-    note: "同じ系統の血が極限まで濃縮され、純血の頂点が結晶した",
-    test: c => c.lineA && c.lineB && c.lineA === c.lineB && Math.min(c.genA, c.genB) >= 4 },
-];
 function mlSpecialMating(parentA, parentB) {
   if (!parentA || !parentB) return null;
   const keys = [legendArchetypeKey(parentA), legendArchetypeKey(parentB)];
@@ -609,20 +460,6 @@ function mlSpecialMating(parentA, parentB) {
   return null;
 }
 // 脚質ペアの配合相性（ニック）。良相性ほど強い恩恵と看板特性が出る
-const BREED_NICKS = {
-  "SPR+SPR": { rank: "◎", label: "純血スプリンターの配合", ability: "finisher",     ab: { sprint: 5, flat: 2 } },
-  "CLM+CLM": { rank: "◎", label: "純血クライマーの配合",   ability: "mount",        ab: { climb: 5, stamina: 2 } },
-  "TT+TT":   { rank: "◎", label: "純血独走屋の配合",       ability: "soloist",      ab: { solo: 5, stamina: 2 } },
-  "PUN+SPR": { rank: "◎", label: "豪脚パンチャーの黄金配合", ability: "finisher",     ab: { sprint: 4, climb: 3 } },
-  "CLM+TT":  { rank: "◎", label: "独走クライマーの黄金配合", ability: "soloist",      ab: { climb: 4, solo: 3 } },
-  "RUL+SPR": { rank: "◎", label: "平坦最強の黄金配合",       ability: "engine",       ab: { flat: 4, sprint: 3 } },
-  "CLM+PUN": { rank: "○", label: "登坂職人の好配合",         ability: "mount",        ab: { climb: 4, sprint: 1 } },
-  "PUN+TT":  { rank: "○", label: "変幻自在の好配合",         ability: "puncheur",     ab: { climb: 2, solo: 3 } },
-  "RUL+TT":  { rank: "○", label: "鉄壁ルーラーの好配合",     ability: "engine",       ab: { flat: 3, solo: 2 } },
-  "RUL+RUL": { rank: "○", label: "純血ルーラーの配合",       ability: "engine",       ab: { flat: 4, stamina: 2 } },
-  "PUN+PUN": { rank: "○", label: "純血パンチャーの配合",     ability: "puncheur",     ab: { climb: 3, sprint: 2 } },
-  "RUL+PUN": { rank: "○", label: "万能型の好配合",           ability: "allrounder_sp", ab: { flat: 2, climb: 2 } },
-};
 function breedNick(typeA, typeB) {
   const key = [typeA, typeB].sort().join("+");
   return BREED_NICKS[key] || { rank: "△", label: "標準的な配合", ability: null, ab: {} };
@@ -804,63 +641,19 @@ function computePrestige() {
   const score = Math.round(meta.totalEarnedCP * 3 + legends.length * 15 + mlWins * 2 + mlPodiums * 1 + mlAchieved * 5 + titleCount * 25);
   return { score, totalEarnedCP: meta.totalEarnedCP, legendCount: legends.length, mlWins, mlPodiums, mlAchieved, titleCount };
 }
-const MONTHS = ["4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
-const RELEGATE_LINE = 15;
 // v8: クラス連動の恩恵（ロースター上限・スカウト人数・逸材確率）
-const ROSTER_MAX_BY_CLASS = [12, 14, 16];
-const SCOUT_COUNT_BY_CLASS = [5, 7, 9];
-const PRODIGY_CHANCE_BY_CLASS = [0.28, 0.38, 0.5];
-const UPKEEP_PER_RIDER = 3; // 選手1名あたりの月次維持費（万円）
 
 // ---------- v7: 役割（5種・エースは別枠のisAceフラグ） ----------
-const ROLES = {
-  lead:      { label: "第一アシスト", desc: "エースを最後まで牽引" },
-  sub:       { label: "第二アシスト", desc: "第一アシストを支援。脚がなくなると離脱" },
-  mountain:  { label: "山岳アシスト", desc: "山岳まで脚を温存し、山岳区間でエースを牽引" },
-  flat:      { label: "平坦アシスト", desc: "平坦・丘陵のみ牽引。山岳では牽引せず自然消滅的に遅れる" },
-  breakaway: { label: "逃げ要員", desc: "序盤に飛び出し逃げ集団を形成。ローテーションで牽引し合う" },
-};
 // v12: 無線指示（レース中の操作）を廃止し、出走前に選ぶ「作戦」に統合。
 // normal/push/holdは排他の1択、ace_earlyは独立したON/OFFトグル
-const CHASE_MODES = {
-  normal:    { label: "通常", desc: "標準的なローテーションペースで走る" },
-  push:      { label: "追走強化", desc: "牽引役のローテーション頻度を上げてペースを上げる（脚の消耗が早まる）" },
-  hold:      { label: "静観", desc: "牽引役の脚を温存し、ギャップの拡大を許容する" },
-  ace_early: { label: "エース早期発射", desc: "エースが単独アタック。エネルギー切れで大失速のリスクあり（1回限り）" },
-};
 
 // v27: 実況テキストの拡充。区間タイプごとに複数の実況パターンを用意し、単調な
 // 「◯◯へ突入！」の繰り返しを避ける（区間インデックスで決定的に選ぶ）
-const SEG_COMMENTARY = {
-  flat: ["平坦区間、集団は一団となってハイスピードで進む", "風を切る平坦路、隊列が長く伸びていく", "平坦の巡航、アシストが前を固めてペースを作る", "平坦基調、脚を溜めながらの我慢比べだ"],
-  hill: ["丘陵に差しかかる、パンチャーがそわそわし始める", "細かなアップダウンで集団にじわじわ負荷がかかる", "起伏の連続、脚のある者が徐々に前へ上がる", "丘陵区間、ここで無理をすると後半に響く"],
-  climb: ["本格的な登坂開始、クライマーの独壇場だ", "勾配がきつくなり、早くも千切れる選手が出る", "山岳区間、じりじりとタイム差が生まれていく", "登りに入った、パワーウェイトレシオがものを言う"],
-  sprint: ["最終スプリント区間へ、隊列が一気に凝縮する", "ゴールスプリントの位置取り争いが激化してきた", "スプリンターが車列の前方へ殺到する", "ラスト、トレインが発進態勢に入る"],
-  mtn: ["山頂フィニッシュへ、最後の急坂が待ち受ける", "頂上決戦、ここまでの疲労がすべて出る", "最後の登り、まさに勝負どころだ", "山頂ゴールへの激坂、脚が残っているのは誰だ"],
-  tt: ["個人TT、孤独な独走のはじまり", "エアロポジションを保ち一定ペースを刻む", "独走力の真価が問われる区間だ", "タイムトライアル、己との戦いが続く"],
-};
-const FINISH_COMMENTARY = [
-  "🎙 フィニッシュ！歓声が競技場を包む",
-  "🎙 ゴール！長い戦いに決着がついた",
-  "🎙 フィニッシュライン通過！勝者が決まる",
-];
 
 // v9: 出走人数を固定値からsquadMin〜squadMaxの幅に変更（編成画面で選択）
-const TEMPLATES = [
-  { kind: "クリテリウム", favors: "SPR", squadMin: 1, squadMax: 5, laps: 6, segs: [["flat", 300, 18], ["flat", 260, 15], ["sprint", 90, 4]] },
-  { kind: "サーキットレース", favors: "SPR", squadMin: 1, squadMax: 5, laps: 4, segs: [["flat", 380, 20], ["hill", 260, 12], ["flat", 320, 16], ["sprint", 110, 4]] },
-  { kind: "丘陵ロード", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 480, 26], ["hill", 450, 17], ["hill", 450, 17], ["sprint", 130, 4]] },
-  { kind: "山岳ロード", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["flat", 460, 26], ["climb", 600, 13], ["climb", 640, 12], ["mtn", 190, 4]] },
-  { kind: "ヒルクライム", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["climb", 560, 14], ["climb", 600, 12], ["mtn", 190, 4]] },
-  { kind: "個人TT", favors: "TT", squadMin: 1, squadMax: 1, segs: [["tt", 520, 22], ["tt", 520, 22]] },
-];
 // v28: 実績アンロック式の新コンテンツ。累計クリアポイント（totalEarnedCP）が閾値に達すると、
 // 通常のTEMPLATESに加えて新しいコース種別がカレンダーに出現するようになる。TEMPLATESは
 // index参照される箇所があるため配列は変えず、レース生成時の抽選プールだけを広げる
-const UNLOCK_TEMPLATES = [
-  { kind: "ナイトクリテリウム", favors: "SPR", squadMin: 1, squadMax: 5, laps: 8, unlockCP: 20, segs: [["flat", 260, 16], ["flat", 240, 14], ["sprint", 90, 4]] },
-  { kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5, unlockCP: 45, segs: [["flat", 420, 22], ["hill", 400, 16], ["climb", 300, 10], ["sprint", 120, 4]] },
-];
 function unlockedTemplates() {
   const cp = loadMeta().totalEarnedCP;
   return [...TEMPLATES, ...UNLOCK_TEMPLATES.filter(t => cp >= t.unlockCP)];
@@ -868,55 +661,20 @@ function unlockedTemplates() {
 // v33.11: モニュメント（ワンデー・クラシック）。毎年決まった月に開催される、格式高い一発勝負の
 // 古典レース。長く消耗の激しいコースで脚質と地力が問われる。勝てば「クラシックの覇者」への道。
 // month は MONTHS 配列のインデックス（0=4月）。世界選手権(5=9月)・五輪(3)・最終戦(11)と重ならない月に配置
-const ML_MONUMENTS = [
-  { id: "pave", month: 1, name: "石畳の古典《春の地獄》", grade: 3, tmpl: { kind: "石畳クラシック", favors: "RUL", squadMin: 1, squadMax: 5, segs: [["flat", 520, 30], ["hill", 300, 14], ["flat", 500, 26], ["hill", 260, 12], ["sprint", 120, 4]] } },
-  { id: "ardennes", month: 4, name: "丘陵の古典《アルデンヌ》", grade: 3, tmpl: { kind: "丘陵クラシック", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 420, 24], ["hill", 420, 16], ["hill", 440, 16], ["hill", 300, 12], ["sprint", 120, 4]] } },
-  { id: "autumn", month: 6, name: "山岳の古典《秋の女王》", grade: 3, tmpl: { kind: "山岳クラシック", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["flat", 360, 22], ["climb", 560, 13], ["hill", 300, 12], ["climb", 420, 12], ["mtn", 160, 4]] } },
-];
 function groupModeFor(squadN) {
   if (squadN === 1) return "solo";
   if (squadN === 2) return "pelotonOnly";
   return "full";
 }
-const VENUES = ["房総", "飛騨", "阿蘇", "蔵王", "琵琶湖", "瀬戸内", "津軽", "日光", "富士", "美濃", "丹波", "石鎚"];
 // v28: 会場ごとの相性・ホームアドバンテージ。各会場を地方ブロックに割り当て、自チームの
 // 本拠地（homeRegion）と同じ地方のレースでは地元の声援で出走選手に小さな能力ボーナスがつく
-const REGIONS = ["東日本", "中部", "西日本"];
-const VENUE_REGION = {
-  "房総": "東日本", "蔵王": "東日本", "津軽": "東日本", "日光": "東日本",
-  "飛騨": "中部", "富士": "中部", "美濃": "中部", "琵琶湖": "中部",
-  "阿蘇": "西日本", "瀬戸内": "西日本", "丹波": "西日本", "石鎚": "西日本",
-};
-const HOME_ABILITY_BONUS = 3;
 function raceIsHome(race, homeRegion) {
   return !!(homeRegion && race && race.venue && VENUE_REGION[race.venue] === homeRegion);
 }
 // v13: グランツール・海外遠征テーマ用の海外venue名（VENUESとは別枠で使用）
-const OVERSEAS_VENUES = ["アルプス", "ピレネー", "ドロミテ", "フランドル", "ロンバルディア", "アンダルシア", "トスカーナ", "プロヴァンス"];
 // v14.8: グランツールを年3戦（春・夏・秋）に増設。PROクラスのグランファイナル出場には
 // この3戦すべての総合優勝（全制覇）が必要になる。コース性格も戦ごとに変えて個性を出す
-const GRAND_TOURS = [
-  { month: 1, season: "春季", stageTmpls: [TEMPLATES[0], TEMPLATES[1], TEMPLATES[2]] },
-  { month: 3, season: "夏季", stageTmpls: [TEMPLATES[2], TEMPLATES[3], TEMPLATES[4]] },
-  { month: 5, season: "秋季", stageTmpls: [TEMPLATES[3], TEMPLATES[4], TEMPLATES[1]] },
-];
-const SEG_LABEL = { flat: "平坦", hill: "丘陵", climb: "山岳", sprint: "ゴールスプリント", mtn: "山頂フィニッシュ", tt: "TT区間" };
-const SEG_COLOR = { flat: C.blue, hill: C.purple, climb: C.red, sprint: C.green, mtn: C.red, tt: "#e8a13c" };
-const SEG_AB = { flat: "flat", hill: "climb", climb: "climb", sprint: "sprint", mtn: "climb", tt: "solo" };
 
-const ITEMS = {
-  wheel: { label: "決戦用カーボンホイール", desc: "次の1レース：出走全員の登坂+15%", price: 30 },
-  suit:  { label: "エアロワンピース", desc: "次の1レース：出走全員の平坦+15%", price: 30 },
-  supp:  { label: "リカバリーサプリ", desc: "選手1名の疲労を40回復", price: 12 },
-  tune:  { label: "コンディション調律", desc: "選手1名の調子を2段階アップ", price: 15 },
-  camp:  { label: "トレーニングキャンプ券", desc: "今月の練習効果×2（チーム全体）。ただし全員の疲労+25（故障リスクに注意）", price: 25 },
-};
-const EQUIPS = {
-  frame: { label: "エアロフレーム(チーム)", desc: "平坦 +6%/Lv（全員・恒常）" },
-  wheels: { label: "軽量ホイール(チーム)", desc: "登坂 +6%/Lv（全員・恒常）" },
-  facility: { label: "トレーニング設備", desc: "練習効果 +15%/Lv（恒常）" },
-};
-const EQUIP_COST = [40, 70, 110, 160, 220];
 // v11: スタッフ雇用（equipの買い切りとは異なり、レベルに応じた月給制。
 // クラスが上がるほど雇用できるレベル上限が増える）
 const STAFF_ROLES = {
