@@ -254,7 +254,11 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
   完全に分離できた。共有可変カウンタ RID は `ridState={value}` ホルダーへ変換（所有はcore）。state↔breedingの
   実行時のみの循環importは安全。**教訓**：ビルド成功は参照解決を保証しない（未定義識別子はグローバル扱い）。
   cross-fileのimport網羅は静的チェッカで検証すること。
-- **Phase 3**：`RaceView`（既にトップレベル独立コンポーネント・約457行）を `src/components/RaceView.jsx` へ。
+- **Phase 3（完了）**：`RaceView` を `src/components/RaceView.jsx` へ。実際にはRaceViewは可視化専用の
+  定数・ヘルパー約44個（MAP_W/PACK_*/buildTopPath/mapX/groupAt/FinalSprintCinematic 等）とRaceErrorBoundaryを
+  伴う「レース演出サブシステム」だった。参照閉包を取り、RaceView専用シンボルは同ファイルへ同梱。App と共有する
+  汎用UI（`Btn`/`Eyebrow`）は `src/components/ui.jsx` へ、フォーマッタ（`fmtTime`/`fmtGap`）は `core.js` へ切り出し、
+  両者から import。main.jsx は 7617→6959行。Playwrightでレース実走（LIVE可視化）まで検証、実エラー0。
 
 ### 各Phaseの検証手順（必須）
 `npm run build` → http-server 配信 → Playwrightで①両モード起動②実コンソールエラー0③代表フロー。

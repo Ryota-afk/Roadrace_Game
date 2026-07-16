@@ -215,3 +215,9 @@ export function strHash(s) {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 387420489);
   return (h ^ (h >>> 9)) >>> 0;
 }
+
+
+// --- 表示フォーマッタ（Phase 3で移設）---
+export function fmtTime(sec) { const m = Math.floor(sec / 60), s = Math.floor(sec % 60); return `${m}:${String(s).padStart(2, "0")}`; }
+
+export function fmtGap(sec) { return sec < 0.5 ? "TOP" : `+${fmtTime(sec)}`; }
