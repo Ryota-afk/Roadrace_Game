@@ -9,6 +9,13 @@ import { TYPE_ABKEYS, TEACH_KEYS, PROTEGE_TEACHINGS, ARCH_BREED, ML_SPECIAL_MATI
 import { MONTHS, RELEGATE_LINE, ROSTER_MAX_BY_CLASS, SCOUT_COUNT_BY_CLASS, PRODIGY_CHANCE_BY_CLASS, UPKEEP_PER_RIDER, ROLES, CHASE_MODES, SEG_COMMENTARY, FINISH_COMMENTARY, TEMPLATES, UNLOCK_TEMPLATES, ML_MONUMENTS, VENUES, REGIONS, VENUE_REGION, HOME_ABILITY_BONUS, OVERSEAS_VENUES, GRAND_TOURS, SEG_LABEL, SEG_COLOR, SEG_AB } from "./data/course.js";
 import { ITEMS, EQUIPS, EQUIP_COST } from "./data/items.js";
 
+// ---- 純ロジック（src/core, sim, breeding, world, state）----
+import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins, hasAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "./core/core.js";
+import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, rankSim, riderHash01, rollWeather, simulateTicks } from "./sim/race.js";
+import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
+import { mlWorldStarsForYear } from "./world/world.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
+
 /* =========================================================
    ロードレース・プロチーム運営 v12
    v11からの変更（詳細は roadrace_design_v12.md 参照）：
@@ -43,45 +50,12 @@ import { ITEMS, EQUIPS, EQUIP_COST } from "./data/items.js";
 // 0〜3個を保有できる「特殊能力」に拡張した。categoryは今後の特殊能力ファイル（図鑑）用の分類。
 // bad:true は悪特性。escape/domestique/closerは旧バージョンでは付与されるだけで効果が
 // 実装されていなかった（死んだ特性）ため、今回きちんと効果を持たせた
-function hasAbility(r, id) { return !!(r && r.abilities && r.abilities.includes(id)); }
 // v15: 保有数は0〜3個（多いほど稀）。逸材(forceProdigy)は2〜3個確定・悪特性を含まない
-function rollAbilities(rng, opts = {}) {
-  const goodPool = Object.keys(ABILITIES).filter(k => !ABILITIES[k].bad && !ABILITIES[k].breedOnly);
-  const badPool = Object.keys(ABILITIES).filter(k => ABILITIES[k].bad);
-  let n;
-  if (opts.forceProdigy) n = rng() < 0.5 ? 2 : 3;
-  else { const roll = rng(); n = roll < 0.35 ? 0 : roll < 0.75 ? 1 : roll < 0.95 ? 2 : 3; }
-  const abilities = [];
-  for (let i = 0; i < n; i++) {
-    const wantBad = !opts.forceProdigy && rng() < 0.2;
-    const pool = (wantBad ? badPool : goodPool).filter(k => !abilities.includes(k));
-    if (pool.length === 0) continue;
-    abilities.push(pool[Math.floor(rng() * pool.length)]);
-  }
-  return abilities;
-}
 // v15フェーズ2: 金特（ゴールド進化）。対応する特殊能力を保有したまま一定の条件
 // （その脚質での勝利数、または該当する役割での出走数）を満たすと、保有能力自体は
 // そのままに「金特」フラグ（goldAbilities配列）が立ち、効果が強化される。
 // ASSIST_ROLESはこのファイル後方（v13のフレーバーテキスト部）で定義されるが、
 // 実際に呼ばれるのは選手が条件を満たした実行時なので問題ない
-function hasGoldAbility(r, id) { return !!(r && r.goldAbilities && r.goldAbilities.includes(id)); }
-function countWins(r) { return (r.raceLog || []).filter(e => e.rank === 1).length; }
-function countRoleUses(r, pred) { return (r.raceLog || []).filter(pred).length; }
-const GOLD_CONDITIONS = {
-  mount:       r => r.type === "CLM" && countWins(r) >= 5,
-  puncheur:    r => r.type === "PUN" && countWins(r) >= 5,
-  flatlander:  r => r.type === "RUL" && countWins(r) >= 5,
-  sprinter_sp: r => r.type === "SPR" && countWins(r) >= 5,
-  soloist:     r => r.type === "TT" && countWins(r) >= 5,
-  closer:      r => countWins(r) >= 8,
-  escape:      r => countRoleUses(r, e => e.role === "breakaway") >= 5,
-  domestique:  r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)) >= 8,
-  // v28: 新特殊能力の金特条件
-  finisher:    r => countWins(r) >= 8,
-  engine:      r => (r.raceLog || []).length >= 30,
-  allrounder_sp: r => countWins(r) >= 6,
-};
 // 保有する特殊能力のうち、条件を満たしたものだけを金特化する。新たに金特化があれば
 // 変更後のオブジェクトを返し（呼び出し側で差分検知してログ表示に使える）、無ければ引数をそのまま返す
 function upgradeGoldAbilities(r) {
@@ -166,7 +140,6 @@ function growSub(r, key, amount) {
 function rollCondDir() {
   return Math.random() < 0.34 ? -1 : Math.random() < 0.5 ? 0 : 1;
 }
-const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];
 
 // v13: 周回プレイ（クリアポイント）＋難易度テーマ。難易度は他チームの強さ（aiMul）と
 // 選手成長のソフトキャップ閾値（growthCap、softFactorのしきい値）に反映する。
@@ -224,18 +197,6 @@ function computeClearPoints(year, difficultyId) {
 }
 // v13.2: 特典が消費式ではなくなったため、保持する値は「生涯獲得クリアポイント合計」の
 // 1つだけになった（難易度解禁・永続ボーナスのどちらもこの値だけで判定する）
-const META_KEY = "roadrace_v12_meta";
-function loadMeta() {
-  try {
-    const raw = localStorage.getItem(META_KEY);
-    if (!raw) return { totalEarnedCP: 0 };
-    const m = JSON.parse(raw);
-    return { totalEarnedCP: m.totalEarnedCP || 0 };
-  } catch (e) { return { totalEarnedCP: 0 }; }
-}
-function saveMeta(meta) {
-  try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* noop */ }
-}
 // v27: コースレコード。コース種別（クリテリウム・丘陵ロード等）ごとに、これまでの全レースで
 // 記録された最速の「レコード指数」（コース距離÷勝者フィニッシュタイム×100。距離のばらつきを
 // 正規化した比較可能な指標）を、達成者名・年とともにプレイをまたいで蓄積する。
@@ -260,310 +221,38 @@ function recordCourseResult(kind, length, winnerTime, holder, isPlayer, year) {
 // v28: 通算タイトル数。シーズン・マイライフ両モードで自分（自チーム）が獲得した主要タイトルを
 // プレイをまたいで永続的に集計する。グランツール総合優勝・グランファイナル制覇（シーズン）、
 // 世界選手権優勝・オリンピック優勝（マイライフ）を数える
-const TITLES_KEY = "roadrace_v12_titles";
-function loadTitles() {
-  try { const raw = localStorage.getItem(TITLES_KEY); const o = raw ? JSON.parse(raw) : {}; return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; }
-}
-function recordTitle(kind) {
-  if (!kind) return;
-  const t = loadTitles();
-  t[kind] = (t[kind] || 0) + 1;
-  try { localStorage.setItem(TITLES_KEY, JSON.stringify(t)); } catch (e) { /* noop */ }
-}
-function totalTitleCount() {
-  const t = loadTitles();
-  return TITLE_DEFS.reduce((s, d) => s + (t[d.key] || 0), 0);
-}
 // v15: マイライフ専用の殿堂入り・レジェンド記録。マイライフモードのリセット（新しい選手で
 // キャリアを始める）をまたいで、引退した歴代選手のサマリーだけを別キーで蓄積し続ける
-const ML_LEGENDS_KEY = "roadrace_v12_mylife_legends";
-function loadMlLegends() {
-  try {
-    const raw = localStorage.getItem(ML_LEGENDS_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch (e) { return []; }
-}
-function saveMlLegends(list) {
-  try { localStorage.setItem(ML_LEGENDS_KEY, JSON.stringify(list)); } catch (e) { /* noop */ }
-}
 // v33.3: 系統確立レジストリ。プレイをまたいで系統名ごとの累積実績を記録し、血統が
 // 「未確立→確立→名門→大系統」と育っていく。確立した系統は子孫に因子（伸びしろ＋系統特能）を授ける。
-const ML_BLOODLINE_KEY = "roadrace_v12_bloodlines";
-function loadBloodlines() {
-  try { const raw = localStorage.getItem(ML_BLOODLINE_KEY); const o = raw ? JSON.parse(raw) : {}; return (o && typeof o === "object") ? o : {}; }
-  catch (e) { return {}; }
-}
-function saveBloodlines(obj) {
-  try { localStorage.setItem(ML_BLOODLINE_KEY, JSON.stringify(obj)); } catch (e) { /* noop */ }
-}
 // 殿堂入りした選手の系統実績を累積する（引退＝殿堂入りのタイミングで呼ぶ）
-function mlRegisterBloodline(leg) {
-  if (!leg || !leg.lineageName) return;
-  const all = loadBloodlines();
-  const key = leg.lineageName;
-  const rec = all[key] || { name: key, count: 0, wins: 0, podiums: 0, bestOverall: 0, abilityCounts: {}, members: [] };
-  rec.count += 1;
-  rec.wins += (leg.wins || 0);
-  rec.podiums += (leg.podiums || 0);
-  rec.bestOverall = Math.max(rec.bestOverall || 0, leg.overall || 0);
-  (leg.specialAbilities || []).forEach(id => { if (ABILITIES[id] && !ABILITIES[id].bad) rec.abilityCounts[id] = (rec.abilityCounts[id] || 0) + 1; });
-  if (leg.name && !rec.members.includes(leg.name)) rec.members.push(leg.name);
-  if (rec.members.length > 20) rec.members = rec.members.slice(-20);
-  all[key] = rec;
-  saveBloodlines(all);
-}
 // 系統の格（確立度）。系統は「複数の名選手を輩出する」ことで初めて確立する（＝血の継続が必要）
-function mlBloodlineTier(rec) {
-  if (!rec) return { tier: 0, label: "未確立", score: 0 };
-  const score = (rec.count || 0) * 6 + (rec.wins || 0) * 0.4 + (rec.bestOverall || 0) * 0.12;
-  let tier = 0;
-  if ((rec.count || 0) >= 5 && score >= 60) tier = 3;
-  else if ((rec.count || 0) >= 3 && score >= 36) tier = 2;
-  else if ((rec.count || 0) >= 2 && score >= 18) tier = 1;
-  const label = ["未確立", "確立", "名門", "大系統"][tier];
-  return { tier, label, score: Math.round(score) };
-}
 // 系統の因子（最も色濃く受け継がれてきた特能）
-function mlBloodlineFactor(rec) {
-  if (!rec || !rec.abilityCounts) return null;
-  let best = null, bc = 1;
-  Object.entries(rec.abilityCounts).forEach(([id, c]) => { if (c > bc && ABILITIES[id]) { bc = c; best = id; } });
-  return best;
-}
 // 系統確立ボーナス（子孫が受け取る因子）。爆発力と同じく行き先は伸びしろ（才能キャップ・成長力）＋系統特能
-function mlBloodlineBonus(lineageName) {
-  if (!lineageName) return null;
-  const rec = loadBloodlines()[lineageName];
-  if (!rec) return null;
-  const t = mlBloodlineTier(rec);
-  if (t.tier <= 0) return null;
-  return {
-    tier: t.tier, label: t.label, rec, factor: mlBloodlineFactor(rec),
-    talentCap: t.tier,               // +1 / +2 / +3
-    growthSteps: t.tier >= 2 ? 1 : 0, // 名門以上は成長力も底上げ
-    factorGold: t.tier >= 3,          // 大系統は因子を金特で伝える
-  };
-}
 // v15: 引退の瞬間（強制引退・自主引退どちらも）にこのスナップショットを記録する。
 // computeAchievements/riderNickname/riderCareerSummaryは全てファイル後方で定義されるが、
 // 実際に呼ばれるのは選手が引退した実行時（スクリプト全体の評価が終わった後）なので問題ない
-function mlLegendSnapshot(s) {
-  const r = s.player;
-  const wins = (r.raceLog || []).filter(e => e.rank === 1).length;
-  const podiums = (r.raceLog || []).filter(e => e.rank <= 3).length;
-  const achievedCount = computeAchievements(s).filter(a => a.achieved).length;
-  // v31: 配合（血統）用の系譜データ。この選手を血統IDで識別し、両親・祖先・+値・世代を記録する。
-  // 祖先は深追いしすぎないよう、両親＋その祖先までを最大12件で保持する
-  const retiredAt = Date.now();
-  const bloodId = "b:" + (r.name || "無名") + "#" + retiredAt;
-  const ancestors = Array.isArray(r.ancestorBloodIds) ? r.ancestorBloodIds.slice(0, 12) : [];
-  const arch = mlCareerArchetype(s); // v31.4: 生き様（称号）
-  return {
-    name: r.name, type: r.type, background: r.background, team: s.team,
-    endYear: s.year, age: r.age, races: (r.raceLog || []).length, wins, podiums,
-    salary: s.salary, rivalName: s.rival ? s.rival.name : null, rivalRecord: s.rivalRecord || null,
-    // v26: 複数ライバル制。2人目の好敵手は初対戦を終えている場合のみ記録に残す
-    rival2Name: (s.rival2 && (s.rivalRecord2?.meetings || 0) > 0) ? s.rival2.name : null, rivalRecord2: s.rivalRecord2 || null,
-    achievedCount, achievedTotal: ML_ACHIEVEMENTS.length,
-    nickname: riderNickname(r), summary: riderCareerSummary({ ...r, farewellYear: s.year, farewellReason: "retired" }),
-    // v27: 教え子（プロテジェ）システム用。引退時の最終能力・成長力・特殊能力・得意分野を
-    // 記録しておくと、次のプレイでこの選手に師事した新人が能力の一部を引き継げる。
-    // 旧セーブの殿堂選手にはこれらが無いため、読み出し側は type/戦績からのフォールバックを用いる
-    finalAbilities: { flat: Math.round(r.flat), climb: Math.round(r.climb), sprint: Math.round(r.sprint), stamina: Math.round(r.stamina), solo: Math.round(r.solo) },
-    finalSubStats: { accel: Math.round(r.accel ?? 50), build: Math.round(r.build ?? 50), mental: Math.round(r.mental ?? 50) },
-    growthPow: r.growthPow, specialAbilities: [...(r.abilities || [])], focus: r.focus, overall: overall(r),
-    retiredAt,
-    // v31: 配合（血統）
-    bloodId, ancestors, parents: r.parentBloodIds || null,
-    plusValue: r.plusValue || 0, generation: r.generation || 0,
-    // v31.2: 系統名（旧セーブは名前から生成）
-    lineageName: r.lineageName || `${r.name || "無名"}系`,
-    // v31.4: キャリアの生き様（称号）
-    careerTitle: arch.title, careerTitleDesc: arch.desc, careerArchetypeKey: arch.key,
-    // v33.4: 特殊配合の称号（あれば）
-    specialMatingTitle: r.specialMating ? r.specialMating.title : null,
-  };
-}
 // v27: 教え子への継承内容を導く。師匠（殿堂スナップショット）の得意能力・戦績・成長力・
 // 特殊能力から、新人が受け継ぐ能力ボーナス等を算出する。旧セーブ（能力データ無し）でも
 // type と戦績だけで最低限の継承ができるようフォールバックを用意する
 // v28: 「師の教え」＝メンター継承のアーキタイプ。師匠の脚質・戦績に応じて、伝授される
 // 得意能力の方向性・継承特性（lineage）・成長力が変わる。パターンを増やして師匠ごとに
 // 教え子の個性が変わるようにする。keysModeは伸ばす能力2つ、lineageは継承する看板特性
-function protegeInherit(master) {
-  const wins = master.wins || 0, podiums = master.podiums || 0;
-  const strength = Math.min(1, (wins * 2 + podiums) / 40); // 0..1（伝説的な師ほど1に近い）
-  const teaching = PROTEGE_TEACHINGS.find(t => t.match(master)) || PROTEGE_TEACHINGS[PROTEGE_TEACHINGS.length - 1];
-  // 伸ばす得意能力：top2は師の最終能力の上位2つ（無ければtype由来）、それ以外はkeysMode指定
-  let keys;
-  if (teaching.keysMode === "top2") {
-    keys = master.finalAbilities
-      ? Object.entries(master.finalAbilities).sort((a, b) => b[1] - a[1]).slice(0, 2).map(e => e[0])
-      : (TYPE_ABKEYS[master.type] || ["flat", "stamina"]);
-  } else {
-    keys = TEACH_KEYS[teaching.keysMode] || ["flat", "stamina"];
-  }
-  const primaryBonus = Math.round(3 + strength * 4); // 3〜7
-  const abBonus = {};
-  abBonus[keys[0]] = primaryBonus;
-  abBonus[keys[1]] = (abBonus[keys[1]] || 0) + Math.round(primaryBonus * 0.5);
-  const growthPowBump = strength >= 0.55;
-  // 継承特性：師の教えの看板特性（lineage）を必ず受け継ぐ。
-  // さらに師本人が良特性を持っていれば、それとは別に1つ受け継ぐ（最大2特性＝手厚い継承）
-  const lineageTrait = teaching.lineage;
-  let inheritAbility = null;
-  for (const id of (master.specialAbilities || [])) {
-    if (ABILITIES[id] && !ABILITIES[id].bad && id !== lineageTrait) { inheritAbility = id; break; }
-  }
-  // v29: 副ステータスの継承。師の教えに応じた副ステータス補正
-  const subBonus = { ...(teaching.sub || {}) };
-  return { teaching, keys, abBonus, growthPowBump, lineageTrait, inheritAbility, subBonus, strength };
-}
 // ---------- v31: 配合（血統）システム ----------
 // ウイニングポストの血統・配合・インブリード、DQMの配合（+値累代）を、マイライフの
 // 師弟継承へ落とし込む。2人の殿堂レジェンドを「両親」に選ぶと両方の血を引く教え子が生まれ、
 // 脚質の相性（ニック）、共通祖先による血の濃さ（インブリード）、累代で受け継ぐ+値を持つ。
-function legendBloodId(l) {
-  if (!l) return null;
-  return l.bloodId || (l.name != null ? "n:" + l.name : null);
-}
 // 自身＋記録済み祖先の血統IDの集合（インブリード判定用）
-function legendAncestorSet(l) {
-  const set = new Set();
-  const self = legendBloodId(l); if (self) set.add(self);
-  (l && l.ancestors || []).forEach(a => { if (a) set.add(a); });
-  return set;
-}
 // v31.5: 生き様（称号）の血。親のアーキタイプに応じた配合ボーナス（能力・特能・血の格）。
-function legendArchetypeKey(leg) {
-  if (leg && leg.careerArchetypeKey) return leg.careerArchetypeKey;
-  if (!leg) return null;
-  if ((leg.wins || 0) >= 25) return "emperor";
-  if ((leg.wins || 0) >= 8) return "specialist_" + leg.type;
-  if ((leg.podiums || 0) >= 12 && (leg.wins || 0) <= 3) return "nearly";
-  return null;
-}
-function archBreedBonus(leg) {
-  const key = legendArchetypeKey(leg);
-  return (key && ARCH_BREED[key]) ? { ...ARCH_BREED[key], key } : null;
-}
 // v33.4: 特殊配合（DQM由来）。特定の血の組み合わせは、あらかじめ定められた唯一無二の名血
 // （金枠）を確定で生む。爆発力・危険度とは別枠。行き先は伸びしろ＋称号＋金特に限定する。
-function mlSpecialMating(parentA, parentB) {
-  if (!parentA || !parentB) return null;
-  const keys = [legendArchetypeKey(parentA), legendArchetypeKey(parentB)];
-  const abs = [...(parentA.specialAbilities || []), ...(parentB.specialAbilities || [])];
-  const ctx = { keys, abs, lineA: parentA.lineageName, lineB: parentB.lineageName, genA: parentA.generation || 0, genB: parentB.generation || 0 };
-  for (const sm of ML_SPECIAL_MATINGS) { try { if (sm.test(ctx)) return sm; } catch (e) { /* noop */ } }
-  return null;
-}
 // 脚質ペアの配合相性（ニック）。良相性ほど強い恩恵と看板特性が出る
-function breedNick(typeA, typeB) {
-  const key = [typeA, typeB].sort().join("+");
-  return BREED_NICKS[key] || { rank: "△", label: "標準的な配合", ability: null, ab: {} };
-}
 // 血の濃さ（インブリード）：両親が共通の祖先を持つほど濃い血のクロスになる
-function breedInbreed(parentA, parentB) {
-  const ga = legendAncestorSet(parentA), gb = legendAncestorSet(parentB);
-  let count = 0; ga.forEach(x => { if (gb.has(x)) count++; });
-  return { count, mergedAncestors: new Set([...ga, ...gb]) };
-}
 // v33: 配合評価グレードの表示色
 function mlGradeColor(g) {
   return g === "SS" ? "#ff5db1" : g === "S" ? "#ffd24a" : g === "A" ? "#ff9f43" : g === "B" ? "#6cc8e5" : g === "C" ? "#9aa7b4" : "#7a828c";
 }
 // 配合ボーナス一式を算出（両親＝殿堂スナップショット、typeは新人の脚質）
-function mlBreedBonus(parentA, parentB) {
-  const nick = breedNick(parentA.type, parentB.type);
-  const inb = breedInbreed(parentA, parentB);
-  // +値（累代）：両親の+値の平均＋世代加算。DQM的に代を重ねるほど蓄積する
-  const plusValue = Math.round(((parentA.plusValue || 0) + (parentB.plusValue || 0)) / 2) + 2;
-  const plusPer = Math.min(15, plusValue); // 1能力あたりの累代ボーナス（上限15）
-  const abBonus = {};
-  Object.entries(nick.ab || {}).forEach(([k, v]) => { abBonus[k] = (abBonus[k] || 0) + v; });
-  AB_KEYS.forEach(k => { abBonus[k] = (abBonus[k] || 0) + Math.round(plusPer * 0.5); });
-  // 血の濃さボーナス：共通祖先1つにつき全能力+2（上限+8）、看板特性を確定付与
-  const inbreedAb = inb.count > 0 ? (nick.ability || "big") : null;
-  if (inb.count > 0) { const b = Math.min(8, inb.count * 2); AB_KEYS.forEach(k => { abBonus[k] = (abBonus[k] || 0) + b; }); }
-  // 継承特性：ニックの看板特性＋もう片親の良特性＋血の濃さ特性（重複除去は呼び出し側）
-  const extraAbilities = [];
-  if (nick.ability) extraAbilities.push(nick.ability);
-  for (const id of (parentB.specialAbilities || [])) { if (ABILITIES[id] && !ABILITIES[id].bad && !extraAbilities.includes(id)) { extraAbilities.push(id); break; } }
-  if (inbreedAb && !extraAbilities.includes(inbreedAb)) extraAbilities.push(inbreedAb);
-  // 副ステータス：両親の高い方の1/4を上乗せ
-  const subBonus = {};
-  SUB_STAT_KEYS.forEach(k => {
-    const a = (parentA.finalSubStats && parentA.finalSubStats[k]) || 50;
-    const b = (parentB.finalSubStats && parentB.finalSubStats[k]) || 50;
-    subBonus[k] = Math.round((Math.max(a, b) - 50) * 0.25);
-  });
-  const growthBump = nick.rank === "◎";
-  const generation = Math.max(parentA.generation || 0, parentB.generation || 0) + 1;
-  // v31.1: 金特クロス（配合限定の恩恵）。両親が共通で持ち、かつ金特化できる特能は、
-  // 子に「最初から金特」で受け継がれる。さらに濃い血のクロス（インブリード×2以上）では
-  // ニックの看板特性も金特で結晶する。通常プレイでは勝利数などを満たさないと金特化しないため、
-  // 配合でしか手に入らない特別なアドバンテージになる
-  const parentAset = new Set(parentA.specialAbilities || []);
-  const goldInherit = [];
-  (parentB.specialAbilities || []).forEach(id => {
-    if (parentAset.has(id) && GOLD_CONDITIONS[id] && !goldInherit.includes(id)) goldInherit.push(id);
-  });
-  if (inb.count >= 2 && nick.ability && GOLD_CONDITIONS[nick.ability] && !goldInherit.includes(nick.ability)) goldInherit.push(nick.ability);
-  // v31.2: 配合限定特能（通常は絶対に手に入らない血統の証）。
-  //  系統の申し子＝◎ニック かつ 濃い血or血統を重ねた配合、
-  //  二刀流＝登坂系(CLM/PUN)×スプリント系(SPR/RUL)の異系交配、
-  //  覇道の血脈＝4代以上続いた血統
-  const exclusive = [];
-  if (nick.rank === "◎" && (inb.count >= 1 || generation >= 3)) exclusive.push("sireline");
-  const upA = ["CLM", "PUN"].includes(parentA.type), spA = ["SPR", "RUL"].includes(parentA.type);
-  const upB = ["CLM", "PUN"].includes(parentB.type), spB = ["SPR", "RUL"].includes(parentB.type);
-  if ((upA && spB) || (spA && upB)) exclusive.push("hybrid");
-  if (generation >= 4) exclusive.push("dynasty");
-  // v31.5: 生き様（称号）の血。両親のアーキタイプに応じて能力・特能・副ステ・血の格を上乗せ。
-  // 名血（世界王者・帝王・英雄）ほど能力ボーナスが厚く、脚質専門家は得意能力を色濃く伝える。
-  const archNotes = [];
-  let archBaku = 0; // 名血ボーナス（爆発力用）
-  [parentA, parentB].forEach(par => {
-    const ab = archBreedBonus(par);
-    if (!ab) return;
-    archNotes.push(ab.note);
-    Object.entries(ab.ab || {}).forEach(([k, v]) => { abBonus[k] = (abBonus[k] || 0) + v; });
-    if (ab.sub) SUB_STAT_KEYS.forEach(k => { if (ab.sub[k]) subBonus[k] = (subBonus[k] || 0) + ab.sub[k]; });
-    if (ab.ability && ABILITIES[ab.ability] && !extraAbilities.includes(ab.ability)) extraAbilities.push(ab.ability);
-    if (ab.plus) AB_KEYS.forEach(k => { abBonus[k] = (abBonus[k] || 0) + ab.plus; });
-    const bakuByKey = { world1: 6, heroMulti: 5, hero: 4, emperor: 4, domestique: 1, nearly: 1, ironman: 1, latebloom: 1 };
-    archBaku += (bakuByKey[ab.key] != null ? bakuByKey[ab.key] : (String(ab.key).startsWith("specialist_") ? 2 : 1));
-  });
-  // v33: 爆発力（ウイポ由来）。ニック・血の濃さ・累代・世代・名血・金特クロス・配合限定特能を
-  // 1つの数値に集約し、産駒の「素質＝伸びしろ」を決める。フラットな初期能力盛りではなく、
-  // 成長力(growthPow)と才能キャップ(talentCap)へ変換して「育てると化ける」形にする。
-  const nickBaku = nick.rank === "◎" ? 8 : nick.rank === "○" ? 4 : 0;
-  const inbreedBaku = Math.min(12, inb.count * 4);
-  const diversityBaku = Math.min(8, Math.max(0, (inb.mergedAncestors ? inb.mergedAncestors.size : 0) - 2) * 2); // 血脈活性化（多様性）
-  const legacyBaku = Math.min(10, Math.round(plusPer * 0.6) + Math.max(0, generation - 1));
-  const specialBaku = goldInherit.length * 4 + exclusive.length * 3;
-  const bakuhatsu = Math.round(nickBaku + inbreedBaku + diversityBaku + legacyBaku + specialBaku + archBaku);
-  const matingGrade = bakuhatsu >= 30 ? "SS" : bakuhatsu >= 23 ? "S" : bakuhatsu >= 16 ? "A" : bakuhatsu >= 10 ? "B" : bakuhatsu >= 5 ? "C" : "D";
-  const growthSteps = bakuhatsu >= 24 ? 2 : bakuhatsu >= 13 ? 1 : 0; // 成長力の底上げ段数
-  const talentCap = Math.min(8, Math.floor(Math.max(0, bakuhatsu - 16) / 3)); // 才能：限界突破の上乗せ
-  // v33.2: 危険度（インブリードの代償）。血が濃いほど虚弱・故障持ちで生まれるリスクが上がる。
-  // 両親の健康な血（鉄人・頑丈）と、血脈の多様性（活性化配合）でリスクは和らぐ。
-  let healthMit = 0;
-  [parentA, parentB].forEach(par => {
-    const sa = par.specialAbilities || [];
-    if (sa.includes("tough")) healthMit += 18;
-    if (sa.includes("iron")) healthMit += 10;
-    const stam = (par.finalAbilities && par.finalAbilities.stamina) || 0;
-    if (stam >= 85) healthMit += 6;
-  });
-  const danger = Math.max(0, Math.min(95, Math.round(inb.count * 22 + Math.max(0, inb.count - 1) * 8 - diversityBaku * 1.5 - healthMit)));
-  const dangerLabel = danger >= 60 ? "激" : danger >= 38 ? "高" : danger >= 18 ? "中" : danger > 0 ? "低" : "無";
-  // v33.4: 特殊配合（唯一無二の名血）
-  const special = mlSpecialMating(parentA, parentB);
-  return { nick, inbreed: inb, plusValue, plusPer, abBonus, extraAbilities, subBonus, growthBump, inbreedAb, generation, goldInherit, exclusive, archNotes, bakuhatsu, matingGrade, growthSteps, talentCap, danger, dangerLabel, healthMit, special };
-}
 // v31.1: 血統IDから表示名を得る（殿堂に記録のない祖先はIDから名前部分を抽出）
 function bloodIdToName(id, map) {
   if (!id) return "？";
@@ -582,11 +271,6 @@ function breedNickTableRows() {
   return Object.entries(BREED_NICKS)
     .map(([k, v]) => ({ pair: k.split("+"), ...v }))
     .sort((a, b) => (a.rank === b.rank ? 0 : a.rank === "◎" ? -1 : b.rank === "◎" ? 1 : a.rank === "○" ? -1 : 1));
-}
-function mlRecordLegend(s) {
-  const snap = mlLegendSnapshot(s);
-  saveMlLegends([...loadMlLegends(), snap]);
-  mlRegisterBloodline(snap); // v33.3: 系統確立レジストリへ実績を累積
 }
 // v26: 引退後キャリア（エピローグ）。引退直後に殿堂入りしたスナップショットへ、
 // 選んだ道（監督/完全引退）に応じたフレーバーテキストを後付けで追記する
@@ -630,17 +314,6 @@ function mlEpilogueAway(s) {
 // v26: 生涯評価（プレステージスコア）。周回プレイをまたいで蓄積される既存の永続データ
 // （シーズンモードの生涯クリアポイント・マイライフの歴代選手記録）を1つのスコアに集約する。
 // 新たな永続ストレージは増やさず、既にある2つの記録源だけから算出する
-function computePrestige() {
-  const meta = loadMeta();
-  const legends = loadMlLegends();
-  const mlWins = legends.reduce((s, l) => s + (l.wins || 0), 0);
-  const mlPodiums = legends.reduce((s, l) => s + (l.podiums || 0), 0);
-  const mlAchieved = legends.reduce((s, l) => s + (l.achievedCount || 0), 0);
-  // v28: 通算タイトルもプレステージに加える（1タイトル=25点の重み）
-  const titleCount = totalTitleCount();
-  const score = Math.round(meta.totalEarnedCP * 3 + legends.length * 15 + mlWins * 2 + mlPodiums * 1 + mlAchieved * 5 + titleCount * 25);
-  return { score, totalEarnedCP: meta.totalEarnedCP, legendCount: legends.length, mlWins, mlPodiums, mlAchieved, titleCount };
-}
 // v8: クラス連動の恩恵（ロースター上限・スカウト人数・逸材確率）
 
 // ---------- v7: 役割（5種・エースは別枠のisAceフラグ） ----------
@@ -654,10 +327,6 @@ function computePrestige() {
 // v28: 実績アンロック式の新コンテンツ。累計クリアポイント（totalEarnedCP）が閾値に達すると、
 // 通常のTEMPLATESに加えて新しいコース種別がカレンダーに出現するようになる。TEMPLATESは
 // index参照される箇所があるため配列は変えず、レース生成時の抽選プールだけを広げる
-function unlockedTemplates() {
-  const cp = loadMeta().totalEarnedCP;
-  return [...TEMPLATES, ...UNLOCK_TEMPLATES.filter(t => cp >= t.unlockCP)];
-}
 // v33.11: モニュメント（ワンデー・クラシック）。毎年決まった月に開催される、格式高い一発勝負の
 // 古典レース。長く消耗の激しいコースで脚質と地力が問われる。勝てば「クラシックの覇者」への道。
 // month は MONTHS 配列のインデックス（0=4月）。世界選手権(5=9月)・五輪(3)・最終戦(11)と重ならない月に配置
@@ -699,36 +368,12 @@ const OB_COACH_SALARY = 8; // 万円/月
 const TYPE_COACH_ABILITY = { SPR: "sprint", CLM: "climb", RUL: "flat", PUN: "climb", TT: "solo" };
 
 // v7: パーツスロットを4種に拡張
-const PART_SLOTS = ["frame", "tire", "wheels", "nutrition"];
 const SLOT_LABEL = { frame: "フレーム", tire: "タイヤ", wheels: "ホイール", nutrition: "補給食" };
 // v28: 機材のアビリティ配分がスタミナ・独走に偏りすぎていた（補給食・タイヤがほぼこの2つ専用）
 // ため、各スロットの選択肢を5能力に分散し直した。特に手薄だったスプリントを各スロットに追加。
 // フレーム＝スプリント/平坦/登坂、ホイール＝平坦/登坂、タイヤ＝スプリント/独走/スタミナ/登坂、
 // 補給食＝スタミナ/スプリントを基本に、脚質ごとに機材で伸ばす能力を選べるようにした
-const PARTS = {
-  fr_sprint: { slot: "frame", tier: 1, label: "スプリントフレーム", ab: { sprint: 6 }, price: 28 },
-  fr_aero:   { slot: "frame", tier: 1, label: "エアロロードフレーム", ab: { flat: 6 }, price: 28 },
-  fr_light:  { slot: "frame", tier: 1, label: "超軽量クライムフレーム", ab: { climb: 6 }, price: 28 },
-  ti_endure: { slot: "tire", tier: 1, label: "耐久タイヤ", ab: { stamina: 6 }, price: 22 },
-  ti_tt:     { slot: "tire", tier: 1, label: "TTタイヤ", ab: { solo: 6 }, price: 22 },
-  ti_grip:   { slot: "tire", tier: 1, label: "グリップタイヤ", ab: { sprint: 4, climb: 3 }, price: 22 },
-  wh_light:  { slot: "wheels", tier: 1, label: "軽量ホイール", ab: { climb: 5 }, price: 24 },
-  wh_aero:   { slot: "wheels", tier: 1, label: "エアロホイール", ab: { flat: 5 }, price: 24 },
-  nu_gel:    { slot: "nutrition", tier: 1, label: "エナジージェル", ab: { stamina: 5 }, price: 18 },
-  nu_bar:    { slot: "nutrition", tier: 1, label: "カフェインジェル", ab: { sprint: 3, stamina: 3 }, price: 18 },
-  fr_sprint2:{ slot: "frame", tier: 2, label: "スプリントフレームPro", ab: { sprint: 10 }, price: 48 },
-  fr_aero2:  { slot: "frame", tier: 2, label: "エアロフレームPro", ab: { flat: 10 }, price: 48 },
-  fr_light2: { slot: "frame", tier: 2, label: "クライムフレームPro", ab: { climb: 10 }, price: 48 },
-  ti_race:   { slot: "tire", tier: 2, label: "レーシングタイヤ", ab: { sprint: 5, solo: 5 }, price: 40 },
-  wh_race:   { slot: "wheels", tier: 2, label: "レーシングホイール", ab: { flat: 5, climb: 5 }, price: 44 },
-  nu_pro:    { slot: "nutrition", tier: 2, label: "プロ仕様補給食", ab: { stamina: 8 }, price: 36 },
-  fr_ult:    { slot: "frame", tier: 3, label: "モノコックUltimate", ab: { flat: 4, climb: 4, sprint: 4, stamina: 4, solo: 4 }, price: 90 },
-  ti_ult:    { slot: "tire", tier: 3, label: "レーシングプロトUltimate", ab: { sprint: 4, solo: 8 }, price: 70 },
-  wh_ult:    { slot: "wheels", tier: 3, label: "エアロクライムUltimate", ab: { flat: 6, climb: 6 }, price: 80 },
-  nu_ult:    { slot: "nutrition", tier: 3, label: "アルティメット補給食", ab: { stamina: 6, sprint: 4 }, price: 60 },
-};
 
-const SPONSOR_NAMES = ["アオゾラ銀行", "ハヤテ運輸", "ヤマセミ食品", "クレセント自転車", "ソラマメ製菓", "ツバキ石油", "ミナモ製薬", "カワセミ電工"];
 
 const SCOUT_POLICIES = {
   balance: { label: "おまかせ", desc: "バランス型の候補" },
@@ -750,12 +395,6 @@ const WEATHER = {
   rain: { label: "雨", icon: "🌧" },
   heat: { label: "猛暑", icon: "🥵" },
 };
-function rollWeather(rng) {
-  const r = rng();
-  if (r < 0.14) return "rain";
-  if (r < 0.24) return "heat";
-  return "clear";
-}
 // v25: マイライフの個人スポンサー・メディア人気度。節目（25/50/75/100）に到達するたびに
 // 一時金の個人スポンサー契約が入る。加えて月々の人気度に応じた個人スポンサー収入も別途支給する
 const POP_MILESTONES = [
@@ -962,120 +601,17 @@ const EVENTS = [
 ];
 
 // ---------- ユーティリティ ----------
-function mulberry(seed) {
-  let a = seed | 0;
-  return function () {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 // v12バグ修正: 名前のバリエーションが少なく被って見えるとの指摘を受け、大幅に語彙を増やした
 // （180姓×100名＝18000通り）。前半は既存の演出寄りの姓、後半は実際によくある姓を追加し、
 // 母集団を広げてかぶりにくくしている
-const SURNAMES = [
-  "相馬", "桐生", "白鳥", "早瀬", "神楽", "水城", "燕", "嵐山", "灰原", "東雲",
-  "氷室", "真壁", "夏目", "御堂", "九条", "橘", "篝", "斑鳩", "黒崎", "鏡",
-  "朝霧", "深月", "鷹羽", "竜崎", "天羽", "風間", "雪村", "藤堂", "綾小路", "一条",
-  "二階堂", "銀河", "朔", "響", "澄川", "涼風", "月島", "星野", "千歳", "朝比奈",
-  "西園寺", "北条", "高城", "結城", "雫石", "氷川", "風早", "花房", "星空", "銀水",
-  "紅葉", "桜井", "藤崎", "藤宮", "神代", "天海", "蒼月", "蒼樹", "朝倉", "夕凪",
-  "冬木", "秋月", "秋山", "五十嵐", "百瀬", "千葉", "常盤", "若宮", "大鷹", "小鳥遊",
-  "南雲", "東條", "高杉", "高階", "桜小路", "藤枝", "天音", "夜久", "春日井", "夏川",
-  "佐藤", "鈴木", "高橋", "田中", "渡辺", "伊藤", "山本", "中村", "小林", "加藤",
-  "吉田", "山田", "佐々木", "山口", "松本", "井上", "木村", "林", "斎藤", "清水",
-  "山崎", "森", "池田", "橋本", "阿部", "石川", "山下", "中島", "石井", "小川",
-  "前田", "岡田", "長谷川", "藤田", "後藤", "近藤", "村上", "遠藤", "青木", "坂本",
-  "福田", "太田", "西村", "藤井", "金子", "岡本", "松田", "中川", "中野", "原田",
-  "小野", "田村", "竹内", "和田", "中山", "石田", "上田", "森田", "柴田", "酒井",
-  "工藤", "横山", "宮崎", "宮本", "内田", "高木", "安藤", "島田", "谷口", "大野",
-  "高田", "丸山", "今井", "河野", "藤原", "新井", "松井", "木下", "川口", "大塚",
-  "小島", "田口", "平野", "菅原", "久保", "松岡", "野口", "中田", "大西", "竹田",
-  "白石", "岩崎", "荒木", "鈴村", "三浦", "西田", "北村", "南田", "春日", "東野",
-  // v28: 周回プレイで姓の被りが目立つとの指摘を受けさらに追加（実在頻度の高い姓を中心に）
-  "野村", "小松", "武田", "上野", "杉山", "増田", "小山", "大久保", "丸田", "今村",
-  "服部", "平田", "岩本", "田島", "望月", "永井", "浅野", "松浦", "河合", "星",
-  "馬場", "菊地", "広瀬", "本田", "秋田", "根本", "野中", "堀", "神田", "沢田",
-  "水野", "杉本", "大森", "須藤", "吉川", "飯田", "土屋", "堀内", "川崎", "関",
-  "内藤", "松下", "浜田", "尾崎", "早川", "森本", "岡", "萩原", "小池", "村田",
-  // v28: 姓も似た系統（藤◯・天◯・星◯…）で固まって見えるとの指摘を受け、漢字が散る実在姓をさらに追加
-  "福井", "桑原", "岸本", "森下", "川上", "田辺", "富田", "平井", "黒木", "石橋",
-  "三宅", "中西", "大橋", "篠原", "白川", "江口", "樋口", "山内", "竹中", "岡崎",
-  "片山", "畑中", "板垣", "伊達", "稲垣", "宇野", "大内", "奥村", "香川", "神谷",
-  "北川", "越智", "小澤", "阪本", "立花", "津田", "成田", "難波", "二宮", "沼田",
-  "平塚", "福原", "前川", "松永", "三上", "水口", "宗像", "矢野", "柳沢", "米田",
-  "若林", "浅井", "鵜飼", "海老原", "大隈", "柏木", "門脇", "北原", "楠", "河内",
-  "小暮", "紺野", "笹川", "志村", "須賀", "瀬川", "高松", "田代", "土井", "堂本",
-  "灘", "袴田", "日向", "深谷", "牧野", "槇島", "宮下", "毛利", "薬師寺", "湯川",
-];
-const GIVEN = [
-  "蓮", "岳", "走", "迅", "颯", "翼", "剛", "凌", "駆", "峻",
-  "隼", "湊", "遼", "陸", "翔", "樹", "匠", "輝", "悠", "陽",
-  "光", "智", "誠", "健", "潤", "晴", "涼", "昴", "蒼", "弦",
-  "燦", "耀", "煌", "皓", "昂", "漣", "澪", "渚", "洸", "汐",
-  "雷", "焔", "陣", "塁", "魁", "羽", "律", "尊", "崚", "岬",
-  "朝", "暁", "昇", "昌", "明", "央", "心", "淳", "敦", "慧",
-  "碧", "凪", "宙", "龍", "天", "空", "海", "舜", "駿", "豪",
-  "猛", "進", "学", "勉", "潔", "実", "修", "治", "仁", "卓",
-  "巧", "拓", "創", "想", "志", "元", "直", "正", "賢", "聡",
-  "亮", "諒", "爽", "快", "康", "保", "守", "護", "勝", "優",
-];
 // v28: 下の名前が1文字漢字ばかりで周回時に被って見えるとの指摘を受け、2文字の名前を大量追加。
 // pickRiderNameはGIVEN(1字)とGIVEN2(2字)を合わせた母集団から抽選し、名の多様性を大幅に広げる
-const GIVEN2 = [
-  "大輝", "翔太", "健太", "悠斗", "陽向", "颯太", "拓海", "海斗", "大和", "蓮司",
-  "翔平", "涼介", "健吾", "雄大", "隼人", "直樹", "亮太", "翼", "駿介", "陽介",
-  "圭介", "慎太郎", "航平", "悠真", "陽太", "大地", "琉生", "湊斗", "結翔", "陽斗",
-  "駿太", "遼太郎", "光輝", "英輝", "和樹", "一輝", "拓也", "康平", "俊介", "壮一",
-  "誠也", "友哉", "智也", "貴大", "秀樹", "篤志", "祐介", "洋平", "凌駕", "楓真",
-  "壮太", "怜央", "颯真", "叶大", "碧斗", "奏太", "湊太", "悠斗", "櫂", "煌大",
-  "晴斗", "陽翔", "大翔", "悠人", "蒼真", "颯馬", "眞人", "宗一郎", "誠一", "武尊",
-  "隼太", "遥斗", "凪咲", "海翔", "汐音", "陣内", "駿平", "峻平", "翔真", "悠翔",
-  "大成", "琉偉", "怜", "凰介", "京介", "岳人", "泰河", "颯人", "翠", "琥珀",
-];
-let RID = 100;
 // v7: OVRは上位加重（特化型を正しく評価）
-function overall(r) {
-  const vals = AB_KEYS.map(k => r[k]).sort((a, b) => b - a);
-  return Math.round(vals[0] * 0.5 + vals[1] * 0.3 + (vals[2] + vals[3] + vals[4]) / 3 * 0.2);
-}
 // v13: 選手名鑑・殿堂入り演出用の二つ名・フレーバーテキスト生成。
 // パワプロの選手名鑑／ウイニングポストの殿堂入りをイメージし、戦績（raceLog）を
 // 優先しつつ、まだ実績のない選手には脚質・性格ベースの二つ名を割り当てる
 // v13.2: 二つ名は無条件で全選手に付与せず、ある程度の実績（勝利・表彰台・出場数など）を
 // 残した選手だけに与える。実績が無ければ二つ名なし（呼び出し側はnullを想定して表示を省く）
-function hasEarnedNickname(r) {
-  const log = r.raceLog || [];
-  const wins = log.filter(e => e.rank === 1).length;
-  const podiums = log.filter(e => e.rank <= 3).length;
-  return wins >= 1 || podiums >= 2 || log.length >= 5 || !!r.prodigy;
-}
-function riderNickname(r) {
-  if (!hasEarnedNickname(r)) return null;
-  const log = r.raceLog || [];
-  const wins = log.filter(e => e.rank === 1).length;
-  const podiums = log.filter(e => e.rank <= 3).length;
-  const races = log.length;
-  const supR = log.filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
-  const aceR = log.filter(e => ["ace", "lead"].includes(e.role)).length;
-  const abs = { flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo };
-  const top = Object.entries(abs).sort((a, b) => b[1] - a[1])[0][0];
-  // v31.4: 「勝ち星が多い＝みんな伝説の勝ち師」で没個性化していたため、勝利数上位は
-  // 脚質を冠した称号にし、役割（献身のアシスト）や取りこぼし（悲運）も拾って多様化する
-  const byTypeKing = { flat: "平坦の帝王", climb: "山岳の覇者", sprint: "豪脚のゴールハンター", stamina: "無尽蔵の機関車", solo: "独走の求道者" };
-  const byType = { flat: "巡航の職人", climb: "山岳の申し子", sprint: "スプリンター", stamina: "鉄の脚", solo: "独走屋" };
-  if (supR >= 10 && supR >= aceR * 1.5 && wins <= 4) return "献身のアシスト";
-  if (podiums >= 10 && wins <= 2) return "悲運の名脇役";
-  if (wins >= 8) return byTypeKing[top] || "常勝の帝王";
-  if (wins >= 5) return "常勝の帝王";
-  if (wins >= 3) return "勝利の申し子";
-  if (podiums >= 12) return "表彰台の主";
-  if (podiums >= 6) return "表彰台の常連";
-  if (races >= 12 && podiums === 0) return "苦労人";
-  if (r.prodigy) return "将来を嘱望された逸材";
-  return byType[top] || "無名の挑戦者";
-}
 // v13.3: 以前はフレーバーテキストが脚質・性格・特性をそのまま言い換えるだけで、
 // ロースターカード上のバッジ／PersonaLine／TraitLineと内容が丸かぶりしていた。
 // 実績があれば「特筆すべき1戦」を物語調に語るエピソード方式、まだ実績がなければ
@@ -1173,7 +709,6 @@ const ACE_TYPE_LABEL = {
 };
 // v14.6で追加したROLE_CLAUSEのキーのうち、実質「アシスト系」に分類できるものをまとめる
 // （breakthroughは自由な個人色が強くどちらにも属さないため除外、breakawayは別枠で判定）
-const ASSIST_ROLES = new Set(["lead", "sub", "mountain", "flat", "support", "experience"]);
 const FLAVOR_UNDEFEATED = [
   n => `${n}戦${n}勝、デビュー以来まだ黒星がない完全無敗を貫いている。`,
   n => `無敗街道驀進中——${n}戦して一度も負けたことがない。`,
@@ -1359,28 +894,6 @@ function riderFlavorText(r) {
 }
 // v13.2: 殿堂入り選手専用の「軌跡」テキスト。riderFlavorText（脚質・性格などの固定プロフィール）
 // とは別枠で、raceLogや離脱理由から実際のキャリアの歩みを物語調に組み立てる
-function riderCareerSummary(r) {
-  const log = r.raceLog || [];
-  const wins = log.filter(e => e.rank === 1).length;
-  const podiums = log.filter(e => e.rank <= 3).length;
-  const races = log.length;
-  const firstYear = races > 0 ? Math.min(...log.map(e => e.year)) : null;
-  const lastYear = r.farewellYear;
-  const spanText = firstYear != null && lastYear != null
-    ? `${firstYear}年目から${lastYear}年目までの${Math.max(1, lastYear - firstYear + 1)}年間、`
-    : "";
-  const originText = r.prodigy ? "鳴り物入りの逸材として加入し、" : "";
-  let recordText;
-  if (races === 0) recordText = "出走機会には恵まれなかったが、";
-  else if (wins > 0) recordText = `通算${races}戦${wins}勝・表彰台${podiums}回という実績を残し、`;
-  else if (podiums > 0) recordText = `通算${races}戦、表彰台${podiums}回まで食い込みながらも勝利には届かず、`;
-  else recordText = `通算${races}戦を走り抜いたが目立った結果は残せず、`;
-  let farewellText;
-  if (r.farewellReason === "rival_retired") farewellText = `解雇後は${r.signedTeam}に活躍の場を移し、${r.age}歳でそこで現役を退いた。`;
-  else if (r.farewellReason === "released") farewellText = `${r.age}歳でチームを去った。`;
-  else farewellText = `${r.age}歳で現役を引退した。`;
-  return `${originText}${spanText}${recordText}${farewellText}`;
-}
 // v13.1: 殿堂入りの条件。「所属したことがある全選手」を無条件で殿堂入りさせるとキリがないため、
 // 一定の実績（出走数・勝利・表彰台・能力）かお気に入り登録のいずれかを満たした選手だけを
 // 選手名鑑に永久保存する。基準未満の選手はチームを離れた時点で記録から静かに消える
@@ -1407,16 +920,8 @@ function computePickupChance(r) {
 // v16: tierはチームが所属する実際のクラス（0=B1／1=A／2=PRO）。マイライフの移籍
 // オファー画面でチームのランクを一目でわかるように表示し、かつ実際にそのチームと
 // 契約するとプレイヤーのclassIdxがそのtierに変わる（機材解放条件に直結する）
-const RIVAL_TEAMS = [
-  { name: "レッドサンダー山陽", color: "#d9484a", tier: 1 }, { name: "クレディ・ブルー", color: "#3f7fd9", tier: 2 },
-  { name: "ヴェロチタ京都", color: "#9a6be0", tier: 0 }, { name: "ウィンドミル北海道", color: "#e08a3f", tier: 0 },
-];
 // v14: マイライフモード用のチームプール（6チーム）。プレイヤーは新人としてこの中の
 // 1チームに加入し、残り5チームは全て純粋なライバルAIチームとしてレースに登場する
-const MYLIFE_TEAMS = [
-  ...RIVAL_TEAMS,
-  { name: "サンライズ静岡", color: "#4fd1c5", tier: 0 }, { name: "北斗プロサイクル", color: "#c084fc", tier: 1 },
-];
 const CLASS_TIER_COLOR = [C.sub, C.blue, C.yellow];
 function mlTeamTier(teamName) { const t = MYLIFE_TEAMS.find(t => t.name === teamName); return t ? t.tier : 0; }
 // v28: ライバルチームの動向ニュース。年月から決定的に生成する簡易フレーバー。
@@ -1646,39 +1151,6 @@ const ML_OFFSEASON_CHOICES = [
 ];
 // v15: マイライフの実績・アチーブメント。既存のraceLog・rivalRecord・flags・classIdxだけから
 // 判定する（達成状態を別途保持しない）ので、算出のたびに常に最新の状態と一致する
-const ML_ACHIEVEMENTS = [
-  { id: "first_win", icon: "🥇", label: "初勝利", desc: "レースで初めて優勝する", reward: { money: 30 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.rank === 1) },
-  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる", reward: { money: 20 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.rank <= 3) },
-  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する", reward: { money: 50, cp: 1 },
-    check: (ml) => ml.classIdx >= 1 },
-  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する", reward: { money: 100, cp: 2 },
-    check: (ml) => ml.classIdx >= 2 },
-  { id: "worlds_podium", icon: "🌍", label: "世界選手権メダリスト", desc: "世界選手権で表彰台に上がる", reward: { money: 80, cp: 2 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank <= 3) },
-  { id: "worlds_win", icon: "🌍", label: "世界選手権制覇", desc: "世界選手権で優勝する", reward: { money: 150, cp: 4 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank === 1) },
-  { id: "olympics_podium", icon: "🥇", label: "オリンピックメダリスト", desc: "オリンピックで表彰台に上がる", reward: { money: 100, cp: 3 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank <= 3) },
-  { id: "olympics_win", icon: "🥇", label: "オリンピック制覇", desc: "オリンピックで金メダルを獲得する", reward: { money: 200, cp: 5 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank === 1) },
-  { id: "rival_5wins", icon: "🔥", label: "宿命のライバル", desc: "ライバルに5勝する", reward: { money: 60 },
-    check: (ml) => (ml.rivalRecord?.wins || 0) >= 5 },
-  { id: "veteran_50", icon: "🚴", label: "百戦錬磨", desc: "通算50戦に出走する", reward: { money: 60 },
-    check: (ml) => (ml.player?.raceLog || []).length >= 50 },
-  { id: "married", icon: "💍", label: "家庭を持つ", desc: "結婚する", reward: { money: 30 },
-    check: (ml) => !!ml.flags?.married },
-  { id: "injury_comeback", icon: "🩹", label: "苦難を乗り越えて", desc: "大きな怪我から復帰する", reward: { money: 30 },
-    check: (ml) => !!ml.flags?.injuryResolved },
-  { id: "has_child", icon: "👶", label: "親になる", desc: "第一子を授かる", reward: { money: 30 },
-    check: (ml) => !!ml.flags?.hasChild },
-  { id: "mentor", icon: "🎖", label: "チームの精神的支柱に", desc: "後輩選手のメンターになる", reward: { money: 40 },
-    check: (ml) => !!ml.flags?.mentor },
-];
-function computeAchievements(ml) {
-  return ML_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(ml) }));
-}
 // v17: シーズンモード（チーム運営）版の実績システム。マイライフと同様、既存の
 // careerStats・careerHistory・hallOfFame・classIdx・roster・captainIdだけから判定する
 const SEASON_ACHIEVEMENTS = [
@@ -1843,213 +1315,25 @@ function fmtGap(sec) { return sec < 0.5 ? "TOP" : `+${fmtTime(sec)}`; }
 // 追記していくので、同じSetをリレーしながらnewRiderを複数回呼べば呼び出し間でも重複しない）
 // v28: 1字の名(GIVEN)と2字の名(GIVEN2)を合わせた母集団から抽選。姓の追加と合わせて
 // 組み合わせ数が大幅に増え（約310姓×約190名≒5.9万通り）、周回をまたいだ被りが起きにくくなる
-const GIVEN_ALL = [...GIVEN, ...GIVEN2];
-function pickRiderName(rng, banned) {
-  let name, tries = 0;
-  do {
-    name = SURNAMES[Math.floor(rng() * SURNAMES.length)] + " " + GIVEN_ALL[Math.floor(rng() * GIVEN_ALL.length)];
-    tries++;
-  } while (banned && banned.has(name) && tries < 200);
-  if (banned) banned.add(name);
-  return name;
-}
 
-function randPow(rng, dist) {
-  const d = dist || [0.05, 0.25, 0.60];
-  const x = rng();
-  if (x < d[0]) return "S";
-  if (x < d[1]) return "A";
-  if (x < d[2]) return "B";
-  return "C";
-}
 
 // v29: コア5能力とは別の「副ステータス」3種。AB_KEYSには入れず（parts/overall/練習全体への
 // 波及を避けるため）、生成・表示・シムの特定フックにだけ効かせる独立軸。
 //   accel  加速力：アタックの初速・ゴール前の飛び出しの鋭さ（スプリント=トップ速度とは別）
 //   build  体格 ：高いほど重量＝平坦/独走で有利・登坂で不利（パワーウェイトの本質）
 //   mental メンタル：★3など大舞台での能力・調子の安定・勝負どころの粘り
-const SUB_STAT_KEYS = ["accel", "build", "mental"];
 const SUB_STAT_LABEL = { accel: "加速力", build: "体格", mental: "メンタル" };
 function buildDesc(build) { return build >= 66 ? "パワー型" : build >= 45 ? "標準" : "軽量型"; }
-function genSubStats(type, rng, opts = {}) {
-  const j = () => (rng() - 0.5) * 24;
-  const accelBase = { SPR: 68, PUN: 64, RUL: 54, CLM: 44, TT: 42 }[type] ?? 50;
-  const buildBase = { SPR: 68, RUL: 66, PUN: 52, TT: 48, CLM: 34 }[type] ?? 50;
-  const persM = { genius: 8, smart: 5, seeker: 4, artisan: 2 }[opts.personality] ?? 0;
-  const boost = opts.forceProdigy ? 10 : 0;
-  const cl = (v) => Math.max(20, Math.min(95, Math.round(v)));
-  return {
-    accel: cl(accelBase + j() + boost),
-    build: cl(buildBase + j()), // 体格は才能とは無関係なので逸材補正なし
-    mental: cl(48 + (rng() - 0.5) * 40 + persM + boost),
-  };
-}
-function newRider(power, rng, opts = {}) {
-  const keys = Object.keys(TYPES);
-  const type = opts.type || keys[Math.floor(rng() * keys.length)];
-  const clamp = (v) => Math.max(22, Math.min(94, Math.round(v)));
-  const b = () => power + (rng() - 0.5) * 22;
-  const r = { flat: b(), climb: b(), sprint: b(), stamina: b(), solo: b() };
-  const bo = 14;
-  if (type === "SPR") { r.sprint += bo; r.climb -= 9; }
-  if (type === "CLM") { r.climb += bo; r.sprint -= 9; }
-  if (type === "RUL") { r.flat += bo; r.stamina += 6; }
-  if (type === "PUN") { r.climb += 7; r.sprint += 7; }
-  if (type === "TT")  { r.solo += bo; r.flat += 6; }
-  if (opts.abBonus) Object.entries(opts.abBonus).forEach(([k, v]) => { r[k] += v; });
-  if (opts.forceProdigy) AB_KEYS.forEach(k => { r[k] += 12; }); // v8: 逸材はベース能力を底上げ
-  AB_KEYS.forEach(k => r[k] = clamp(r[k]));
-  const age = opts.age ?? (22 + Math.floor(rng() * 12));
-  const gKeys = Object.keys(GROWTH);
-  // v14: マイライフの経歴選択（高卒/大卒/実業団卒）で成長タイプを明示指定できるように。
-  // 指定が無ければ従来通りランダム（若年層はlate寄りの補正込み）
-  let growth = opts.growth || gKeys[Math.floor(rng() * 3)];
-  if (!opts.growth && age <= 19 && rng() < 0.5) growth = "late";
-  // v19: ごく稀に「超早熟」「超晩成」という極端な成長タイプが出現する（明示指定時は対象外）
-  if (!opts.growth) {
-    const rare = rng();
-    if (rare < 0.03) growth = "super_early";
-    else if (rare < 0.06) growth = "super_late";
-  }
-  const abilities = rollAbilities(rng, { forceProdigy: opts.forceProdigy });
-  const px = rng();
-  let personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
-    : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
-  let growthPowVal = opts.growthPow || randPow(rng, opts.powDist);
-  if (opts.forceProdigy) { personality = "genius"; growthPowVal = "S"; }
-  const sub = genSubStats(type, rng, { personality, forceProdigy: opts.forceProdigy });
-  const rider = {
-    id: RID++,
-    name: pickRiderName(rng, opts.banned),
-    type, ...r, ...sub, age, growth, growthPow: growthPowVal, abilities, personality,
-    fatigue: 20 + Math.floor(rng() * 20), cond: 3, condForecast: (rng() < 0.34 ? -1 : rng() < 0.5 ? 0 : 1), injury: 0, streak: 0,
-    focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
-    prodigy: !!opts.forceProdigy,
-    raceLog: [], // v13: 選手名鑑用の出走履歴（{year, month, name, rank}）
-    favorite: false, // v13.1: お気に入り登録（殿堂入り条件を満たさなくても必ず記録に残す）
-    tenure: 0, // v17: チームケミストリー用の在籍月数（加入時は常に0からスタート）
-  };
-  rider.joinOvr = overall(rider);
-  return rider;
-}
 
-function initRoster() {
-  // v12バグ修正: 初期メンバー6名の名前が完全固定されており、新しくゲームを始めても
-  // 毎回同じ名前になってしまうと気になるとのフィードバックを受け、能力値・年齢・役割の
-  // バランスはそのまま維持しつつ、名前だけを新規ゲームのたびにランダム生成するようにした
-  const rng = mulberry(Date.now() % 999983);
-  const mk = (name, type, f, c, sp, st, so, age, growth, pow, trait, pers) => {
-    const r = {
-      id: RID++, name, type, flat: f, climb: c, sprint: sp, stamina: st, solo: so,
-      ...genSubStats(type, rng, { personality: pers }),
-      age, growth, growthPow: pow, abilities: trait ? [trait] : [], personality: pers,
-      fatigue: 20, cond: 3, condForecast: 0, injury: 0, streak: 0,
-      focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
-      raceLog: [], favorite: false, tenure: 0,
-    };
-    r.joinOvr = overall(r); return r;
-  };
-  const banned = new Set();
-  const randName = () => pickRiderName(rng, banned);
-  return [
-    mk(randName(), "SPR", 66, 38, 82, 60, 48, 25, "normal", "A", "closer", "hotblood"),
-    mk(randName(), "CLM", 52, 80, 34, 72, 58, 27, "late", "B", "mount", "seeker"),
-    mk(randName(), "RUL", 76, 56, 52, 76, 64, 28, "normal", "C", "domestique", "artisan"),
-    mk(randName(), "PUN", 62, 67, 64, 62, 56, 23, "early", "A", null, "normal"),
-    mk(randName(), "TT", 64, 46, 44, 64, 76, 26, "normal", "B", null, "free"),
-    mk(randName(), "RUL", 48, 42, 44, 52, 46, 19, "late", "S", "iron", "genius"),
-  ];
-}
 
 // v8: クラスが上がるほど候補が増える。5名を超える分は汎用スロットで補う
-function scoutSpecs(policy, count) {
-  let base5;
-  if (policy === "future") base5 = [17, 18, 18, 19, 20].map(age => ({ age, mul: 0.8, priceMul: 0.7, powDist: [0.15, 0.60, 0.90] }));
-  else if (policy === "now") base5 = [23, 24, 25, 26, 27].map(age => ({ age, mul: 1.08, priceMul: 1.25, powDist: [0.0, 0.05, 0.45] }));
-  else base5 = [18, 20, 22, 24, 25].map((age, i) => ({ age, mul: 0.85 + i * 0.055, priceMul: 0.7 + i * 0.13 }));
-  const extra = [];
-  for (let i = 5; i < count; i++) extra.push({ age: 20 + (i % 6), mul: 0.9 + (i % 4) * 0.05, priceMul: 0.85 + (i % 4) * 0.1 });
-  return [...base5, ...extra];
-}
-function genScouts(classIdx, seed, policy = "balance", existingNames, scoutLv = 0) {
-  const rng = mulberry(seed);
-  const base = CLASSES[classIdx].scout;
-  const count = SCOUT_COUNT_BY_CLASS[classIdx];
-  const specs = scoutSpecs(policy, count);
-  const prodigyRng = mulberry(seed + 999);
-  // v28: スカウトスタッフのレベルに応じて逸材（成長S確定）の発掘率が上がる
-  const hasProdigy = prodigyRng() < PRODIGY_CHANCE_BY_CLASS[classIdx] * (1 + scoutLv * 0.6);
-  const prodigyIdx = hasProdigy ? Math.floor(prodigyRng() * count) : -1;
-  // v12バグ修正: 候補一覧の中で名前が被らないよう、既存ロースターの名前も避けつつ
-  // 同じバッチ内で使った名前を集合に積み上げていく
-  const nameBanned = new Set(existingNames || []);
-  return specs.map((s, i) => {
-    const opts = { age: s.age, powDist: s.powDist, banned: nameBanned };
-    if (policy === "sprint" && i < Math.ceil(count * 0.6)) { opts.type = "SPR"; opts.abBonus = { sprint: 8 }; }
-    if (policy === "climb" && i < Math.ceil(count * 0.6)) { opts.type = "CLM"; opts.abBonus = { climb: 8 }; }
-    if (i === prodigyIdx) opts.forceProdigy = true;
-    const r = newRider(base * s.mul, rng, opts);
-    if (s.age <= 18) r.growth = rng() < 0.6 ? "late" : r.growth;
-    // v28: スカウトスタッフのレベルで査定のブレ幅が縮む（lv3で約25%まで）
-    const blurMul = Math.max(0.2, 1 - scoutLv * 0.28);
-    const blur = {};
-    AB_KEYS.forEach(k => {
-      const d = (6 + rng() * 9) * blurMul;
-      blur[k] = { min: Math.max(20, Math.round(r[k] - d)), max: Math.min(94, Math.round(r[k] + d)) };
-    });
-    const ovrMin = Math.round(AB_KEYS.reduce((a, k) => a + blur[k].min, 0) / 5);
-    const ovrMax = Math.round(AB_KEYS.reduce((a, k) => a + blur[k].max, 0) / 5);
-    const tag = s.age <= 19 ? "高卒ルーキー" : s.age <= 22 ? "大卒" : "実業団";
-    return { rider: r, tag, blur, ovrMin, ovrMax, price: Math.round(overall(r) * 1.4 * s.priceMul * (r.prodigy ? 1.7 : 1)) };
-  });
-}
 
 // v11: FA移籍市場。genScoutsと異なり、既に完成している23〜30歳の即戦力〜中堅選手を
 // 能力を伏せずに（ブレ幅なしで）即決購入方式で提示する。月1回、月送り時に全入れ替え
-const FA_POOL_COUNT_BY_CLASS = [4, 5, 7];
-function genFaPool(classIdx, seed, existingNames) {
-  const rng = mulberry(seed);
-  const base = CLASSES[classIdx].scout;
-  const count = FA_POOL_COUNT_BY_CLASS[classIdx];
-  const nameBanned = new Set(existingNames || []);
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    const age = 23 + Math.floor(rng() * 8); // 23〜30歳
-    const mul = 0.85 + rng() * 0.45; // 新人スカウトよりブレ幅を広く（即戦力〜掘り出し物まで）
-    const r = newRider(base * mul, rng, { age, banned: nameBanned });
-    const ageFactor = age <= 25 ? 1.2 : age <= 28 ? 1.0 : age <= 30 ? 0.85 : 0.65;
-    const price = Math.max(20, Math.round(overall(r) * 1.6 * ageFactor));
-    out.push({ rider: r, age, price });
-  }
-  return out;
-}
 
 // v17: 選手間トレード。ライバルチームが自チームの特定選手に目を付け、代わりに
 // 自チーム所属の選手と近い実力の選手を1名提示してくる。最大2件、毎月入れ替わる
-function genTradeOffers(classIdx, seed, roster) {
-  if (!roster || roster.length <= 1) return [];
-  const rng = mulberry(seed);
-  const base = CLASSES[classIdx].scout;
-  const nameBanned = new Set(roster.map(r => r.name));
-  const wanted = [...roster].sort(() => rng() - 0.5).slice(0, Math.min(2, roster.length));
-  return wanted.map(r => {
-    const team = RIVAL_TEAMS[Math.floor(rng() * RIVAL_TEAMS.length)];
-    const power = Math.max(base * 0.6, overall(r) + (rng() - 0.5) * 12);
-    const offeredRider = newRider(power, rng, { banned: nameBanned });
-    return { id: `trade-${r.id}-${Math.floor(rng() * 999999)}`, team: team.name, teamColor: team.color, wantRiderId: r.id, offeredRider };
-  });
-}
 
-function genSponsors(classIdx, year) {
-  const rng = mulberry(year * 913 + classIdx * 77 + 3);
-  const pick = () => SPONSOR_NAMES[Math.floor(rng() * SPONSOR_NAMES.length)];
-  const need = CLASSES[classIdx].need;
-  return [
-    { name: pick(), style: "安定型", monthly: 18 + classIdx * 8, norma: Math.max(10, need - 10), bonus: 80 + classIdx * 40, penalty: 30 + classIdx * 15, mandates: 1 },
-    { name: pick(), style: "バランス型", monthly: 12 + classIdx * 7, norma: need - 3, bonus: 180 + classIdx * 70, penalty: 80 + classIdx * 30, mandates: 1 },
-    { name: pick(), style: "挑戦型", monthly: 8 + classIdx * 5, norma: need + 5, bonus: 350 + classIdx * 130, penalty: 180 + classIdx * 60, mandates: 2 },
-  ];
-}
 function pickMandateMonths(n, seed) {
   const rng = mulberry(seed);
   const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -2061,135 +1345,13 @@ function pickMandateMonths(n, seed) {
   return out.sort((a, b) => a - b);
 }
 
-function strHash(s) {
-  let h = 9;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 387420489);
-  return (h ^ (h >>> 9)) >>> 0;
-}
 
 // v7: month===11でclassIdx===0(B1)ならA昇格戦を2日間ステージレースとして生成
 // v14.8: gtWins（そのクラスでその年に総合優勝したグランツールのgtIndex配列）を追加引数に取り、
 // PROクラスのグランファイナルだけは出場条件がポイントではなくグランツール全制覇になる
-function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
-  const rng = mulberry(year * 1000 + month * 37 + 5);
-  const races = [];
-  // v28: 累計CPで解禁される新コース種別も抽選プールに含める
-  const pool = unlockedTemplates();
-  if (month === 11) {
-    const isProFinal = classIdx === 2;
-    const gtWinCount = (gtWins || []).length;
-    const qualified = isProFinal ? gtWinCount >= GRAND_TOURS.length : points >= CLASSES[classIdx].need;
-    // v12: 以前はB1→Aの昇格戦だけが2日間ステージレースで、A→PRO・PROグランファイナルは
-    // 1日のとばしレースだった（1日目を観戦してもすぐ結果に飛ぶように見え、2日目が
-    // 行われないバグと誤解されていた）。全クラスのチャンピオンシップを統一して
-    // 2日間ステージレースにする
-    const stageName = classIdx === 0 ? "A昇格ステージレース（2日間・総合タイム）"
-      : classIdx === 1 ? "PRO昇格ステージレース（2日間・総合タイム）"
-      : "グランファイナル（2日間・総合タイム）";
-    races.push({
-      id: `champ-${year}-${classIdx}`, championship: true, locked: !qualified, stageRace: true, stageCount: 2,
-      name: stageName,
-      tmpl: TEMPLATES[3], grade: 3, cls: classIdx, weather: rollWeather(rng),
-      lockReason: qualified ? null : (isProFinal
-        ? `出場権なし（年間グランツール全${GRAND_TOURS.length}戦制覇が必要・現在${gtWinCount}/${GRAND_TOURS.length}勝）`
-        : `出場権なし（${CLASSES[classIdx].need}pt必要）`),
-    });
-    const t = pool[Math.floor(rng() * pool.length)];
-    const fvenue = VENUES[Math.floor(rng() * VENUES.length)];
-    races.push({ id: `r-${year}-${month}-x`, name: `${fvenue}ファイナルロード`, venue: fvenue, tmpl: t, grade: 2, cls: classIdx, locked: false, weather: rollWeather(rng) });
-    return races;
-  }
-  const count = month === 0 ? 3 : (month === 8 || month === 9) ? 4 : 5;
-  const openCount = month === 0 ? 2 : 2 + Math.floor(rng() * 2);
-  for (let i = 0; i < count; i++) {
-    const t = pool[Math.floor(rng() * pool.length)];
-    const open = i < openCount;
-    const cls = open ? classIdx : Math.floor(rng() * 3);
-    const grade = month === 0 ? 1 : month === 10 ? (i === 0 ? 3 : 1 + Math.floor(rng() * 2)) : 1 + Math.floor(rng() * 3);
-    const venue = VENUES[Math.floor(rng() * VENUES.length)];
-    races.push({
-      id: `r-${year}-${month}-${i}`,
-      name: `${venue}${t.kind}`, venue,
-      tmpl: t, grade, cls, weather: rollWeather(rng),
-      locked: !open || cls !== classIdx,
-      lockReason: (!open || cls !== classIdx) ? `${CLASSES[cls].id}限定` : null,
-    });
-  }
-  // v13: グランツール・海外遠征。年3戦（春・夏・秋）、その年のクラスに開かれた
-  // 3日間の海外遠征ステージレースを追加する。stageTmplsで日ごとにコース性格を変え、
-  // 通常のクラス別カレンダーとは独立に毎年必ず出走できる
-  // v14.7: グランツールはPROクラス限定の大会に変更（B1・Aでは開催されない）
-  // v14.8: 1戦だったグランツールを年3戦に増設。gtIndexで個別に勝敗を追跡し、
-  // 3戦すべての総合優勝がグランファイナル出場の条件になる
-  const gtDef = classIdx === 2 ? GRAND_TOURS.find(g => g.month === month) : null;
-  if (gtDef) {
-    const gtIndex = GRAND_TOURS.indexOf(gtDef);
-    const venue = OVERSEAS_VENUES[Math.floor(rng() * OVERSEAS_VENUES.length)];
-    races.unshift({
-      id: `grandtour-${year}-${gtIndex}`, grandTour: true, gtIndex, stageRace: true, stageCount: 3,
-      name: `${venue}${gtDef.season}グランツール（3日間・総合タイム）`,
-      tmpl: gtDef.stageTmpls[0], stageTmpls: gtDef.stageTmpls,
-      grade: 3, cls: classIdx, locked: false, lockReason: null, weather: rollWeather(rng),
-    });
-  }
-  if (sponsor && sponsor.mandateMonths && sponsor.mandateMonths.includes(month)) {
-    const target = races.find(r => !r.locked);
-    if (target) target.sponsorMandate = true;
-  }
-  return races;
-}
 
 // ---------- 実効能力 ----------
-function rainMul(r, weather) {
-  if (weather !== "rain") return 1;
-  return hasAbility(r, "rain_sp") ? 0.97 : 0.93;
-}
-function effAbilities(r, equip, itemBoost, grade, weather) {
-  const fatPen = 1 - Math.max(0, (r.fatigue || 0) - 50) * 0.003;
-  const cm = condMul(r.cond || 3);
-  // v29: ピーキング（フォーム）。狙って仕上げた選手はレース当日に能力が底上げされる（±約17%）。
-  // マイライフ専用の概念で、フォーム未設定の選手（AI・シーズン）は50=1.0で無影響
-  const formMul = 1 + ((r.form ?? 50) - 50) / 300;
-  const e = {};
-  AB_KEYS.forEach(k => { e[k] = r[k]; });
-  if (r.parts) {
-    PART_SLOTS.forEach(slot => {
-      const pid = r.parts[slot];
-      if (pid && PARTS[pid]) Object.entries(PARTS[pid].ab).forEach(([k, v]) => { e[k] += v; });
-    });
-  }
-  // v28: 大舞台適性。big=★3で+6%、nervous(悪特性)=★3で-5%
-  // v29: メンタルも★3で能力に反映（±約8%）。特性big/nervousと重ねる
-  const mental = r.mental ?? 50;
-  const mentalBig = grade === 3 ? 1 + (mental - 50) / 600 : 1;
-  const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig;
-  const wMul = rainMul(r, weather);
-  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul; });
-  // v28: オールラウンダーは全能力を控えめに底上げ（脚質を選ばない万能型）
-  if (hasAbility(r, "allrounder_sp")) AB_KEYS.forEach(k => { e[k] += hasGoldAbility(r, "allrounder_sp") ? 4 : 2; });
-  // v31.2: 配合限定特能。系統の申し子＝全能力+3、覇道の血脈＝全能力+2かつスタミナ+3
-  if (hasAbility(r, "sireline")) AB_KEYS.forEach(k => { e[k] += 3; });
-  if (hasAbility(r, "dynasty")) { AB_KEYS.forEach(k => { e[k] += 2; }); e.stamina += 3; }
-  // v29: 体格（パワーウェイト）。軽いほど登坂有利・重いほど平坦/独走有利
-  const build = r.build ?? 50;
-  e.climb *= 1 + (50 - build) / 300;
-  e.flat *= 1 + (build - 50) / 350;
-  e.solo *= 1 + (build - 50) / 450;
-  e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
-  e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
-  // v29バグ修正: 万一いずれかの能力値が欠損（旧セーブ等でundefined）していると
-  // NaNがシミュレーション全体（finishTime等）に伝播し、最終的にレース描画がクラッシュして
-  // 画面が真っ暗になる恐れがあった。非有限値は安全な既定値(50)に丸めて必ず有限にする
-  AB_KEYS.forEach(k => { e[k] = Number.isFinite(e[k]) ? Math.min(135, e[k]) : 50; });
-  e.type = r.type; e.abilities = r.abilities; e.goldAbilities = r.goldAbilities;
-  // v29: 副ステータスをエントラントにも持たせ、tick計算・最終区間で参照する
-  e.accel = r.accel ?? 50; e.mental = mental; e.build = build;
-  return e;
-}
 // 脚質の得意区間ボーナス（形骸化対策）
-function typeAffinityBonus(type, segType) {
-  return (TYPES[type]?.affinity?.[segType]) || 0;
-}
 function abilityFor(segType, e) {
   if (segType === "flat") return e.flat;
   if (segType === "hill") return e.climb * 0.55 + e.flat * 0.45;
@@ -2202,62 +1364,6 @@ function abilityFor(segType, e) {
 
 // ---------- v7: コース生成（3D表示とシミュレーションで共有） ----------
 // 現実の勾配(%)は使わず、区間タイプ＋レースごとの「急峻さ乱数」で近似する（簡易だが十分にドラマが出る）
-function generateCourse(raceMeta, dayTag) {
-  // v13: グランツールなど、日ごとに異なるコース性格を持つステージレース用に
-  // stageTmpls（日別テンプレート配列）があればそちらを優先して使う
-  const stageMatch = dayTag && /^day(\d+)$/.exec(dayTag);
-  const tmpl = (raceMeta.stageTmpls && stageMatch) ? raceMeta.stageTmpls[Number(stageMatch[1]) - 1] || raceMeta.tmpl : raceMeta.tmpl;
-  // v8: dayTagを混ぜることで、2日間ステージレースの各日で別コースになるようにする（同一レースIDの使い回し対策）
-  const crng = mulberry(strHash(raceMeta.id + raceMeta.name + (dayTag || "")));
-  const LEN = 300 + crng() * 120;
-  const amp1 = 20 + crng() * 26, f1 = 2.2 + crng() * 2.2, ph1 = crng() * Math.PI * 2;
-  const amp2 = 4 + crng() * 9, f2 = 8 + crng() * 8, ph2 = crng() * Math.PI * 2;
-  const steepness = 0.75 + crng() * 0.6; // 0.75〜1.35：この山/丘がきついかどうか
-  // v13: 周回コース（laps指定時、1周分のsegsをそのままlaps回繰り返して全体コースを構成する）
-  const laps = tmpl.laps || 1;
-  const lapSegDefs = laps > 1 ? Array.from({ length: laps }, () => tmpl.segs).flat() : tmpl.segs;
-  const segs = lapSegDefs.map(([type, base, dist]) => ({ type, base, dist, label: SEG_LABEL[type] }));
-  // v12: 天候・横風エシュロン。平坦・丘陵区間の一部にランダムで横風フラグを立てる
-  segs.forEach(s => {
-    s.wind = (s.type === "flat" || s.type === "hill") && crng() < 0.28;
-    if (s.wind) s.windDir = crng() < 0.5 ? 1 : -1;
-  });
-  const totalW = segs.reduce((s, x) => s + x.dist, 0);
-  const cumFrac = []; let acc = 0;
-  segs.forEach(s => { acc += s.dist / totalW; cumFrac.push(acc); });
-  const elevTarget = { flat: 0, hill: 9, climb: 22, sprint: 0, mtn: 26, tt: 0 };
-  const boundElev = [0];
-  segs.forEach(s => boundElev.push(elevTarget[s.type] * steepness));
-  const yAt = (frac) => {
-    let j = 0;
-    for (; j < segs.length; j++) { if (frac <= cumFrac[j] + 1e-6) break; }
-    j = Math.min(j, segs.length - 1);
-    const prev = j === 0 ? 0 : cumFrac[j - 1];
-    const local = (frac - prev) / (cumFrac[j] - prev);
-    return boundElev[j] + (boundElev[j + 1] - boundElev[j]) * local;
-  };
-  const segTypeAtFrac = (frac) => {
-    for (let j = 0; j < segs.length; j++) { if (frac <= cumFrac[j] + 1e-6) return { type: segs[j].type, idx: j, wind: !!segs[j].wind, windDir: segs[j].windDir || 0 }; }
-    const last = segs[segs.length - 1];
-    return { type: last.type, idx: segs.length - 1, wind: !!last.wind, windDir: last.windDir || 0 };
-  };
-  // 標高プロファイル（グラフ表示用・30点）
-  const elevationProfile = [];
-  for (let i = 0; i <= 30; i++) { const f = i / 30; elevationProfile.push({ frac: f, elev: yAt(f) }); }
-  let totalElevationGain = 0;
-  for (let i = 1; i < elevationProfile.length; i++) { const d = elevationProfile[i].elev - elevationProfile[i - 1].elev; if (d > 0) totalElevationGain += d; }
-  const climbCount = segs.filter(s => ["climb", "mtn"].includes(s.type)).length;
-  const raceDifficultyRating = Math.round((totalElevationGain * 1.2 + climbCount * 15 + LEN * 0.15) * steepness);
-  return {
-    length: LEN, segs, cumFrac, steepness, finalIdx: segs.length - 1,
-    posAtFrac: (frac) => frac * LEN,
-    fracAtPos: (pos) => Math.max(0, Math.min(1, pos / LEN)),
-    segTypeAt: (pos) => segTypeAtFrac(pos / LEN),
-    yAt, elevationProfile, totalElevationGain, climbCount, raceDifficultyRating,
-    amp1, f1, ph1, amp2, f2, ph2,
-    laps, lapAtFrac: (frac) => Math.min(laps, Math.floor(Math.max(0, Math.min(1, frac)) * laps) + 1),
-  };
-}
 // v27: 今季のチームポイント順位表。他チームのポイントは実シミュレーションしていないため、
 // 年・クラス・チーム名から決定的に「シーズン想定合計」を割り出し、経過月数に応じて按分して
 // 現在値を推定する（難易度が上がるほど他チームも強くなる）。自チームは実際のポイントを使う
@@ -2286,386 +1392,43 @@ function bumpCareerStats(cs, rank, prize) {
     bestFinish: cs.bestFinish === null ? rank : Math.min(cs.bestFinish, rank),
   };
 }
-function climbWeightFor(segType, steepness) {
-  const base = { flat: 0, hill: 0.4, climb: 0.85, mtn: 0.9, sprint: 0, tt: 0 }[segType] || 0;
-  return Math.min(1, base * steepness);
-}
-function terrainSpeedMul(segType, steepness) {
-  const base = { flat: 1, hill: 0.85, climb: 0.65, mtn: 0.6, sprint: 1, tt: 0.95 }[segType] ?? 1;
-  if (segType === "climb" || segType === "mtn") return Math.max(0.35, base - (steepness - 1) * 0.3);
-  return base;
-}
 // 区間タイプ別の実効能力（連続勾配ブレンド＋脚質ボーナス）
-function segmentAbility(segType, e, steepness) {
-  let ab;
-  if (segType === "sprint") ab = e.sprint;
-  else if (segType === "tt") ab = e.solo * 0.6 + e.flat * 0.4;
-  else if (segType === "mtn") ab = e.climb * 0.7 + e.sprint * 0.3;
-  else { const w = climbWeightFor(segType, steepness); ab = e.flat * (1 - w) + e.climb * w; }
-  ab += typeAffinityBonus(e.type, segType);
-  // v15: 特殊能力による区間タイプ別の能力補正（金特なら効果2倍）
-  if (hasAbility(e, "mount") && ["climb", "mtn"].includes(segType)) ab += hasGoldAbility(e, "mount") ? 8 : 4;
-  if (hasAbility(e, "puncheur") && segType === "hill") ab += hasGoldAbility(e, "puncheur") ? 8 : 4;
-  if (hasAbility(e, "flatlander") && segType === "flat") ab += hasGoldAbility(e, "flatlander") ? 8 : 4;
-  if (hasAbility(e, "sprinter_sp") && segType === "sprint") ab += hasGoldAbility(e, "sprinter_sp") ? 8 : 4;
-  if (hasAbility(e, "soloist") && segType === "tt") ab += hasGoldAbility(e, "soloist") ? 8 : 4;
-  if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += hasGoldAbility(e, "closer") ? 8 : 4;
-  // v31.2: 配合限定「二刀流」。丘陵・山岳・スプリントの各区間で+5（登坂型とスプリント型の血を併せ持つ証）
-  if (hasAbility(e, "hybrid") && ["hill", "climb", "mtn", "sprint"].includes(segType)) ab += 5;
-  return ab;
-}
 
 // ---------- v7/v8: ティックベース連続シミュレーション ----------
 // v8: 解像度を5秒/tick→1秒/tickに引き上げ（3D観戦のワープ・divergenceの根本対策）。
 // BASE_TICK_DIST/GROUP_GAP_DISTはTICK_SECに比例して縮小し、実時間あたりの速度・グループ判定基準は据え置き
-const TICK_SEC = 1;
-const GROUP_GAP_DIST = 0.22;      // これ以内の位置差なら同一グループ
-const ROTATION_PERIOD_TICKS = 20; // 20秒ごとに先頭交代
-// v12: AIチームごとの隠しの戦略スタイル（プレイヤーの事前作戦とは独立）。
-// aggressive=push相当・conservative=hold相当のローテーションペースになる
-const AI_STYLES = ["aggressive", "balanced", "conservative"];
 // v12バグ修正: 消耗ペースを全体的に緩和（1.15→0.85）。集団サイズによる消耗軽減・
 // 集団後方での回復を導入したこととあわせ、長いレースで役割が合っている選手まで
 // 早々にスタミナを使い切ってしまい、役割ミスマッチとの対比が埋もれてしまう問題に対応
-const DRAIN_K = 0.85;
-// v12バグ修正: エネルギーは減る一方で回復する仕組みがなく、下限も無かったため、
-// 長いレースでは選手のエネルギーが際限なく（-1000を超えるほど）マイナスに膨らみ続けていた。
-// energyPenaltyMul()はenergy<=-90あたりで既に速度低下が頭打ち（0.55倍）になるため、
-// それより下はゲーム的な意味を持たない数値の暴走に過ぎない。下限を設けて無意味な
-// 桁あふれを防ぐ（energyPenaltyMulの頭打ち地点より十分下なので、既存の速度・結果には影響しない）
-const ENERGY_FLOOR = -100;
-const BASE_TICK_DIST = 0.26;      // 能力70・エネルギー満タン時の基準移動量/tick
-const ATTACK_TICKS = 25;          // アタック持続（25秒）
-// v14.10: 逃げ要員（breakaway）ロールの選手が実際に飛び出すための持続時間。
-// エースの早期発射（ATTACK_TICKS）よりやや長めにし、集団から確実に離れる間合いを作る
-const BREAKAWAY_ATTACK_TICKS = 30;
-const MAX_TICKS = 2500;
-
-function effortCost(mode, segType, steepness) {
-  if (mode === "pull") return 1.0;
-  if (mode === "draft") return { flat: 0.5, tt: 0.5, sprint: 0.5, hill: 0.7 }[segType] ?? (0.85 - (steepness - 1) * 0.1);
-  if (mode === "solo") return 1.3;
-  return 1.6; // attack
-}
-function energyPenaltyMul(energy) {
-  if (energy > 20) return 1;
-  if (energy > 0) return 0.85 + (energy / 20) * 0.15;
-  // v10: 下限0.35→0.55（深いエネルギー枯渇時の失速緩和。千切れ選手の遅れ過大バグ対策）
-  return Math.max(0.55, 1 + (energy / 100) * 0.5);
-}
-function tickSpeedFactor(en, segType, mode, steepness) {
-  let ab = segmentAbility(segType, en, steepness);
-  // v15: 展開依存の特殊能力（逃げ屋・献身のアシスト）は、能力算出時点ではmodeを
-  // 知らないsegmentAbilityではなくここで加算する
-  if (hasAbility(en, "escape") && mode === "attack") ab += hasGoldAbility(en, "escape") ? 8 : 4;
-  if (hasAbility(en, "domestique") && mode === "pull") ab += hasGoldAbility(en, "domestique") ? 6 : 3;
-  // v29: 加速力はアタック（飛び出し・ギャップ埋め）の鋭さに効く
-  if (mode === "attack") ab += ((en.accel ?? 50) - 50) * 0.2;
-  let f = 1 + (ab - 70) / 260;
-  if (mode === "attack") f *= 1.15;
-  f *= energyPenaltyMul(en.energy);
-  // v8: 微小なゆらぎ（±3%）。純粋な決定論だと同一条件のレースが毎回ほぼ同じ結果になってしまうため
-  f *= 1 + (Math.random() - 0.5) * 0.06;
-  return Math.max(0.15, f);
-}
-function tickDistance(en, segType, mode, steepness) {
-  return BASE_TICK_DIST * tickSpeedFactor(en, segType, mode, steepness) * terrainSpeedMul(segType, steepness);
-}
 // v12バグ修正: 平坦アシストが山岳区間に入っても、能力値による速度低下以外は何も起きず、
 // 千切れるとしても唐突に見えた。役割と地形が合っていない選手は消耗が早まるようにし、
 // 能力不足による減速と合わさって「じわじわ垂れて千切れていく」自然な挙動にする
-function roleTerrainMismatchMul(role, segType) {
-  if (role === "flat" && (segType === "climb" || segType === "mtn")) return 1.6;
-  if (role === "mountain" && (segType === "flat" || segType === "sprint")) return 1.3;
-  return 1;
-}
 // v12: 集団の人数が多いほど風除け効果で消耗が緩む（独走=1.0、大集団ほど下がり0.55が下限）。
 // 牽引中の選手はこの恩恵を受けない（風除けの外にいるため。呼び出し側でdraft時のみ掛ける）
-function groupShelterMul(n) {
-  return Math.max(0.55, 1 - Math.min(1, (n - 1) / 14) * 0.45);
-}
-const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこない位置）での基礎回復量/tick
-function energyDrain(en, mode, segType, steepness) {
-  // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（金特で更に軽減）
-  const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88) : 1;
-  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul;
-}
 // 役割ごとに「今この地形で牽引役になれるか」
 // v12バグ修正: エネルギーが尽きているかどうかは"sub"ロールしかチェックしておらず、
 // 他のロール（lead/flat/mountain/breakaway）は消耗しきっていてもローテーションの
 // 牽引順が回ってくると牽引を続けてしまっていた（エネルギーが際限なく大きくマイナスに
 // なる・スタミナ切れの選手がずるずる千切れず牽引を続ける不自然な挙動の原因）。
 // 役割に関わらず、エネルギーが尽きたら牽引適性を失うようにする
-function canPull(en, segType) {
-  if (en.isAce) return false;
-  if (en.energy <= 0) return false;
-  if (en.role === "breakaway") return true;
-  if (en.role === "lead") return true;
-  if (en.role === "sub") return true;
-  if (en.role === "mountain") return ["climb", "mtn"].includes(segType);
-  if (en.role === "flat") return ["flat", "hill"].includes(segType);
-  return false;
-}
 
 // AIチームの役割自動割り当て（5役割・先頭=エース）
 // v28: ゴール勝負の駆け引きを反映。最終スプリントは実力（スプリント能力）で決まるため、
 // スプリントが弱点の選手ほど集団ゴールでは分が悪く、早めの逃げ（breakaway）に活路を求める。
 // 逆にスプリントが武器の選手は集団に残ってゴールスプリントを待つ
-function assignAIRoles(members, squadN) {
-  const roles = {};
-  members.forEach((r, i) => {
-    if (i === 0 || squadN < 3) { roles[r.id] = "lead"; return; }
-    const roll = Math.random();
-    // スプリントがその選手の武器か弱点かを、他能力のピークとの差で測る。
-    // sprintGap=0 → スプリントが最強（集団ゴール向き・ほぼ逃げない）
-    // sprintGap大 → スプリントが弱点（集団ゴールで不利・早逃げに出やすい）
-    const peak = Math.max(r.flat, r.climb, r.sprint, r.stamina, r.solo);
-    const sprintGap = peak - r.sprint;
-    const breakawayChance = Math.min(0.65, 0.06 + sprintGap * 0.022);
-    if (roll < breakawayChance) { roles[r.id] = "breakaway"; return; }
-    // 逃げないなら地形・脚質に応じた集団内の役割（ゴールスプリントに残る）
-    if (r.type === "CLM") roles[r.id] = "mountain";
-    else if (r.type === "SPR" || r.type === "RUL") roles[r.id] = "flat";
-    else roles[r.id] = "sub";
-  });
-  if (squadN >= 3) {
-    const hasLead = members.slice(1).some(r => roles[r.id] === "lead" || roles[r.id] === "sub" || roles[r.id] === "flat" || roles[r.id] === "mountain");
-    if (!hasLead && members.length > 1) roles[members[1].id] = "lead";
-  }
-  return roles;
-}
 
 // 1レース分のティックシミュレーションを実行/再開する
 // riders: buildSimで作った実体配列（pos/energy/mode/finished/history...を保持）
 // fromTick: この番号のティックから再計算（0なら最初から）
 // directive: { chaseMode:'normal'|'push'|'hold', aceEarly:bool }
 // noGroup: true ならグルーピングを一切行わない（TT個人走行用）
-function simulateTicks(course, riders, fromTick, directive, noGroup) {
-  if (fromTick === 0) {
-    riders.forEach(en => {
-      en.pos = 0; en.energy = 100; en.finished = false; en.finishTime = null;
-      // v12: エース早期発射は無線指示の廃止に伴い出走前の作戦選択になったため、
-      // レース開始（fromTick===0）の時点から適用する
-      // v14.10: 逃げ要員ロールは牽引適性が上がるだけで実際に飛び出す処理が無く、
-      // 「逃げてくれない」不具合になっていた。ロールを持つ選手はレース開始と同時に
-      // 自動でアタック（attackモード）に入り、実際に集団から離れる動きをするようにする
-      en.attackLeft = (directive.aceEarly && en.isAce) ? ATTACK_TICKS
-        : (en.role === "breakaway" ? BREAKAWAY_ATTACK_TICKS : 0);
-      en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
-    });
-  } else {
-    riders.forEach(en => {
-      const idx = Math.min(fromTick - 1, en.posHist.length - 1);
-      en.pos = en.posHist[idx]; en.energy = en.energyHist[idx];
-      en.posHist = en.posHist.slice(0, fromTick); en.energyHist = en.energyHist.slice(0, fromTick);
-      en.modeHist = en.modeHist.slice(0, fromTick); en.groupHist = en.groupHist.slice(0, fromTick);
-      en.slotHist = en.slotHist.slice(0, fromTick);
-      if (directive.aceEarly && en.isAce) { en.attackLeft = ATTACK_TICKS; }
-    });
-  }
-  let tick = fromTick;
-  while (tick < MAX_TICKS) {
-    const active = riders.filter(en => !en.finished);
-    if (active.length === 0) break;
-    // 1. グループ判定（位置の近さのみ。吸収・千切れは自然発生）
-    if (noGroup) {
-      active.forEach((en, i) => { en.groupId = en.id; });
-    } else {
-      active.sort((a, b) => b.pos - a.pos);
-      let gid = 0;
-      active.forEach((en, i) => {
-        if (i === 0) { en.groupId = gid; return; }
-        if (active[i - 1].pos - en.pos <= GROUP_GAP_DIST) en.groupId = active[i - 1].groupId;
-        else { gid++; en.groupId = gid; }
-      });
-    }
-    // 2. モード決定（pull/draft/solo/attack）：ロール・ローテーション周期・無線指示から
-    const groups = {};
-    active.forEach(en => { (groups[en.groupId] = groups[en.groupId] || []).push(en); });
-    Object.values(groups).forEach(members => {
-      if (members.length === 1) {
-        const en = members[0];
-        en.mode = en.attackLeft > 0 ? "attack" : "solo";
-        en.slot = 0;
-        if (en.attackLeft > 0) en.attackLeft--;
-        return;
-      }
-      const segType = course.segTypeAt(members[0].pos).type;
-      let eligible = members.filter(en => canPull(en, segType));
-      let rotSpan = ROTATION_PERIOD_TICKS;
-      // v12: 自チームが関与するグループはプレイヤーの事前作戦（directive.chaseMode）に従う。
-      // AIチームのみのグループは、そのグループの多数派チームが持つ隠しスタイル
-      // （aiStyle）に応じたペースになる（プレイヤーの作戦とは独立）
-      if (members.some(en => en.team === "PLAYER")) {
-        if (directive.chaseMode === "push") rotSpan = Math.max(2, ROTATION_PERIOD_TICKS - 2);
-        if (directive.chaseMode === "hold") rotSpan = ROTATION_PERIOD_TICKS + 3;
-      } else {
-        const styleCounts = {};
-        members.forEach(en => { if (en.aiStyle) styleCounts[en.aiStyle] = (styleCounts[en.aiStyle] || 0) + 1; });
-        const domStyle = Object.entries(styleCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-        if (domStyle === "aggressive") rotSpan = Math.max(2, ROTATION_PERIOD_TICKS - 2);
-        if (domStyle === "conservative") rotSpan = ROTATION_PERIOD_TICKS + 3;
-      }
-      const rotIdx = Math.floor(tick / rotSpan);
-      let puller = eligible.length ? eligible[rotIdx % eligible.length] : null;
-      // v12バグ修正: canPullにエネルギー切れの判定を追加したことで、集団全員が消耗しきっている
-      // 極端な状況では牽引適性者が誰もいなくなり得る。誰も牽引しないと集団全体がそのtickで
-      // 完全に停止してしまうため、非常時のフォールバックとして（エースを除く）最もエネルギーが
-      // 残っている選手に牽引を任せる（消耗はするが、集団が立ち止まるよりは自然）
-      if (!puller) {
-        const fallbackPool = members.filter(en => !en.isAce);
-        if (fallbackPool.length > 0) puller = fallbackPool.reduce((best, en) => (en.energy > best.energy ? en : best), fallbackPool[0]);
-      }
-      // v10: 見た目専用のローテーション待ち順（0=牽引中、1,2,...=次に牽引予定、
-      // ローテーションに参加しない選手は集団後方扱い）。finishTime等の実データには無関係
-      members.forEach(en => {
-        if (en.attackLeft > 0) { en.mode = "attack"; en.slot = 0; en.attackLeft--; return; }
-        en.mode = (puller && en === puller) ? "pull" : "draft";
-        const eIdx = eligible.indexOf(en);
-        en.slot = eIdx === -1 ? eligible.length : ((eIdx - rotIdx) % eligible.length + eligible.length) % eligible.length;
-      });
-    });
-    // 3. 移動：先にpull/solo/attackを確定、その後draftが「ついていけるか」を判定
-    active.forEach(en => {
-      if (en.mode === "draft") return;
-      const segType = course.segTypeAt(en.pos).type;
-      let dist = tickDistance(en, segType, en.mode, course.steepness);
-      // v12バグ修正: 牽引中の選手が自チームのエースと同じ集団にいる場合でも、
-      // 牽引ペースは牽引者自身の最大出力（自然な走力）で決まっていたため、
-      // 脚力の強いアシストがエース本人が付いていけるペースより速く牽引してしまい、
-      // 「アシストがエースを置いていく」形でエースだけ千切れてしまうことがあった。
-      // エースが同じ集団にいる時は、エースが牽引した場合の到達距離を上限にして
-      // ペースを合わせる（エースを守るための牽引、という前提に合わせる）
-      if (en.mode === "pull") {
-        const ace = active.find(o => o.team === en.team && o.isAce && o.groupId === en.groupId);
-        if (ace) dist = Math.min(dist, tickDistance(ace, segType, "pull", course.steepness));
-      }
-      en.lastOwnDist = dist;
-      en.pos = Math.min(course.length, en.pos + dist);
-      en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode, segType, course.steepness));
-    });
-    Object.values(groups).forEach(members => {
-      const puller = members.find(en => en.mode === "pull");
-      if (!puller) return;
-      members.filter(en => en.mode === "draft").forEach(en => {
-        const segInfo = course.segTypeAt(en.pos);
-        const segType = segInfo.type;
-        // v12: 横風区間は道幅の関係で全員がシェルターを得られず、千切れやすくなる
-        // （集団についていける基準を厳しくし、ドラフトのコストも上げる）
-        const windActive = !!segInfo.wind;
-        const groupDist = puller.lastOwnDist;
-        const ownCapable = tickDistance(en, segType, "pull", course.steepness);
-        let dist;
-        if (ownCapable >= groupDist * (windActive ? 0.80 : 0.9)) {
-          // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
-          // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
-          // ゴールタイムが不自然なほど大量に完全一致してしまう（差が均質すぎる問題）。
-          // スプリント区間に限り、各選手自身のスプリント適性（ownCapable/groupDistの比）と
-          // 小さな運要素を反映した微差を加え、集団のままでも着差にばらつきが出るようにする
-          const isFinalSeg = segInfo.idx === course.finalIdx;
-          if (isFinalSeg) {
-            // v28: 最終区間（カメラが切り替わる勝負どころ）は、そこまで生き残った選手同士の
-            // ゴール前の掛け合いをスプリント能力で決める。山頂フィニッシュなどスプリント以外で
-            // 終わるコースでも、地形適性（ownCapable＝登坂等）で集団に残れるかは従来通り決まり、
-            // 残った選手の中ではスプリント力の finishing kick が着差になる。
-            // 登坂力が無ければ最終区間の手前（climb区間）で千切れて集団に残れない
-            const terrainEdge = ownCapable / groupDist - 1;
-            // sprint区間はownCapableが既にスプリントなので二重計上を避け係数を半分に
-            const sprintEdge = (segType === "sprint" ? 0.5 : 1) * (en.sprint - 70) / 260;
-            const edgeMul = segType === "sprint" ? 1.7 : 0.9;
-            // v28: 「豪脚のラストスパート」は最終区間の追い込みが上乗せされる
-            const finishKick = hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0;
-            // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
-            const accelKick = ((en.accel ?? 50) - 50) / 900;
-            const mentalKick = ((en.mental ?? 50) - 50) / 1500;
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.035;
-            dist = groupDist * Math.max(0.85, Math.min(1.19, 1 + terrainEdge * edgeMul + sprintEdge + finishKick + accelKick + mentalKick + luck));
-          } else if (segType === "sprint") {
-            // 周回途中などの非最終スプリント区間は従来の弱めの着差
-            const abilityEdge = ownCapable / groupDist - 1;
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.05;
-            dist = groupDist * Math.max(0.94, Math.min(1.06, 1 + abilityEdge * 0.6 + luck));
-          } else {
-            dist = groupDist;
-          }
-        }
-        else { dist = ownCapable; en.mode = "solo"; }
-        en.pos = Math.min(course.length, en.pos + dist);
-        // v12: 集団の人数が多いほどドラフト勢の消耗が緩み（風除け効果）、ローテーションの
-        // 牽引順が回ってこない集団後方の位置にいるほど少しずつスタミナが回復する。
-        // 千切れて単独走になった選手（en.mode==="solo"）はこの恩恵を受けない
-        const sheltered = en.mode === "draft";
-        const shelterMul = sheltered ? groupShelterMul(members.length) : 1;
-        const backRatio = sheltered ? Math.min(1, (en.slot || 0) / Math.max(1, members.length - 1)) : 0;
-        const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
-        // v15: 横風耐性を持つ選手は横風区間でのドラフト消耗ペナルティが軽減される（1.25→1.1）
-        const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
-        // v17: チームケミストリー（squad構築時にchemMulを付与。未設定なら1で無効果）
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1);
-        en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
-      });
-    });
-    // 4. 履歴記録・ゴール判定
-    active.forEach(en => {
-      en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
-      en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
-      if (en.pos >= course.length && !en.finished) { en.finished = true; en.finishTime = tick * TICK_SEC; }
-    });
-    tick++;
-  }
-  // MAX_TICKS到達時点で未ゴールの選手はペースから残り距離を推定して確定
-  riders.forEach(en => {
-    if (!en.finished) {
-      const lastDist = Math.max(0.2, en.lastOwnDist || 0.3);
-      const remain = course.length - en.pos;
-      en.finishTime = MAX_TICKS * TICK_SEC + (remain / lastDist) * TICK_SEC;
-    }
-  });
-  return tick;
-}
 // v10: 同一ティック（TICK_SEC未満の差）でゴールした集団を検出し、
 // スプリント能力+乱数で現実的な微小タイム差（0〜3秒程度）を付与する。
 // ドラフト処理が集団内で完全に同じ移動距離を割り当てるため、そのままだと
 // 集団ゴールの選手が文字通り同タイムになり「TOP」表示が乱発してしまう対策。
 // ティックシミュレーション本体・観戦アニメーションのposHist等には一切手を加えない。
-function resolveFinishClusters(entrants) {
-  const sorted = [...entrants].sort((a, b) => a.finishTime - b.finishTime);
-  let i = 0;
-  while (i < sorted.length) {
-    let j = i + 1;
-    while (j < sorted.length && sorted[j].finishTime - sorted[i].finishTime < TICK_SEC) j++;
-    if (j - i > 1) {
-      const cluster = sorted.slice(i, j);
-      const baseTime = cluster[0].finishTime;
-      const scored = cluster.map(en => {
-        const jitter = 1 + (Math.random() - 0.5) * 0.16;
-        const energyFactor = 0.85 + Math.max(0, Math.min(1, (en.energy + 20) / 120)) * 0.15;
-        return { en, score: (en.sprint || 0) * energyFactor * jitter };
-      }).sort((a, b) => b.score - a.score);
-      const spread = Math.min(3.0, 0.3 * (scored.length - 1));
-      scored.forEach((s, k) => {
-        const frac = scored.length > 1 ? k / (scored.length - 1) : 0;
-        s.en.finishTime = baseTime + frac * spread;
-      });
-    }
-    i = j;
-  }
-}
 // v10: 千切れ選手の遅れ過大バグ対策。優勝タイムの+35%を上限に、それを超える
 // finishTimeは丸める（順位はそのまま、表示上のタイム差だけ現実的な範囲に収める）
-const MAX_GAP_MUL = 1.35;
-function capExcessiveGaps(entrants) {
-  if (entrants.length === 0) return;
-  const winnerTime = Math.min(...entrants.map(e => e.finishTime));
-  const cap = winnerTime * MAX_GAP_MUL;
-  entrants.forEach(en => { if (en.finishTime > cap) en.finishTime = cap; });
-}
-function rankSim(sim) {
-  resolveFinishClusters(sim.entrants);
-  capExcessiveGaps(sim.entrants);
-  sim.ranked = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
-  sim.ranked.forEach((e, i) => e.rank = i + 1);
-}
 
 // v17: チームケミストリー。出走メンバーの平均在籍月数（tenure）が長いほど、
 // 集団内でのドラフト効率が上がる（消耗が減る）。長く一緒に走ってきたチームほど
@@ -3312,7 +2075,6 @@ const PACK_BIAS_EASE = 0.06;    // 前後バイアス（誰が前寄りか）が
 const PACK_ELONG_EASE = 0.035;
 const PACK_WANDER_FREQ_X = 0.16; // 独立揺らぎの基準周波数（Hz、前後方向）
 const PACK_WANDER_FREQ_Y = 0.12; // 独立揺らぎの基準周波数（Hz、左右方向）
-function riderHash01(id, salt) { return ((id * 2654435761 + salt * 40503) % 100000) / 100000; }
 // 選手固有の周波数・位相で滑らかに漂う疑似ランダム波形（他の選手とは同期しない）
 function riderWander(id, salt, tSec, baseFreq) {
   const h1 = riderHash01(id, salt), h2 = riderHash01(id, salt + 1);
@@ -3855,92 +2617,11 @@ function RaceView({ sim, onFinish }) {
 }
 
 // ---------- 初期状態 ----------
-function initGame() {
-  RID = 100;
-  const roster = initRoster();
-  const rosterNames = roster.map(r => r.name);
-  return {
-    screen: "intro", tab: "home",
-    // v28: 自チーム名（プレイヤーが命名できる。未設定なら既定名）
-    teamName: "あなたのチーム",
-    year: 1, month: 0, classIdx: 0, points: 0, budget: 300,
-    roster,
-    equip: { frame: 0, wheels: 0, facility: 0 },
-    staff: { manager: 0, trainer: 0, doctor: 0, scout: 0 },
-    inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
-    partsInv: {},
-    camp: false,
-    sponsor: null,
-    sponsorOffers: genSponsors(0, 1),
-    scoutPolicy: "balance",
-    // v12バグ修正: 初回のスカウト候補・FA候補が固定シードで毎回同じ顔ぶれになっていたため、
-    // 新規ゲームのたびに変わるようDate.now()由来のシードに変更。
-    // 自チームの初期ロースターの名前とも被らないよう渡す
-    scouts: genScouts(0, Date.now() % 999983, "balance", rosterNames),
-    faMarket: genFaPool(0, (Date.now() + 12345) % 999983, rosterNames),
-    tradeOffers: genTradeOffers(0, (Date.now() + 54321) % 999983, roster),
-    races: genMonthRaces(1, 0, 0, 0, null, []),
-    sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
-    result: null, prizeInfo: null,
-    champBest: null, gc: null, pendingEvent: null, eventResult: null,
-    yearendInfo: null, log: [], cleared: false,
-    // v13: キャリア統計・歴史記録テーマ。通算成績と年度ごとの結果履歴を保持する
-    careerStats: { totalRaces: 0, totalWins: 0, totalPodiums: 0, totalPrize: 0, bestFinish: null },
-    careerHistory: [],
-    // v13: 難易度（周回プレイでクリアポイントを貯めて上位難易度を解禁する）
-    difficulty: "easy",
-    // v13: 選手名鑑・殿堂入り。引退・解雇した選手のスナップショット（raceLog含む）を保持する
-    hallOfFame: [],
-    // v13.1: 解雇後にライバルチームへ拾われた元自チーム選手（signedTeamで所属先を管理）。
-    // 出走のたびraceLogが伸び、年度末に引退すると殿堂入り条件次第でhallOfFameへ移る
-    rivalAlumni: [],
-    // v14.8: その年に総合優勝したグランツールのgtIndex一覧（年度末にリセット）。
-    // PROクラスのグランファイナル出場条件（全戦制覇）の判定に使う
-    gtWins: [],
-    // v28: 会場ごとの相性・ホームアドバンテージ。自チームの本拠地。地元開催のレースで
-    // 出走選手に小さな能力ボーナスがつく
-    homeRegion: REGIONS[Math.floor(Math.random() * REGIONS.length)],
-    // v17: キャプテン制度。指名した選手のidを保持する（未指名ならnull）
-    captainId: null,
-    // v18: グランツール副次クラシフィケーション（ポイント賞・山岳賞・新人賞）の
-    // 自チーム通算獲得回数。実績判定に使う
-    jerseyWinCounts: { points: 0, mountains: 0, youth: 0 },
-    // v18: 実績を初めて達成した時に一度だけ報酬を付与するため、既に報酬を受け取った実績idを記録する
-    rewardedAchievements: [],
-    // v25: グランファイナル制覇後も同じチームで続けられる周回モード（ディナスティ）。
-    // 周回のたびに他チームの地力を底上げし、再挑戦のたびに歯応えを保つ
-    dynastyLevel: 0,
-    // v25: ユース育成枠（年1回だけ安価に確保できる原石）。使用済みかどうかを保持し、
-    // 年度末に毎年リセットする
-    youthUsed: false,
-    // v27: 引退選手のスタッフ登用（OBコーチ）。殿堂入りOBを月給制で1名まで雇える
-    obCoach: null,
-  };
-}
 
 // ---------- v10: セーブ/ロード（localStorage） ----------
 // "main"画面（月送り後の安定した地点）でのみ自動保存する。result/gc/pendingEvent等の
 // レース中・イベント中の一時的な状態は保存対象から除外し、ロード時は必ずmain画面に着地させる
 // （courseオブジェクトなど関数を含む値をシリアライズしようとする事故を避けるため）
-const SAVE_KEY = "roadrace_v12_save";
-const SAVE_VERSION = "v12";
-const SAVE_FIELDS = [
-  "year", "month", "classIdx", "points", "budget", "roster", "equip", "staff", "inv", "partsInv",
-  "camp", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
-  "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
-  "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed", "obCoach", "homeRegion", "teamName",
-];
-function serializeState(g) {
-  const out = {};
-  SAVE_FIELDS.forEach(k => { out[k] = g[k]; });
-  return out;
-}
-function saveGame(g) {
-  try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ version: SAVE_VERSION, savedAt: Date.now(), state: serializeState(g) }));
-    return true;
-  } catch (e) { return false; }
-}
 function hasSaveGame() {
   try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
 }
@@ -3948,28 +2629,6 @@ function hasSaveGame() {
 // 消費した後にセーブデータで上書きされるため、ロード後のRIDが実際の最大IDより
 // 低いまま取り残されていた。これにより次回のスカウト/FA生成が既存選手とIDが衝突し、
 // Reactのkey衝突で能力値表示が古い選手のまま残る不具合が発生していた（要修正済み）
-function resyncRid(state) {
-  let max = RID;
-  (state.roster || []).forEach(r => { if (r.id >= max) max = r.id + 1; });
-  (state.scouts || []).forEach(sc => { if (sc.rider.id >= max) max = sc.rider.id + 1; });
-  (state.faMarket || []).forEach(fa => { if (fa.rider.id >= max) max = fa.rider.id + 1; });
-  RID = max;
-}
-function loadGame() {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed.version !== SAVE_VERSION || !parsed.state) return null;
-    const base = initGame();
-    resyncRid(parsed.state);
-    return {
-      ...base, ...parsed.state,
-      screen: "main", tab: "home",
-      sel: base.sel, result: null, prizeInfo: null, gc: null, pendingEvent: null, eventResult: null, yearendInfo: null,
-    };
-  } catch (e) { return null; }
-}
 function clearSaveGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* noop */ }
 }
@@ -3990,72 +2649,6 @@ function worldPointsForFinish(rank, grade) {
 // v33.9: 生きた世界。ペロトンの主役たちはキャリア固有シードから決定論的に生成され、
 // 毎年 加齢→成長/衰え→引退→世代交代（時に名選手の血を継ぐ2世が台頭）していく。
 // 状態はシード1つだけ保存し、任意の年の顔ぶれは年1から再シミュして求める（純関数）。
-const WORLD_STAR_COUNT = 24;
-const WORLD_STAR_TYPES = ["SPR", "CLM", "RUL", "PUN", "TT"];
-function mlMakeWorldStar(rng, year, opts) {
-  opts = opts || {};
-  return {
-    id: opts.id || ("ws" + Math.floor(rng() * 1e9)),
-    name: opts.name || pickRiderName(rng, null),
-    type: opts.type || WORLD_STAR_TYPES[Math.floor(rng() * WORLD_STAR_TYPES.length)],
-    age: opts.age != null ? opts.age : 20 + Math.floor(rng() * 8),
-    rating: opts.rating != null ? opts.rating : 74 + Math.floor(rng() * 20),
-    wins: opts.wins || 0,
-    peakAge: opts.peakAge != null ? opts.peakAge : 27 + Math.floor(rng() * 4),
-    growth: opts.growth || (rng() < 0.25 ? "S" : rng() < 0.6 ? "A" : "B"),
-    debutYear: opts.debutYear != null ? opts.debutYear : year,
-    lineage: opts.lineage || null,
-    bloodOf: opts.bloodOf || null, // v33.10: あなたの殿堂・血統から世界へ流入した選手
-  };
-}
-function mlWorldStarsForYear(seed, targetYear, legendPool) {
-  const s0 = ((seed || 777) >>> 0);
-  const initRng = mulberry(s0);
-  // v33.10: あなたの殿堂の名選手・確立した系統の血が、次世代として世界のペロトンに流入する
-  const legs = (legendPool || []).slice().sort((a, b) => (b.overall || 0) - (a.overall || 0)).slice(0, 8);
-  let stars = [];
-  for (let i = 0; i < WORLD_STAR_COUNT; i++) {
-    if (i < legs.length && initRng() < 0.85) {
-      const leg = legs[i];
-      const surname = (leg.name || "名家 選手").split(" ")[0];
-      stars.push(mlMakeWorldStar(initRng, 1, {
-        name: surname + " " + GIVEN_ALL[Math.floor(initRng() * GIVEN_ALL.length)],
-        type: leg.type,
-        age: 21 + Math.floor(initRng() * 10),
-        rating: Math.max(72, Math.min(97, Math.round((leg.overall || 80) - 4 + initRng() * 8))),
-        wins: Math.floor(initRng() * 10),
-        bloodOf: leg.lineageName || (surname + "系"),
-      }));
-    } else {
-      stars.push(mlMakeWorldStar(initRng, 1, { age: 21 + Math.floor(initRng() * 12), rating: 74 + Math.floor(initRng() * 21), wins: Math.floor(initRng() * 14) }));
-    }
-  }
-  const ty = Math.max(1, targetYear || 1);
-  for (let y = 2; y <= ty; y++) {
-    const yr = mulberry((s0 + y * 2654435761) >>> 0);
-    // 加齢と成長/衰え
-    stars = stars.map(st => {
-      const ns = { ...st };
-      ns.age += 1;
-      if (ns.age <= ns.peakAge) ns.rating = Math.min(99, ns.rating + (ns.growth === "S" ? 3 : ns.growth === "A" ? 2 : 1));
-      else ns.rating = Math.max(38, ns.rating - (1 + Math.floor((ns.age - ns.peakAge) / 2)));
-      return ns;
-    });
-    // ランキング上位ほど勝ち星を積む
-    const ranked = [...stars].sort((a, b) => b.rating - a.rating);
-    ranked.forEach((st, idx) => { if (idx === 0) st.wins += 3; else if (idx < 3) st.wins += 2; else if (idx < 10) st.wins += 1; });
-    // 引退＆世代交代（4割で名選手の血を継ぐ2世が登場）
-    stars = stars.map(st => {
-      const retire = st.age >= 35 || (st.age >= 32 && st.rating < 62) || st.rating < 44;
-      if (!retire) return st;
-      const inherit = yr() < 0.4 || !!st.bloodOf; // 殿堂の血を引くスターは必ず後継を残す
-      const surname = (st.name || "無名 選手").split(" ")[0];
-      const childName = inherit ? (surname + " " + GIVEN_ALL[Math.floor(yr() * GIVEN_ALL.length)]) : pickRiderName(yr, null);
-      return mlMakeWorldStar(yr, y, { name: childName, type: inherit ? st.type : undefined, age: 19 + Math.floor(yr() * 3), rating: 70 + Math.floor(yr() * 16), lineage: inherit ? st.name : null, bloodOf: inherit ? st.bloodOf : null });
-    });
-  }
-  return stars.sort((a, b) => b.rating - a.rating);
-}
 // 前年との比較で「今年の世界の動き」を抽出（新王者・引退・新星の台頭）
 function mlWorldNews(seed, year, legendPool) {
   if (!year || year < 2) return [];
@@ -4125,79 +2718,14 @@ function mlWorldBoard(ml) {
 }
 // v31.5: アンビションを「生き方（路線）」ごとに分岐させ、道中から個性が出るようにした。
 // 勝利の道・大舞台の道・献身の道・世界の道の4路線を用意し、路線ごとに目標のはしごが異なる。
-const ML_AMBITION_PATHS = {
-  victory: {
-    label: "勝利の道", icon: "🏆", color: "#ffd23f",
-    desc: "とにかく勝つ。勝ち星を積み上げて絶対的エースを目指す生き方。",
-    rungs: [
-      { key: "v_first", label: "プロ初勝利を挙げる",           metric: "careerWins", target: 1,  reward: { money: 60,  pop: 3 } },
-      { key: "v5",      label: "通算5勝",                     metric: "careerWins", target: 5,  reward: { money: 120, pop: 4 } },
-      { key: "v10",     label: "通算10勝",                    metric: "careerWins", target: 10, reward: { money: 220, ab: 2 } },
-      { key: "v20",     label: "通算20勝",                    metric: "careerWins", target: 20, reward: { money: 420, ab: 3 } },
-      { key: "v30",     label: "通算30勝（生けるレジェンド）",  metric: "careerWins", target: 30, reward: { money: 700, ab: 4, growth: 1 } },
-    ],
-  },
-  bigstage: {
-    label: "大舞台の道", icon: "🎌", color: "#e8a13c",
-    desc: "格上のレースと世界の大舞台で栄光をつかむ、勝負師の生き方。",
-    rungs: [
-      { key: "b_pod",    label: "初表彰台",                    metric: "careerPodiums", target: 1, reward: { money: 60,  pop: 3 } },
-      { key: "b_big",    label: "グレード3以上のレースで勝利",   metric: "careerBigWins", target: 1, reward: { money: 220, pop: 8 } },
-      { key: "b_big3",   label: "グレード3以上を通算3勝",       metric: "careerBigWins", target: 3, reward: { money: 380, ab: 2 } },
-      { key: "b_title",  label: "世界選手権か五輪で優勝",        metric: "careerTitles",  target: 1, reward: { money: 600, pop: 15, ab: 2 } },
-      { key: "b_title3", label: "大舞台で通算3勝（伝説の英雄）",  metric: "careerTitles",  target: 3, reward: { money: 900, pop: 25, ab: 3, growth: 1 } },
-    ],
-  },
-  devotion: {
-    label: "献身の道", icon: "🤝", color: "#4f8fe8",
-    desc: "自分の勝利より仲間とチームのために走る、名脇役の生き方。",
-    rungs: [
-      { key: "d10",     label: "アシスト役で10戦走る",         metric: "supportRaces", target: 10, reward: { money: 80,  pop: 3 } },
-      { key: "d_pod",   label: "それでも通算表彰台10回",        metric: "careerPodiums", target: 10, reward: { money: 160, ab: 1 } },
-      { key: "d30",     label: "アシスト役で通算30戦",         metric: "supportRaces", target: 30, reward: { money: 280, ab: 2 } },
-      { key: "d60",     label: "アシスト役で通算60戦",         metric: "supportRaces", target: 60, reward: { money: 450, ab: 2, growth: 1 } },
-      { key: "d_pod20", label: "献身を貫き通算表彰台20回",      metric: "careerPodiums", target: 20, reward: { money: 600, ab: 3 } },
-    ],
-  },
-  world: {
-    label: "世界の道", icon: "🌍", color: "#35c07e",
-    desc: "世界ランキングを駆け上がり、世界の頂点を極める生き方。",
-    rungs: [
-      { key: "w50", label: "世界ランク TOP50入り", metric: "rankAtMost", target: 50, reward: { money: 150, pop: 6 } },
-      { key: "w20", label: "世界ランク TOP20入り", metric: "rankAtMost", target: 20, reward: { money: 260, pop: 8 } },
-      { key: "w10", label: "世界ランク TOP10入り", metric: "rankAtMost", target: 10, reward: { money: 380, ab: 2, growth: 1 } },
-      { key: "w3",  label: "世界ランク TOP3入り",  metric: "rankAtMost", target: 3,  reward: { money: 550, ab: 3 } },
-      { key: "w1",  label: "世界ランク1位に立つ",   metric: "rankAtMost", target: 1,  reward: { money: 900, pop: 25, ab: 3, growth: 1 } },
-    ],
-  },
-};
 const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world"];
 function mlAmbitionPath(ml) { return ML_AMBITION_PATHS[ml.ambitionPath] || ML_AMBITION_PATHS.victory; }
-function mlAmbitionMetricValue(ml, metric) {
-  if (metric === "careerWins") return ml.careerWins || 0;
-  if (metric === "careerPodiums") return ml.careerPodiums || 0;
-  if (metric === "careerBigWins") return ml.careerBigWins || 0;
-  if (metric === "careerTitles") return ml.careerTitles || 0;
-  if (metric === "rankAtMost") return ml.worldRank == null ? 999 : ml.worldRank;
-  if (metric === "supportRaces") return ((ml.player && ml.player.raceLog) || []).filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
-  return 0;
-}
 function mlCurrentAmbition(ml) {
   const rungs = mlAmbitionPath(ml).rungs;
   const idx = ml.ambitionIdx || 0;
   return idx < rungs.length ? rungs[idx] : null;
 }
 // 指定路線で、現在の到達状況からまだ達成していない最初の段（路線切替時のindex決定に使う）
-function mlFirstUnmetRung(ml, pathKey) {
-  const rungs = (ML_AMBITION_PATHS[pathKey] || ML_AMBITION_PATHS.victory).rungs;
-  for (let i = 0; i < rungs.length; i++) { if (!mlAmbitionCleared(ml, rungs[i])) return i; }
-  return rungs.length;
-}
-function mlAmbitionCleared(ml, amb) {
-  if (!amb) return false;
-  const v = mlAmbitionMetricValue(ml, amb.metric);
-  return amb.metric === "rankAtMost" ? v <= amb.target : v >= amb.target;
-}
 function mlAmbitionProgressText(ml, amb) {
   if (!amb) return "";
   if (amb.metric === "rankAtMost") return `現在 世界${ml.worldRank == null ? "—" : ml.worldRank}位 ／ 目標 ${amb.target}位以内`;
@@ -4222,129 +2750,12 @@ function applyAmbitionReward(reward, player, money) {
 // v31.4: キャリアの生き様（アーキタイプ／称号）。「最終的にみんな伝説の勝ち師になり没個性化する」
 // という指摘に対応。勝利数だけでなく、役割（エース/アシスト）・脚質・大舞台タイトル・世界ランク・
 // 表彰台率・在籍年数・成長タイプから、その選手が「どんな伝説だったか」を1つに定めて称える。
-function mlCareerArchetype(s) {
-  const r = s.player || {};
-  const log = r.raceLog || [];
-  const races = log.length;
-  const wins = (s.careerWins != null) ? s.careerWins : log.filter(e => e.rank === 1).length;
-  const podiums = (s.careerPodiums != null) ? s.careerPodiums : log.filter(e => e.rank <= 3).length;
-  const titles = s.careerTitles || 0;
-  const worldBest = s.worldRankBest;
-  const years = s.year || 1;
-  const age = r.age || 30;
-  const aceR = log.filter(e => ["ace", "lead"].includes(e.role)).length;
-  const supR = log.filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
-  const type = r.type;
-  const SPEC = {
-    SPR: { t: "豪脚のスプリント王", d: "ゴール前の爆発力で数々の集団スプリントを制した、生粋のフィニッシャー。" },
-    CLM: { t: "山岳の魔術師", d: "峠という峠で栄光を掴んだ、天性のクライマー。" },
-    RUL: { t: "平坦の絶対王者", d: "風を切り裂くパワーで平坦路を支配した、鉄壁のルーラー。" },
-    PUN: { t: "丘陵の変幻自在", d: "起伏あるコースを知性と脚で攻略し続けた、したたかなパンチャー。" },
-    TT:  { t: "孤高のタイムトライアリスト", d: "時計と戦い、独走で幾多の勝利を刻んだ孤高の求道者。" },
-  };
-  if (worldBest === 1) return { key: "world1", title: "世界の頂に立った者", desc: "世界ランキングの頂点を極め、一時代を築いた絶対王者。", color: C.yellow };
-  if (titles >= 2) return { key: "heroMulti", title: "大舞台の英雄", desc: "世界選手権・五輪の大舞台で幾度も頂点に立った、記憶に刻まれる英雄。", color: C.yellow };
-  if (titles >= 1) return { key: "hero", title: "大一番の勝負師", desc: "ここぞの大舞台で栄冠をつかんだ、勝負強さの人。", color: "#e8a13c" };
-  // v33.11: モニュメント（クラシック）制覇に特化したキャリア
-  if ((s.careerClassics || 0) >= 3) return { key: "classicKing", title: "クラシックの覇者", desc: "格式高いモニュメントを幾度も制した、古典レースの申し子。", color: "#e8a13c" };
-  if ((s.careerClassics || 0) >= 1 && wins < 8) return { key: "classicHunter", title: "石畳の古豪", desc: "消耗の激しい一発勝負の古典で栄冠をつかんだ、タフネスの体現者。", color: C.green };
-  if (wins >= 25) return { key: "emperor", title: "常勝の帝王", desc: "数えきれない勝利を積み上げた、記録に残る絶対的エース。", color: C.yellow };
-  if (wins >= 8) { const sp = SPEC[type] || { t: "勝利の職人", d: "堅実に勝ちを積み上げた実力者。" }; return { key: "specialist_" + type, title: sp.t, desc: sp.d, color: C.green }; }
-  if (supR >= 12 && supR >= aceR * 1.5 && wins <= 4) return { key: "domestique", title: "不屈のアシスト職人", desc: "自らの勝利より仲間の勝利を優先し、チームを陰で支え続けた名脇役。", color: C.blue };
-  if (podiums >= 12 && wins <= 3) return { key: "nearly", title: "悲運の名脇役", desc: "幾度も表彰台に立ちながら、最高の一段には手が届かなかった、愛されるべき選手。", color: C.purple };
-  if (years >= 12 || age >= 36) return { key: "ironman", title: "鉄人", desc: "長きにわたり第一線で走り続けた、稀有なる持久力の持ち主。", color: "#6fa8dc" };
-  if ((r.growth === "late" || r.growth === "super_late") && wins >= 2) return { key: "latebloom", title: "遅咲きの雑草魂", desc: "長い下積みを経て、キャリア後半に花開いた苦労人。", color: C.green };
-  if (wins >= 3) return { key: "winner", title: "勝利を知る者", desc: "確かな勝ち星を残した、記憶に残るレーサー。", color: C.green };
-  if (podiums >= 6) return { key: "podium", title: "表彰台の常連", desc: "安定して上位に絡み続けた、堅実な実力者。", color: C.sub };
-  if (races >= 15) return { key: "journeyman", title: "生涯一レーサー", desc: "派手さはなくとも、最後までペダルを回し続けた職人。", color: C.sub };
-  return { key: "challenger", title: "名もなき挑戦者", desc: "短くも自分の走りを貫いた、一人の挑戦者。", color: C.sub };
-}
 // ---------- v14: マイライフモード（選手1人のキャリア） ----------
 // v9〜v13のシーズンモード（チーム運営）とは完全に別のセーブ・状態を持つ、
 // 選手1人の視点でB1からのキャリアを歩む新モード。既存のTYPES/ABILITIES/PERSONALITIES/
 // GROWTH/newRider/generateCourse/simulateTicks/rankSim/riderNickname等はそのまま再利用する
-function initMyLife() {
-  return {
-    screen: "mylife_create", typeChoice: "RUL", bgChoice: "university",
-    year: 1, month: 0, classIdx: 0, points: 0,
-    player: null, team: null,
-    races: [], sel: { raceId: null },
-    result: null, resultInfo: null,
-    log: [], retired: false,
-    // v14.3: 監督指示・監督評価（マスクデータ）・年俸・ショップ用の資産
-    directive: null, managerEval: 30, salary: 0, money: 0,
-    partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
-    gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
-    houseLv: -1, carLv: -1,
-    // v15: マイライフ専用ライバル。キャリア開始時に1名生成し、以後固定
-    rival: null, rivalRecord: null,
-    // v26: 複数ライバル制。2人目の好敵手（初対戦を終えるまでUIには出さない）
-    rival2: null, rivalRecord2: null,
-    // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
-    flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false, mentor: false, mentorName: null, mentorActive: false },
-    rewardedAchievements: [],
-    pendingCrossroads: null, crossroadsResultText: null,
-    pendingOffseason: null, offseasonResultText: null,
-    // v30: 世界ランキング＆キャリア・アンビション
-    worldPoints: 0, worldRank: null, worldRankBest: null,
-    worldSeed: (Math.floor(Math.random() * 1e9) >>> 0) || 777, // v33.9: 生きた世界のシード
-    ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory", // v31.5: 生き方（路線）
-    careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
-    // v32: 固定チームメイト・条件付き作戦・キャリアグラフ用の年次記録
-    teammates: [], tactic: "balanced", careerHistory: [],
-  };
-}
-const ML_SAVE_KEY = "roadrace_v12_mylife_save";
-const ML_SAVE_VERSION = "v12ml";
-const ML_SAVE_FIELDS = [
-  "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
-  "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
-  "rival", "rivalRecord", "rival2", "rivalRecord2", "flags", "rewardedAchievements",
-  // v30: 世界ランキング＆キャリア・アンビション
-  "worldPoints", "worldRank", "worldRankBest", "worldSeed", "ambitionIdx", "ambitionDone", "ambitionPath",
-  "careerWins", "careerPodiums", "careerBigWins", "careerTitles", "careerClassics",
-  "teammates", "tactic", "careerHistory",
-];
-function saveMyLife(ml) {
-  try {
-    const out = {}; ML_SAVE_FIELDS.forEach(k => { out[k] = ml[k]; });
-    localStorage.setItem(ML_SAVE_KEY, JSON.stringify({ version: ML_SAVE_VERSION, savedAt: Date.now(), state: out }));
-    return true;
-  } catch (e) { return false; }
-}
 function hasMyLifeSave() {
   try { return !!localStorage.getItem(ML_SAVE_KEY); } catch (e) { return false; }
-}
-function loadMyLifeGame() {
-  try {
-    const raw = localStorage.getItem(ML_SAVE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed.version !== ML_SAVE_VERSION || !parsed.state) return null;
-    const base = initMyLife();
-    if (parsed.state.player && parsed.state.player.id >= RID) RID = parsed.state.player.id + 1;
-    if (parsed.state.rival && parsed.state.rival.id >= RID) RID = parsed.state.rival.id + 1;
-    const merged = { ...base, ...parsed.state, sel: base.sel, result: null, resultInfo: null };
-    // v30: 旧セーブ移行。世界ランキング／アンビションの通算カウンタが未保存なら、
-    // これまでの戦績ログから通算勝利・表彰台を補完する（グレード依存のbigWinsは補完不可のため0）
-    if (parsed.state.careerWins == null && merged.player && Array.isArray(merged.player.raceLog)) {
-      merged.careerWins = merged.player.raceLog.filter(e => e.rank === 1).length;
-      merged.careerPodiums = merged.player.raceLog.filter(e => e.rank <= 3).length;
-    }
-    // v31.5: 路線（生き方）未設定の旧セーブは勝利の道に置き、到達状況から現在の段を決める
-    if (parsed.state.ambitionPath == null) {
-      merged.ambitionPath = "victory";
-      merged.ambitionIdx = mlFirstUnmetRung(merged, "victory");
-    }
-    // v32: 固定チームメイト未設定の旧セーブは、現所属チームのメンバーを今生成する
-    if ((!merged.teammates || merged.teammates.length === 0) && merged.player && merged.team) {
-      const trng = mulberry(Date.now() % 999983 + 7);
-      merged.teammates = mlGenTeammates(trng, merged.team, 3, [merged.player.name], merged.year || 1);
-    }
-    if (!merged.tactic) merged.tactic = "balanced";
-    if (!Array.isArray(merged.careerHistory)) merged.careerHistory = [];
-    return merged;
-  } catch (e) { return null; }
 }
 function clearMyLifeSave() {
   try { localStorage.removeItem(ML_SAVE_KEY); } catch (e) { /* noop */ }
@@ -4366,23 +2777,10 @@ function mlCreateRival(rng, playerName, playerTeamName, bannedNames, bannedTeams
   const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
     : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
   const abilities = rollAbilities(rng);
-  return { id: RID++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, abilities };
+  return { id: ridState.value++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, abilities };
 }
 // v32（固定チームメイト）：所属チームの固定メンバーを生成する。名前・脚質・性格・特性・
 // 加入年を固定アイデンティティとして持ち、以後レースには現在の地力で登場する（保存対象）。
-function mlGenTeammates(rng, teamName, count, bannedNames, year) {
-  const banned = new Set(bannedNames || []);
-  const typeKeys = Object.keys(TYPES);
-  const list = [];
-  for (let i = 0; i < count; i++) {
-    const type = typeKeys[Math.floor(rng() * typeKeys.length)];
-    const name = pickRiderName(rng, banned);
-    const px = rng();
-    const personality = px < 0.35 ? "normal" : ["hotblood", "seeker", "artisan", "free", "smart", "genius"][Math.floor(rng() * 6)];
-    list.push({ id: RID++, name, type, personality, abilities: rollAbilities(rng), team: teamName, joinYear: year || 1, winsForMe: 0 });
-  }
-  return list;
-}
 // v14: マイライフのレースは6チーム全部をAI生成し、プレイヤーの選手だけを
 // 「PLAYER」チームタグ付きの1名として混ぜる（RaceView等の既存カメラ・強調表示ロジックを
 // そのまま再利用するため）。プレイヤー自身のチームメイトは実際のチーム名で登場する
@@ -4390,169 +2788,6 @@ function mlGenTeammates(rng, teamName, count, bannedNames, year) {
 // ライバルの固定アイデンティティ（名前・脚質・性格）に差し替え、isRivalフラグを立てる
 // v32: TACTICS＝出走前に選ぶ条件付き作戦（ノーリスクの疑似無線）。simulateTicksが解釈する
 // directiveと、プレイヤー自身の立ち回り（早め逃げ）へマッピングする。結果に実際に影響する。
-const ML_TACTICS = {
-  balanced:   { label: "🚩 標準（流れに任せる）",       chaseMode: "normal", aceEarly: false, desc: "特別な仕掛けはせず、脚質と展開に任せる" },
-  wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", chaseMode: "push",   aceEarly: false, desc: "逃げを許さず集団を保ち、ゴール勝負に持ち込む（スプリント型向き）" },
-  early:      { label: "💨 早めに逃げる",               chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "序盤から飛び出して逃げ切りを狙う（スプリントが苦手な選手向き）" },
-  aggressive: { label: "⚔ 積極的に仕掛ける",            chaseMode: "normal", aceEarly: true,  desc: "終盤の勝負どころで自ら仕掛ける（エース時）" },
-  assist:     { label: "🤝 アシストに徹する",            chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
-};
-function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars) {
-  const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
-  const course = generateCourse(raceMeta, dayTag);
-  const rng = mulberry(Date.now() % 999983);
-  // v22: クラスさえ上がれば以降は相手のレベルが固定されてしまい、キャリア後半は練習しなくても
-  // 勝ち続けられて練習の意味が薄れる、という指摘を受けた。年数が経つほどライバル勢も力をつけて
-  // くる（新世代の台頭）という設定で、経過年数に応じてAIの地力を継続的に底上げする
-  const yearBonus = Math.min(24, ((year || 1) - 1) * 1.5);
-  const power = (50 + classIdx * 9 + (raceMeta.grade - 1) * 4 + yearBonus) * diffAiMul;
-  const { squadMin, squadMax } = raceMeta.tmpl;
-  const nameBanned = new Set([player.name]);
-  const riders = [];
-  const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
-  // v32（世界の統合）：歴代殿堂選手を、AIチームのエース枠に一定確率で紛れ込ませる。
-  // 過去の自分やライバルの血を引く名選手たちと、同じレースで再会できる。
-  const legendPool = loadMlLegends().filter(l => l && l.finalAbilities);
-  const legendTeams = {}; // teamName -> legend
-  if (legendPool.length > 0) {
-    const nLeg = rng() < 0.55 ? (rng() < 0.35 ? 2 : 1) : 0;
-    const otherTeams = MYLIFE_TEAMS.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team));
-    const shuffled = [...legendPool].sort(() => rng() - 0.5).slice(0, nLeg);
-    const teamsForLeg = [...otherTeams].sort(() => rng() - 0.5).slice(0, nLeg);
-    shuffled.forEach((leg, i) => { if (teamsForLeg[i]) legendTeams[teamsForLeg[i].name] = leg; });
-  }
-  // v33.12（A-3）：世界ランキング上位の永続スターを、実際のレースに名前付きで出走させる。
-  // グレードが高いほど強豪が集う。殿堂・ライバルのチームとは重ならないよう割り当てる。
-  const worldStarTeams = {}; // teamName -> { star, rank }
-  if (worldStars && worldStars.length) {
-    const nWant = ({ 1: 1, 2: 2, 3: 3, 4: 4 }[raceMeta.grade] || 1) - Object.keys(legendTeams).length;
-    if (nWant > 0) {
-      const avail = MYLIFE_TEAMS.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team) && !legendTeams[d.name]);
-      const pool = worldStars.slice(0, Math.min(worldStars.length, nWant * 3));
-      const chosen = [...pool].sort(() => rng() - 0.5).slice(0, Math.min(nWant, avail.length));
-      const teamsForStar = [...avail].sort(() => rng() - 0.5);
-      chosen.forEach((st, i) => { if (teamsForStar[i]) worldStarTeams[teamsForStar[i].name] = { star: st, rank: worldStars.indexOf(st) + 1 }; });
-    }
-  }
-  let assistedAceRef = null; // v33.8: アシスト宣言時に献身で押し上げた自チームのエース
-  MYLIFE_TEAMS.forEach(d => {
-    const isMyTeam = d.name === myTeamName;
-    const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
-    const members = [];
-    // v32（固定チームメイト）：自分のチームは、保存済みの固定メンバーを現在の地力で登場させる
-    if (isMyTeam && teammates && teammates.length) {
-      teammates.slice(0, Math.max(1, aiSquadN)).forEach((tm, i) => {
-        const st = newRider(power + (i === 0 ? 4 : 0), rng, { type: tm.type, banned: nameBanned });
-        st.id = tm.id; st.name = tm.name; st.type = tm.type; st.personality = tm.personality || st.personality;
-        if (tm.abilities) st.abilities = tm.abilities;
-        members.push(st);
-      });
-      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned }));
-    } else {
-      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
-    }
-    const aiRoles = assignAIRoles(members, aiSquadN);
-    const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
-    const teamEntrants = members.map((r, i) => {
-      // v29: マイライフのAI相手もeffAbilitiesを通し、体格・調子・大舞台・加速力・メンタルを反映
-      const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
-      return {
-        id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, ...e,
-        team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
-      };
-    });
-    if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
-      const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned });
-      rivalStats.abilities = rival.abilities; rivalStats.goldAbilities = rival.goldAbilities;
-      const re = effAbilities(rivalStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
-      teamEntrants[0] = {
-        ...teamEntrants[0], ...re,
-        id: rival.id, name: rival.name, type: rival.type, abilities: rival.abilities, goldAbilities: rival.goldAbilities,
-        isRival: true,
-      };
-    }
-    // v26: 複数ライバル制。2人目のライバル（好敵手）は別チームの出走枠を差し替える
-    if (rival2 && raceMeta.rival2Present && d.name === rival2.team && d.name !== myTeamName) {
-      const rival2Stats = newRider(power + 6, rng, { type: rival2.type, banned: nameBanned });
-      rival2Stats.abilities = rival2.abilities; rival2Stats.goldAbilities = rival2.goldAbilities;
-      const r2e = effAbilities(rival2Stats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
-      teamEntrants[0] = {
-        ...teamEntrants[0], ...r2e,
-        id: rival2.id, name: rival2.name, type: rival2.type, abilities: rival2.abilities, goldAbilities: rival2.goldAbilities,
-        isRival2: true,
-      };
-    }
-    // v32（世界の統合）：このチームに歴代殿堂選手が割り当てられていればエース枠に差し替える
-    if (legendTeams[d.name] && !isMyTeam) {
-      const leg = legendTeams[d.name];
-      const legStats = newRider(power + 8, rng, { type: leg.type, banned: nameBanned });
-      legStats.abilities = leg.specialAbilities || legStats.abilities;
-      AB_KEYS.forEach(k => { if (leg.finalAbilities && leg.finalAbilities[k] != null) legStats[k] = leg.finalAbilities[k]; });
-      SUB_STAT_KEYS.forEach(k => { if (leg.finalSubStats && leg.finalSubStats[k] != null) legStats[k] = leg.finalSubStats[k]; });
-      const le = effAbilities(legStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
-      teamEntrants[0] = {
-        ...teamEntrants[0], ...le,
-        id: legStats.id, name: leg.name, type: leg.type, abilities: legStats.abilities, goldAbilities: legStats.goldAbilities,
-        isLegend: true, legendTitle: leg.careerTitle || null,
-      };
-    }
-    // v33.12（A-3）：世界ランキングのスターをエース枠に差し替える（isLegendと排他）
-    if (worldStarTeams[d.name] && !isMyTeam && !legendTeams[d.name]) {
-      const { star, rank } = worldStarTeams[d.name];
-      const wsStats = newRider(power, rng, { type: star.type, banned: nameBanned });
-      const keyset = TYPE_ABKEYS[star.type] || [];
-      AB_KEYS.forEach(k => { wsStats[k] = Math.max(40, Math.min(98, Math.round(star.rating - 8 + (keyset.includes(k) ? 8 : 0) + rng() * 5))); });
-      const we = effAbilities(wsStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
-      teamEntrants[0] = {
-        ...teamEntrants[0], ...we,
-        id: wsStats.id, name: star.name, type: star.type, abilities: wsStats.abilities, goldAbilities: wsStats.goldAbilities,
-        isWorldStar: true, worldRank: rank, bloodOf: star.bloodOf || null,
-      };
-    }
-    if (isMyTeam) {
-      // v14.3: 監督指示が「エース」「アシスト／経験」であれば役割はそれに従って強制する。
-      // 指示のない特別な区分（積極的な走り等）の場合のみ、従来通り能力比較で自動判定する
-      const topAbility = Math.max(...teamEntrants.map(e => e.flat + e.climb + e.sprint + e.stamina + e.solo));
-      const playerTotal = playerEff.flat + playerEff.climb + playerEff.sprint + playerEff.stamina + playerEff.solo;
-      const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
-      let playerIsAce;
-      // v33.6: 「アシストに徹する」を選べば監督指示に関わらず献身役に固定できる（献身の道の運ゲー解消）
-      if (tac.playerAssist) playerIsAce = false;
-      else if (directiveKey === "ace") playerIsAce = true;
-      else if (directiveKey === "support" || directiveKey === "experience") playerIsAce = false;
-      else playerIsAce = playerTotal >= topAbility;
-      if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
-      // v33.8: アシストに徹する＝チームのエース（先頭のチームメイト）を献身で押し上げる。
-      // 牽引・風除け・ボトルの恩恵を、自分の地力＋「献身のアシスト」特能に応じてエースの決め所へ還元する。
-      if (tac.playerAssist && !playerIsAce) {
-        const ace = teamEntrants.find(e => e.isAce);
-        if (ace) {
-          const contrib = (playerTotal / 5 - 55) * 0.16 + (hasAbility(player, "domestique") ? (hasGoldAbility(player, "domestique") ? 5 : 3) : 0);
-          const boost = Math.max(2, Math.min(10, Math.round(contrib)));
-          AB_KEYS.forEach(k => { ace[k] = Math.min(99, (ace[k] || 0) + boost); });
-          ace.assistBoost = boost;
-          assistedAceRef = ace;
-        }
-      }
-      // v32（条件付き作戦）：早めに逃げる作戦なら、プレイヤーを逃げ要員として飛び出させる
-      const playerRole = tac.playerBreakaway ? "breakaway" : (playerIsAce ? "lead" : "sub");
-      riders.push({
-        id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: player.goldAbilities, ...playerEff,
-        team: "PLAYER", teamName: myTeamName, color: C.yellow,
-        isAce: playerIsAce, role: playerRole, isPlayerChar: true,
-      });
-    }
-    teamEntrants.forEach(en => riders.push(en));
-  });
-  const sim = { entrants: riders, riders, course, groupMode: "full", raceMeta, breakSurvived: false };
-  // v32（条件付き作戦）：選択した作戦をレース全体の指示（集団牽引の強さ・エース発射）へ反映
-  const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
-  simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
-  rankSim(sim);
-  // v33.8: 献身で押し上げたエースの最終着順を結果画面に渡す
-  if (assistedAceRef) sim.assistedAce = { name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
-  return sim;
-}
 
 // ---------- メインアプリ ----------
 function App() {
@@ -6258,7 +4493,7 @@ function App() {
       if (!offer) return s;
       const outgoing = s.roster.find(r => r.id === offer.wantRiderId);
       if (!outgoing) return s;
-      const incoming = { ...offer.offeredRider, id: RID++, tenure: 0, favorite: false, raceLog: [] };
+      const incoming = { ...offer.offeredRider, id: ridState.value++, tenure: 0, favorite: false, raceLog: [] };
       const roster = s.roster.filter(r => r.id !== offer.wantRiderId).concat(incoming);
       const captainId = s.captainId === offer.wantRiderId ? null : s.captainId;
       return {

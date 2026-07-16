@@ -245,11 +245,15 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
   （挙動不変・verbatim）、`src/index.html`＝Vite入口テンプレート、`package.json`/`vite.config.js` 追加、
   `.gitignore` 整備、`.jsx`ミラーと旧 `roadrace_v12.html` を廃止（内容は `src/` と git 履歴に保全）。
   Playwrightで両モード起動を検証（実エラー0）。
-- **Phase 1 (a)**：静的データを `src/data/` へ。デザイントークン(C/FONT_*)・TYPES・ABILITIES・GOLD_CONDITIONS・
-  PERSONALITIES・CLASSES・DIFFICULTIES・配合テーブル(BREED_NICKS/ARCH_BREED/ML_SPECIAL_MATINGS)・
-  TEMPLATES/VENUES/GRAND_TOURS/ITEMS/EQUIPS・localStorageキー定数。低リスク。
-- **Phase 2 (b)**：純ロジック。`src/sim/`(simulateTicks/effAbilities/assignAIRoles)、`src/breeding/`、
-  `src/world/`、`src/state/`(init/save/load/buildMyLifeSim)。sim/breeding/world は App非依存の純関数で綺麗に切れる。
+- **Phase 1 (a)（完了）**：静的データ52定数を `src/data/` の6モジュールへ（theme/abilities/progression/
+  breeding/course/items）。関数を参照する条件テーブル(GOLD_CONDITIONS 等)はロジック扱いでPhase 2へ送った。
+- **Phase 2 (b)（完了）**：純ロジックを層構造で分離。`src/core/`(RNG・能力/名前/選手生成・OVR)←
+  `src/sim/`(コース生成・simulateTicks・着順)／`src/breeding/`(配合・血統・殿堂)／`src/world/`(世界スター)←
+  `src/state/`(init/save/load・生成器・アンビション・実績・buildMyLifeSim)。**手法**：純ロジックseedの
+  参照閉包(102メンバー)を機械抽出→クロスimport自動計算→ビルド＋Playwright検証。閉包はAppもhookも一切参照せず
+  完全に分離できた。共有可変カウンタ RID は `ridState={value}` ホルダーへ変換（所有はcore）。state↔breedingの
+  実行時のみの循環importは安全。**教訓**：ビルド成功は参照解決を保証しない（未定義識別子はグローバル扱い）。
+  cross-fileのimport網羅は静的チェッカで検証すること。
 - **Phase 3**：`RaceView`（既にトップレベル独立コンポーネント・約457行）を `src/components/RaceView.jsx` へ。
 
 ### 各Phaseの検証手順（必須）
