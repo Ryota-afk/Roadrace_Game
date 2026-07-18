@@ -1432,7 +1432,7 @@ function App() {
       });
       const player = {
         ...s.player,
-        raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role }],
+        raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role, monument: race.monument || undefined }],
         popularity: newPopularity,
         popMilestones: [...popMilestones, ...newlyHit],
       };

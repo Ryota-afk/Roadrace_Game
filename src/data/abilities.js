@@ -44,6 +44,8 @@ export const ABILITIES = {
   soloist:     { label: "独走の求道者", desc: "TT区間で能力+4", category: "地形適性" },
   // v28: 万能型の地形適性。全区間で控えめに底上げする（脚質を選ばないオールラウンダー）
   allrounder_sp:{ label: "オールラウンダー", desc: "全ての区間で能力+2", category: "地形適性" },
+  // v34(C-2): 古典適性。消耗の激しいワンデー古典（モニュメント）で真価を発揮する石畳の英雄
+  pave_sp:     { label: "石畳巧者", desc: "モニュメント（古典）レースで全能力+5%（金特で+9%）", category: "地形適性" },
   // 展開・役割
   escape:      { label: "逃げ屋", desc: "アタック（逃げ）中の能力+4", category: "展開・役割" },
   domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },

@@ -42,6 +42,8 @@ export const GOLD_CONDITIONS = {
   finisher:    r => countWins(r) >= 8,
   engine:      r => (r.raceLog || []).length >= 30,
   allrounder_sp: r => countWins(r) >= 6,
+  // v34(C-2): モニュメント（古典）を2勝すると石畳巧者が金特（石畳の帝王級）に進化する
+  pave_sp:     r => (r.raceLog || []).filter(e => e.monument && e.rank === 1).length >= 2,
 };
 
 export const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];

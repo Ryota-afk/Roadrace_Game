@@ -40,7 +40,15 @@ export function rainMul(r, weather) {
   return hasAbility(r, "rain_sp") ? 0.97 : 0.93;
 }
 
-export function effAbilities(r, equip, itemBoost, grade, weather) {
+// v34 (C-2): モニュメント（古典）適性。石畳巧者はワンデー古典の消耗戦で真価を発揮し、
+// 開催がモニュメントのときだけ全能力が底上げされる。銅で約+5%、金特で約+9%。
+// monument が偽（通常レース・シーズンモード）なら 1.0 で無影響。
+export function monumentMul(r, monument) {
+  if (!monument || !hasAbility(r, "pave_sp")) return 1;
+  return hasGoldAbility(r, "pave_sp") ? 1.09 : 1.05;
+}
+
+export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   const fatPen = 1 - Math.max(0, (r.fatigue || 0) - 50) * 0.003;
   const cm = condMul(r.cond || 3);
   // v29: ピーキング（フォーム）。狙って仕上げた選手はレース当日に能力が底上げされる（±約17%）。
@@ -60,7 +68,8 @@ export function effAbilities(r, equip, itemBoost, grade, weather) {
   const mentalBig = grade === 3 ? 1 + (mental - 50) / 600 : 1;
   const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig;
   const wMul = rainMul(r, weather);
-  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul; });
+  const mMul = monumentMul(r, monument); // v34(C-2): 古典適性（石畳巧者）
+  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul * mMul; });
   // v28: オールラウンダーは全能力を控えめに底上げ（脚質を選ばない万能型）
   if (hasAbility(r, "allrounder_sp")) AB_KEYS.forEach(k => { e[k] += hasGoldAbility(r, "allrounder_sp") ? 4 : 2; });
   // v31.2: 配合限定特能。系統の申し子＝全能力+3、覇道の血脈＝全能力+2かつスタミナ+3

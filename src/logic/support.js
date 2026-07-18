@@ -35,6 +35,8 @@ export const ACQUIRE_CONDITIONS = {
   // v28: 新特殊能力の後天習得条件
   finisher:    r => countWins(r) >= 5,
   engine:      r => (r.raceLog || []).length >= 20,
+  // v34(C-2): モニュメント（古典）に2回出走すると石畳巧者に開眼する余地が生まれる
+  pave_sp:     r => (r.raceLog || []).filter(e => e.monument).length >= 2,
 };
 
 export function acquireNewAbility(r) {
@@ -1224,7 +1226,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
   const riders = [];
   const chemTier = teamChemistryTier(squad);
   squad.forEach(r => {
-    const e = effAbilities(r, equip, itemBoost, raceMeta.grade, raceMeta.weather);
+    const e = effAbilities(r, equip, itemBoost, raceMeta.grade, raceMeta.weather, raceMeta.monument);
     const role = roles[r.id] || "lead";
     riders.push({
       id: r.id, name: r.name, type: r.type, abilities: r.abilities, age: r.age, chemMul: chemTier.mul, ...e,
@@ -1259,7 +1261,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
       return members.map((r, i) => {
         // v29: AI相手もプレイヤーと同じeffAbilitiesを通し、体格(パワーウェイト)・調子・大舞台適性・
         // 加速力・メンタルなどの副次補正が相手選手にも効くようにする（天候補正もこの中で処理）
-        const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+        const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
         return {
           id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, age: r.age, ...e,
           team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,

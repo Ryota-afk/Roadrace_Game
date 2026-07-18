@@ -651,7 +651,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   const { squadMin, squadMax } = raceMeta.tmpl;
   const nameBanned = new Set([player.name]);
   const riders = [];
-  const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+  const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
   // v32（世界の統合）：歴代殿堂選手を、AIチームのエース枠に一定確率で紛れ込ませる。
   // 過去の自分やライバルの血を引く名選手たちと、同じレースで再会できる。
   const legendPool = loadMlLegends().filter(l => l && l.finalAbilities);
@@ -697,7 +697,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
     const teamEntrants = members.map((r, i) => {
       // v29: マイライフのAI相手もeffAbilitiesを通し、体格・調子・大舞台・加速力・メンタルを反映
-      const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+      const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       return {
         id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, ...e,
         team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
@@ -706,7 +706,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
       const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned });
       rivalStats.abilities = rival.abilities; rivalStats.goldAbilities = rival.goldAbilities;
-      const re = effAbilities(rivalStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+      const re = effAbilities(rivalStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...re,
         id: rival.id, name: rival.name, type: rival.type, abilities: rival.abilities, goldAbilities: rival.goldAbilities,
@@ -717,7 +717,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     if (rival2 && raceMeta.rival2Present && d.name === rival2.team && d.name !== myTeamName) {
       const rival2Stats = newRider(power + 6, rng, { type: rival2.type, banned: nameBanned });
       rival2Stats.abilities = rival2.abilities; rival2Stats.goldAbilities = rival2.goldAbilities;
-      const r2e = effAbilities(rival2Stats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+      const r2e = effAbilities(rival2Stats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...r2e,
         id: rival2.id, name: rival2.name, type: rival2.type, abilities: rival2.abilities, goldAbilities: rival2.goldAbilities,
@@ -731,7 +731,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       legStats.abilities = leg.specialAbilities || legStats.abilities;
       AB_KEYS.forEach(k => { if (leg.finalAbilities && leg.finalAbilities[k] != null) legStats[k] = leg.finalAbilities[k]; });
       SUB_STAT_KEYS.forEach(k => { if (leg.finalSubStats && leg.finalSubStats[k] != null) legStats[k] = leg.finalSubStats[k]; });
-      const le = effAbilities(legStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+      const le = effAbilities(legStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...le,
         id: legStats.id, name: leg.name, type: leg.type, abilities: legStats.abilities, goldAbilities: legStats.goldAbilities,
@@ -744,7 +744,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const wsStats = newRider(power, rng, { type: star.type, banned: nameBanned });
       const keyset = TYPE_ABKEYS[star.type] || [];
       AB_KEYS.forEach(k => { wsStats[k] = Math.max(40, Math.min(98, Math.round(star.rating - 8 + (keyset.includes(k) ? 8 : 0) + rng() * 5))); });
-      const we = effAbilities(wsStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather);
+      const we = effAbilities(wsStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...we,
         id: wsStats.id, name: star.name, type: star.type, abilities: wsStats.abilities, goldAbilities: wsStats.goldAbilities,
