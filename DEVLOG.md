@@ -190,7 +190,8 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
 | `e98092f` | **C-1**：モニュメント（ワンデー・クラシック）3種を追加 |
 | (DEVLOG) | 引き継ぎ文書 DEVLOG.md 追加＋実装済み機能インベントリ |
 | `A-3` | 世界ランキングのスターが実際のレースに出走（出走表に🌍◯位表示、グレードで人数増減。`buildMyLifeSim` に worldStars 注入、`worldStarTeams`） |
-| `C-2増分1` | クラシック適性「石畳巧者」(`pave_sp`)：モニュメントで全能力+5%（金特+9%）。`monumentMul`＋`effAbilities`にmonument引数を追加 |
+| `C-2増分1` | クラシック適性の配線：`monumentMul`＋`effAbilities`にmonument引数、raceLogにmonumentタグ |
+| `C-2増分2` | 脚質別の古典適性3種（`pave_sp`石畳/`ardennes_sp`丘陵/`autumn_sp`山岳）。対応古典のみ全能力+5%（金特+9%） |
 
 ---
 
@@ -201,13 +202,18 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
 
 ### ゲーム内容
 - **C-2 追加フォーマット／適性**（進行中）：
-  - **増分1（完了・v34）**：クラシック適性の特能 **`pave_sp`「石畳巧者」** を実装。モニュメント（古典）レースで
-    全能力×1.05（金特で×1.09）。`raceMeta.monument` を `effAbilities`（sim/race.js）へ届け、`rainMul` と同型の
-    `monumentMul(r, monument)` で適用。習得＝モニュメント2回出走（ACQUIRE, support.js）、金特化＝モニュメント2勝
-    （GOLD, core.js）。プレイヤーの raceLog エントリに `monument` タグを付与（main.jsx のレース確定）。
-    ヘルプ更新。**検証**：純ESMのままNodeで monumentMul/effAbilities/条件を単体テスト（×1.05/×1.09・条件境界）＋
-    Playwrightで両モード0エラー。
-  - **残**：新競技フォーマット（チームTT＝合算タイム／トラック）、脚質別の古典適性（石畳/丘陵/山岳それぞれ専用）。
+  - **増分1（完了・v34）**：クラシック適性の配線を実装。`raceMeta.monument` を `effAbilities`（sim/race.js）へ届け、
+    `rainMul` と同型の `monumentMul(r, monument)` で全能力×1.05（金特×1.09）を適用。プレイヤーの raceLog
+    エントリに `monument` タグ（＝モニュメントid）を付与（main.jsx のレース確定）。
+  - **増分2（完了・v34）**：これを**脚質別の古典適性3種**に展開。`monumentMul` を
+    `MONUMENT_ABILITY = {pave:"pave_sp", ardennes:"ardennes_sp", autumn:"autumn_sp"}` のマップ方式にし、
+    各モニュメントは対応特能を持つ選手だけをブースト（相互作用なし）：
+    石畳《春の地獄》→`pave_sp`「石畳巧者」／丘陵《アルデンヌ》→`ardennes_sp`「アルデンヌの狼」／
+    山岳《秋の女王》→`autumn_sp`「秋の女王」。習得＝その古典で表彰台（ACQUIRE, support.js）、
+    金特化＝その古典で優勝（GOLD, core.js）。ヘルプ更新。**検証**：Nodeで13ケース単体テスト
+    （各特能が自分の古典のみ+5%/+9%・他古典は無影響・条件の脚質別判定）＋Playwrightで両モード0エラー。
+  - **残**：新競技フォーマット（チームTT＝合算タイム／トラック等）。※シーズンモードにはモニュメントが無いため
+    これら古典適性は現状マイライフ専用（season の raceMeta.monument は undefined＝無影響）。
     ※シーズンモードにはモニュメントが無いため石畳巧者は現状マイライフ専用（season の raceMeta.monument は undefined＝無影響）。
 - **バランス調整パス**（C-2の後）：急増した要素（配合・爆発力・危険度・系統・特殊配合・生きた世界・作戦・モニュメント）を実際に回して数値を整える
 - **B-2 逆メンター**（未着手）：ベテラン化したら若手を指導（プロテジェの師匠側を遊ぶ）／チームメイトの絆・確執イベント

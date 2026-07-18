@@ -40,12 +40,14 @@ export function rainMul(r, weather) {
   return hasAbility(r, "rain_sp") ? 0.97 : 0.93;
 }
 
-// v34 (C-2): モニュメント（古典）適性。石畳巧者はワンデー古典の消耗戦で真価を発揮し、
-// 開催がモニュメントのときだけ全能力が底上げされる。銅で約+5%、金特で約+9%。
-// monument が偽（通常レース・シーズンモード）なら 1.0 で無影響。
+// v34 (C-2): モニュメント（古典）適性。各モニュメント（石畳/丘陵/山岳）にはそれぞれ専用の
+// 古典適性があり、対応する古典のときだけ全能力が底上げされる（脚質別適性）。銅で約+5%、金特で約+9%。
+// monument が偽（通常レース・シーズンモード）や、対応特能を持たなければ 1.0 で無影響。
+export const MONUMENT_ABILITY = { pave: "pave_sp", ardennes: "ardennes_sp", autumn: "autumn_sp" };
 export function monumentMul(r, monument) {
-  if (!monument || !hasAbility(r, "pave_sp")) return 1;
-  return hasGoldAbility(r, "pave_sp") ? 1.09 : 1.05;
+  const ab = MONUMENT_ABILITY[monument];
+  if (!ab || !hasAbility(r, ab)) return 1;
+  return hasGoldAbility(r, ab) ? 1.09 : 1.05;
 }
 
 export function effAbilities(r, equip, itemBoost, grade, weather, monument) {

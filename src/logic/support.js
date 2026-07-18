@@ -35,8 +35,10 @@ export const ACQUIRE_CONDITIONS = {
   // v28: 新特殊能力の後天習得条件
   finisher:    r => countWins(r) >= 5,
   engine:      r => (r.raceLog || []).length >= 20,
-  // v34(C-2): モニュメント（古典）に2回出走すると石畳巧者に開眼する余地が生まれる
-  pave_sp:     r => (r.raceLog || []).filter(e => e.monument).length >= 2,
+  // v34(C-2): 各モニュメント（古典）で表彰台に立つと、その古典専用の適性に開眼する余地が生まれる（脚質別）
+  pave_sp:     r => (r.raceLog || []).some(e => e.monument === "pave" && e.rank <= 3),
+  ardennes_sp: r => (r.raceLog || []).some(e => e.monument === "ardennes" && e.rank <= 3),
+  autumn_sp:   r => (r.raceLog || []).some(e => e.monument === "autumn" && e.rank <= 3),
 };
 
 export function acquireNewAbility(r) {

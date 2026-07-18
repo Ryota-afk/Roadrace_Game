@@ -42,8 +42,10 @@ export const GOLD_CONDITIONS = {
   finisher:    r => countWins(r) >= 8,
   engine:      r => (r.raceLog || []).length >= 30,
   allrounder_sp: r => countWins(r) >= 6,
-  // v34(C-2): モニュメント（古典）を2勝すると石畳巧者が金特（石畳の帝王級）に進化する
-  pave_sp:     r => (r.raceLog || []).filter(e => e.monument && e.rank === 1).length >= 2,
+  // v34(C-2): 各モニュメント（古典）を制覇すると、その古典専用の適性が金特に進化する（脚質別）
+  pave_sp:     r => (r.raceLog || []).some(e => e.monument === "pave" && e.rank === 1),
+  ardennes_sp: r => (r.raceLog || []).some(e => e.monument === "ardennes" && e.rank === 1),
+  autumn_sp:   r => (r.raceLog || []).some(e => e.monument === "autumn" && e.rank === 1),
 };
 
 export const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];
