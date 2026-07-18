@@ -1219,6 +1219,23 @@ export function computeStandings(g) {
   return rows;
 }
 
+// v34（バランス）：シーズン順位を実効化する。現在の順位表での自チームの順位を返す。
+export function seasonRank(g) {
+  const rows = computeStandings(g);
+  const idx = rows.findIndex(r => r.isPlayer);
+  return { rank: idx + 1, total: rows.length };
+}
+// 年度末のシーズン順位ボーナス（賞金・万円）。上位ほど厚く、クラスで増額。走り込んで順位を上げる意味を作る。
+export function standingsRankReward(rank, classIdx) {
+  const base = rank === 1 ? 150 : rank === 2 ? 90 : rank === 3 ? 40 : 0;
+  return Math.round(base * (1 + classIdx * 0.6));
+}
+// シーズン順位に応じてチャンピオンシップの昇格ボーダー（必要着順）を緩和する。
+// 1位＝本番5位以内で昇格／2位＝4位以内／3位以下＝従来通り3位以内。年間を通した強さを本番に還元。
+export function champPromoteCut(rank) {
+  return rank === 1 ? 5 : rank === 2 ? 4 : 3;
+}
+
 export function bumpCareerStats(cs, rank, prize) {
   return {
     totalRaces: cs.totalRaces + 1,

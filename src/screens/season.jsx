@@ -10,7 +10,7 @@ import { CHASE_MODES, HOME_ABILITY_BONUS, MONTHS, ROLES, SEG_AB, SEG_COLOR, UNLO
 import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
-import { CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, staffSalaryTotal, t_label, teamChemistryTier } from "../logic/support.js";
+import { CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
 import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveMeta } from "../state/state.js";
 
@@ -1086,7 +1086,11 @@ export function renderSeasonScreens(ctx) {
       <div style={{ display: "grid", gap: 10 }}>
         <Eyebrow color={C.purple}>今季のチーム順位表（{g.year}年目・{cls.label}）</Eyebrow>
         <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.7 }}>
-          {MONTHS[g.month]}時点の推定ポイント順位です。他チームのポイントは想定値ですが、昇格ライン（{CLASSES[g.classIdx].need}pt）到達の目安として自チームの立ち位置を確認できます。
+          {MONTHS[g.month]}時点のチームポイント順位です。他チームも毎月ポイントを積み上げています——<span style={{ color: C.text }}>走り込んで順位を上げるほど、年度末に報酬とチャンピオンシップの優位が得られます</span>。レースを休むと相手に抜かれて順位が下がります。
+        </div>
+        <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}`, fontSize: 11, color: C.sub, lineHeight: 1.7 }}>
+          🏆 <span style={{ color: C.text, fontWeight: 700 }}>最終順位ボーナス</span>：1位 +{standingsRankReward(1, g.classIdx)}万／2位 +{standingsRankReward(2, g.classIdx)}万／3位 +{standingsRankReward(3, g.classIdx)}万<br />
+          🎯 <span style={{ color: C.text, fontWeight: 700 }}>昇格ボーダー緩和</span>：シーズン1位＝本番<span style={{ color: "#e8a13c" }}>5位以内</span>／2位＝<span style={{ color: "#e8a13c" }}>4位以内</span>／3位以下＝3位以内でチャンピオンシップ昇格（PROは対象外）
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "6px 10px", display: "grid", gap: 2 }}>
           {rows.map((row, i) => (
@@ -1104,7 +1108,7 @@ export function renderSeasonScreens(ctx) {
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11, color: C.sub }}>3月のチャンピオンシップ3位以内で昇格できます。順位表はあくまで参考で、昇格判定はチャンピオンシップの結果で決まります。</div>
+        <div style={{ fontSize: 11, color: C.sub }}>昇格の最終判定は3月のチャンピオンシップ（本番）で決まりますが、その必要着順はこのシーズン順位で緩和されます。年間を通して上位で走り切るほど昇格が近づきます。</div>
         <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
       </div>
     );
@@ -1644,6 +1648,13 @@ export function renderSeasonScreens(ctx) {
           <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.8 }}>
             {info.champBest !== null ? `年度末レース結果：自チーム最高 ${info.champBest}位` : "年度末レースには出場できませんでした（ポイント不足）"}
           </div>
+          {info.standingsRank != null && (
+            <div style={{ marginTop: 8, fontSize: 13, color: "#e8a13c", lineHeight: 1.8 }}>
+              🏆 シーズン最終順位 {info.standingsRank}/{info.standingsTotal}位
+              {info.standingsMoney > 0 ? ` — 順位ボーナス +${info.standingsMoney}万円` : ""}
+              {info.promoteCut > 3 && info.champBest !== null ? `／ 上位の走りで昇格ボーダーが本番${info.promoteCut}位以内に緩和` : ""}
+            </div>
+          )}
           {info.sponsorResult && (
             <div style={{ marginTop: 8, fontSize: 13, color: info.sponsorResult.achieved ? C.green : C.red }}>
               {info.sponsorResult.name}：ノルマ{info.sponsorResult.norma}ptに対し{info.sponsorResult.pts}pt —

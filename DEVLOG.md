@@ -193,6 +193,7 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
 | `C-2増分1` | クラシック適性の配線：`monumentMul`＋`effAbilities`にmonument引数、raceLogにmonumentタグ |
 | `C-2増分2` | 脚質別の古典適性3種（`pave_sp`石畳/`ardennes_sp`丘陵/`autumn_sp`山岳）。対応古典のみ全能力+5%（金特+9%） |
 | `UI下馬評` | 出走表に予想印（◎本命/○対抗/▲注目）＋評価順位を表示。`raceForecast(entrants,favors)`(support.js)＝コース得意分野の地力で格付け。マイライフ＝プレイヤーの評価も表示。シーズン＝自チーム選手をeffAbilitiesで実効能力化して同じ予想を有効化（AIは元々能力保持） |
+| `バランス:シーズン順位実効化` | 規定pt超過が形骸化（取ったら休む方が得）していた問題を修正。既存の飾りだった`computeStandings`のチーム順位表を実効化：年度末に順位で賞金ボーナス（`standingsRankReward`）＋昇格ボーダー緩和（`champPromoteCut`：1位→本番5位以内/2位→4位/他3位、PRO除く）。`seasonRank(g)`。他チームは毎月加点するので走り込むほど順位・報酬・昇格が有利＝走り続ける動機を常時付与。主画面ヘッダに順位表示、順位表画面と年度末画面を実効説明に更新 |
 
 ---
 
