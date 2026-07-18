@@ -1162,7 +1162,7 @@ export function renderSeasonScreens(ctx) {
       <div style={{ display: "grid", gap: 12 }}>
         <Eyebrow color={C.purple}>🏁 出走表 — {race ? race.name : ""}</Eyebrow>
         {playerEntrants.length === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>まだ自チームの出走メンバーを選んでいません。相手の布陣を見て編成を決めましょう。</div>}
-        <StartListPanel entrants={[...playerEntrants, ...aiEntrants]} />
+        <StartListPanel entrants={[...playerEntrants, ...aiEntrants]} favors={race && race.tmpl ? race.tmpl.favors : undefined} />
         <Btn onClick={() => setG(s => ({ ...s, screen: "lineup" }))}>← 編成に戻る</Btn>
       </div>
     );

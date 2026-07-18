@@ -1,6 +1,6 @@
 // 表示用サブコンポーネント（Phase 4-1で main.jsx から分離）。
 import React from "react";
-import { ABILITY_CATEGORY_ORDER, DISCIPLINES, DISCIPLINE_KEYS, buildDesc, disciplineScore, loadCourseRecords } from "../logic/support.js";
+import { ABILITY_CATEGORY_ORDER, DISCIPLINES, DISCIPLINE_KEYS, buildDesc, disciplineScore, loadCourseRecords, raceForecast } from "../logic/support.js";
 import { Eyebrow } from "./ui.jsx";
 import { GOLD_CONDITIONS } from "../core/core.js";
 import { ABILITIES, AB_COLOR, AB_KEYS, AB_LABEL, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL, PERSONALITIES, TYPES } from "../data/abilities.js";
@@ -40,7 +40,7 @@ export function SubStatLine({ r }) {
   );
 }
 
-export function StartListPanel({ entrants }) {
+export function StartListPanel({ entrants, favors }) {
   const teams = {};
   entrants.forEach(e => { (teams[e.teamName] = teams[e.teamName] || { color: e.color, list: [] }).list.push(e); });
   const rows = Object.entries(teams).sort((a, b) => {
@@ -48,20 +48,47 @@ export function StartListPanel({ entrants }) {
     const bp = b[1].list.some(e => e.team === "PLAYER") ? 0 : 1;
     return ap - bp;
   });
+  // v34(UI): 下馬評（コース地力の予想印）。能力データがあるとき（マイライフの出走表）だけ有効
+  const forecast = raceForecast(entrants, favors);
+  const hasForecast = forecast.size > 0;
+  const me = hasForecast ? entrants.find(e => e.isPlayerChar) : null;
+  const myFc = me ? forecast.get(me) : null;
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <div style={{ fontSize: 11, color: C.sub }}>出走 {entrants.length}名 / {rows.length}チーム（👑=エース）</div>
+      {hasForecast && (
+        <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}` }}>
+          <div style={{ fontSize: 11.5, color: C.sub }}>
+            📊 下馬評（このコースの地力予想）：
+            <span style={{ color: "#ffd23f", fontWeight: 700, marginLeft: 4 }}>◎本命</span>{" "}
+            <span style={{ color: "#4f8fe8", fontWeight: 700 }}>○対抗</span>{" "}
+            <span style={{ color: "#35c07e", fontWeight: 700 }}>▲注目</span>
+          </div>
+          {myFc && (
+            <div style={{ fontSize: 12.5, color: C.text, marginTop: 4, fontWeight: 700 }}>
+              あなたの評価：
+              <span style={{ color: myFc.mark ? myFc.mark.color : C.sub, marginLeft: 4 }}>
+                {myFc.mark ? `${myFc.mark.icon} ${myFc.mark.label}` : "無印"}（{myFc.rank}番手／{entrants.length}人中）
+              </span>
+            </div>
+          )}
+        </div>
+      )}
       {rows.map(([tn, t]) => {
         const isPlayerTeam = t.list.some(e => e.team === "PLAYER");
         return (
           <div key={tn} style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", borderLeft: `3px solid ${t.color}` }}>
             <div style={{ fontFamily: FONT_D, fontWeight: 700, color: isPlayerTeam ? C.yellow : C.text, fontSize: 13 }}>{tn}{isPlayerTeam ? "（自チーム）" : ""}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 3 }}>
-              {t.list.map((e, i) => (
-                <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : e.isWorldStar ? "#4f8fe8" : (e.isRival || e.isRival2) ? C.red : C.text }}>
-                  {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.isWorldStar ? `🌍${e.worldRank}位 ` : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
-                </span>
-              ))}
+              {t.list.map((e, i) => {
+                const fc = forecast.get(e);
+                return (
+                  <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : e.isWorldStar ? "#4f8fe8" : (e.isRival || e.isRival2) ? C.red : C.text }}>
+                    {fc && fc.mark ? <span style={{ color: fc.mark.color, fontWeight: 700, marginRight: 1 }}>{fc.mark.icon}</span> : ""}
+                    {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.isWorldStar ? `🌍${e.worldRank}位 ` : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
+                  </span>
+                );
+              })}
             </div>
           </div>
         );

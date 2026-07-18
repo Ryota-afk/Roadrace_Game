@@ -638,7 +638,7 @@ export function renderMyLifeScreens(ctx) {
       <div style={{ display: "grid", gap: 12 }}>
         <Eyebrow color={C.purple}>🏁 出走表 — {ml.result.raceMeta.name}</Eyebrow>
         <div style={{ fontSize: 11.5, color: C.sub }}>{ml.result.raceMeta.tmpl.kind}・{"★".repeat(ml.result.raceMeta.grade)}・{TYPES[ml.result.raceMeta.tmpl.favors].label}有利</div>
-        <StartListPanel entrants={ml.result.entrants} />
+        <StartListPanel entrants={ml.result.entrants} favors={ml.result.raceMeta.tmpl.favors} />
         <Btn onClick={() => setMl(s => ({ ...s, screen: "mylife_race" }))}>🏁 レースを始める</Btn>
         <Btn outline color={C.sub} onClick={() => { mlRaceLockRef.current = false; setMl(s => ({ ...s, result: null, screen: "mylife_main" })); }}>← 出走を取りやめる</Btn>
       </div>
