@@ -192,7 +192,7 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
 | `A-3` | 世界ランキングのスターが実際のレースに出走（出走表に🌍◯位表示、グレードで人数増減。`buildMyLifeSim` に worldStars 注入、`worldStarTeams`） |
 | `C-2増分1` | クラシック適性の配線：`monumentMul`＋`effAbilities`にmonument引数、raceLogにmonumentタグ |
 | `C-2増分2` | 脚質別の古典適性3種（`pave_sp`石畳/`ardennes_sp`丘陵/`autumn_sp`山岳）。対応古典のみ全能力+5%（金特+9%） |
-| `UI下馬評` | 出走表に予想印（◎本命/○対抗/▲注目）＋プレイヤーの評価順位を表示。`raceForecast(entrants,favors)`(support.js)＝コース得意分野の地力で格付け。マイライフのみ有効（シーズンは能力データ無しで自動非表示） |
+| `UI下馬評` | 出走表に予想印（◎本命/○対抗/▲注目）＋評価順位を表示。`raceForecast(entrants,favors)`(support.js)＝コース得意分野の地力で格付け。マイライフ＝プレイヤーの評価も表示。シーズン＝自チーム選手をeffAbilitiesで実効能力化して同じ予想を有効化（AIは元々能力保持） |
 
 ---
 

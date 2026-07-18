@@ -11,7 +11,7 @@ import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
 import { CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, staffSalaryTotal, t_label, teamChemistryTier } from "../logic/support.js";
-import { PARTS, PART_SLOTS, generateCourse } from "../sim/race.js";
+import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
 import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveMeta } from "../state/state.js";
 
 export function renderSeasonScreens(ctx) {
@@ -1156,7 +1156,11 @@ export function renderSeasonScreens(ctx) {
   if (g.screen === "startlist") {
     const race = g.races.find(r => r.id === g.sel.raceId);
     const playerEntrants = g.roster.filter(r => (g.sel.starters || []).includes(r.id))
-      .map(r => ({ name: r.name, type: r.type, teamName: g.teamName || "あなたのチーム", color: C.yellow, team: "PLAYER", isAce: r.id === g.sel.ace }));
+      .map(r => {
+        // v34(UI): 下馬評用に自チーム選手も実効能力を持たせる（AIと同じeffAbilitiesで公平に比較）
+        const meta = { id: r.id, name: r.name, type: r.type, teamName: g.teamName || "あなたのチーム", color: C.yellow, team: "PLAYER", isAce: r.id === g.sel.ace };
+        return race ? { ...effAbilities(r, g.equip, {}, race.grade, race.weather, race.monument), ...meta } : meta;
+      });
     const aiEntrants = (g.pendingAiTeams || []).flat();
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
