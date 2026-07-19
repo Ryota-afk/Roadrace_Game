@@ -4,7 +4,7 @@ import { loadMlLegends, mlBreedBonus } from "../breeding/breeding.js";
 import { RaceErrorBoundary, RaceView } from "../components/RaceView.jsx";
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "../components/panels.jsx";
 import { Btn, Eyebrow } from "../components/ui.jsx";
-import { fmtGap, fmtTime, overall } from "../core/core.js";
+import { fmtGap, fmtRelTime, fmtTime, overall } from "../core/core.js";
 import { ABILITIES, AB_KEYS, AB_LABEL, COND_ARROW, COND_COLOR, GROWTH, POW, TYPES, TYPE_ROLE_FIT } from "../data/abilities.js";
 import { CHASE_MODES, HOME_ABILITY_BONUS, MONTHS, ROLES, SEG_AB, SEG_COLOR, UNLOCK_TEMPLATES } from "../data/course.js";
 import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
@@ -12,7 +12,7 @@ import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
 import { CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
-import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveMeta } from "../state/state.js";
+import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
 
 export function renderSeasonScreens(ctx) {
   const { acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap } = ctx;
@@ -26,9 +26,15 @@ export function renderSeasonScreens(ctx) {
           （春・夏・秋）が開催され、その全戦制覇がグランファイナルへの出場条件。グランファイナル優勝でクリア。
         </p>
       </div>
-      {hasSaveGame() && (
-        <Btn onClick={() => { const loaded = loadGame(); if (loaded) setG(loaded); }}>💾 続きから</Btn>
-      )}
+      {hasSaveGame() && (() => {
+        const info = saveGameInfo();
+        return (
+          <Btn onClick={() => { const loaded = loadGame(); if (loaded) setG(loaded); }}>
+            💾 続きから
+            {info && <span style={{ display: "block", fontSize: 10.5, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>{info.teamName}・{info.classLabel}・{info.year}年目{info.savedAt ? ` — ${fmtRelTime(info.savedAt)}に保存` : ""}</span>}
+          </Btn>
+        );
+      })()}
       <Btn outline={hasSaveGame()} onClick={() => {
         const doReset = () => { clearSaveGame(); setG(s => ({ ...initGame(), screen: "newgame_setup" })); };
         if (hasSaveGame()) askConfirm("保存データを消して最初から始めます。よろしいですか？", doReset);

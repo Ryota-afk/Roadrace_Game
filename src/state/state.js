@@ -426,6 +426,18 @@ export function loadGame() {
   } catch (e) { return null; }
 }
 
+// v35(UI): セーブの安心感。フルロードせずに続きから用のサマリ（誰の・いつの・どこまで）だけ覗く。
+export function saveGameInfo() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (p.version !== SAVE_VERSION || !p.state) return null;
+    const s = p.state;
+    return { savedAt: p.savedAt || null, teamName: s.teamName || "あなたのチーム", year: s.year || 1, classLabel: (CLASSES[s.classIdx || 0] || {}).label || "" };
+  } catch (e) { return null; }
+}
+
 export const ML_AMBITION_PATHS = {
   victory: {
     label: "勝利の道", icon: "🏆", color: "#ffd23f",
@@ -614,6 +626,24 @@ export function loadMyLifeGame() {
     if (!merged.tactic) merged.tactic = "balanced";
     if (!Array.isArray(merged.careerHistory)) merged.careerHistory = [];
     return merged;
+  } catch (e) { return null; }
+}
+
+// v35(UI): マイライフ続きから用の軽量サマリ（誰の・何年目・どのクラス・いつ保存）。
+export function myLifeSaveInfo() {
+  try {
+    const raw = localStorage.getItem(ML_SAVE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (p.version !== ML_SAVE_VERSION || !p.state) return null;
+    const s = p.state;
+    return {
+      savedAt: p.savedAt || null,
+      name: (s.player && s.player.name) || "選手",
+      age: (s.player && s.player.age) || null,
+      year: s.year || 1,
+      classLabel: (CLASSES[s.classIdx || 0] || {}).label || "",
+    };
   } catch (e) { return null; }
 }
 

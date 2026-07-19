@@ -227,3 +227,19 @@ export function strHash(s) {
 export function fmtTime(sec) { const m = Math.floor(sec / 60), s = Math.floor(sec % 60); return `${m}:${String(s).padStart(2, "0")}`; }
 
 export function fmtGap(sec) { return sec < 0.5 ? "TOP" : `+${fmtTime(sec)}`; }
+
+// v35(UI): セーブ時刻の相対表示（続きからの安心感）。
+export function fmtRelTime(ts) {
+  if (!ts) return "";
+  const d = Date.now() - ts;
+  if (d < 0) return "たった今";
+  const min = Math.floor(d / 60000);
+  if (min < 1) return "たった今";
+  if (min < 60) return `${min}分前`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}時間前`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}日前`;
+  const mon = Math.floor(day / 30);
+  return `${mon}ヶ月前`;
+}

@@ -4,14 +4,14 @@ import { legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineFactor, mlBloo
 import { RaceErrorBoundary, RaceView } from "../components/RaceView.jsx";
 import { AbilityFileList, AbilityGrid, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "../components/panels.jsx";
 import { Btn, Eyebrow } from "../components/ui.jsx";
-import { fmtTime, overall } from "../core/core.js";
+import { fmtRelTime, fmtTime, overall } from "../core/core.js";
 import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilities.js";
 import { MONTHS } from "../data/course.js";
 import { CLASSES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
 import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlMediaHeadline, mlWorldBoard, mlWorldNews, potentialHint, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
 export function renderMyLifeScreens(ctx) {
   const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
@@ -26,9 +26,15 @@ export function renderMyLifeScreens(ctx) {
               脚質と経歴を選んでB1のいずれかのチームに新人選手として加入します。
             </p>
           </div>
-          {hasMyLifeSave() && (
-            <Btn onClick={() => { const loaded = loadMyLifeGame(); if (loaded) setMl(loaded); }}>💾 続きから</Btn>
-          )}
+          {hasMyLifeSave() && (() => {
+            const info = myLifeSaveInfo();
+            return (
+              <Btn onClick={() => { const loaded = loadMyLifeGame(); if (loaded) setMl(loaded); }}>
+                💾 続きから
+                {info && <span style={{ display: "block", fontSize: 10.5, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>{info.name}{info.age ? `（${info.age}歳）` : ""}・{info.classLabel}・{info.year}年目{info.savedAt ? ` — ${fmtRelTime(info.savedAt)}に保存` : ""}</span>}
+              </Btn>
+            );
+          })()}
           <div>
             <Eyebrow>脚質</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
