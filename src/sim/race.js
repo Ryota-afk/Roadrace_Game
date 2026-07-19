@@ -251,10 +251,16 @@ export function groupShelterMul(n) {
 }
 
 export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこない位置）での基礎回復量/tick
+// v35(バランス): 勝負を賭けた逃げ（committedBreak）が単独で先頭に立っている間だけ、
+// 選抜地形で消耗が軽減される（brk係数）。登坂・山岳で最も効き（集団が組織的に追えず、
+// 登りでは集団のドラフト優位も縮む）、丘で中程度、平坦・スプリントでは無効＝吸収される。
+// 集団に吸収されて draft/pull へ戻れば solo/attack ではなくなり自動的に無効化される。
 function energyDrain(en, mode, segType, steepness) {
   // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（金特で更に軽減）
   const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88) : 1;
-  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul;
+  const brk = en.committedBreak && (mode === "solo" || mode === "attack")
+    ? ({ mtn: 0.55, climb: 0.6, hill: 0.78, flat: 1, sprint: 1, tt: 1 }[segType] ?? 1) : 1;
+  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul * brk;
 }
 
 export function canPull(en, segType) {
@@ -303,6 +309,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // 自動でアタック（attackモード）に入り、実際に集団から離れる動きをするようにする
       en.attackLeft = (directive.aceEarly && en.isAce) ? ATTACK_TICKS
         : (en.role === "breakaway" ? BREAKAWAY_ATTACK_TICKS : 0);
+      // v35(バランス): シーズンのエース早期発射＝「勝負を賭けた逃げ」。単独で飛び出したエースは
+      // 選抜地形（登坂・丘）では集団が組織的に追えず（登りでは集団のドラフト優位も縮む）、
+      // ギャップ維持の消耗が軽くなる（committedBreak）。平坦・スプリントでは恩恵ゼロ＝吸収される。
+      en.committedBreak = !!(directive.aceEarly && en.isAce);
       en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
     });
   } else {
@@ -312,7 +322,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       en.posHist = en.posHist.slice(0, fromTick); en.energyHist = en.energyHist.slice(0, fromTick);
       en.modeHist = en.modeHist.slice(0, fromTick); en.groupHist = en.groupHist.slice(0, fromTick);
       en.slotHist = en.slotHist.slice(0, fromTick);
-      if (directive.aceEarly && en.isAce) { en.attackLeft = ATTACK_TICKS; }
+      if (directive.aceEarly && en.isAce) { en.attackLeft = ATTACK_TICKS; en.committedBreak = true; }
     });
   }
   let tick = fromTick;
