@@ -9,7 +9,7 @@ import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilit
 import { MONTHS } from "../data/course.js";
 import { CLASSES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlMediaHeadline, mlWorldBoard, mlWorldNews, potentialHint, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
+import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlWorldBoard, mlWorldNews, potentialHint, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
@@ -1194,6 +1194,28 @@ export function renderMyLifeScreens(ctx) {
             </div>
           </div>
           {hist.length <= 1 && <div style={{ fontSize: 11, color: C.sub }}>年度を進めるとグラフが伸びていきます。</div>}
+          {/* v35(UI): キャリアの軌跡（年表）。raceLogから語る価値のある一戦を時系列で */}
+          {(() => {
+            const tl = mlCareerTimeline(ml);
+            return (
+              <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+                <Eyebrow color={C.yellow}>🏅 キャリアの軌跡</Eyebrow>
+                {tl.length === 0 ? (
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 6 }}>まだ語るべき一戦はない。初勝利・初表彰台がここに刻まれていく。</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 0, marginTop: 6 }}>
+                    {tl.map((e, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "5px 0", borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
+                        <span style={{ fontSize: 10, color: C.sub, fontFamily: FONT_M, width: 62, flexShrink: 0 }}>{e.year}年目{MONTHS[e.month] || ""}</span>
+                        <span style={{ fontSize: 13, flexShrink: 0 }}>{e.icon}</span>
+                        <span style={{ fontSize: 11.5, color: e.color, lineHeight: 1.4 }}>{e.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
         </div>
       );

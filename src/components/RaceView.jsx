@@ -364,6 +364,14 @@ export function RaceView({ sim, onFinish }) {
     baseEvents.push({ t: 0.985, text: FINISH_COMMENTARY[Math.floor(strHash(sim.raceMeta.name || "x") % FINISH_COMMENTARY.length)] });
     // v27: 実況の動的イベント検知用の状態（逃げとメインのギャップ変化を追う）
     let prevGapSec = null, lastDynCommentAt = 0;
+    // v35(UI): 注目選手（マイライフ＝プレイヤー本人／シーズン＝自チームのエース）を名指しで実況する。
+    // 順位の急変・先頭浮上・遅れを検知して、レースを「自分の物語」として盛り上げる。
+    const focusEnt = sim.entrants.find(e => e.isPlayerChar)
+      || sim.entrants.find(e => e.team === "PLAYER" && e.isAce)
+      || sim.entrants.find(e => e.team === "PLAYER");
+    const focusId = focusEnt ? focusEnt.id : null;
+    const focusName = focusEnt ? focusEnt.name : null;
+    let prevFocusRank = null, lastFocusSampleAt = 0;
 
     let clock = 0, prev = performance.now(), done = false, lastHud = 0, intervalId = null;
     const tick = () => {
@@ -526,9 +534,32 @@ export function RaceView({ sim, onFinish }) {
             gapText = `逃げとメインのギャップ：約${curGapSec}秒`;
           }
         }
+        // v35(UI): 注目選手（プレイヤー／自チームのエース）を名指しで実況。順位の急変・先頭浮上・
+        // 遅れを拾う。最終区間はラストスパート演出が優先されるため対象外。ギャップ実況と枠を共有し
+        // （4秒間隔）、より物語性の高い注目選手の実況を優先する。
+        // 注目選手の順位を約2.5秒ごとにサンプリングし、その窓での動きを実況にする
+        let focusFired = false;
+        if (!finalSegRef.current && focusId != null && now - lastFocusSampleAt > 2500) {
+          const fr = sorted.findIndex(r => r.e.id === focusId);
+          const focusRank = fr >= 0 ? fr + 1 : null;
+          if (focusRank != null) {
+            if (prevFocusRank != null && now - lastDynCommentAt > 3500) {
+              const up = prevFocusRank - focusRank; // 正＝順位を上げた
+              if (focusRank === 1 && prevFocusRank > 1) {
+                liveRef.current = { text: `📻 ${focusName}が先頭に立った！`, until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+              } else if (up >= 4 && focusRank <= 8) {
+                liveRef.current = { text: `📻 ${focusName}が集団を縫って前へ上がってきた！`, until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+              } else if (up <= -5) {
+                liveRef.current = { text: `📻 ${focusName}が遅れ始めた…苦しい展開だ`, until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+              }
+            }
+            prevFocusRank = focusRank;
+            lastFocusSampleAt = now;
+          }
+        }
         // v27: 実況の動的イベント。逃げとメインのギャップが大きく動いた瞬間に実況を差し込む
         // （最終区間はラストスパート演出が優先されるため対象外。過度な連発を避けて4秒間隔で抑制）
-        if (!finalSegRef.current && curGapSec != null && prevGapSec != null && now - lastDynCommentAt > 4000) {
+        if (!focusFired && !finalSegRef.current && curGapSec != null && prevGapSec != null && now - lastDynCommentAt > 4000) {
           const d = curGapSec - prevGapSec;
           if (curGapSec < 1.5 && prevGapSec >= 3) {
             liveRef.current = { text: "📻 逃げ吸収！集団は再び一つにまとまった", until: now + 2600 }; lastDynCommentAt = now;

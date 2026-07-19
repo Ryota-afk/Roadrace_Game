@@ -1468,6 +1468,33 @@ export function mlMediaHeadline(ml) {
   return H(`${nm}、雌伏の時`, `まだ大きな結果は出ていないが、${nm}の努力を見る者は見ている。飛躍の時は近い。`, "neutral");
 }
 
+// v35(UI): キャリアの軌跡。raceLog から「語る価値のある一戦」だけを時系列で抽出し、
+// 選手詳細（キャリアグラフ画面）に年表として並べる。勝利・モニュメント・格上レースの表彰台・
+// 初勝利/初表彰台を拾う。純関数。
+export function mlCareerTimeline(ml) {
+  if (!ml || !ml.player) return [];
+  const log = ml.player.raceLog || [];
+  const out = [];
+  let firstWinDone = false, firstPodiumDone = false;
+  const isBig = (e) => /世界選手権|オリンピック|グランツール|ツアー|世界選手/.test(e.name || "");
+  log.forEach((e, i) => {
+    const rank = e.rank;
+    const when = { year: e.year, month: e.month };
+    if (rank === 1) {
+      const first = !firstWinDone; firstWinDone = true;
+      if (e.monument) out.push({ ...when, icon: "🏛", color: "#ffd24a", text: `${e.name}を制覇（クラシックの勝者）` });
+      else if (isBig(e)) out.push({ ...when, icon: "🌍", color: "#ffd23f", text: `${e.name}で優勝！世界の頂点に立った` });
+      else out.push({ ...when, icon: first ? "✨" : "🏆", color: "#ffd23f", text: first ? `プロ初勝利（${e.name}）` : `${e.name}で優勝` });
+    } else if (rank <= 3) {
+      if (e.monument) out.push({ ...when, icon: "🏛", color: "#e8a13c", text: `${e.name}で${rank}位（クラシック表彰台）` });
+      else if (isBig(e)) out.push({ ...when, icon: "🥈", color: "#cfd6e4", text: `${e.name}で${rank}位（大舞台の表彰台）` });
+      else if (!firstPodiumDone) { firstPodiumDone = true; out.push({ ...when, icon: "🎖", color: "#4fbf6b", text: `キャリア初表彰台（${e.name}で${rank}位）` }); }
+    }
+  });
+  // 直近が上に来るよう新しい順。多すぎる場合は上位（最近）30件に留める
+  return out.reverse().slice(0, 30);
+}
+
 export function computeWorldRank(points, year) {
   if (!points || points <= 1) return 300;
   const P1 = 360 + (year - 1) * 52; // 世界1位相当の持ち点（年々上昇）
