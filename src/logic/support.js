@@ -1558,6 +1558,22 @@ export function mlCareerTimeline(ml) {
   return out.reverse().slice(0, 30);
 }
 
+// v35(逆メンター): 弟子（プロテジェ）の現在の状態を、弟子入りからの経過年数から算出する純関数。
+// 成長力(growthPow)と、弟子を取った時の師（プレイヤー）の地力(mentorOvr)＝指導の質で伸びが決まる。
+// インクリメンタルな状態更新を持たず「年が進めば自然に育つ」形（保存・分岐に依存しない）。
+export function protegeState(protege, year) {
+  if (!protege) return null;
+  const yrs = Math.max(0, (year || protege.joinYear) - protege.joinYear);
+  const powBase = { S: 5.6, A: 4.3, B: 3.1, C: 2.2 }[protege.growthPow] || 3.1;
+  const guide = 0.7 + Math.max(0, ((protege.mentorOvr || 70) - 60)) / 120; // 師の地力で 0.7〜約1.0
+  const perYear = powBase * guide;
+  const ovr = Math.min(94, Math.round((protege.ovr0 || 50) + yrs * perYear));
+  const age = (protege.age0 || 18) + yrs;
+  // 直近の節目（70/80/90）到達の可視化用
+  const nextMilestone = [70, 80, 90].find(t => ovr < t) || null;
+  return { ovr, age, yrs, perYear: Number(perYear.toFixed(1)), nextMilestone };
+}
+
 export function computeWorldRank(points, year) {
   if (!points || points <= 1) return 300;
   const P1 = 360 + (year - 1) * 52; // 世界1位相当の持ち点（年々上昇）

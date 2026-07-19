@@ -593,6 +593,7 @@ const ML_SAVE_FIELDS = [
   "worldPoints", "worldRank", "worldRankBest", "worldSeed", "ambitionIdx", "ambitionDone", "ambitionPath",
   "careerWins", "careerPodiums", "careerBigWins", "careerTitles", "careerClassics",
   "teammates", "tactic", "careerHistory",
+  "protege", // v35(逆メンター): 弟子（プロテジェ）
 ];
 
 export function saveMyLife(ml) {

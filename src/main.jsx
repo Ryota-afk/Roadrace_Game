@@ -1347,10 +1347,26 @@ function App() {
   // v18: シーズンモードのキャプテン制度に対応するマイライフ側の役割。30歳以降、
   // チームの精神的支柱（メンター）になることを選べる。一度なると解除はできない
   function mlBecomeMentor() {
-    setMl(s => ({
-      ...s, flags: { ...s.flags, mentor: true },
-      log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】チームの精神的支柱としてメンター役を引き受けた`],
-    }));
+    setMl(s => {
+      if (s.protege) return s;
+      // v35(逆メンター): メンターになると、有望な若手を1人「弟子」に取る。弟子は師（あなた）の
+      // 地力に導かれ、年を追うごとに育っていく（protegeState で経過年数から算出）。
+      const rng = mulberry(Date.now() % 999983 + 61);
+      const types = ["SPR", "CLM", "RUL", "PUN", "TT"];
+      const type = types[Math.floor(rng() * types.length)];
+      const growthPow = rng() < 0.45 ? "S" : "A";
+      const name = pickRiderName(rng, new Set([s.player?.name, s.rival?.name, s.rival2?.name].filter(Boolean)));
+      const age0 = 17 + Math.floor(rng() * 3);
+      const ovr0 = 46 + Math.floor(rng() * 10);
+      const protege = { name, type, age0, ovr0, growthPow, joinYear: s.year, mentorOvr: overall(s.player) };
+      return {
+        ...s, flags: { ...s.flags, mentor: true }, protege,
+        log: [...s.log,
+          `【${s.year}年目 ${MONTHS[s.month]}】チームの精神的支柱としてメンター役を引き受けた`,
+          `【${s.year}年目 ${MONTHS[s.month]}】将来有望な若手 ${name}（${age0}歳・${TYPES[type].label}／成長力${growthPow}）を弟子に取り、指導を始めた`,
+        ],
+      };
+    });
   }
   function mlStartRace() {
     if (mlRaceLockRef.current) return;

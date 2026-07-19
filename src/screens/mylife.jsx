@@ -9,7 +9,7 @@ import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilit
 import { MONTHS } from "../data/course.js";
 import { CLASSES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlWorldBoard, mlWorldNews, potentialHint, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
+import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
@@ -278,6 +278,33 @@ export function renderMyLifeScreens(ctx) {
               </div>
             );
           })()}
+          {/* v35(逆メンター): 弟子（プロテジェ）の成長を見守るパネル */}
+          {ml.protege && (() => {
+            const pr = protegeState(ml.protege, ml.year);
+            const t = TYPES[ml.protege.type];
+            const growPct = pr.nextMilestone ? Math.max(0, Math.min(1, (pr.ovr - (pr.nextMilestone - 10)) / 10)) : 1;
+            return (
+              <div style={{ background: "linear-gradient(180deg, rgba(53,192,126,0.06), transparent)", borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.green}`, padding: "9px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: 10.5, color: C.green, fontWeight: 700 }}>🎓 弟子の成長</span>
+                  <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>師の導き ×{pr.perYear}/年</span>
+                </div>
+                <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "2px 0 1px" }}>
+                  {ml.protege.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
+                  <span style={{ marginLeft: 6, fontSize: 11, color: C.sub }}>{pr.age}歳・成長力{ml.protege.growthPow}</span>
+                  <span style={{ marginLeft: 8, fontFamily: FONT_M, fontSize: 13, color: C.yellow }}>OVR {pr.ovr}</span>
+                </div>
+                <div style={{ height: 5, borderRadius: 3, background: C.line, marginTop: 5, overflow: "hidden" }}>
+                  <div style={{ width: `${growPct * 100}%`, height: "100%", background: C.green, borderRadius: 3 }} />
+                </div>
+                <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>
+                  {pr.nextMilestone
+                    ? (pr.yrs === 0 ? `弟子入りしたばかり。あなたの背中を追い、OVR${pr.nextMilestone}を目指す。` : `${pr.yrs}年の指導で着実に成長中。次はOVR${pr.nextMilestone}の壁。`)
+                    : "一流の域に達した。あなたの教えが確かに実を結んでいる。"}
+                </div>
+              </div>
+            );
+          })()}
           {/* v34(UI): チーム・キャリア状況を折りたたみ、毎月の行動（レース/練習）を主画面の上部に出す */}
           <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}` }}>
             <button onClick={() => setMl(s => ({ ...s, uiStatusOpen: !s.uiStatusOpen }))} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: "9px 12px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", color: C.sub, fontSize: 11.5 }}>
@@ -508,9 +535,9 @@ export function renderMyLifeScreens(ctx) {
             <Eyebrow color={C.sub}>⚙ その他・キャリア管理</Eyebrow>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6, alignItems: "center" }}>
               {ml.flags?.mentor
-                ? <span style={{ fontSize: 11.5, color: C.yellow }}>🎖 チームの精神的支柱（毎月疲労-3／評価+0.3）</span>
+                ? <span style={{ fontSize: 11.5, color: C.yellow }}>🎖 チームの精神的支柱{ml.protege ? `・${ml.protege.name}の師` : ""}（毎月疲労-3／評価+0.3）</span>
                 : r.age >= 30 && (
-                  <Btn small outline color={C.yellow} onClick={() => askConfirm("若手のメンターになりますか？（毎月の疲労回復と監督評価の伸びが恒常的に上がります。一度なると元には戻せません）", mlBecomeMentor)}>🎖 メンターになる</Btn>
+                  <Btn small outline color={C.yellow} onClick={() => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor)}>🎖 メンターになる（弟子を取る）</Btn>
                 )}
               <Btn small outline color={"#e8a13c"} onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
               <Btn small outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🚪 静かに引退</Btn>
@@ -1080,6 +1107,22 @@ export function renderMyLifeScreens(ctx) {
               <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.6 }}>{arch.desc}</div>
             </div>
           </div>
+          {/* v35(逆メンター): 弟子への継承。育てた若手が後を継ぐ物語の締めくくり */}
+          {ml.protege && (() => {
+            const pr = protegeState(ml.protege, ml.year);
+            const t = TYPES[ml.protege.type];
+            return (
+              <div style={{ background: "linear-gradient(180deg, rgba(53,192,126,0.08), transparent)", borderRadius: 10, border: `1px solid ${C.green}`, padding: "12px 14px" }}>
+                <Eyebrow color={C.green}>🎓 受け継がれる意志</Eyebrow>
+                <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.7, marginTop: 4 }}>
+                  あなたが指導した弟子 <b style={{ color: C.text }}>{ml.protege.name}</b>（{t.label}・{pr.age}歳）は、
+                  いまや <span style={{ fontFamily: FONT_M, color: C.yellow }}>OVR {pr.ovr}</span> の
+                  {pr.ovr >= 88 ? "堂々たるエース" : pr.ovr >= 78 ? "頼れる一線級" : "成長著しい若手"}へと育った。
+                  {pr.ovr >= 82 ? "あなたの背中は、確かに次の世代へ受け継がれた。" : "その走りには、あなたの教えが宿っている。"}
+                </div>
+              </div>
+            );
+          })()}
           {ml.lastRaceResult && (
             <div style={{ background: "rgba(232,161,60,0.1)", borderRadius: 10, padding: "10px 12px", border: `1.5px solid #e8a13c` }}>
               <Eyebrow color={"#e8a13c"}>🏁 ラストレース — {ml.lastRaceResult.name}</Eyebrow>
