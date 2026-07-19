@@ -257,6 +257,14 @@ export function renderMyLifeScreens(ctx) {
               </div>
             )}
           </div>
+          {/* v34(UI): チーム・キャリア状況を折りたたみ、毎月の行動（レース/練習）を主画面の上部に出す */}
+          <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}` }}>
+            <button onClick={() => setMl(s => ({ ...s, uiStatusOpen: !s.uiStatusOpen }))} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: "9px 12px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", color: C.sub, fontSize: 11.5 }}>
+              <span>📋 状況：世界{ml.worldRank == null ? "—" : `${ml.worldRank}位`}・監督{managerEvalTier(ml.managerEval).label}・人気{Math.round(ml.player.popularity || 0)}{ml.rival ? `・vs ${ml.rival.name}` : ""}{race.rivalPresent ? " 🔥同走" : ""}</span>
+              <span style={{ fontWeight: 700 }}>{ml.uiStatusOpen ? "▲ 閉じる" : "▼ 詳しく"}</span>
+            </button>
+            {ml.uiStatusOpen && (
+              <div style={{ display: "grid", gap: 8, padding: "0 10px 10px" }}>
           {/* v30/v31.5: 世界ランキング＆キャリア・アンビション（生き方＝路線で目標が分岐） */}
           {(() => {
             const tier = worldRankTier(ml.worldRank);
@@ -355,6 +363,9 @@ export function renderMyLifeScreens(ctx) {
               {race.rival2Present && <div style={{ fontSize: 11, color: C.blue, marginTop: 3 }}>🔥 今月のレースに好敵手も出走してくる</div>}
             </div>
           )}
+              </div>
+            )}
+          </div>
           <div>
             <Eyebrow>今月の練習メニュー</Eyebrow>
             <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
