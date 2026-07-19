@@ -10,7 +10,7 @@ import { CHASE_MODES, HOME_ABILITY_BONUS, MONTHS, ROLES, SEG_AB, SEG_COLOR, UNLO
 import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
-import { CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
+import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
 import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
 
@@ -344,13 +344,28 @@ export function renderSeasonScreens(ctx) {
           <div style={{ fontSize: 12, color: C.sub }}>
             所属 {g.roster.length}/{rosterMax}名。<span style={{ color: C.yellow }}>能力{growthCap}以上＝限界突破</span>（金色表示・成長が大幅に鈍化。難易度「{(DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label}」の成長上限）。練習指定能力の伸びはトレードオフ（×0.9）で指定外に一部融通されます。
           </div>
-          <div style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <span style={{ fontSize: 11.5, color: C.sub }}>チームケミストリー </span>
-              <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: C.green }}>{chem.label}</span>
-            </div>
-            <div style={{ fontSize: 10.5, color: C.sub }}>平均在籍{chem.avgTenure.toFixed(1)}ヶ月{chem.mul < 1 ? `／レース中のドラフト消耗-${Math.round((1 - chem.mul) * 100)}%` : ""}</div>
-          </div>
+          {(() => {
+            // v35(シーズン深掘り): ケミストリーの育ちを可視化。次のティアまでの進捗バー＋昇格後の効果
+            const next = [...CHEMISTRY_TIERS].sort((a, b) => a.min - b.min).find(t => t.min > chem.min);
+            const pct = next ? Math.max(0, Math.min(1, (chem.avgTenure - chem.min) / (next.min - chem.min))) : 1;
+            return (
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <span style={{ fontSize: 11.5, color: C.sub }}>🤝 チームケミストリー </span>
+                    <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: C.green }}>{chem.label}</span>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: C.sub }}>平均在籍{chem.avgTenure.toFixed(1)}ヶ月{chem.mul < 1 ? `／ドラフト消耗-${Math.round((1 - chem.mul) * 100)}%` : ""}</div>
+                </div>
+                <div style={{ height: 5, borderRadius: 3, background: C.line, marginTop: 6, overflow: "hidden" }}>
+                  <div style={{ width: `${pct * 100}%`, height: "100%", background: C.green, borderRadius: 3 }} />
+                </div>
+                <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>
+                  {next ? `次の絆「${next.label}」まで平均在籍あと${Math.max(0, next.min - chem.avgTenure).toFixed(1)}ヶ月（メンバーを固定して走り込むほど深まる）` : "最高の絆に到達。長く共に走った証だ。"}
+                </div>
+              </div>
+            );
+          })()}
           <div style={{ fontSize: 11, color: C.sub }}>🎖 各選手カードのマークで主将を1名任命できます。主将より2歳以上若い選手は練習効果+10%になります。</div>
           {g.inv.camp > 0 && !g.camp && <Btn small outline color={C.purple} onClick={() => askConfirm("キャンプを実施しますか？今月の練習効果が×2になりますが、選手全員の疲労が+25されます（連発すると故障リスクが高まります）。", useCamp)}>⛺ キャンプ券を使う（今月の練習効果×2・全員疲労+25）</Btn>}
           {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}

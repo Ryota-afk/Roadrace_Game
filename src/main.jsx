@@ -737,6 +737,11 @@ function App() {
       const roster = monthlyUpdate(st, raceInfo);
       const income = s.sponsor ? s.sponsor.monthly : 0;
       const log = [...s.log, ...st._injured.map(t => `【${MONTHS[s.month]}】${t}`)];
+      // v35(シーズン深掘り): チームケミストリーが上のティアへ上がった瞬間を「絆」の節目としてログに刻む
+      const prevChem = teamChemistryTier(s.roster), newChem = teamChemistryTier(roster);
+      if (newChem.min > prevChem.min && newChem.min > 0) {
+        log.push(`【${MONTHS[s.month]}】🤝 長く共に走った絆が実り、チームは「${newChem.label}」に到達（レース中のドラフト消耗 -${Math.round((1 - newChem.mul) * 100)}%）`);
+      }
       let sponsor = s.sponsor;
       const mandateRace = s.races.find(r => r.sponsorMandate);
       if (sponsor && mandateRace && !(raceInfo && raceInfo.raceId === mandateRace.id)) {
