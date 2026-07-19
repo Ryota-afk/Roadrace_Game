@@ -631,12 +631,17 @@ export function mlGenTeammates(rng, teamName, count, bannedNames, year) {
   return list;
 }
 
+// v35(バランス): 作戦の説明を実測（Node頭付き比較）に合わせて正直化。
+// 各tacticの tag = 一目でわかる向き・リスク、desc = 実際の効き方（どのコース・脚質で得か）。
+// 検証で判明した要点：末脚温存＝平坦スプリントで堅実／早めに逃げる＝多くは吸収され着順は落ちる
+// 博打だが集団ゴールで勝てない脚質の唯一の一発（起伏・山岳で逃げ切りやすい）／積極＝非スプリント型が
+// 終盤に仕掛けて先着を狙う（スプリント型は末脚を消して不利）。
 export const ML_TACTICS = {
-  balanced:   { label: "🚩 標準（流れに任せる）",       chaseMode: "normal", aceEarly: false, desc: "特別な仕掛けはせず、脚質と展開に任せる" },
-  wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", chaseMode: "push",   aceEarly: false, desc: "逃げを許さず集団を保ち、ゴール勝負に持ち込む（スプリント型向き）" },
-  early:      { label: "💨 早めに逃げる",               chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "序盤から飛び出して逃げ切りを狙う（スプリントが苦手な選手向き）" },
-  aggressive: { label: "⚔ 積極的に仕掛ける",            chaseMode: "normal", aceEarly: true,  desc: "終盤の勝負どころで自ら仕掛ける（エース時）" },
-  assist:     { label: "🤝 アシストに徹する",            chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
+  balanced:   { label: "🚩 標準（流れに任せる）",       tag: "無難", tagColor: "#9aa3b5", chaseMode: "normal", aceEarly: false, desc: "特別な仕掛けはせず、脚質と展開に任せる。迷ったらまずこれ" },
+  wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", tag: "堅実・平坦向き", tagColor: "#4fbf6b", chaseMode: "push",   aceEarly: false, desc: "逃げを潰して集団を保ち、ゴールスプリントで勝負。スプリント型・平坦/クリテで最も安定して上位に入る" },
+  early:      { label: "💨 早めに逃げる",               tag: "博打・起伏向き", tagColor: "#e8734a", chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "ハイリスク＝多くは吸収され平均着順は落ちる。だが集団スプリントで勝てない脚質が“一発”を狙える唯一の手。平坦より起伏・山岳の方が逃げ切りやすい" },
+  aggressive: { label: "⚔ 積極的に仕掛ける",            tag: "非スプリント型向き", tagColor: "#e8a13c", chaseMode: "normal", aceEarly: true,  desc: "終盤にエース自ら加速して先着を狙う。集団ゴールで分が悪い登坂・独走・パンチャー型向き。スプリント型は末脚を消すので不利" },
+  assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを押し上げる献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
 
 export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars) {

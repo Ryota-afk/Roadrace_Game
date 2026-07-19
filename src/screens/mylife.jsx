@@ -438,7 +438,15 @@ export function renderMyLifeScreens(ctx) {
                       border: `1.5px solid ${(ml.tactic || "balanced") === k ? C.yellow : C.line}` }}>{t.label}</button>
                 ))}
               </div>
-              <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>{(ML_TACTICS[ml.tactic] || ML_TACTICS.balanced).desc}</div>
+              {(() => {
+                const tac = ML_TACTICS[ml.tactic] || ML_TACTICS.balanced;
+                return (
+                  <div style={{ fontSize: 10, color: C.sub, marginTop: 5, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                    {tac.tag && <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, color: tac.tagColor || C.sub, border: `1px solid ${tac.tagColor || C.line}`, borderRadius: 6, padding: "1px 5px", lineHeight: 1.5 }}>{tac.tag}</span>}
+                    <span>{tac.desc}</span>
+                  </div>
+                );
+              })()}
             </div>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
