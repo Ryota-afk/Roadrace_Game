@@ -264,7 +264,10 @@ function energyDrain(en, mode, segType, steepness) {
   const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88) : 1;
   const brk = en.committedBreak && (mode === "solo" || mode === "attack")
     ? ({ mtn: 0.55, climb: 0.6, hill: 0.78, flat: 1, sprint: 1, tt: 1 }[segType] ?? 1) : 1;
-  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul * brk;
+  // v35: 献身のアシストに徹する選手は、賢く脚を使って（無駄に踏み過ぎず）自滅を避ける。
+  // 長丁場のクリテ等で牽引しすぎて千切れ、自分もエースも大敗する事故を防ぐ。
+  const assistMul = en.isAssisting ? 0.78 : 1;
+  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul * brk * assistMul;
 }
 
 export function canPull(en, segType) {

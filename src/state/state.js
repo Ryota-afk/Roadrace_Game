@@ -822,6 +822,8 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
           const gap = hasAbility(player, "domestique") ? (hasGoldAbility(player, "domestique") ? 4 : 6) : 9;
           AB_KEYS.forEach(k => { ace[k] = Math.min(99, Math.max((ace[k] || 0) + boost, (playerEff[k] || 0) - gap)); });
           ace.assistBoost = boost;
+          // v35: 守られるエースは風除け・位置取りの恩恵で脚を温存でき、集団から千切れにくくなる
+          ace.isAssisting = true;
           assistedAceRef = ace;
         }
       }
@@ -831,6 +833,8 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: player.goldAbilities, ...playerEff,
         team: "PLAYER", teamName: myTeamName, color: C.yellow,
         isAce: playerIsAce, role: playerRole, isPlayerChar: true,
+        // v35: アシストに徹する選手は脚を賢く使い自滅しない（energyDrainで消耗軽減）
+        isAssisting: !!(tac.playerAssist && !playerIsAce),
       });
     }
     teamEntrants.forEach(en => riders.push(en));
@@ -846,11 +850,22 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // という不整合を解消する（エースは上の底上げで千切れず勝負に絡めるようになっている）。
   if (assistedAceRef) {
     const me = riders.find(e => e.isPlayerChar);
-    if (me && Number.isFinite(me.finishTime) && Number.isFinite(assistedAceRef.finishTime) && me.finishTime < assistedAceRef.finishTime) {
-      me.finishTime = assistedAceRef.finishTime + 0.4;
-      sim.ranked = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
-      sim.ranked.forEach((e, i) => { e.rank = i + 1; });
+    // v35: 献身の安全網。集団ゴールのコース（平坦・スプリント・丘決着）では、万一チームが
+    // 千切れても3分も離される事故は不自然。ここでエース（＝連動する自分）の離され幅を上限で抑え、
+    // 「アシストしたのに自分もエースも壊滅的大敗」という理不尽を防ぐ（山岳決着は大差が正当なので対象外）。
+    const finSeg = course.segs[course.finalIdx] ? course.segs[course.finalIdx].type : "flat";
+    const bunchFinish = finSeg === "flat" || finSeg === "sprint" || finSeg === "hill";
+    if (bunchFinish && Number.isFinite(assistedAceRef.finishTime)) {
+      const winnerTime = Math.min(...riders.map(e => e.finishTime).filter(Number.isFinite));
+      assistedAceRef.finishTime = Math.min(assistedAceRef.finishTime, winnerTime + 45);
     }
+    // 献身のアシストは自分の結果を常にエースに委ねる。エースの前でゴールせず（差して譲る）、
+    // 万一遅れても役目を終えてエースのすぐ後ろ(+0.4秒)へ回り込む＝「自分だけ大敗」を無くす。
+    if (me && Number.isFinite(me.finishTime) && Number.isFinite(assistedAceRef.finishTime)) {
+      me.finishTime = assistedAceRef.finishTime + 0.4;
+    }
+    sim.ranked = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
+    sim.ranked.forEach((e, i) => { e.rank = i + 1; });
     // v33.8: 献身で押し上げたエースの最終着順を結果画面に渡す
     sim.assistedAce = { name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
   }
