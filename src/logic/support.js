@@ -1252,7 +1252,7 @@ export function computeStandings(g) {
     const rng = mulberry(strHash(t.name) + g.year * 101 + g.classIdx * 7);
     const strength = (0.6 + rng() * 0.85) * diffMul * dynastyMul;
     const seasonTotal = Math.round(need * strength * 1.35);
-    return { name: t.name, color: t.color, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
+    return { name: t.name, color: t.color, spec: t.spec, trait: t.trait, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
   });
   rows.push({ name: g.teamName || "あなたのチーム", color: C.yellow, pts: g.points, isPlayer: true });
   rows.sort((a, b) => b.pts - a.pts);
@@ -1292,8 +1292,8 @@ export function seasonTitleRace(g) {
   return {
     rank, total, isLeader: rank === 1,
     leaderName: leader.name, gapToLeader,
-    ahead: ahead ? { name: ahead.name, gap: gapAhead } : null,
-    behind: behind ? { name: behind.name, gap: gapBehind } : null,
+    ahead: ahead ? { name: ahead.name, gap: gapAhead, trait: ahead.trait } : null,
+    behind: behind ? { name: behind.name, gap: gapBehind, trait: behind.trait } : null,
     line,
   };
 }
@@ -1373,7 +1373,12 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
       const alumni = (rivalAlumni || []).filter(a => a.signedTeam === d.name).slice(0, aiSquadN);
       const alumniIds = new Set(alumni.map(a => a.id));
       const members = alumni.map(a => ({ ...a }));
-      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap }));
+      // v35(シーズン深掘り): チームの個性（spec）に沿って選手を生成。エースは必ずその脚質、
+      // 他メンバーも過半数がその脚質に寄る＝スプリント軍団/山岳の名門等の対戦の駆け引きが生まれる
+      for (let i = members.length; i < aiSquadN; i++) {
+        const useSpec = d.spec && (i === 0 || rng() < 0.55);
+        members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap, type: useSpec ? d.spec : undefined }));
+      }
       const aiRoles = assignAIRoles(members, aiSquadN);
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];

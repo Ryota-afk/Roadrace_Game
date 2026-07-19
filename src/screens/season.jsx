@@ -237,6 +237,12 @@ export function renderSeasonScreens(ctx) {
                   <span style={{ fontFamily: FONT_M, fontSize: 12, color: col, fontWeight: 700 }}>{tr.rank}位 / {tr.total}</span>
                 </div>
                 <div style={{ fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.5 }}>{tr.line}</div>
+                {(tr.ahead || tr.behind) && (
+                  <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    {tr.ahead && <span>🎯 追う相手：{tr.ahead.name}{tr.ahead.trait ? `（${tr.ahead.trait}）` : ""}</span>}
+                    {tr.behind && <span>👀 背後：{tr.behind.name}{tr.behind.trait ? `（${tr.behind.trait}）` : ""}</span>}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -1140,7 +1146,10 @@ export function renderSeasonScreens(ctx) {
               <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontFamily: FONT_M, fontSize: 14, color: i === 0 ? C.yellow : C.sub, width: 22 }}>{i + 1}.</span>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: row.color, display: "inline-block" }} />
-                <span style={{ fontFamily: FONT_D, fontWeight: 700, color: row.isPlayer ? C.yellow : C.text, fontSize: 13.5 }}>{row.name}</span>
+                <span>
+                  <span style={{ fontFamily: FONT_D, fontWeight: 700, color: row.isPlayer ? C.yellow : C.text, fontSize: 13.5 }}>{row.name}</span>
+                  {row.trait && <span style={{ fontSize: 10, color: C.sub, marginLeft: 6 }}>{row.trait}</span>}
+                </span>
               </span>
               <span style={{ fontFamily: FONT_M, fontSize: 14, color: row.isPlayer ? C.yellow : C.text }}>{row.pts}pt</span>
             </div>

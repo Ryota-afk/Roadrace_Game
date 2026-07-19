@@ -88,14 +88,20 @@ export function riderCareerSummary(r) {
   return `${originText}${spanText}${recordText}${farewellText}`;
 }
 
+// v35(シーズン深掘り): 各チームに個性（脚質傾向 spec ＋ 二つ名 trait）。レースでは所属選手が
+// その脚質に寄って生成され、エースは必ずその脚質になる（＝スプリント軍団は平坦で、山岳の名門は
+// 登りで脅威、という対戦の駆け引きが生まれる）。spec は newRider の type コード。
 export const RIVAL_TEAMS = [
-  { name: "レッドサンダー山陽", color: "#d9484a", tier: 1 }, { name: "クレディ・ブルー", color: "#3f7fd9", tier: 2 },
-  { name: "ヴェロチタ京都", color: "#9a6be0", tier: 0 }, { name: "ウィンドミル北海道", color: "#e08a3f", tier: 0 },
+  { name: "レッドサンダー山陽", color: "#d9484a", tier: 1, spec: "SPR", trait: "スプリント軍団" },
+  { name: "クレディ・ブルー", color: "#3f7fd9", tier: 2, spec: "PUN", trait: "オールラウンドの強豪" },
+  { name: "ヴェロチタ京都", color: "#9a6be0", tier: 0, spec: "CLM", trait: "山岳の名門" },
+  { name: "ウィンドミル北海道", color: "#e08a3f", tier: 0, spec: "TT", trait: "独走・逃げ派" },
 ];
 
 export const MYLIFE_TEAMS = [
   ...RIVAL_TEAMS,
-  { name: "サンライズ静岡", color: "#4fd1c5", tier: 0 }, { name: "北斗プロサイクル", color: "#c084fc", tier: 1 },
+  { name: "サンライズ静岡", color: "#4fd1c5", tier: 0, spec: "RUL", trait: "平坦のルーラー集団" },
+  { name: "北斗プロサイクル", color: "#c084fc", tier: 1, spec: "PUN", trait: "勝負師揃い" },
 ];
 
 export const ML_ACHIEVEMENTS = [
