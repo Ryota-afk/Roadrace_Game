@@ -440,6 +440,10 @@ export function renderSeasonScreens(ctx) {
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color, border: `1px solid ${t.color}`, borderRadius: 4, padding: "1px 5px" }}>{t.label}</span>
                     <span style={{ marginLeft: 5, fontFamily: FONT_M, fontSize: 12, color: POW[r.growthPow].color }}>成長{r.growthPow}</span>
                     <span style={{ marginLeft: 5, fontSize: 11, color: potentialHint(r).color }}>{potentialHint(r).label}</span>
+                    {/* v35(シーズン深掘り): 現在の成長フェーズを明示（育成の手応え） */}
+                    <span style={{ marginLeft: 5, fontSize: 10.5, color: ph.tag === "成長期" ? C.green : ph.tag === "全盛期" ? C.yellow : "#e8734a" }}>
+                      {ph.tag === "成長期" ? "☘ 成長期" : ph.tag === "全盛期" ? "⛰ 全盛期" : "🍂 衰え期"}
+                    </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <button onClick={() => setCaptain(r.id)} title="主将に任命（自分より2歳以上若い選手の練習効果+10%）"

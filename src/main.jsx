@@ -742,6 +742,18 @@ function App() {
       if (newChem.min > prevChem.min && newChem.min > 0) {
         log.push(`【${MONTHS[s.month]}】🤝 長く共に走った絆が実り、チームは「${newChem.label}」に到達（レース中のドラフト消耗 -${Math.round((1 - newChem.mul) * 100)}%）`);
       }
+      // v35(シーズン深掘り): 育成の手応え。練習・出走の成長でOVRの節目(70/80/90)を越えた選手を祝う
+      roster.forEach(nr => {
+        const old = s.roster.find(r => r.id === nr.id);
+        if (!old) return;
+        const oOld = overall(old), oNew = overall(nr);
+        [70, 80, 90].forEach(th => {
+          if (oOld < th && oNew >= th) {
+            const young = (nr.age || 25) <= 23;
+            log.push(`【${MONTHS[s.month]}】📈 ${nr.name} がOVR${th}の壁を突破！${young ? "若き才能が確かに開花しつつある。" : "円熟の走りにさらなる凄みが増した。"}`);
+          }
+        });
+      });
       let sponsor = s.sponsor;
       const mandateRace = s.races.find(r => r.sponsorMandate);
       if (sponsor && mandateRace && !(raceInfo && raceInfo.raceId === mandateRace.id)) {
