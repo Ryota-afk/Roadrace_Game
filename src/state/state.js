@@ -814,7 +814,12 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         if (ace) {
           const contrib = (playerTotal / 5 - 55) * 0.16 + (hasAbility(player, "domestique") ? (hasGoldAbility(player, "domestique") ? 5 : 3) : 0);
           const boost = Math.max(2, Math.min(10, Math.round(contrib)));
-          AB_KEYS.forEach(k => { ace[k] = Math.min(99, (ace[k] || 0) + boost); });
+          // v35: 献身は「格下のエースを自分の走力の近くまで引き上げ、格上の展開に乗せる」もの。
+          // 弱いエースが千切れて牽引が届かず無意味になる問題を解消するため、各能力を
+          // 「プレイヤー実効値 - gap」まで底上げする（＝風除け・位置取り・ボトルで勝負所へ運ぶ）。
+          // 「献身のアシスト」持ちほど密着でき、格差(gap)が縮まる。
+          const gap = hasAbility(player, "domestique") ? (hasGoldAbility(player, "domestique") ? 4 : 6) : 9;
+          AB_KEYS.forEach(k => { ace[k] = Math.min(99, Math.max((ace[k] || 0) + boost, (playerEff[k] || 0) - gap)); });
           ace.assistBoost = boost;
           assistedAceRef = ace;
         }
@@ -834,8 +839,20 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
   simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
   rankSim(sim);
-  // v33.8: 献身で押し上げたエースの最終着順を結果画面に渡す
-  if (assistedAceRef) sim.assistedAce = { name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
+  // v35: 献身のアシストは自分の着順を捨ててエースを届ける役割。ドメスティークは自分が守る
+  // エースの前でゴールしない——もしエースより上でフィニッシュしていたら、勝負を譲って
+  // すぐ後ろ（+0.4秒）に「差し」、エースを先着させる。これで「アシストしたのに自分が上」
+  // という不整合を解消する（エースは上の底上げで千切れず勝負に絡めるようになっている）。
+  if (assistedAceRef) {
+    const me = riders.find(e => e.isPlayerChar);
+    if (me && Number.isFinite(me.finishTime) && Number.isFinite(assistedAceRef.finishTime) && me.finishTime < assistedAceRef.finishTime) {
+      me.finishTime = assistedAceRef.finishTime + 0.4;
+      sim.ranked = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
+      sim.ranked.forEach((e, i) => { e.rank = i + 1; });
+    }
+    // v33.8: 献身で押し上げたエースの最終着順を結果画面に渡す
+    sim.assistedAce = { name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
+  }
   return sim;
 }
 
