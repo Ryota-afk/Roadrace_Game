@@ -645,7 +645,9 @@ export const ML_TACTICS = {
 };
 
 export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars) {
-  const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
+  const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
+  const diffAiMul = diffDef.aiMul;
+  const aiCap = diffDef.abilCap ?? 94; // v35(バランス): 難易度別のAI能力上限（hard/oniは94超）
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
   // v22: クラスさえ上がれば以降は相手のレベルが固定されてしまい、キャリア後半は練習しなくても
@@ -696,7 +698,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       });
       for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned }));
     } else {
-      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
+      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap }));
     }
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
@@ -709,7 +711,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       };
     });
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
-      const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned });
+      const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned, cap: aiCap });
       rivalStats.abilities = rival.abilities; rivalStats.goldAbilities = rival.goldAbilities;
       const re = effAbilities(rivalStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
@@ -720,7 +722,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
     // v26: 複数ライバル制。2人目のライバル（好敵手）は別チームの出走枠を差し替える
     if (rival2 && raceMeta.rival2Present && d.name === rival2.team && d.name !== myTeamName) {
-      const rival2Stats = newRider(power + 6, rng, { type: rival2.type, banned: nameBanned });
+      const rival2Stats = newRider(power + 6, rng, { type: rival2.type, banned: nameBanned, cap: aiCap });
       rival2Stats.abilities = rival2.abilities; rival2Stats.goldAbilities = rival2.goldAbilities;
       const r2e = effAbilities(rival2Stats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
@@ -732,7 +734,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     // v32（世界の統合）：このチームに歴代殿堂選手が割り当てられていればエース枠に差し替える
     if (legendTeams[d.name] && !isMyTeam) {
       const leg = legendTeams[d.name];
-      const legStats = newRider(power + 8, rng, { type: leg.type, banned: nameBanned });
+      const legStats = newRider(power + 8, rng, { type: leg.type, banned: nameBanned, cap: aiCap });
       legStats.abilities = leg.specialAbilities || legStats.abilities;
       AB_KEYS.forEach(k => { if (leg.finalAbilities && leg.finalAbilities[k] != null) legStats[k] = leg.finalAbilities[k]; });
       SUB_STAT_KEYS.forEach(k => { if (leg.finalSubStats && leg.finalSubStats[k] != null) legStats[k] = leg.finalSubStats[k]; });

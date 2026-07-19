@@ -1261,7 +1261,9 @@ export function teamChemistryTier(squad) {
 
 export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel, teamName) {
   // v13: 難易度による他チームの強さ補正（aiMul）。省略時はnormal相当
-  const diffAiMul = (DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1]).aiMul;
+  const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
+  const diffAiMul = diffDef.aiMul;
+  const aiCap = diffDef.abilCap ?? 94; // v35(バランス): 難易度別のAI能力上限（hard/oniは94超）
   // v25: グランファイナル制覇後の周回（ディナスティ）モード。周を重ねるたびに他チームの
   // 地力を底上げし、周回プレイでも歯応えが保たれるようにする
   const dynastyBonus = Math.min(20, (dynastyLevel || 0) * 5);
@@ -1298,7 +1300,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
       const alumni = (rivalAlumni || []).filter(a => a.signedTeam === d.name).slice(0, aiSquadN);
       const alumniIds = new Set(alumni.map(a => a.id));
       const members = alumni.map(a => ({ ...a }));
-      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned }));
+      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap }));
       const aiRoles = assignAIRoles(members, aiSquadN);
       // v12: チームごとに隠しの戦略スタイルを割り当て、レース展開にばらつきを持たせる
       const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];

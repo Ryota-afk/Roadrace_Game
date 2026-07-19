@@ -168,7 +168,9 @@ export function genSubStats(type, rng, opts = {}) {
 export function newRider(power, rng, opts = {}) {
   const keys = Object.keys(TYPES);
   const type = opts.type || keys[Math.floor(rng() * keys.length)];
-  const clamp = (v) => Math.max(22, Math.min(94, Math.round(v)));
+  // v35(バランス): 能力上限を可変に（既定94）。難易度の高いAIは opts.cap で94超の地力を持てる。
+  const cap = opts.cap ?? 94;
+  const clamp = (v) => Math.max(22, Math.min(cap, Math.round(v)));
   const b = () => power + (rng() - 0.5) * 22;
   const r = { flat: b(), climb: b(), sprint: b(), stamina: b(), solo: b() };
   const bo = 14;
