@@ -6,7 +6,7 @@ import { BREED_NICKS } from "../data/breeding.js";
 import { MONTHS, VENUE_REGION } from "../data/course.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C } from "../data/theme.js";
-import { AI_STYLES, assignAIRoles, effAbilities, generateCourse, rankSim, simulateTicks } from "../sim/race.js";
+import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "../sim/race.js";
 import { ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, mlAmbitionMetricValue } from "../state/state.js";
 import { mlWorldStarsForYear } from "../world/world.js";
 
@@ -1422,6 +1422,13 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
   }
   const sim = { entrants: riders, riders, course, groupMode, raceMeta, breakSurvived: false };
   const roleMap = {}; riders.forEach(en => { roleMap[en.id] = en.role; });
+  // v35(チームTT): チームタイムトライアルは集団シミュレーションではなく、チーム単位の合算タイム。
+  // ペロトンのsimulateTicksは走らせず、TT地力・人数・ケミストリーからチーム時間を算出する。
+  if (raceMeta.tmpl && raceMeta.tmpl.teamTT) {
+    computeTeamTT(sim, chemTier.mul);
+    sim.hadBreak = false;
+    return { sim, aiTeams: aiTeamsUsed };
+  }
   // v12: 無線指示の廃止に伴い、作戦（chaseMode/aceEarly）は出走前に決定済みのものをそのまま渡す
   simulateTicks(course, riders, 0, directive || { chaseMode: "normal", aceEarly: false }, groupMode === "solo");
   rankSim(sim);

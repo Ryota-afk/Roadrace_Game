@@ -938,13 +938,15 @@ function App() {
     const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
     // v29: 出走表用に事前生成した相手チーム布陣があればそれを使い、顔ぶれを一致させる
     const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, g.pendingAiTeams, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName);
+    // v35(チームTT): チームTTはペロトン演出を持たないため、観戦を選んでも結果画面へ直行する
+    const effWatch = race.tmpl.teamTT ? false : watch;
     setG(s => ({
       ...s, result: sim,
-      gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,
+      gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch: effWatch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,
       inv: { ...s.inv, wheel: s.inv.wheel - (itemBoost.wheel ? 1 : 0), suit: s.inv.suit - (itemBoost.suit ? 1 : 0) },
-      screen: watch ? "race" : "result_pending",
+      screen: effWatch ? "race" : "result_pending",
     }));
-    if (!watch) setTimeout(() => finishRace(sim, race, race.stageRace ? 1 : undefined), 0);
+    if (!effWatch) setTimeout(() => finishRace(sim, race, race.stageRace ? 1 : undefined), 0);
   }
 
   // v12: 以前はg（renderクロージャのstale値）からroster2/simを計算した後にsetGへ渡していたため、
@@ -991,6 +993,8 @@ function App() {
   // setG後にgが更新前のまま参照される（stale closure）事故を避ける
   function finishRace(sim, race, stageOverride) {
     rankSim(sim);
+    // v35(チームTT): チーム単位の合算タイム。チーム順位で得点・賞金を確定する
+    if (sim.teamTT) { finishTeamTT(sim, race); return; }
     if (race.stageRace) {
       finishStage(sim, race, stageOverride);
       return;
@@ -1027,6 +1031,34 @@ function App() {
         sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
         careerStats: bumpCareerStats(s.careerStats, best.rank, prize),
         prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak, courseRecord },
+        screen: "result",
+      };
+    });
+  }
+
+  // v35(チームTT): チームTTの結果確定。チーム順位で得点・賞金を付与し、出走選手にチーム着順を記録
+  function finishTeamTT(sim, race) {
+    const teams = sim.teamTT;
+    const playerTeam = teams.find(t => t.isPlayer);
+    const teamRank = playerTeam ? playerTeam.rank : teams.length;
+    const totalTeams = teams.length;
+    const mul = CLASSES[g.classIdx].prizeMul * GRADE_MUL[race.grade];
+    // チーム1つの結果なので、個人レースの複数入賞相当に賞金を厚めに換算
+    const prize = Math.round((PRIZES[teamRank - 1] || 1) * mul * 2.4);
+    const mandateHit = !race.championship && !!race.sponsorMandate;
+    let pts = Math.round((PTS[teamRank - 1] || 0) * GRADE_MUL[race.grade]);
+    if (mandateHit) pts = Math.round(pts * 1.3);
+    const starterIds = new Set((playerTeam ? playerTeam.riders : []).map(r => r.id));
+    setG(s => {
+      const roster = s.roster.map(r => starterIds.has(r.id)
+        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] }
+        : r);
+      return {
+        ...s, roster, budget: s.budget + prize,
+        points: race.championship ? s.points : s.points + pts,
+        sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
+        careerStats: bumpCareerStats(s.careerStats, teamRank, prize),
+        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, teamTT: teams, teamRank, totalTeams, mandateHit },
         screen: "result",
       };
     });

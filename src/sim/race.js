@@ -526,6 +526,43 @@ export function resolveFinishClusters(entrants, finishSegType) {
   }
 }
 
+// v35(チームTT): チームタイムトライアル。集団の駆け引きではなく、チーム単位の合算タイムで競う。
+// 独走(solo)主体＋平坦(flat)＋スタミナのTT地力を、人数(ローテ効率)・連携(ケミストリー)・
+// 「必要人数までの底上げ」で1つのチーム時間に集約する。下位~1/3は千切れて捨てられる（完走はK名）。
+// ＝速い選手を並べるだけでなく、弱点の無い層の厚さと連携が効く新フォーマット。
+export function teamTTPower(r) {
+  return (r.solo || 0) * 0.5 + (r.flat || 0) * 0.3 + (r.stamina || 0) * 0.2;
+}
+export function teamTTTime(riders, chemMul) {
+  const n = riders.length;
+  if (n === 0) return { time: 9999, power: 0, K: 0 };
+  const powers = riders.map(teamTTPower).sort((a, b) => b - a);
+  const K = Math.max(1, Math.round(n * 0.66)); // 完走に必要な人数（下位~1/3は千切れ可）
+  const kth = powers[K - 1];
+  const topAvg = powers.slice(0, K).reduce((a, b) => a + b, 0) / K;
+  const support = (topAvg - kth) * 0.5;                 // 強力な牽引役が最後尾の必要人員を引き上げる
+  const sizeBonus = Math.min(1.12, 1 + (n - 1) * 0.02); // 人数が多いほどローテ効率↑
+  const chemBonus = 1 + (1 - (chemMul || 1));           // ケミストリー(0.92〜1.0)→連携ボーナス
+  const power = (kth + support) * sizeBonus * chemBonus;
+  // 現実的なチームTTタイム（~48〜54分帯に収め、強弱差は数分に）。基準75で±約9秒/power。
+  const time = Math.max(2400, Math.round(3060 - (power - 75) * 9));
+  return { time, power, K };
+}
+export function computeTeamTT(sim, playerChemMul) {
+  const byTeam = {};
+  sim.entrants.forEach(e => { (byTeam[e.team] = byTeam[e.team] || []).push(e); });
+  const teams = Object.entries(byTeam).map(([team, riders]) => {
+    const isPlayer = team === "PLAYER";
+    const { time, K } = teamTTTime(riders, isPlayer ? playerChemMul : 1);
+    const jitter = (Math.random() - 0.5) * 24; // ±12秒程度のばらつき
+    return { team, teamName: riders[0].teamName || team, color: riders[0].color, isPlayer, time: Math.round(time + jitter), K, riders };
+  });
+  teams.sort((a, b) => a.time - b.time);
+  teams.forEach((t, i) => { t.rank = i + 1; t.riders.forEach((r, j) => { r.finishTime = t.time + j * 0.05; }); });
+  sim.teamTT = teams;
+  return teams;
+}
+
 export function rankSim(sim) {
   // v35(バランス): フィニッシュ区間の地形を決着ロジックへ渡す。course未設定の
   // 呼び出し（旧テスト等）は従来どおりスプリント決着（"sprint"）にフォールバック。

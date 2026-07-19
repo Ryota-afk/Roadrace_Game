@@ -1459,6 +1459,37 @@ export function renderSeasonScreens(ctx) {
 
   if (g.screen === "result_pending") return wrap(<div style={{ color: C.sub }}>結果集計中…</div>);
 
+  // v35(チームTT): チームTT専用の結果画面（チーム順位＝合算タイムで並べる）
+  if (g.screen === "result" && g.result && g.prizeInfo && g.prizeInfo.teamTT) {
+    const { race, prize, pts, teamTT, teamRank, totalTeams, mandateHit } = g.prizeInfo;
+    const winner = teamTT[0];
+    return wrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
+          <Eyebrow>RESULT — {race.name}（チームTT）</Eyebrow>
+          <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>
+            🏆 優勝：{winner.teamName}<span style={{ fontSize: 12, color: winner.isPlayer ? C.yellow : C.sub }}> {fmtTime(winner.time)}</span>
+          </div>
+          <div style={{ fontSize: 13.5, color: C.text }}>自チーム：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{teamRank}位</span> / {totalTeams}チーム</div>
+          <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{race.championship ? "" : ` ／ ポイント +${pts}pt${mandateHit ? "（指定レースボーナス込）" : ""}`}</div>
+          <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと連携（ケミストリー）が効きます。</div>
+        </div>
+        <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px" }}>
+          {teamTT.map((t) => (
+            <div key={t.team} style={{ display: "flex", justifyContent: "space-between", padding: "6px 8px", borderRadius: 6, fontSize: 13, background: t.isPlayer ? "rgba(255,210,63,0.12)" : "transparent", borderBottom: `1px solid ${C.line}` }}>
+              <span style={{ color: t.isPlayer ? C.yellow : C.text, fontWeight: t.isPlayer ? 700 : 400 }}>
+                <span style={{ fontFamily: FONT_M, display: "inline-block", width: 26 }}>{t.rank}.</span>
+                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: t.color, marginRight: 6 }} />
+                {t.teamName}{t.isPlayer ? "（自チーム）" : ""}
+              </span>
+              <span style={{ fontFamily: FONT_M, color: C.sub }}>{t.rank === 1 ? fmtTime(t.time) : fmtGap(t.time - winner.time)}</span>
+            </div>
+          ))}
+        </div>
+        <Btn onClick={() => { const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))]; advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId }); }}>翌月へ進む →</Btn>
+      </div>
+    );
+  }
   if (g.screen === "result" && g.result && g.prizeInfo) {
     const { race, prize, pts, best, mandateHit, breakSurvived, hadBreak, courseRecord } = g.prizeInfo;
     const res = g.result;

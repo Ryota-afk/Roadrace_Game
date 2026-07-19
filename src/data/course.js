@@ -60,6 +60,8 @@ export const TEMPLATES = [
 export const UNLOCK_TEMPLATES = [
   { kind: "ナイトクリテリウム", favors: "SPR", squadMin: 1, squadMax: 5, laps: 8, unlockCP: 20, segs: [["flat", 260, 16], ["flat", 240, 14], ["sprint", 90, 4]] },
   { kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5, unlockCP: 45, segs: [["flat", 420, 22], ["hill", 400, 16], ["climb", 300, 10], ["sprint", 120, 4]] },
+  // v35(チームTT): チーム単位の合算タイム。squadMinを4に上げ「層の厚さ」を要求。teamTTフラグで専用エンジンへ分岐。
+  { kind: "チームTT", favors: "TT", teamTT: true, squadMin: 4, squadMax: 6, unlockCP: 30, segs: [["tt", 480, 22], ["flat", 300, 14], ["tt", 480, 22]] },
 ];
 
 export const ML_MONUMENTS = [
