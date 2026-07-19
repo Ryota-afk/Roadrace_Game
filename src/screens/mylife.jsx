@@ -764,6 +764,7 @@ export function renderMyLifeScreens(ctx) {
     if (ml.screen === "mylife_shop" && ml.player) {
       const r = ml.player;
       const availPartsMl = (pid) => (ml.partsInv[pid] || 0) - (Object.values(r.parts || {}).includes(pid) ? 1 : 0);
+      const shopCat = ml.shopCat || "parts";
       return mlWrap(
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
@@ -775,7 +776,13 @@ export function renderMyLifeScreens(ctx) {
               <span style={{ fontSize: 11, color: C.sub }}>フォーム <span style={{ color: (r.form ?? 50) >= 80 ? C.yellow : (r.form ?? 50) >= 62 ? C.green : C.sub, fontFamily: FONT_M }}>{Math.round(r.form ?? 50)}</span></span>
             </div>
           </div>
-          <section>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[["parts", "🔧 パーツ", C.purple], ["items", "🧪 消耗品・合宿", C.green], ["perm", "⭐ 恒久投資", "#e8a13c"]].map(([k, label, col]) => (
+              <button key={k} onClick={() => setMl(x => ({ ...x, shopCat: k }))}
+                style={{ flex: "1 1 auto", minWidth: 0, background: shopCat === k ? col : C.panel2, color: shopCat === k ? "#14171d" : C.sub, border: `1px solid ${shopCat === k ? col : C.line}`, borderRadius: 8, padding: "7px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{label}</button>
+            ))}
+          </div>
+          {shopCat === "parts" && (<section>
             <Eyebrow color={C.purple}>マシンパーツ（クラス昇格で上位解禁）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {Object.entries(PARTS).map(([pid, p]) => {
@@ -808,8 +815,8 @@ export function renderMyLifeScreens(ctx) {
                 </span>
               ))}
             </div>
-          </section>
-          <section>
+          </section>)}
+          {shopCat === "items" && (<section>
             <Eyebrow color={C.green}>消耗品（在庫制）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {Object.entries(ML_STOCK_ITEMS).map(([k, it]) => (
@@ -825,8 +832,8 @@ export function renderMyLifeScreens(ctx) {
                 </div>
               ))}
             </div>
-          </section>
-          <section>
+          </section>)}
+          {shopCat === "items" && (<section>
             <Eyebrow color={"#e8a13c"}>私設強化合宿（何度でも・資金の使い道）</Eyebrow>
             <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
               <div>
@@ -835,8 +842,8 @@ export function renderMyLifeScreens(ctx) {
               </div>
               <Btn small color={"#e8a13c"} disabled={ml.money < mlPrivateCampCost(ml)} onClick={mlPrivateCamp}>{mlPrivateCampCost(ml)}万で実施</Btn>
             </div>
-          </section>
-          <section>
+          </section>)}
+          {shopCat === "perm" && (<section>
             <Eyebrow color={C.blue}>永続トレーニング用品（買い切り）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {Object.entries(ML_GEAR).map(([k, it]) => (
@@ -851,8 +858,8 @@ export function renderMyLifeScreens(ctx) {
                 </div>
               ))}
             </div>
-          </section>
-          <section>
+          </section>)}
+          {shopCat === "perm" && (<section>
             <Eyebrow color={"#e8a13c"}>車（レース参加の疲労蓄積を軽減）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {ML_CARS.map((c, i) => (
@@ -865,8 +872,8 @@ export function renderMyLifeScreens(ctx) {
                 </div>
               ))}
             </div>
-          </section>
-          <section>
+          </section>)}
+          {shopCat === "perm" && (<section>
             <Eyebrow color={C.red}>家（毎月の疲労回復を底上げ）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {ML_HOUSES.map((h, i) => (
@@ -879,7 +886,7 @@ export function renderMyLifeScreens(ctx) {
                 </div>
               ))}
             </div>
-          </section>
+          </section>)}
           <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
         </div>
       );
