@@ -805,6 +805,46 @@ export function rivalNews(year, month) {
   return { team: team.name, color: team.color, text: tmpl(team.name) };
 }
 
+// v35(D 物語): 因縁が育つライバル。対戦を重ね、特に接戦（写真判定・僅差）ほど
+// 「因縁度(heat)」が燃え上がり、呼称が 好敵手→ライバル→宿敵→宿命の宿敵 と激化する。
+// 既存セーブ（heat未保存）は通算対戦数からフォールバック。
+export function rivalHeatTier(heat) {
+  const h = heat || 0;
+  if (h >= 22) return { key: 3, label: "宿命の宿敵", color: "#ff4d4d" };
+  if (h >= 11) return { key: 2, label: "宿敵", color: "#ff7a45" };
+  if (h >= 4)  return { key: 1, label: "ライバル", color: "#e8a13c" };
+  return { key: 0, label: "好敵手", color: "#5aa9e6" };
+}
+
+// 1戦で加算される因縁度。接戦ほど大きく燃える（写真判定+3／僅差+2／通常+1）
+export function rivalMeetingHeat(gapSec) {
+  const g = Math.abs(gapSec == null ? 99 : gapSec);
+  if (g < 1) return 3;
+  if (g < 4) return 2;
+  return 1;
+}
+
+// 1戦の「決定的瞬間」を物語る一文を生成。勝敗×接戦度×格上/格下で分岐し、
+// 因縁度が上がった瞬間は昇格の煽りも添える。
+export function rivalDrama({ beat, gapSec, rivalName, rivalRank, myRank, heatBefore, heatAfter }) {
+  const g = Math.abs(gapSec == null ? 99 : gapSec);
+  const gTxt = g < 60 ? `${g.toFixed(1)}秒` : `${Math.floor(g / 60)}分${Math.round(g % 60)}秒`;
+  const photo = g < 1, close = g < 4;
+  let line;
+  if (beat) {
+    if (photo) line = `写真判定にもつれ込む死闘。わずか${gTxt}、あなたが${rivalName}を競り落とした。`;
+    else if (close) line = `最後まで並走する接戦を、${gTxt}振り切って制した。${rivalName}の視線が背中に刺さる。`;
+    else line = `${rivalName}を${gTxt}突き放す完勝。今日は完全にあなたの一日だった。`;
+  } else {
+    if (photo) line = `写真判定の末、わずか${gTxt}。${rivalName}に刺し返された。この悔しさは忘れない。`;
+    else if (close) line = `${rivalName}にわずか${gTxt}及ばず。あと一歩、その差を埋める日が来る。`;
+    else line = `${rivalName}に${gTxt}の完敗。力の差を見せつけられ、拳を握る。`;
+  }
+  const before = rivalHeatTier(heatBefore), after = rivalHeatTier(heatAfter);
+  const promoted = after.key > before.key ? `——この一戦で、二人の因縁はついに『${after.label}』の域に入った。` : null;
+  return { line, promoted, tier: after };
+}
+
 export const ML_BACKGROUNDS = {
   highschool: { label: "高校卒", age: 18, powerBase: 40, growth: "late", powDist: [0.16, 0.46, 0.80],
     desc: "能力はまだ粗削りだが伸びしろは最大級。長い目で育てる叩き上げタイプ" },

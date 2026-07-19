@@ -22,7 +22,7 @@ import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEA
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
-import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rollCondDir, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
+import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
 // ---- 画面ディスパッチ（Phase 4-2）----
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -1444,12 +1444,18 @@ function App() {
       let rivalOutcome = null;
       if (rivalEntrant) {
         const beat = me.rank < rivalEntrant.rank;
+        // v35(D 物語): 因縁が育つライバル。接戦ほど因縁度が燃え、決定的瞬間の一文を生成する
+        const gapSec = Math.abs((me.finishTime || 0) - (rivalEntrant.finishTime || 0));
+        const heatBefore = rivalRecord?.heat ?? rivalRecord?.meetings ?? 0;
+        const heatAfter = heatBefore + rivalMeetingHeat(gapSec);
         rivalRecord = {
           meetings: (rivalRecord?.meetings || 0) + 1,
           wins: (rivalRecord?.wins || 0) + (beat ? 1 : 0),
           losses: (rivalRecord?.losses || 0) + (beat ? 0 : 1),
+          heat: heatAfter,
         };
-        rivalOutcome = { name: rivalEntrant.name, rank: rivalEntrant.rank, beat };
+        const drama = rivalDrama({ beat, gapSec, rivalName: rivalEntrant.name, rivalRank: rivalEntrant.rank, myRank: me.rank, heatBefore, heatAfter });
+        rivalOutcome = { name: rivalEntrant.name, rank: rivalEntrant.rank, beat, line: drama.line, promoted: drama.promoted, tierLabel: drama.tier.label, tierColor: drama.tier.color };
       }
       // v26: 複数ライバル制。2人目の好敵手は初対戦時だけ「新たな好敵手が現れた」という
       // 紹介フレーバーを付ける
@@ -1459,18 +1465,26 @@ function App() {
       if (rival2Entrant) {
         const isFirstMeeting = (rivalRecord2?.meetings || 0) === 0;
         const beat2 = me.rank < rival2Entrant.rank;
+        const gap2 = Math.abs((me.finishTime || 0) - (rival2Entrant.finishTime || 0));
+        const heat2Before = rivalRecord2?.heat ?? rivalRecord2?.meetings ?? 0;
+        const heat2After = heat2Before + rivalMeetingHeat(gap2);
         rivalRecord2 = {
           meetings: (rivalRecord2?.meetings || 0) + 1,
           wins: (rivalRecord2?.wins || 0) + (beat2 ? 1 : 0),
           losses: (rivalRecord2?.losses || 0) + (beat2 ? 0 : 1),
+          heat: heat2After,
         };
-        rivalOutcome2 = { name: rival2Entrant.name, rank: rival2Entrant.rank, beat: beat2 };
+        const drama2 = rivalDrama({ beat: beat2, gapSec: gap2, rivalName: rival2Entrant.name, rivalRank: rival2Entrant.rank, myRank: me.rank, heatBefore: heat2Before, heatAfter: heat2After });
+        rivalOutcome2 = { name: rival2Entrant.name, rank: rival2Entrant.rank, beat: beat2, line: drama2.line, promoted: isFirstMeeting ? null : drama2.promoted, tierLabel: drama2.tier.label, tierColor: drama2.tier.color };
         rival2Intro = isFirstMeeting;
       }
       let log = newlyHit.length > 0
         ? [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】人気度が${newlyHit.join("・")}に到達し、個人スポンサー契約で+${popBonus}万円`]
         : s.log;
       if (rival2Intro) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rival2Entrant.teamName}の${rival2Entrant.name}と初めて同じレースで相まみえた。新たな好敵手になりそうだ`];
+      // v35(D 物語): 因縁度が上がった瞬間はログにも刻む（決定的な一戦の記録）
+      if (rivalOutcome && rivalOutcome.promoted) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rivalOutcome.promoted.replace(/^——/, "")}`];
+      if (rivalOutcome2 && rivalOutcome2.promoted) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rivalOutcome2.promoted.replace(/^——/, "")}`];
       // v30: 世界ランキング更新＆キャリア・アンビション判定
       const wpGain = worldPointsForFinish(me.rank, race.grade);
       const worldPoints = (s.worldPoints || 0) + wpGain;

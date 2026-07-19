@@ -9,7 +9,7 @@ import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilit
 import { MONTHS } from "../data/course.js";
 import { CLASSES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlWorldBoard, mlWorldNews, potentialHint, riderFlavorText, worldRankTier } from "../logic/support.js";
+import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlWorldBoard, mlWorldNews, potentialHint, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
@@ -344,27 +344,33 @@ export function renderMyLifeScreens(ctx) {
             </div>
             <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>好成績を残すほど上がり、25/50/75/100到達で一時金の契約ボーナスも入ります</div>
           </div>
-          {ml.rival && (
-            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.red}` }}>
-              <Eyebrow color={C.red}>ライバル</Eyebrow>
+          {ml.rival && (() => {
+            const ht = rivalHeatTier(ml.rivalRecord?.heat ?? ml.rivalRecord?.meetings ?? 0);
+            return (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ht.color}` }}>
+              <Eyebrow color={ht.color}>🔥 {ht.label}</Eyebrow>
               <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.rival.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{ml.rival.team}・{TYPES[ml.rival.type].label}）</span></div>
               <div style={{ fontSize: 11, color: C.sub }}>
                 通算対戦成績：{ml.rivalRecord?.meetings || 0}戦 <span style={{ color: C.green }}>{ml.rivalRecord?.wins || 0}勝</span> <span style={{ color: C.red }}>{ml.rivalRecord?.losses || 0}敗</span>
               </div>
               {race.rivalPresent && <div style={{ fontSize: 11, color: C.yellow, marginTop: 3 }}>🔥 今月のレースにライバルも出走してくる</div>}
             </div>
-          )}
+            );
+          })()}
           {/* v26: 複数ライバル制。2人目の好敵手は初対戦を終えるまでは表示しない（サプライズを残す） */}
-          {ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0 && (
-            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.blue}` }}>
-              <Eyebrow color={C.blue}>好敵手</Eyebrow>
+          {ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0 && (() => {
+            const ht2 = rivalHeatTier(ml.rivalRecord2?.heat ?? ml.rivalRecord2?.meetings ?? 0);
+            return (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ht2.color}` }}>
+              <Eyebrow color={ht2.color}>🔥 {ht2.label}（好敵手）</Eyebrow>
               <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.rival2.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{ml.rival2.team}・{TYPES[ml.rival2.type].label}）</span></div>
               <div style={{ fontSize: 11, color: C.sub }}>
                 通算対戦成績：{ml.rivalRecord2?.meetings || 0}戦 <span style={{ color: C.green }}>{ml.rivalRecord2?.wins || 0}勝</span> <span style={{ color: C.red }}>{ml.rivalRecord2?.losses || 0}敗</span>
               </div>
               {race.rival2Present && <div style={{ fontSize: 11, color: C.blue, marginTop: 3 }}>🔥 今月のレースに好敵手も出走してくる</div>}
             </div>
-          )}
+            );
+          })()}
               </div>
             )}
           </div>
@@ -743,18 +749,20 @@ export function renderMyLifeScreens(ctx) {
           )}
           {rivalOutcome && (
             <div style={{ background: rivalOutcome.beat ? "#16241c" : "#241818", border: `1px solid ${rivalOutcome.beat ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
-              <Eyebrow color={rivalOutcome.beat ? C.green : C.red}>🔥 ライバル対決 — {rivalOutcome.beat ? "勝利" : "敗北"}</Eyebrow>
-              <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{rivalOutcome.name}は{rivalOutcome.rank}位でフィニッシュ。{rivalOutcome.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。"}</div>
+              <Eyebrow color={rivalOutcome.beat ? C.green : C.red}>🔥 {rivalOutcome.tierLabel || "ライバル"}対決 — {rivalOutcome.beat ? "勝利" : "敗北"}</Eyebrow>
+              <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{rivalOutcome.name}は{rivalOutcome.rank}位でフィニッシュ。{rivalOutcome.line || (rivalOutcome.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。")}</div>
+              {rivalOutcome.promoted && <div style={{ fontSize: 12, color: rivalOutcome.tierColor || C.yellow, marginTop: 5, fontWeight: 700 }}>{rivalOutcome.promoted}</div>}
             </div>
           )}
           {rivalOutcome2 && (
             <div style={{ background: rival2Intro ? "#1c2536" : (rivalOutcome2.beat ? "#16241c" : "#241818"), border: `1px solid ${rival2Intro ? C.blue : (rivalOutcome2.beat ? C.green : C.red)}`, borderRadius: 10, padding: "10px 12px" }}>
-              <Eyebrow color={rival2Intro ? C.blue : (rivalOutcome2.beat ? C.green : C.red)}>{rival2Intro ? "🆕 新たな好敵手" : `🔥 好敵手対決 — ${rivalOutcome2.beat ? "勝利" : "敗北"}`}</Eyebrow>
+              <Eyebrow color={rival2Intro ? C.blue : (rivalOutcome2.beat ? C.green : C.red)}>{rival2Intro ? "🆕 新たな好敵手" : `🔥 ${rivalOutcome2.tierLabel || "好敵手"}対決 — ${rivalOutcome2.beat ? "勝利" : "敗北"}`}</Eyebrow>
               <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>
                 {rival2Intro
                   ? `${rivalOutcome2.name}という選手と初めて同じレースで走った。${rivalOutcome2.rank}位でフィニッシュした彼／彼女は、これから長く意識する存在になりそうだ。`
-                  : `${rivalOutcome2.name}は${rivalOutcome2.rank}位でフィニッシュ。${rivalOutcome2.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。"}`}
+                  : `${rivalOutcome2.name}は${rivalOutcome2.rank}位でフィニッシュ。${rivalOutcome2.line || (rivalOutcome2.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。")}`}
               </div>
+              {!rival2Intro && rivalOutcome2.promoted && <div style={{ fontSize: 12, color: rivalOutcome2.tierColor || C.yellow, marginTop: 5, fontWeight: 700 }}>{rivalOutcome2.promoted}</div>}
             </div>
           )}
           {directive && (
