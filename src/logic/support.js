@@ -240,6 +240,31 @@ export const STAFF_ROLES = {
 
 export const STAFF_MAX_BY_CLASS = [1, 2, 3];
 
+// v35(シーズン深掘り): スタッフの個性化。役割ごとに名前・肩書・現在レベルの具体効果を返し、
+// 「顔の見えるスタッフ陣」にする。名前はチーム名＋役割から決定論的に生成（在籍中は不変）。
+export const STAFF_META = {
+  manager: { icon: "🧑‍💼", title: "監督" },
+  trainer: { icon: "🧑‍🏫", title: "トレーナー" },
+  doctor:  { icon: "🩺", title: "チームドクター" },
+  scout:   { icon: "🔍", title: "スカウト" },
+};
+const STAFF_SURNAMES = ["田中", "佐藤", "鈴木", "高橋", "渡辺", "伊藤", "山本", "中村", "小林", "加藤", "吉田", "山田", "松本", "井上", "木村", "林"];
+export function staffMemberName(teamName, role) {
+  const rng = mulberry(strHash((teamName || "team") + "#" + role));
+  return STAFF_SURNAMES[Math.floor(rng() * STAFF_SURNAMES.length)];
+}
+// 現在レベルでの具体効果（説明文の一般論ではなく「今いくら効いているか」）
+export function staffEffectText(role, lv) {
+  if (!lv) return null;
+  switch (role) {
+    case "manager": return `スポンサー月収 +${lv * 12}%・ノルマ -${lv * 8}%・成功報酬 +${lv * 10}%`;
+    case "trainer": return `全選手の練習成長 +${lv * 12}%`;
+    case "doctor":  return `故障率 -${lv * 22}%・離脱期間を短縮`;
+    case "scout":   return `新人査定のブレ -${Math.min(80, lv * 28)}%・逸材の発掘率アップ`;
+    default: return null;
+  }
+}
+
 export const STAFF_SALARY_PER_LV = 12; // 万円/月・レベル1つあたり（月給制、昇格なし＝買い切り費用は無し）
 
 export function staffSalaryTotal(staff) {

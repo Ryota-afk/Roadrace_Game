@@ -10,7 +10,7 @@ import { CHASE_MODES, HOME_ABILITY_BONUS, MONTHS, ROLES, SEG_AB, SEG_COLOR, UNLO
 import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
-import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
+import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, STAFF_META, staffEffectText, staffMemberName, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
 import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
 
@@ -363,6 +363,20 @@ export function renderSeasonScreens(ctx) {
                 <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>
                   {next ? `次の絆「${next.label}」まで平均在籍あと${Math.max(0, next.min - chem.avgTenure).toFixed(1)}ヶ月（メンバーを固定して走り込むほど深まる）` : "最高の絆に到達。長く共に走った証だ。"}
                 </div>
+              </div>
+            );
+          })()}
+          {/* v35(シーズン深掘り): スタッフ陣を一目で。雇用中の各スタッフを名前付きで並べる */}
+          {(() => {
+            const hired = Object.entries(g.staff || {}).filter(([, lv]) => lv > 0);
+            if (hired.length === 0 && !g.obCoach) return null;
+            return (
+              <div style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}` }}>
+                <span style={{ fontSize: 11, color: C.sub }}>🏳 スタッフ陣：</span>
+                <span style={{ fontSize: 11.5, color: C.text }}>
+                  {hired.length === 0 ? "（一般スタッフ未雇用）" : hired.map(([k, lv]) => `${(STAFF_META[k] || {}).icon || ""}${staffMemberName(g.teamName, k)}${(STAFF_META[k] || {}).title || k}Lv${lv}`).join("・")}
+                  {g.obCoach && <span style={{ color: "#e8a13c" }}>{hired.length > 0 ? "・" : ""}🎓{g.obCoach.name}コーチ</span>}
+                </span>
               </div>
             );
           })()}
@@ -722,14 +736,19 @@ export function renderSeasonScreens(ctx) {
               <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
                 {Object.entries(STAFF_ROLES).map(([k, st]) => {
                   const lv = g.staff[k] || 0;
+                  const meta = STAFF_META[k] || { icon: "🧑‍💼", title: st.label };
+                  const hired = lv > 0;
+                  const name = staffMemberName(g.teamName, k);
                   return (
-                    <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div key={k} style={{ background: hired ? "rgba(217,72,74,0.06)" : C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${hired ? "rgba(217,72,74,0.4)" : C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                       <div>
-                        <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{st.label} <span style={{ fontFamily: FONT_M, color: C.yellow }}>Lv{lv}/{staffMax}</span></div>
-                        <div style={{ color: C.sub, fontSize: 11.5 }}>{st.desc}</div>
+                        <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>
+                          {meta.icon} {hired ? `${name}${meta.title}` : st.label} <span style={{ fontFamily: FONT_M, color: C.yellow }}>Lv{lv}/{staffMax}</span>
+                        </div>
+                        <div style={{ color: hired ? C.red : C.sub, fontSize: 11.5 }}>{hired ? `現在の効果：${staffEffectText(k, lv)}` : st.desc}</div>
                       </div>
                       <Btn small color={C.red} disabled={lv >= staffMax} onClick={() => hireStaff(k)}>
-                        {lv >= staffMax ? (g.classIdx < 2 ? "昇格で解禁" : "MAX") : `月給+${STAFF_SALARY_PER_LV}万`}
+                        {lv >= staffMax ? (g.classIdx < 2 ? "昇格で解禁" : "MAX") : hired ? `昇格 +${STAFF_SALARY_PER_LV}万` : `雇用 月給+${STAFF_SALARY_PER_LV}万`}
                       </Btn>
                     </div>
                   );
