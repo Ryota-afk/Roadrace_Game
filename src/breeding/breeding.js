@@ -112,6 +112,8 @@ export function mlLegendSnapshot(s) {
     careerTitle: arch.title, careerTitleDesc: arch.desc, careerArchetypeKey: arch.key,
     // v33.4: 特殊配合の称号（あれば）
     specialMatingTitle: r.specialMating ? r.specialMating.title : null,
+    // v35(逆メンター/演出): 育てた弟子（プロテジェ）の生データ。読み出し側で最終OVRを算出して称える
+    protege: s.protege || null,
   };
 }
 

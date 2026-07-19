@@ -1134,16 +1134,48 @@ export function renderMyLifeScreens(ctx) {
             {riderCareerSummary({ ...r, farewellYear: ml.year, farewellReason: "retired" })}
           </div>
           <div style={{ fontSize: 11.5, color: C.sub }}>通算{(r.raceLog || []).length}戦・{wins}勝・表彰台{podiums}回</div>
-          {ml.rival && (
-            <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.red}`, lineHeight: 1.6 }}>
-              ライバル・{ml.rival.name}（{ml.rival.team}）との通算対戦成績は{ml.rivalRecord?.meetings || 0}戦{ml.rivalRecord?.wins || 0}勝{ml.rivalRecord?.losses || 0}敗だった。
-            </div>
-          )}
-          {ml.rival2 && (
-            <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.blue}`, lineHeight: 1.6 }}>
-              好敵手・{ml.rival2.name}（{ml.rival2.team}）との通算対戦成績は{ml.rivalRecord2?.meetings || 0}戦{ml.rivalRecord2?.wins || 0}勝{ml.rivalRecord2?.losses || 0}敗だった。
-            </div>
-          )}
+          {/* v35(演出強化): キャリアの名場面。勝利・モニュメント・大舞台を時系列で振り返る集大成 */}
+          {(() => {
+            const tl = mlCareerTimeline(ml).slice(0, 10);
+            if (tl.length === 0) return null;
+            return (
+              <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
+                <Eyebrow color={C.yellow}>🏅 キャリアの名場面</Eyebrow>
+                <div style={{ display: "grid", gap: 0, marginTop: 5 }}>
+                  {tl.map((e, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
+                      <span style={{ fontSize: 10, color: C.sub, fontFamily: FONT_M, width: 46, flexShrink: 0 }}>{e.year}年目</span>
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>{e.icon}</span>
+                      <span style={{ fontSize: 11.5, color: e.color, lineHeight: 1.4 }}>{e.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          {/* v35(演出強化): 因縁の総括。育った因縁度（呼称）でライバルとの物語を締める */}
+          {ml.rival && (() => {
+            const ht = rivalHeatTier(ml.rivalRecord?.heat ?? ml.rivalRecord?.meetings ?? 0);
+            const rec = ml.rivalRecord || {}; const m = rec.meetings || 0;
+            const tail = m === 0 ? "ついに本気で相まみえる機会は訪れなかったが、その存在は常に道標だった。"
+              : ht.key >= 3 ? "幾度となく死力を尽くして競り合った、生涯忘れえぬ宿命の相手だった。"
+              : ht.key >= 2 ? "何度も牙を剥き合い、互いを限界まで高め合った宿敵だった。"
+              : ht.key >= 1 ? "しのぎを削り合った、忘れがたきライバルだった。" : "良き好敵手として、互いの走りを認め合った。";
+            return (
+              <div style={{ fontSize: 11.5, color: C.text, padding: "9px 11px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${ht.color}`, lineHeight: 1.7 }}>
+                🔥 <span style={{ color: ht.color, fontWeight: 700 }}>{ht.label}</span>・{ml.rival.name}（{ml.rival.team}）— 通算{m}戦 {rec.wins || 0}勝{rec.losses || 0}敗。{tail}
+              </div>
+            );
+          })()}
+          {ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0 && (() => {
+            const ht2 = rivalHeatTier(ml.rivalRecord2?.heat ?? ml.rivalRecord2?.meetings ?? 0);
+            const rec = ml.rivalRecord2 || {};
+            return (
+              <div style={{ fontSize: 11.5, color: C.text, padding: "9px 11px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${ht2.color}`, lineHeight: 1.7 }}>
+                🔥 <span style={{ color: ht2.color, fontWeight: 700 }}>{ht2.label}</span>（好敵手）・{ml.rival2.name}（{ml.rival2.team}）— 通算{rec.meetings || 0}戦 {rec.wins || 0}勝{rec.losses || 0}敗。
+              </div>
+            );
+          })()}
           {/* v26: 引退後キャリア（エピローグ）。監督転身／完全引退を選ぶと殿堂記録に後日談が加わる */}
           {ml.epilogueText ? (
             <div style={{ fontSize: 11.5, color: C.text, padding: "8px 10px", background: C.panel2, borderRadius: 6, borderLeft: `3px solid ${C.yellow}`, lineHeight: 1.7 }}>
@@ -1366,9 +1398,18 @@ export function renderMyLifeScreens(ctx) {
                 <div style={{ fontSize: 11, color: C.text, marginTop: 4, lineHeight: 1.6 }}>{leg.summary}</div>
                 <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>
                   {leg.team}／通算{leg.races}戦{leg.wins}勝・表彰台{leg.podiums}回／実績{leg.achievedCount}/{leg.achievedTotal}
-                  {leg.rivalName && `／ライバル${leg.rivalName}に${leg.rivalRecord?.wins || 0}勝${leg.rivalRecord?.losses || 0}敗`}
-                  {leg.rival2Name && `／好敵手${leg.rival2Name}に${leg.rivalRecord2?.wins || 0}勝${leg.rivalRecord2?.losses || 0}敗`}
                 </div>
+                {/* v35(演出強化): ライバルとの因縁を呼称付きで、育てた弟子の到達を殿堂に刻む */}
+                {leg.rivalName && (() => { const ht = rivalHeatTier(leg.rivalRecord?.heat ?? leg.rivalRecord?.meetings ?? 0); return (
+                  <div style={{ fontSize: 10.5, marginTop: 3 }}>
+                    <span style={{ color: ht.color, fontWeight: 700 }}>🔥{ht.label}</span>
+                    <span style={{ color: C.sub }}> {leg.rivalName}に{leg.rivalRecord?.wins || 0}勝{leg.rivalRecord?.losses || 0}敗
+                    {leg.rival2Name && `／好敵手${leg.rival2Name}に${leg.rivalRecord2?.wins || 0}勝${leg.rivalRecord2?.losses || 0}敗`}</span>
+                  </div>
+                ); })()}
+                {leg.protege && (() => { const pr = protegeState(leg.protege, leg.endYear); return (
+                  <div style={{ fontSize: 10.5, color: C.green, marginTop: 3 }}>🎓 弟子 {leg.protege.name}（{TYPES[leg.protege.type]?.label}）をOVR{pr.ovr}まで育てた</div>
+                ); })()}
                 {leg.epilogue && <div style={{ fontSize: 10.5, color: C.yellow, marginTop: 5, lineHeight: 1.6, fontStyle: "italic" }}>{leg.epilogue}</div>}
                 {leg.autobiography && <div style={{ fontSize: 11, color: C.purple, marginTop: 5, lineHeight: 1.6, fontStyle: "italic" }}>📖「{leg.autobiography}」</div>}
                 {leg.master && <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>🎓 {leg.master}の教え子{leg.partner ? `・🧬${leg.partner}との配合` : ""}</div>}
