@@ -77,6 +77,10 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   // v31.2: 配合限定特能。系統の申し子＝全能力+3、覇道の血脈＝全能力+2かつスタミナ+3
   if (hasAbility(r, "sireline")) AB_KEYS.forEach(k => { e[k] += 3; });
   if (hasAbility(r, "dynasty")) { AB_KEYS.forEach(k => { e[k] += 2; }); e.stamina += 3; }
+  // v35(バランス): 二刀流（配合限定）は従来 segmentAbility の丘/登/山/スプに+5だけで、
+  // 決着（finishAbilityは素のclimb/sprint参照）や平坦に届かず、+3全能力の系統の申子に見劣りしていた。
+  // 二本柱である登坂とスプリントの素地を底上げ（+2/+2）し、フィニッシュにも効く二刀流に。
+  if (hasAbility(r, "hybrid")) { e.climb += 2; e.sprint += 2; }
   // v29: 体格（パワーウェイト）。軽いほど登坂有利・重いほど平坦/独走有利
   const build = r.build ?? 50;
   e.climb *= 1 + (50 - build) / 300;

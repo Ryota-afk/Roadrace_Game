@@ -79,7 +79,7 @@ export const ABILITIES = {
   // v31.2: 配合限定特能（breedOnly）。通常のスカウト・後天習得では絶対に出現せず、
   // 特定条件の配合でしか手に入らない血統の証。TraitLineでは金色枠で表示する
   sireline:    { label: "系統の申し子", desc: "全区間で能力+3（配合限定）", category: "配合限定", breedOnly: true },
-  hybrid:      { label: "二刀流", desc: "丘陵・山岳・スプリント区間で能力+5（配合限定）", category: "配合限定", breedOnly: true },
+  hybrid:      { label: "二刀流", desc: "登坂力・スプリント力+2、さらに丘陵・山岳・スプリント区間で能力+5（配合限定）", category: "配合限定", breedOnly: true },
   dynasty:     { label: "覇道の血脈", desc: "全能力+2・スタミナ+3（配合限定）", category: "配合限定", breedOnly: true },
 };
 
