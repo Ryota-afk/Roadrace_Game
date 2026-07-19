@@ -225,6 +225,23 @@ export function renderSeasonScreens(ctx) {
               <div style={{ fontSize: 12, color: C.text, marginTop: 3 }}>{news.text}</div>
             </div>
           ); })()}
+          {/* v34(UI): 今月のチーム状態をレース選びの直上に出し、タブ切替なしで「出場か休養か」を判断できるように */}
+          {(() => {
+            const inj = g.roster.filter(r => r.injury > 0);
+            const avgFat = Math.round(g.roster.reduce((s, r) => s + (r.fatigue || 0), 0) / Math.max(1, g.roster.length));
+            const tired = g.roster.filter(r => r.injury === 0 && (r.fatigue || 0) >= 80).length;
+            const fatColor = avgFat >= 70 ? C.red : avgFat >= 45 ? "#e8a13c" : C.green;
+            return (
+              <div style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}`, display: "flex", flexWrap: "wrap", gap: "2px 14px", alignItems: "center", fontSize: 12 }}>
+                <span style={{ color: C.sub }}>🚴 今月のチーム状態</span>
+                <span style={{ color: C.text }}>出走可能 <b style={{ color: healthy.length > 0 ? C.green : C.red, fontFamily: FONT_M }}>{healthy.length}</b>/{g.roster.length}名</span>
+                <span style={{ color: C.text }}>平均疲労 <b style={{ color: fatColor, fontFamily: FONT_M }}>{avgFat}</b></span>
+                {tired > 0 && <span style={{ color: "#e8a13c" }}>疲労高 {tired}名</span>}
+                {inj.length > 0 && <span style={{ color: C.red }}>🩹 故障 {inj.map(r => `${r.name}(${r.injury}ヶ月)`).join("・")}</span>}
+                {g.camp && <span style={{ color: C.purple }}>⛺ キャンプ実施中</span>}
+              </div>
+            );
+          })()}
           <Eyebrow>今月のレースカレンダー（出場は月1回）</Eyebrow>
           {g.homeRegion && <div style={{ fontSize: 11, color: C.sub }}>🏠 本拠地：<span style={{ color: C.green }}>{g.homeRegion}</span>（地元開催のレースは出走選手が地元の声援を受けて能力+{HOME_ABILITY_BONUS}）</div>}
           {g.races.map(r => {
