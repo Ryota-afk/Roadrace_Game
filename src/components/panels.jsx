@@ -249,14 +249,21 @@ export function AbilityGrid({ r, cap = 88 }) {
       {AB_KEYS.map(k => {
         const partBonus = r.parts ? PART_SLOTS.reduce((s, sl) => s + ((r.parts[sl] && PARTS[r.parts[sl]].ab[k]) || 0), 0) : 0;
         const broke = r[k] >= cap;
+        // v34(UI): 成長の伸びしろを可視化。現在値のバー＋成長上限(cap)までの薄い帯＋上限マーカー。
+        const valPct = Math.min(100, r[k] + partBonus);
+        const capPct = Math.min(100, cap);
+        const room = Math.max(0, Math.round(cap - r[k]));
         return (
           <div key={k}>
             <div style={{ fontSize: 9.5, color: C.sub }}>{AB_LABEL[k]}</div>
             <div style={{ fontFamily: FONT_M, fontSize: 12.5, color: broke ? C.yellow : C.text }}>
               {Math.round(r[k])}{partBonus > 0 && <span style={{ color: C.purple, fontSize: 10 }}>+{partBonus}</span>}
+              {!broke && room > 0 && <span style={{ color: C.sub, fontSize: 9 }}> +{room}</span>}
             </div>
-            <div style={{ height: 3, background: C.line, borderRadius: 2 }}>
-              <div style={{ height: 3, width: `${Math.min(100, r[k] + partBonus)}%`, background: broke ? C.yellow : AB_COLOR[k], borderRadius: 2 }} />
+            <div style={{ position: "relative", height: 4, background: C.line, borderRadius: 2 }} title={broke ? "限界突破" : `伸びしろ +${room}（上限${Math.round(cap)}）`}>
+              {!broke && capPct > valPct && <div style={{ position: "absolute", left: `${valPct}%`, width: `${capPct - valPct}%`, height: 4, background: AB_COLOR[k], opacity: 0.28, borderRadius: 2 }} />}
+              <div style={{ position: "absolute", left: 0, width: `${valPct}%`, height: 4, background: broke ? C.yellow : AB_COLOR[k], borderRadius: 2 }} />
+              <div style={{ position: "absolute", left: `${capPct}%`, top: -1, width: 1.5, height: 6, background: broke ? C.yellow : C.sub, transform: "translateX(-1px)" }} />
             </div>
           </div>
         );
