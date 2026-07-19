@@ -68,7 +68,7 @@ export const ABILITIES = {
   steady_sp:   { label: "精密機械", desc: "調子の変動が小さく安定する", category: "フィジカル" },
   // v28: レース中のエネルギー消耗が軽い（長丁場・逃げで垂れにくい）
   engine:      { label: "無尽蔵のエンジン", desc: "レース中のエネルギー消耗が軽くなる", category: "フィジカル" },
-  glass:       { label: "ガラスの体", desc: "怪我の発生率2倍・離脱期間+1ヶ月", category: "フィジカル", bad: true },
+  glass:       { label: "ガラスの体", desc: "脆い体。シーズン＝故障率2倍・離脱+1ヶ月／マイライフ＝疲労が溜まりやすく抜けにくい", category: "フィジカル", bad: true },
   moody:       { label: "ムラっ気", desc: "調子の変動が激しい", category: "フィジカル", bad: true },
   // 成長
   trainer:     { label: "練習の虫", desc: "練習効果+20%", category: "成長" },

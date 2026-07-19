@@ -1536,17 +1536,23 @@ function App() {
     const houseLv = ctx ? ctx.houseLv : -1;
     const flags = (ctx && ctx.flags) || {};
     const growthCap = mlGrowthCap(ctx && ctx.year, player);
+    // v35(バランス): マイライフには選手本人の故障システムが無く、「ガラスの体」（危険度＝濃い配合の代償）が
+    // 完全に無効化されていた（＝インブリードがノーリスクで爆発力を得られる抜け穴）。故障システムを新設せず、
+    // 脆い体を「疲労が溜まりやすく抜けにくい」形で表現し、健康管理（休養の頻度）に実コストを課す。
+    const glassBody = hasAbility(player, "glass");
     if (mode === "race") {
       const carCut = carLv >= 0 ? (1 - ML_CARS[carLv].raceFatigueCut) : 1;
       const chefCut = gear.chef ? 0.9 : 1;
       // v15: 「鉄人」を持つ選手は出走疲労が軽減される（シーズンモードの45→32と同じ比率）
       const ironCut = hasAbility(player, "iron") ? 32 / 45 : 1;
+      // v35: ガラスの体は逆に出走疲労が増える（脆く、消耗しやすい）
+      const glassMul = glassBody ? 1.35 : 1;
       // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす
       const raceWeather = ctx && ctx.raceWeather;
       const heatMul = raceWeather === "heat" ? 1.15 : 1;
       // v28: 役割を縮小して現役続行を選んだベテランは、レース負荷が軽くなり疲労蓄積が減る
       const roleCut = flags.reducedRole ? 0.85 : 1;
-      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut * heatMul * roleCut);
+      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut * glassMul * heatMul * roleCut);
       player.streak = (player.streak || 0) + 1;
       // v25: シーズンモード同様、出走した種目に応じた能力成長（出走経験）を追加。
       // 格上のレース（グレードが高い）ほど得るものが大きい
@@ -1588,10 +1594,11 @@ function App() {
       const subG = 0.28 * ph.gain * POW[player.growthPow].mul;
       growSub(player, "accel", subG * (player.focus === "sprint" || player.focus === "flat" ? 1.3 : 0.7));
       growSub(player, "mental", subG * 0.6);
-      player.fatigue = Math.max(0, player.fatigue - 15);
+      player.fatigue = Math.max(0, player.fatigue - 15 * (glassBody ? 0.75 : 1));
       player.streak = 0;
     } else if (mode === "rest") {
-      player.fatigue = Math.max(0, player.fatigue - 35);
+      // v35: ガラスの体は回復も鈍い（休んでも抜けきらない＝より頻繁な休養を強いる）
+      player.fatigue = Math.max(0, player.fatigue - 35 * (glassBody ? 0.78 : 1));
       player.streak = 0;
     } else if (mode === "event") {
       player.fatigue = Math.max(0, player.fatigue - 5);
