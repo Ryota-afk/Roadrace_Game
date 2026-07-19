@@ -1265,6 +1265,39 @@ export function seasonRank(g) {
   const idx = rows.findIndex(r => r.isPlayer);
   return { rank: idx + 1, total: rows.length };
 }
+// v35(シーズン深掘り): タイトル争い。順位表から「今の位置・すぐ上の相手・すぐ下の相手・首位との差」を
+// 読み取り、シーズンを通した優勝争いの物語を返す。純関数。ホームに常時カードで出して緊張感を生む。
+export function seasonTitleRace(g) {
+  const rows = computeStandings(g);
+  const idx = rows.findIndex(r => r.isPlayer);
+  if (idx < 0) return null;
+  const me = rows[idx], rank = idx + 1, total = rows.length;
+  const leader = rows[0];
+  const ahead = idx > 0 ? rows[idx - 1] : null;   // すぐ上（追う相手）
+  const behind = idx < rows.length - 1 ? rows[idx + 1] : null; // すぐ下（追われる相手）
+  const gapToLeader = Math.max(0, leader.pts - me.pts);
+  const gapAhead = ahead ? Math.max(0, ahead.pts - me.pts) : 0;
+  const gapBehind = behind ? Math.max(0, me.pts - behind.pts) : 0;
+  const late = (g.month || 0) >= 8; // 終盤ほど言い回しを煽る
+  let line;
+  if (rank === 1) {
+    line = behind
+      ? `首位を快走。2位・${behind.name}を${gapBehind}pt引き離している。${late ? "このまま逃げ切れるか。" : "リードを守り抜けるか。"}`
+      : "首位。独走態勢だ。";
+  } else if (rank <= 3) {
+    line = `表彰台圏の${rank}位。首位・${leader.name}まで${gapToLeader}pt、目前の${ahead.name}（+${gapAhead}pt）を捉えれば順位が上がる。${late ? "終盤、勝負どころだ。" : ""}`;
+  } else {
+    line = `${rank}位／${total}チーム。上位進出へ、まずは一つ上の${ahead.name}（+${gapAhead}pt）を追う。${late ? "残り少ない、追い上げを。" : "走り込んで差を詰めよう。"}`;
+  }
+  return {
+    rank, total, isLeader: rank === 1,
+    leaderName: leader.name, gapToLeader,
+    ahead: ahead ? { name: ahead.name, gap: gapAhead } : null,
+    behind: behind ? { name: behind.name, gap: gapBehind } : null,
+    line,
+  };
+}
+
 // 年度末のシーズン順位ボーナス（賞金・万円）。上位ほど厚く、クラスで増額。走り込んで順位を上げる意味を作る。
 export function standingsRankReward(rank, classIdx) {
   const base = rank === 1 ? 150 : rank === 2 ? 90 : rank === 3 ? 40 : 0;

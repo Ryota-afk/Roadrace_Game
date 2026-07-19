@@ -10,7 +10,7 @@ import { CHASE_MODES, HOME_ABILITY_BONUS, MONTHS, ROLES, SEG_AB, SEG_COLOR, UNLO
 import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
-import { CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
+import { CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
 import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
 
@@ -225,6 +225,21 @@ export function renderSeasonScreens(ctx) {
             </div>
           )}
           {g.month === 0 && <div style={{ background: "#1f2b26", border: `1px solid ${C.green}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, color: C.green }}>4月 — 新人スカウト月間（方針：{SCOUT_POLICIES[g.scoutPolicy].label}）</div>}
+          {/* v35(シーズン深掘り): タイトル争い。順位表を物語化し、シーズンを通した優勝争いの緊張感を出す */}
+          {(() => {
+            const tr = seasonTitleRace(g);
+            if (!tr) return null;
+            const col = tr.isLeader ? C.yellow : tr.rank <= 3 ? C.green : C.blue;
+            return (
+              <div style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.03), transparent)", borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, borderLeft: `3px solid ${col}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <Eyebrow color={col}>🏆 タイトル争い</Eyebrow>
+                  <span style={{ fontFamily: FONT_M, fontSize: 12, color: col, fontWeight: 700 }}>{tr.rank}位 / {tr.total}</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.5 }}>{tr.line}</div>
+              </div>
+            );
+          })()}
           {(() => { const news = rivalNews(g.year, g.month); return (
             <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 12px", borderLeft: `3px solid ${news.color}` }}>
               <Eyebrow color={C.sub}>📰 他チーム動向</Eyebrow>
