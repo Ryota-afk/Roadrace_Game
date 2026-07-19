@@ -4,7 +4,7 @@ import { legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineFactor, mlBloo
 import { RaceErrorBoundary, RaceView } from "../components/RaceView.jsx";
 import { AbilityFileList, AbilityGrid, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "../components/panels.jsx";
 import { Btn, Eyebrow } from "../components/ui.jsx";
-import { overall } from "../core/core.js";
+import { fmtTime, overall } from "../core/core.js";
 import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilities.js";
 import { MONTHS } from "../data/course.js";
 import { CLASSES } from "../data/progression.js";
@@ -667,13 +667,26 @@ export function renderMyLifeScreens(ctx) {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome, finishTime, gapSec, forecast } = ml.resultInfo;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.yellow}` }}>
             <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : undefined}>{race.milestone ? `${ML_MILESTONE_LABEL[race.milestone].eyebrow} RESULT` : race.monument ? "🏛️ モニュメント RESULT" : "RESULT"} — {race.name}</Eyebrow>
-            <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>{rank}位 / {total}人中</div>
+            <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0 1px" }}>{rank}位 / {total}人中</div>
+            {finishTime != null && (
+              <div style={{ fontSize: 12, color: C.sub, fontFamily: FONT_M, marginBottom: 4 }}>
+                タイム {fmtTime(finishTime)}{rank === 1 ? "（優勝）" : `／トップ +${fmtTime(gapSec)}`}
+              </div>
+            )}
             <div style={{ fontSize: 13.5, color: C.green }}>ポイント +{pts}pt ／ 賞金 +{prize}万円</div>
+            {forecast && (
+              <div style={{ fontSize: 11.5, marginTop: 5, color: C.sub }}>
+                📊 下馬評 <span style={{ color: forecast.markColor, fontWeight: 700 }}>{forecast.mark}</span>（{forecast.rank}番手予想）→ 実際 {rank}位
+                {rank < forecast.rank ? <span style={{ color: C.green, fontWeight: 700 }}>　⤴ 予想を上回る快走！</span>
+                  : rank === forecast.rank ? <span style={{ color: C.sub }}>　→ 下馬評どおり</span>
+                  : <span style={{ color: C.red }}>　⤵ 下馬評を下回る…</span>}
+              </div>
+            )}
             {popGain > 0 && (
               <div style={{ fontSize: 11.5, color: "#e8a13c", marginTop: 3 }}>
                 人気度 +{popGain}{popBonus > 0 ? `／個人スポンサー契約ボーナス +${popBonus}万円！` : ""}
