@@ -1427,6 +1427,47 @@ export function mlWorldNews(seed, year, legendPool) {
   return news;
 }
 
+// v35(D 物語): メディアナラティブ。選手の実際のキャリア状態（直近成績・連勝/連続表彰台・
+// 世界ランク・因縁・人気・年齢）から最も「記事になる」角度を選び、見出し＋短い記事を生成する。
+// 純関数（ml から読むだけ）。tone で色分け（good/bad/neutral）。seed で月ごとに文面を少し変える。
+export function mlMediaHeadline(ml) {
+  if (!ml || !ml.player) return null;
+  const p = ml.player;
+  const log = p.raceLog || [];
+  const nm = p.name || "選手";
+  const year = ml.year || 1, month = ml.month || 0;
+  const rng = mulberry((year * 12 + month) * 101 + strHash(nm));
+  const pick = (arr) => arr[Math.floor(rng() * arr.length)];
+  // 直近の流れ
+  const recent = log.slice(-4);
+  let winStreak = 0, podiumStreak = 0;
+  for (let i = log.length - 1; i >= 0; i--) { if (log[i].rank === 1) winStreak++; else break; }
+  for (let i = log.length - 1; i >= 0; i--) { if (log[i].rank <= 3) podiumStreak++; else break; }
+  const last = log[log.length - 1];
+  const recentPoor = recent.length >= 3 && recent.every(r => r.rank > 10);
+  const careerWins = log.filter(r => r.rank === 1).length;
+  const wr = ml.worldRank, wrPrev = ml.worldRankPrev;
+  const heat = ml.rivalRecord?.heat ?? ml.rivalRecord?.meetings ?? 0;
+  const heatTier = rivalHeatTier(heat);
+  const age = p.age || 24;
+  const pop = p.popularity || 0;
+  const H = (headline, body, tone) => ({ headline, body, tone });
+
+  // 記事になる角度を優先度順に選ぶ（最初に該当したもの）
+  if (log.length === 0) return H("期待の新人、デビュー間近", `${nm}が${["静かな闘志を胸に","大器の予感を漂わせ","無名ながら","チーム期待の星として"][Math.floor(rng()*4)]}プロの世界へ足を踏み入れる。その走りに注目が集まる。`, "neutral");
+  if (winStreak >= 3) return H(`${nm} 破竹の${winStreak}連勝`, pick([`止まらない。${nm}が${winStreak}連勝を飾り、ペロトンにその名を刻みつつある。`, `敵なしの快進撃。${nm}の独走態勢に他チームは対抗策を見いだせずにいる。`]), "good");
+  if (wr === 1) return H(`${nm}、ついに世界の頂点へ`, `世界ランキング首位。${nm}は名実ともに世界王者となった。この景色を、彼／彼女は長く夢見てきた。`, "good");
+  if (wr != null && wrPrev != null && wr <= 10 && wrPrev > 10) return H(`${nm} 世界トップ10入り`, `世界ランキング${wrPrev}位から${wr}位へ躍進。${nm}がついに世界の一線級に名を連ねた。`, "good");
+  if (winStreak >= 1 && last) return H(`${nm}が${last.name}を制す`, pick([`${nm}が勝利を掴んだ。会心の走りにスタンドは沸いた。`, `勝ったのは${nm}。着実に勝ち星を重ね、視線を上へと向ける。`]), "good");
+  if (heatTier.key >= 2 && ml.rival) return H(`因縁の${heatTier.label}・${ml.rival.name}戦、白熱`, `${nm}と${ml.rival.name}の${heatTier.label}対決から目が離せない。通算${ml.rivalRecord?.wins||0}勝${ml.rivalRecord?.losses||0}敗、この物語の結末を誰もが見届けたがっている。`, "neutral");
+  if (podiumStreak >= 3) return H(`${nm} 安定の表彰台ラッシュ`, `${podiumStreak}戦連続表彰台。${nm}の充実ぶりは本物だ。あとは頂点に立つ一勝を待つばかり。`, "good");
+  if (pop >= 60 && age <= 25) return H(`若きスター ${nm} に熱視線`, `${age}歳、人気沸騰。${nm}はいまや競技の枠を超えた注目株となっている。`, "good");
+  if (recentPoor) return H(`${nm}、正念場の時`, pick([`ここ数戦は精彩を欠く${nm}。しかし本物の選手は逆境でこそ真価を問われる。`, `もがく${nm}。復調のきっかけを、本人もファンも待ち望んでいる。`]), "bad");
+  if (age >= 33) return H(`ベテラン ${nm}、なお現役`, `${age}歳。積み重ねた通算${careerWins}勝が語るのは、衰えぬ闘志。${nm}の走りは若手の目標であり続ける。`, "neutral");
+  if (careerWins >= 1) return H(`${nm}、通算${careerWins}勝目へ視線`, `一歩ずつ、確かに。${nm}のキャリアは着実に厚みを増している。`, "neutral");
+  return H(`${nm}、雌伏の時`, `まだ大きな結果は出ていないが、${nm}の努力を見る者は見ている。飛躍の時は近い。`, "neutral");
+}
+
 export function computeWorldRank(points, year) {
   if (!points || points <= 1) return 300;
   const P1 = 360 + (year - 1) * 52; // 世界1位相当の持ち点（年々上昇）
