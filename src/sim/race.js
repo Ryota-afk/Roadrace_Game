@@ -476,7 +476,19 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
   return tick;
 }
 
-export function resolveFinishClusters(entrants) {
+// v35(バランス): フィニッシュクラスタ（僅差でゴールした集団）を決着させる決め手の能力。
+// 従来は地形を問わず常にスプリント力で並べ替えていたため、山頂フィニッシュでも
+// 強スプリンターが強クライマーを差す不自然な結果になり、脚質（登坂型）が着順に
+// 反映されにくかった。フィニッシュ区間の地形に応じた「決め所の力」で決着させる。
+export function finishAbility(en, segType) {
+  const sp = en.sprint || 0, cl = en.climb || 0, fl = en.flat || 0, so = en.solo || 0;
+  if (segType === "climb" || segType === "mtn") return cl * 0.75 + sp * 0.25; // 山頂決着＝登坂主体
+  if (segType === "hill") return sp * 0.45 + cl * 0.35 + fl * 0.20;           // 丘のパンチ力
+  if (segType === "tt") return so * 0.6 + fl * 0.4;                          // 独走決着
+  return sp; // 平坦・スプリント区間の集団ゴール＝従来どおりスプリント
+}
+
+export function resolveFinishClusters(entrants, finishSegType) {
   const sorted = [...entrants].sort((a, b) => a.finishTime - b.finishTime);
   let i = 0;
   while (i < sorted.length) {
@@ -488,7 +500,7 @@ export function resolveFinishClusters(entrants) {
       const scored = cluster.map(en => {
         const jitter = 1 + (Math.random() - 0.5) * 0.16;
         const energyFactor = 0.85 + Math.max(0, Math.min(1, (en.energy + 20) / 120)) * 0.15;
-        return { en, score: (en.sprint || 0) * energyFactor * jitter };
+        return { en, score: finishAbility(en, finishSegType) * energyFactor * jitter };
       }).sort((a, b) => b.score - a.score);
       const spread = Math.min(3.0, 0.3 * (scored.length - 1));
       scored.forEach((s, k) => {
@@ -501,7 +513,11 @@ export function resolveFinishClusters(entrants) {
 }
 
 export function rankSim(sim) {
-  resolveFinishClusters(sim.entrants);
+  // v35(バランス): フィニッシュ区間の地形を決着ロジックへ渡す。course未設定の
+  // 呼び出し（旧テスト等）は従来どおりスプリント決着（"sprint"）にフォールバック。
+  const segs = sim.course && sim.course.segs;
+  const finishSegType = segs && segs.length ? segs[sim.course.finalIdx].type : "sprint";
+  resolveFinishClusters(sim.entrants, finishSegType);
   capExcessiveGaps(sim.entrants);
   sim.ranked = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
   sim.ranked.forEach((e, i) => e.rank = i + 1);
