@@ -1573,12 +1573,78 @@ export function protegeState(protege, year) {
   const yrs = Math.max(0, (year || protege.joinYear) - protege.joinYear);
   const powBase = { S: 5.6, A: 4.3, B: 3.1, C: 2.2 }[protege.growthPow] || 3.1;
   const guide = 0.7 + Math.max(0, ((protege.mentorOvr || 70) - 60)) / 120; // 師の地力で 0.7〜約1.0
-  const perYear = powBase * guide;
-  const ovr = Math.min(94, Math.round((protege.ovr0 || 50) + yrs * perYear));
+  // v36(弟子深化): 指導イベントで積んだ「絆(bond 0〜100)」と「鍛錬(guideBonus)」が伸びに効く。
+  // 絆＝寄り添って信頼を築くと最大+20%、鍛錬＝厳しく鍛えると最大+40%（数字が勝手に上がるだけの
+  // 存在から、関わり方で伸びが変わる存在へ）。ovrBonus＝その場の後押しで即時に乗る加点。
+  const bondMul = 1 + Math.min(100, protege.bond || 0) / 500;
+  const trainMul = 1 + Math.min(0.4, protege.guideBonus || 0);
+  const perYear = powBase * guide * bondMul * trainMul;
+  const ovr = Math.min(96, Math.round((protege.ovr0 || 50) + yrs * perYear + (protege.ovrBonus || 0)));
   const age = (protege.age0 || 18) + yrs;
   // 直近の節目（70/80/90）到達の可視化用
   const nextMilestone = [70, 80, 90].find(t => ovr < t) || null;
-  return { ovr, age, yrs, perYear: Number(perYear.toFixed(1)), nextMilestone };
+  const bond = Math.min(100, protege.bond || 0);
+  return { ovr, age, yrs, perYear: Number(perYear.toFixed(1)), nextMilestone, bond,
+    trainMul: Number(trainMul.toFixed(2)), bondMul: Number(bondMul.toFixed(2)) };
+}
+
+// v36(弟子深化): 弟子の指導イベント。毎月ごく稀に発生し、師（プレイヤー）が関わり方を選ぶ。
+// 「厳しく鍛える」系＝鍛錬(guideBonus)が伸び師も少し消耗、「寄り添う」系＝絆(bond)が深まり師も癒やされる。
+// 弟子を"育てている実感"と、育て方による個性差を生む。TYPESに依存しない汎用シーン（名前は画面で差し込む）。
+export const ML_PROTEGE_EVENTS = [
+  { id: "slump", title: "弟子のスランプ",
+    text: "弟子が結果を出せず、練習中も表情が暗い。「自分には才能がないのかも」と弱気なことを口にした。",
+    choices: [
+      { label: "厳しく発破をかける", result: "「甘えるな」と本気で叱咤した。悔し涙をこらえ、翌日から見違えるほど練習に打ち込むようになった。",
+        protege: { guideBonus: 0.06, bond: 4, ovrBonus: 1 }, mentor: { fatigueDelta: 6 } },
+      { label: "隣に座って話を聞く", result: "自分も同じ壁にぶつかった頃の話をした。少し表情が和らぎ、「もう少し頑張ってみます」と顔を上げた。",
+        protege: { bond: 14 }, mentor: { fatigueDelta: -6, evalDelta: 2 } },
+    ] },
+  { id: "form", title: "弟子のフォーム相談",
+    text: "弟子が「先輩のペダリングを盗みたい」と、フォームを見てほしいと頼んできた。",
+    choices: [
+      { label: "つきっきりで矯正する", result: "夜まで付き合い、無駄のない動きを叩き込んだ。効率が目に見えて上がった。",
+        protege: { guideBonus: 0.07, bond: 6 }, mentor: { fatigueDelta: 8, abBoost: 1 } },
+      { label: "要点だけ教えて自分で考えさせる", result: "ヒントだけ与えて突き放した。試行錯誤の末、自分なりの形を掴み始めた。",
+        protege: { guideBonus: 0.03, bond: 8 }, mentor: { fatigueDelta: -2 } },
+    ] },
+  { id: "race_debut", title: "弟子の初レース",
+    text: "弟子が初めて大きなレースに出る。緊張で前夜に眠れなかったらしい。",
+    choices: [
+      { label: "勝ちにこだわれと送り出す", result: "「お前なら獲れる」と背中を押した。気迫の走りで健闘し、大きな自信を掴んだ。",
+        protege: { guideBonus: 0.05, bond: 6, ovrBonus: 1 }, mentor: { fatigueDelta: 3 } },
+      { label: "楽しんでこいと肩を叩く", result: "「結果より、まず走りを楽しめ」と。伸び伸びと走り、レースそのものを好きになったようだ。",
+        protege: { bond: 16 }, mentor: { fatigueDelta: -4 } },
+    ] },
+  { id: "gift", title: "弟子からの贈り物",
+    text: "弟子が「いつもありがとうございます」と、小さなプレゼントを差し出してきた。",
+    choices: [
+      { label: "照れ隠しに稽古をつける", result: "礼の代わりだと、そのまま追い込みメニューに付き合わせた。二人とも汗だくになった。",
+        protege: { guideBonus: 0.04, bond: 10 }, mentor: { fatigueDelta: 5 } },
+      { label: "素直に受け取り労う", result: "ありがたく受け取り、これまでの努力を労った。師弟の絆がぐっと深まった。",
+        protege: { bond: 18 }, mentor: { fatigueDelta: -8, evalDelta: 1 } },
+    ] },
+  { id: "temptation", title: "弟子の迷い",
+    text: "弟子が「もっと待遇の良い他チームに誘われている」と打ち明けてきた。目は揺れている。",
+    choices: [
+      { label: "実力で黙らせろと鍛え直す", result: "「行きたければ行け。だがその前に、ここで一流になってみせろ」。覚悟を決め、練習量が跳ね上がった。",
+        protege: { guideBonus: 0.08, bond: 8 }, mentor: { fatigueDelta: 7 } },
+      { label: "お前の意志を尊重すると伝える", result: "頭ごなしに止めず、本人の気持ちを最優先した。「やっぱり、先輩の下で続けます」と残る道を選んだ。",
+        protege: { bond: 20 }, mentor: { fatigueDelta: -3, evalDelta: 3 } },
+    ] },
+];
+
+// v36(弟子深化): 年度をまたいだ時、弟子がOVRの節目(70/80/90)を越えたら祝いのニュースを返す（無ければnull）。
+export function protegeMilestoneNews(protege, oldYear, newYear) {
+  if (!protege) return null;
+  const before = protegeState(protege, oldYear).ovr;
+  const after = protegeState(protege, newYear).ovr;
+  const crossed = [90, 80, 70].find(t => before < t && after >= t);
+  if (!crossed) return null;
+  const name = protege.name;
+  if (crossed >= 90) return `🎓 弟子 ${name} がついにOVR90の壁を突破！世界のトップと肩を並べる領域へ。あなたの教えが世界を舞台に花開いた`;
+  if (crossed >= 80) return `🎓 弟子 ${name} がOVR80に到達！エース級の風格をまとい、チームの中心を担う存在に成長した`;
+  return `🎓 弟子 ${name} がOVR70を突破！一人前のプロとして、レースで結果を残せる選手になった`;
 }
 
 export function computeWorldRank(points, year) {

@@ -22,7 +22,7 @@ import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEA
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
-import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
+import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, ML_PROTEGE_EVENTS, protegeMilestoneNews, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
 // ---- 画面ディスパッチ（Phase 4-2）----
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -1390,7 +1390,7 @@ function App() {
       const name = pickRiderName(rng, new Set([s.player?.name, s.rival?.name, s.rival2?.name].filter(Boolean)));
       const age0 = 17 + Math.floor(rng() * 3);
       const ovr0 = 46 + Math.floor(rng() * 10);
-      const protege = { name, type, age0, ovr0, growthPow, joinYear: s.year, mentorOvr: overall(s.player) };
+      const protege = { name, type, age0, ovr0, growthPow, joinYear: s.year, mentorOvr: overall(s.player), bond: 20, guideBonus: 0, ovrBonus: 0 };
       return {
         ...s, flags: { ...s.flags, mentor: true }, protege,
         log: [...s.log,
@@ -1398,6 +1398,30 @@ function App() {
           `【${s.year}年目 ${MONTHS[s.month]}】将来有望な若手 ${name}（${age0}歳・${TYPES[type].label}／成長力${growthPow}）を弟子に取り、指導を始めた`,
         ],
       };
+    });
+  }
+  // v36(弟子深化): 弟子の指導イベントへの応答。選択に応じて弟子の絆(bond)・鍛錬(guideBonus)・
+  // 即時加点(ovrBonus)と、師（プレイヤー）の疲労・評価・地力を反映し、結果画面へ。
+  function mlResolveProtegeEvent(choiceIdx) {
+    setMl(s => {
+      const ev = s.pendingProtegeEvent;
+      if (!ev || !s.protege) return { ...s, pendingProtegeEvent: null, screen: "mylife_main" };
+      const ch = ev.choices[choiceIdx];
+      const pd = ch.protege || {}, md = ch.mentor || {};
+      const protege = {
+        ...s.protege,
+        bond: Math.min(100, (s.protege.bond || 0) + (pd.bond || 0)),
+        guideBonus: Math.min(0.4, (s.protege.guideBonus || 0) + (pd.guideBonus || 0)),
+        ovrBonus: (s.protege.ovrBonus || 0) + (pd.ovrBonus || 0),
+      };
+      let player = s.player;
+      if (md.abBoost) { const cap = mlGrowthCap(s.year, player); player = { ...player }; AB_KEYS.forEach(k => { player[k] = Math.min(cap, (player[k] || 0) + md.abBoost); }); }
+      const fatigue = Math.max(0, Math.min(100, (player.fatigue || 0) + (md.fatigueDelta || 0)));
+      player = { ...player, fatigue };
+      const managerEval = Math.max(0, Math.min(100, s.managerEval + (md.evalDelta || 0)));
+      return { ...s, protege, player, managerEval, pendingProtegeEvent: null,
+        eventResultText: ch.result, eventAdvanced: true,
+        screen: "mylife_event_result" };
     });
   }
   function mlStartRace() {
@@ -1782,6 +1806,11 @@ function App() {
       const money = Math.max(0, s.money + Math.round(s.salary / 12) + popIncome - livingCost);
       if (s.month === 11) {
         player.age += 1;
+        // v36(弟子深化): 弟子がこの年度替わりでOVRの節目(70/80/90)を越えたら祝いのニュースを記録
+        if (s.protege) {
+          const news = protegeMilestoneNews(s.protege, s.year, s.year + 1);
+          if (news) log.push(`【${s.year}年目 3月】${news}`);
+        }
         // v35: 強制引退を廃止。何の前触れもなく引退させられる不満を解消し、ベテランは毎年3月の
         // 契約更改で「現役続行／役割縮小／引退」を必ず自分で選べる。衰え期で戦力が落ちていれば
         // 「引退勧告」トーン、まだ戦えるなら「契約更改」トーンで提示する（判定はadviceInfo.declining）。
@@ -1857,12 +1886,19 @@ function App() {
         });
       }
       const month = s.month + 1;
-      return {
+      const base = {
         ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)],
         directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
         money, managerEval,
         screen: "mylife_main", log,
       };
+      // v36(弟子深化): 弟子がいる間は、毎月ごく稀に指導イベントが発生する。関わり方で
+      // 弟子の伸びや個性が変わり、"年1回数字が変わるだけ"だった弟子育成に手触りを与える。
+      if (s.protege && Math.random() < 0.2) {
+        const ev = ML_PROTEGE_EVENTS[Math.floor(Math.random() * ML_PROTEGE_EVENTS.length)];
+        return { ...base, pendingProtegeEvent: ev, screen: "mylife_protege_event" };
+      }
+      return base;
     });
   }
   // v28: 引退勧告への応答。pendingAdviceに次年度以降の続行state（オフシーズン画面）が
@@ -2476,7 +2512,7 @@ function App() {
   }
 
   // ================= v14: マイライフモード 画面群 =================
-  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
+  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
 
   if (superMode === "mylife") return renderMyLifeScreens(ctx);
 

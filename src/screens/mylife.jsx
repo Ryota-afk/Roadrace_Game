@@ -14,7 +14,7 @@ import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
 export function renderMyLifeScreens(ctx) {
-  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
+  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
@@ -287,7 +287,7 @@ export function renderMyLifeScreens(ctx) {
               <div style={{ background: "linear-gradient(180deg, rgba(53,192,126,0.06), transparent)", borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.green}`, padding: "9px 12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span style={{ fontSize: 10.5, color: C.green, fontWeight: 700 }}>🎓 弟子の成長</span>
-                  <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>師の導き ×{pr.perYear}/年</span>
+                  <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>年 +{pr.perYear}（絆×{pr.bondMul}・鍛錬×{pr.trainMul}）</span>
                 </div>
                 <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "2px 0 1px" }}>
                   {ml.protege.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
@@ -296,6 +296,13 @@ export function renderMyLifeScreens(ctx) {
                 </div>
                 <div style={{ height: 5, borderRadius: 3, background: C.line, marginTop: 5, overflow: "hidden" }}>
                   <div style={{ width: `${growPct * 100}%`, height: "100%", background: C.green, borderRadius: 3 }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
+                  <span style={{ fontSize: 9.5, color: C.pink }}>絆</span>
+                  <div style={{ flex: 1, height: 4, borderRadius: 3, background: C.line, overflow: "hidden" }}>
+                    <div style={{ width: `${pr.bond}%`, height: "100%", background: C.pink, borderRadius: 3 }} />
+                  </div>
+                  <span style={{ fontFamily: FONT_M, fontSize: 9.5, color: C.sub }}>{pr.bond}/100</span>
                 </div>
                 <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>
                   {pr.nextMilestone
@@ -969,13 +976,32 @@ export function renderMyLifeScreens(ctx) {
       );
     }
 
+    if (ml.screen === "mylife_protege_event" && ml.pendingProtegeEvent) {
+      const ev = ml.pendingProtegeEvent;
+      const t = ml.protege ? TYPES[ml.protege.type] : null;
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "linear-gradient(180deg, rgba(53,192,126,0.10), #232a26)", border: `1px solid ${C.green}`, borderRadius: 10, padding: "12px 14px" }}>
+            <Eyebrow color={C.green}>🎓 弟子との時間 — {ev.title}</Eyebrow>
+            {ml.protege && <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "6px 0 2px" }}>{ml.protege.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: t?.color }}>{t?.label}</span></div>}
+            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "6px 0 0" }}>{ev.text}</p>
+          </div>
+          {ev.choices.map((c, i) => (
+            <Btn key={i} color={C.green} onClick={() => mlResolveProtegeEvent(i)}>{c.label}</Btn>
+          ))}
+        </div>
+      );
+    }
+
     if (ml.screen === "mylife_event_result") return mlWrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
           <Eyebrow color={C.purple}>結果</Eyebrow>
           <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.eventResultText}</p>
         </div>
-        <Btn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</Btn>
+        {ml.eventAdvanced
+          ? <Btn onClick={() => setMl(s => ({ ...s, eventAdvanced: false, screen: "mylife_main" }))}>戻る →</Btn>
+          : <Btn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</Btn>}
       </div>
     );
 
