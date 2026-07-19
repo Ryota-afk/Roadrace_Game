@@ -1782,16 +1782,12 @@ function App() {
       const money = Math.max(0, s.money + Math.round(s.salary / 12) + popIncome - livingCost);
       if (s.month === 11) {
         player.age += 1;
-        const retire = player.age >= 36 || (player.age >= 33 && overall(player) < player.joinOvr * 0.8);
-        if (retire) {
-          const retiredState = { ...s, player, money, managerEval };
-          mlRecordLegend(retiredState);
-          return { ...retiredState, screen: "mylife_retired", log: [...log, `【${s.year}年目 3月】${player.age}歳で現役引退`] };
-        }
-        // v28: 衰えと引退勧告の駆け引き。強制引退には至らないが、年齢を重ね衰え期に入り
-        // 全盛期の力を失いつつある選手には、年度末にチームから引退・役割縮小の打診が入る。
-        // プレイヤーは「現役続行／役割を縮小して続行／勧告を受け入れ引退」を選べる
-        const declining = player.age >= 32 && growthPhase(player).tag === "衰え期" && overall(player) < player.joinOvr && !s.flags?.reducedRole;
+        // v35: 強制引退を廃止。何の前触れもなく引退させられる不満を解消し、ベテランは毎年3月の
+        // 契約更改で「現役続行／役割縮小／引退」を必ず自分で選べる。衰え期で戦力が落ちていれば
+        // 「引退勧告」トーン、まだ戦えるなら「契約更改」トーンで提示する（判定はadviceInfo.declining）。
+        const phase = growthPhase(player).tag;
+        const declining = phase === "衰え期" && overall(player) < player.joinOvr;
+        const retireChoice = player.age >= 33 || (player.age >= 31 && declining);
         // v17: 引退以外でキャリアが続く年は、必ずオフシーズンの過ごし方を選ばせる。
         // 人生の岐路イベントの判定はオフシーズンの選択を終えたあと（mlContinueAfterOffseason）で行う
         const finalizeYearEnd = (nextState) => {
@@ -1802,9 +1798,9 @@ function App() {
           const histEntry = { year: s.year, ovr: overall(player), worldRank: s.worldRank, worldBest: s.worldRankBest, wins: s.careerWins || 0, podiums: s.careerPodiums || 0 };
           nextState = { ...nextState, worldPoints: decayedWP, worldRank: computeWorldRank(decayedWP, nextState.year), careerHistory: [...(s.careerHistory || []), histEntry] };
           const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState };
-          if (declining) {
+          if (retireChoice) {
             return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval,
-              adviceInfo: { age: player.age, ovr: overall(player), joinOvr: player.joinOvr }, log };
+              adviceInfo: { age: player.age, ovr: overall(player), joinOvr: player.joinOvr, declining, reducedRole: !!s.flags?.reducedRole }, log };
           }
           return offseasonState;
         };

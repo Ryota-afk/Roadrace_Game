@@ -1069,22 +1069,26 @@ export function renderMyLifeScreens(ctx) {
     // v28: 引退勧告の駆け引き画面
     if (ml.screen === "mylife_retire_advice" && ml.player) {
       const r = ml.player;
-      const info = ml.adviceInfo || { age: r.age, ovr: overall(r), joinOvr: r.joinOvr };
+      const info = ml.adviceInfo || { age: r.age, ovr: overall(r), joinOvr: r.joinOvr, declining: false, reducedRole: false };
+      // v35: 衰え期なら「引退勧告」、まだ戦えるなら「契約更改」トーン。どちらでも現役続行/縮小/引退を選べる。
+      const decl = info.declining;
+      const accent = decl ? C.red : C.blue;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: C.panel, borderRadius: 12, padding: 18, borderTop: `4px solid ${C.red}`, textAlign: "center" }}>
+          <div style={{ background: C.panel, borderRadius: 12, padding: 18, borderTop: `4px solid ${accent}`, textAlign: "center" }}>
             <div style={{ fontSize: 34 }}>📋</div>
-            <h2 style={{ fontFamily: FONT_D, color: C.red, fontSize: 20, margin: "6px 0" }}>チームからの引退勧告</h2>
-            <div style={{ fontSize: 12, color: C.sub }}>{info.age}歳・全盛期の力に陰りが見える</div>
+            <h2 style={{ fontFamily: FONT_D, color: accent, fontSize: 20, margin: "6px 0" }}>{decl ? "チームからの引退勧告" : `契約更改（${info.age}歳）`}</h2>
+            <div style={{ fontSize: 12, color: C.sub }}>{decl ? `${info.age}歳・全盛期の力に陰りが見える` : `${info.age}歳・進退はあなたが決める`}</div>
           </div>
-          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.8, background: C.panel2, borderRadius: 8, padding: "10px 12px", borderLeft: `3px solid ${C.red}` }}>
-            監督room「{r.name}、今季もよく走ってくれた。だが正直、往年の走りには戻れていない（OVR {info.ovr}／全盛期基準{info.joinOvr}）。
-            そろそろ身の振り方を考える時期かもしれない。もう一年やるか、役割を落として続けるか、それとも——決めるのは君だ」
+          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.8, background: C.panel2, borderRadius: 8, padding: "10px 12px", borderLeft: `3px solid ${accent}` }}>
+            {decl
+              ? `監督「${r.name}、今季もよく走ってくれた。だが正直、往年の走りには戻れていない（OVR ${info.ovr}／全盛期基準${info.joinOvr}）。そろそろ身の振り方を考える時期かもしれない。もう一年やるか、役割を落として続けるか、それとも——決めるのは君だ」`
+              : `監督「${r.name}、来季の契約をどうする？（OVR ${info.ovr}）まだやれる脚だ。もう一年勝負するもよし、役割を落として長く続けるもよし。引き際もまた、君自身が決めることだ」`}
           </div>
           <div style={{ display: "grid", gap: 8 }}>
-            <Btn color={C.sub} outline onClick={mlRetireAdviceContinue}>💪 勧告を退けて現役を続ける（今まで通り）</Btn>
-            <Btn color={C.blue} outline onClick={mlRetireAdviceReduceRole}>🤝 役割を縮小して続ける（レース負荷-15%・延命）</Btn>
-            <Btn color={C.red} outline onClick={() => askConfirm(`勧告を受け入れ、${r.age}歳で引退しますか？この操作は取り消せません。`, mlRetireAdviceAccept)}>🏁 勧告を受け入れて引退する</Btn>
+            <Btn color={C.sub} outline onClick={mlRetireAdviceContinue}>💪 現役を続ける（今まで通り）</Btn>
+            {!info.reducedRole && <Btn color={C.blue} outline onClick={mlRetireAdviceReduceRole}>🤝 役割を縮小して続ける（レース負荷-15%・延命）</Btn>}
+            <Btn color={C.red} outline onClick={() => askConfirm(`${r.age}歳で引退しますか？この操作は取り消せません。`, mlRetireAdviceAccept)}>🏁 今季限りで引退する</Btn>
           </div>
         </div>
       );
