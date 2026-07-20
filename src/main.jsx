@@ -1233,7 +1233,13 @@ function App() {
   function mlCreateChar(type, background, master, partner) {
     mlCreateArgsRef.current = { type, background, master, partner }; // v36(#5): 引き直し用に保持
     const rng = mulberry(Date.now() % 999983);
-    const team = MYLIFE_TEAMS[Math.floor(Math.random() * MYLIFE_TEAMS.length)];
+    // v38: 所属チームの割り当てを見直し。従来は全チームから完全ランダムで、B1デビューなのに
+    // PRO강호に所属して始まる不整合があり、また脚質と無関係で「毎回ほぼ同じ」に感じられた。
+    // 開始クラス（B1）相応の下位〜中堅チーム（tier<=1）に限定し、自分の脚質に合うチームを
+    // 当たりやすく重み付け＝キャリアごとに顔ぶれが変わりつつ、脚質に沿った所属先になる。
+    const startPool = MYLIFE_TEAMS.filter(t => t.tier <= 1);
+    const weightedPool = [...startPool, ...startPool.filter(t => t.spec === type)];
+    const team = weightedPool[Math.floor(Math.random() * weightedPool.length)];
     const bg = ML_BACKGROUNDS[background];
     // v27: 教え子（プロテジェ）。師匠を選んでいれば、その最終能力・特殊能力・成長力を
     // 一部引き継いだ状態でデビューする
@@ -2022,8 +2028,15 @@ function App() {
           return offseasonState;
         };
         const qualified = s.points >= CLASSES[s.classIdx].need;
-        const classIdx = qualified ? Math.min(2, s.classIdx + 1) : s.classIdx;
-        if (qualified && classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
+        // v38: 降格を実装（従来は昇格のみで「クラスの上下」が形骸化していた）。年間ポイントが
+        // クラス維持ラインを大きく下回ると1つ降格する（B1は最下位なので降格なし）。これにより
+        // 昇格の価値が生まれ、上位クラスで結果を出し続けるプレッシャーが働く。
+        const mlRelegateLine = Math.round(CLASSES[s.classIdx].need * 0.4);
+        let classIdx = s.classIdx;
+        if (qualified) classIdx = Math.min(2, s.classIdx + 1);
+        else if (s.classIdx > 0 && s.points < mlRelegateLine) classIdx = s.classIdx - 1;
+        if (classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
+        else if (classIdx < s.classIdx) log.push(`【${s.year}年目 3月】不振により${CLASSES[classIdx].label}へ降格…雪辱を期す`);
         // v14.3: 年俸改定。その年のポイント・勝利・表彰台に応じて年俸が上がる
         const yearRaces = (player.raceLog || []).filter(e => e.year === s.year);
         const yearWins = yearRaces.filter(e => e.rank === 1).length;
