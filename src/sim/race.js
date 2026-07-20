@@ -272,6 +272,11 @@ function energyDrain(en, mode, segType, steepness) {
 
 export function canPull(en, segType) {
   if (en.isAce) return false;
+  // v36修正: 献身のアシストは集団内で風除け（ドラフト）に徹し、自分は牽引で消耗し尽くさない。
+  // チームの牽引・風除けの恩恵はエースへの能力ブースト（isAssisting時に付与）で表現済みのため、
+  // ここで本人まで牽引に回すと長丁場で自滅（+数百秒の大敗）してしまう。集団に残って脚を残し、
+  // 最終直線で勝負を譲る（sit up）ことで、観戦と一致したまま「エースを勝負圏へ届ける」形にする。
+  if (en.isAssisting) return false;
   if (en.energy <= 0) return false;
   if (en.role === "breakaway") return true;
   if (en.role === "lead") return true;
@@ -432,7 +437,14 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
           // スプリント区間に限り、各選手自身のスプリント適性（ownCapable/groupDistの比）と
           // 小さな運要素を反映した微差を加え、集団のままでも着差にばらつきが出るようにする
           const isFinalSeg = segInfo.idx === course.finalIdx;
-          if (isFinalSeg) {
+          if (isFinalSeg && en.isAssisting && !en.isAce) {
+            // v36修正: 献身のアシストは最終直線で仕事を終え、勝負を譲って流す（スプリントしない）。
+            // ＝先頭で競らず、集団の後方へ自然に下がる。これにより「アシストなのに自分がぶっちぎって
+            // 先頭ゴール→リザルトでは2位」という観戦とリザルトの食い違いを、シミュレーション自体で
+            // 解消する（着順を後から書き換えない＝アニメと結果が必ず一致）。
+            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.02;
+            dist = groupDist * (0.90 + luck);
+          } else if (isFinalSeg) {
             // v28: 最終区間（カメラが切り替わる勝負どころ）は、そこまで生き残った選手同士の
             // ゴール前の掛け合いをスプリント能力で決める。山頂フィニッシュなどスプリント以外で
             // 終わるコースでも、地形適性（ownCapable＝登坂等）で集団に残れるかは従来通り決まり、

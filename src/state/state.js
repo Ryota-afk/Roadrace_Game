@@ -845,34 +845,13 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
   simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
   rankSim(sim);
-  // v35: 献身のアシストは自分の着順を捨ててエースを届ける役割。ドメスティークは自分が守る
-  // エースの前でゴールしない——もしエースより上でフィニッシュしていたら、勝負を譲って
-  // すぐ後ろ（+0.4秒）に「差し」、エースを先着させる。これで「アシストしたのに自分が上」
-  // という不整合を解消する（エースは上の底上げで千切れず勝負に絡めるようになっている）。
+  // v36修正: レース後にfinishTimeを書き換えると、観戦アニメ（posHist）と着順（finishTime）が
+  // 食い違い「先頭でゴールしたのにリザルト2位」等の同期ズレが起きていた。着順の書き換えは全廃し、
+  // 献身の作用はすべてシミュレーション内で完結させる：(1)エースは能力ブースト＋風除け（isAssisting=
+  // 消耗軽減）で勝負圏に残る、(2)アシスト本人は最終直線で流して勝負を譲る（isAssistingの最終区間
+  // ハンドリング）。結果はシミュレーション（＝観戦）そのまま＝アニメと必ず一致する。
   if (assistedAceRef) {
-    const me = riders.find(e => e.isPlayerChar);
-    // v35: 献身の安全網。集団ゴールのコース（平坦・スプリント・丘決着）では、万一チームが
-    // 千切れても3分も離される事故は不自然。ここでエース（＝連動する自分）の離され幅を上限で抑え、
-    // 「アシストしたのに自分もエースも壊滅的大敗」という理不尽を防ぐ（山岳決着は大差が正当なので対象外）。
-    const finSeg = course.segs[course.finalIdx] ? course.segs[course.finalIdx].type : "flat";
-    // v36修正: 献身の安全網を全地形に拡張。従来は平坦・スプリント・丘の集団ゴールでしか
-    // 離され幅を抑えておらず、山岳決着では上限が無く「アシストしたのにエースも自分も+70秒の
-    // 壊滅的大敗」が起きていた。地形ごとに妥当な上限（集団ゴールは僅差／登坂は差が付きやすい）で
-    // エースの離され幅をクランプし、献身が必ず「エースを勝負圏へ届ける」形にする。
-    if (Number.isFinite(assistedAceRef.finishTime)) {
-      const winnerTime = Math.min(...riders.map(e => e.finishTime).filter(Number.isFinite));
-      const capGap = (finSeg === "climb" || finSeg === "mtn") ? 45
-        : (finSeg === "tt") ? 30 : 20; // 集団ゴール＝勝負圏（+20秒）／登坂＝+45秒
-      assistedAceRef.finishTime = Math.min(assistedAceRef.finishTime, winnerTime + capGap);
-    }
-    // 献身のアシストは自分の結果を常にエースに委ねる。エースの前でゴールせず（差して譲る）、
-    // 万一遅れても役目を終えてエースのすぐ後ろ(+0.4秒)へ回り込む＝「自分だけ大敗」を無くす。
-    if (me && Number.isFinite(me.finishTime) && Number.isFinite(assistedAceRef.finishTime)) {
-      me.finishTime = assistedAceRef.finishTime + 0.4;
-    }
-    sim.ranked = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
-    sim.ranked.forEach((e, i) => { e.rank = i + 1; });
-    // v33.8: 献身で押し上げたエースの最終着順を結果画面に渡す
+    // 結果画面用に、献身で押し上げたエースの最終着順（シミュレーション通り）を渡すだけ
     sim.assistedAce = { name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
   }
   return sim;
