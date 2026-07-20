@@ -918,6 +918,16 @@ export function renderMyLifeScreens(ctx) {
               {reply && <Bubble who="me" name={ml.player.name} text={reply.playerLine} />}
               {reply && <Bubble who="rival" name={reply.reply.name} text={reply.reply.text} />}
             </div>
+            {reply && (() => {
+              const e = reply.effects || {};
+              const parts = [];
+              if (e.mentalDelta) parts.push(`🧠 メンタル+${e.mentalDelta}`);
+              if (e.popularityDelta) parts.push(`⭐ 人気+${e.popularityDelta}`);
+              if (e.heatDelta) parts.push(`🔥 因縁+${e.heatDelta}`);
+              return parts.length ? (
+                <div style={{ marginTop: 8, textAlign: "center", fontSize: 11.5, color: C.green, fontWeight: 700 }}>{parts.join("　")}</div>
+              ) : null;
+            })()}
           </div>
           {!reply
             ? (<div style={{ display: "grid", gap: 8 }}>
