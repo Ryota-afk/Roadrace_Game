@@ -9,7 +9,7 @@ import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilit
 import { MONTHS } from "../data/course.js";
 import { CLASSES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
+import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlRiderStatsRows, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
@@ -576,6 +576,7 @@ export function renderMyLifeScreens(ctx) {
               <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップ</Btn>
               <Btn small outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>🏆 実績 {computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}</Btn>
               <Btn small outline color={C.green} onClick={() => setMl(s => ({ ...s, screen: "mylife_teamroster" }))}>👥 チーム名鑑</Btn>
+              <Btn small outline color={C.red} onClick={() => setMl(s => ({ ...s, screen: "mylife_riderstats" }))}>📊 選手成績</Btn>
               <Btn small outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_graph" }))}>📈 キャリアグラフ</Btn>
               <Btn small outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑</Btn>
               <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコード</Btn>
@@ -641,6 +642,44 @@ export function renderMyLifeScreens(ctx) {
     );
 
     // v27: コースレコード一覧（シーズンモードと共有の永続記録）
+    // v37: 選手成績台帳（自分・ライバル・チームメイトの今季／通算スタッツ）
+    if (ml.screen === "mylife_riderstats" && ml.player) {
+      const rows = mlRiderStatsRows(ml);
+      const kindLabel = { self: { t: "あなた", c: C.yellow }, rival: { t: "ライバル", c: C.red }, teammate: { t: "チームメイト", c: C.blue } };
+      return mlWrap(
+        <div style={{ display: "grid", gap: 10 }}>
+          <Eyebrow color={C.red}>📊 選手成績 — {ml.year}年目 時点</Eyebrow>
+          <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>あなた・ライバル・チームメイトの成績を、同じレースで走った記録から集計しています（今季／通算）。</div>
+          <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, overflow: "hidden" }}>
+            <div style={{ display: "flex", gap: 6, padding: "6px 10px", fontSize: 10, color: C.sub, borderBottom: `1px solid ${C.line}`, background: C.panel2 }}>
+              <span style={{ flex: 1 }}>選手</span>
+              <span style={{ width: 62, textAlign: "center" }}>今季</span>
+              <span style={{ width: 96, textAlign: "center" }}>通算(勝/表彰台)</span>
+              <span style={{ width: 40, textAlign: "right" }}>最高</span>
+            </div>
+            {rows.map((r) => {
+              const kl = kindLabel[r.kind] || kindLabel.teammate;
+              return (
+                <div key={r.id} style={{ display: "flex", gap: 6, alignItems: "center", padding: "7px 10px", borderBottom: `1px solid ${C.bg}`, background: r.kind === "self" ? "rgba(255,210,63,0.10)" : "transparent" }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ color: kl.c, fontWeight: r.kind === "self" ? 700 : 500, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+                      {r.kind === "self" ? "🚴 " : r.kind === "rival" ? "🔥 " : "🤝 "}{r.name}
+                    </span>
+                    <span style={{ fontSize: 9.5, color: C.sub }}>{kl.t}・{r.team}</span>
+                  </span>
+                  <span style={{ width: 62, textAlign: "center", fontFamily: FONT_M, fontSize: 11, color: C.text }}>{r.yr ? `${r.yr.races}走${r.yr.wins}勝` : "—"}</span>
+                  <span style={{ width: 96, textAlign: "center", fontFamily: FONT_M, fontSize: 11, color: C.text }}>{r.races}走 <span style={{ color: C.yellow }}>{r.wins}</span>/<span style={{ color: "#e8a13c" }}>{r.podiums}</span></span>
+                  <span style={{ width: 40, textAlign: "right", fontFamily: FONT_M, fontSize: 11, color: r.bestRank === 1 ? C.yellow : C.sub }}>{r.bestRank >= 99 ? "—" : `${r.bestRank}位`}</span>
+                </div>
+              );
+            })}
+            {rows.length <= 1 && <div style={{ padding: "12px", fontSize: 11.5, color: C.sub, textAlign: "center" }}>レースを重ねると、ライバルや仲間の成績がここに蓄積されます。</div>}
+          </div>
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 戻る</Btn>
+        </div>
+      );
+    }
+
     if (ml.screen === "mylife_records") return mlWrap(
       <div style={{ display: "grid", gap: 12 }}>
         <Eyebrow color={"#e8a13c"}>👑 通算タイトル</Eyebrow>

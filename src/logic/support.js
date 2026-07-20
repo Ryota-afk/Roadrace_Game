@@ -1735,6 +1735,60 @@ export function mlWorldNews(seed, year, legendPool) {
 // v35(D 物語): メディアナラティブ。選手の実際のキャリア状態（直近成績・連勝/連続表彰台・
 // 世界ランク・因縁・人気・年齢）から最も「記事になる」角度を選び、見出し＋短い記事を生成する。
 // 純関数（ml から読むだけ）。tone で色分け（good/bad/neutral）。seed で月ごとに文面を少し変える。
+// v37: 選手成績台帳。毎レース後、永続キャラ（ライバル／自チームメイト）の着順を集計する純関数。
+// 出走ごとに通算＆年度別（勝利/表彰台/トップ10/ベスト着順）を積む。使い捨てのモブは対象外。
+export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
+  const next = { ...(prev || {}) };
+  (rankedEntrants || []).forEach(e => {
+    const isRival = !!(e.isRival || e.isRival2);
+    const isMate = teammateIds && teammateIds.has(e.id);
+    if (!isRival && !isMate) return;
+    if (!Number.isFinite(e.rank)) return;
+    const cur = next[e.id]
+      ? { ...next[e.id], byYear: { ...next[e.id].byYear } }
+      : { id: e.id, name: e.name, team: e.teamName || e.team, kind: isRival ? "rival" : "teammate", races: 0, wins: 0, podiums: 0, top10: 0, bestRank: 99, byYear: {} };
+    const r = e.rank;
+    cur.name = e.name; cur.team = e.teamName || e.team || cur.team;
+    cur.races += 1;
+    if (r === 1) cur.wins += 1;
+    if (r <= 3) cur.podiums += 1;
+    if (r <= 10) cur.top10 += 1;
+    cur.bestRank = Math.min(cur.bestRank, r);
+    const y = cur.byYear[year] ? { ...cur.byYear[year] } : { races: 0, wins: 0, podiums: 0 };
+    y.races += 1; if (r === 1) y.wins += 1; if (r <= 3) y.podiums += 1;
+    cur.byYear[year] = y;
+    next[e.id] = cur;
+  });
+  return next;
+}
+
+// 台帳を「自分・ライバル・チームメイト」の表示用リストへ整形（純関数）。
+export function mlRiderStatsRows(ml) {
+  const stats = ml.riderStats || {};
+  const year = ml.year || 1;
+  const rows = [];
+  // 自分（raceLogから集計）
+  const p = ml.player;
+  if (p) {
+    const log = p.raceLog || [];
+    const agg = { races: log.length, wins: 0, podiums: 0, top10: 0, bestRank: 99, yr: { races: 0, wins: 0, podiums: 0 } };
+    log.forEach(e => {
+      if (e.rank === 1) agg.wins++; if (e.rank <= 3) agg.podiums++; if (e.rank <= 10) agg.top10++;
+      agg.bestRank = Math.min(agg.bestRank, e.rank);
+      if (e.year === year) { agg.yr.races++; if (e.rank === 1) agg.yr.wins++; if (e.rank <= 3) agg.yr.podiums++; }
+    });
+    rows.push({ id: p.id, name: p.name, team: ml.team, kind: "self", ...agg, byYear: { [year]: agg.yr } });
+  }
+  Object.values(stats).forEach(s => {
+    const yr = s.byYear && s.byYear[year] ? s.byYear[year] : { races: 0, wins: 0, podiums: 0 };
+    rows.push({ ...s, yr });
+  });
+  // 種別（自分→ライバル→仲間）＆通算勝利数で並べる
+  const kindOrder = { self: 0, rival: 1, teammate: 2 };
+  rows.sort((a, b) => (kindOrder[a.kind] - kindOrder[b.kind]) || (b.wins - a.wins) || (a.bestRank - b.bestRank));
+  return rows;
+}
+
 export function mlMediaHeadline(ml) {
   if (!ml || !ml.player) return null;
   const p = ml.player;

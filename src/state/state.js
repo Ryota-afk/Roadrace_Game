@@ -568,6 +568,8 @@ export function initMyLife() {
     rival: null, rivalRecord: null,
     // v26: 複数ライバル制。2人目の好敵手（初対戦を終えるまでUIには出さない）
     rival2: null, rivalRecord2: null,
+    // v37: 永続キャラ（ライバル/仲間）の成績台帳
+    riderStats: {},
     // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
     flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false, mentor: false, mentorName: null, mentorActive: false },
     rewardedAchievements: [],
@@ -595,6 +597,7 @@ const ML_SAVE_FIELDS = [
   "teammates", "tactic", "careerHistory",
   "protege", // v35(逆メンター): 弟子（プロテジェ）
   "rivalDramaOn", // v36(#6): 性格ベースのライバル会話ドラマの表示 on/off
+  "riderStats", // v37: 永続キャラ（ライバル/仲間）の成績台帳
 ];
 
 export function saveMyLife(ml) {
