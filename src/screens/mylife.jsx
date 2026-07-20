@@ -780,7 +780,7 @@ export function renderMyLifeScreens(ctx) {
     );
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome, finishTime, gapSec, forecast } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome, finishTime, gapSec, forecast, newspaper } = ml.resultInfo;
       // v36(#6): 性格ベースの会話ドラマ（紙芝居/VN風）。ml.rivalDramaOn===false でオフにできる。
       const vnScene = (dlg) => (ml.rivalDramaOn !== false && dlg && dlg.lines) ? (
         <div style={{ marginTop: 8, display: "grid", gap: 6, borderTop: `1px dashed ${C.line}`, paddingTop: 8 }}>
@@ -887,10 +887,41 @@ export function renderMyLifeScreens(ctx) {
               <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>監督評価 {evalDelta >= 0 ? "+" : ""}{evalDelta}</div>
             </div>
           )}
-          <Btn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</Btn>
+          {newspaper
+            ? <Btn color={newspaper.accent} onClick={() => setMl(s => ({ ...s, screen: "mylife_newspaper" }))}>📰 号外が届いた！ →</Btn>
+            : <Btn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</Btn>}
         </div>
       );
     }
+
+    // v36(#7): 新聞・雑誌イベント。大勝・連勝を号外の紙面として演出する。
+    if (ml.screen === "mylife_newspaper" && ml.resultInfo?.newspaper) {
+      const np = ml.resultInfo.newspaper;
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "#f4efe3", color: "#1a1a1a", borderRadius: 6, padding: "16px 16px 18px", border: `3px double #1a1a1a`, boxShadow: "0 6px 24px rgba(0,0,0,0.4)" }}>
+            {/* 題字 */}
+            <div style={{ borderBottom: "3px double #1a1a1a", paddingBottom: 6, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+              <span style={{ fontFamily: FONT_D, fontWeight: 800, fontSize: 20, letterSpacing: 1 }}>📰 {np.masthead}</span>
+              <span style={{ fontSize: 10, color: "#555" }}>{np.date}</span>
+            </div>
+            <div style={{ display: "inline-block", background: np.accent, color: "#1a1a1a", fontSize: 10.5, fontWeight: 800, padding: "1px 8px", borderRadius: 3, marginBottom: 6 }}>{np.tag}</div>
+            {/* 大見出し */}
+            <div style={{ fontFamily: FONT_D, fontWeight: 800, fontSize: 27, lineHeight: 1.2, margin: "2px 0 4px", borderLeft: `6px solid ${np.accent}`, paddingLeft: 8 }}>{np.headline}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#333", marginBottom: 10 }}>{np.sub}</div>
+            {/* 写真枠 */}
+            <div style={{ background: "#d8d2c4", border: "1px solid #b3ac9c", borderRadius: 4, padding: "18px 10px", textAlign: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 30 }}>📷</div>
+              <div style={{ fontSize: 10.5, color: "#555", marginTop: 4, fontStyle: "italic" }}>【写真】{np.photo}</div>
+            </div>
+            {/* 本文（2段組み風） */}
+            <div style={{ fontSize: 12.5, lineHeight: 1.85, color: "#222", textAlign: "justify", columnGap: 14 }}>{np.body}</div>
+          </div>
+          <Btn onClick={() => mlAdvanceMonth("race")}>読み終えて翌月へ進む →</Btn>
+        </div>
+      );
+    }
+
 
     if (ml.screen === "mylife_shop" && ml.player) {
       const r = ml.player;

@@ -1639,6 +1639,58 @@ export function mlCareerTimeline(ml) {
   return out.reverse().slice(0, 30);
 }
 
+// v36(#7): 新聞・雑誌イベント。大きな勝利・連勝を「号外」の紙面として演出する純関数。
+// 直近の一戦が号外に値するか判定し、値するなら見出し・記事を返す（値しなければnull）。
+export function mlNewspaper({ player, race, rank, careerWins, worldRank, year, month }) {
+  if (!player || !race || rank !== 1) return null; // 号外は「勝った時」だけ
+  const log = player.raceLog || [];
+  // 直近から連続する優勝数（今回を含む）を数える＝勝ち星の連なり
+  let winStreak = 0;
+  for (let i = log.length - 1; i >= 0; i--) { if (log[i].rank === 1) winStreak++; else break; }
+  const name = player.name;
+  const grade = race.grade || 1;
+  const isWorlds = race.milestone === "worlds";
+  const isOlympics = race.milestone === "olympics";
+  const isMonument = !!race.monument;
+  const streakMilestone = [15, 10, 8, 5, 3].find(n => winStreak >= n && winStreak === n) ?? (winStreak >= 3 ? winStreak : 0);
+  const careerMilestone = [100, 50, 25, 10].find(n => careerWins === n) || 0;
+  const date = `${year}年目 ${MONTHS[month]}`;
+  const masthead = "ロードレース・タイムズ";
+  // 優先度：世界の頂点 ＞ モニュメント ＞ 連勝節目 ＞ 格上ビッグウィン ＞ 通算勝利節目
+  if (isWorlds || isOlympics) {
+    const t = isWorlds ? "世界選手権" : "オリンピック";
+    return { kind: "crown", accent: "#ffd23f", masthead, date, tag: "号外・特報",
+      headline: `${name}、${t}を制す`, sub: `世界の頂点に立つ ── 王者の称号、ここに`,
+      body: `${race.name}を制した${name}が、ついに世界のトップへと駆け上がった。ゴール前で見せた圧巻の走りに、スタンドは総立ち。${worldRank && worldRank <= 5 ? `世界ランキングも${worldRank}位まで上昇し、` : ""}その名は世界中のファンの記憶に刻まれた。`,
+      photo: `${t}の表彰台で栄光を噛みしめる${name}` };
+  }
+  if (isMonument) {
+    return { kind: "classic", accent: "#e8a13c", masthead, date, tag: "号外",
+      headline: `${name}、クラシック制覇`, sub: `${race.name} ── 英雄の系譜に新たな名`,
+      body: `一世紀を超えて受け継がれる格式高い古典レース《${race.monumentName || race.name}》を、${name}が制した。消耗の激しい伝統のコースで最後まで脚を残し、歴戦の強豪たちを退けての完勝。クラシックの覇者として、その走りは長く語り継がれるだろう。`,
+      photo: `石畳（または峠）を越えて先頭でゴールする${name}` };
+  }
+  if (streakMilestone >= 3) {
+    return { kind: "streak", accent: "#e8544f", masthead, date, tag: winStreak >= 8 ? "特集" : "スポーツ面",
+      headline: `${name} ${winStreak}連勝！`, sub: `止まらない快進撃 ── 敵なしの快走続く`,
+      body: `${race.name}を制し、${name}が${winStreak}連勝を達成した。誰にも止められない勢いで白星を重ね、いまや大会の主役。${winStreak >= 8 ? "この記録がどこまで伸びるのか、ファンの期待は高まるばかりだ。" : "次戦でも連勝を伸ばせるか、注目が集まる。"}`,
+      photo: `ガッツポーズでゴールラインを駆け抜ける${name}` };
+  }
+  if (grade >= 3) {
+    return { kind: "big", accent: "#4f8fe8", masthead, date, tag: "スポーツ面",
+      headline: `${name}、大金星`, sub: `${race.name}で強豪を撃破`,
+      body: `格の高い${"★".repeat(grade)}レース${race.name}で、${name}が見事に優勝を飾った。並みいる強豪を相手にした価値ある勝利。着実に実力をつけてきた走りが、大舞台で結実した一日となった。`,
+      photo: `両手を突き上げて喜ぶ${name}` };
+  }
+  if (careerMilestone) {
+    return { kind: "milestone", accent: "#35c07e", masthead, date, tag: "コラム",
+      headline: `${name} 通算${careerMilestone}勝の金字塔`, sub: `積み重ねた白星、また一つの節目`,
+      body: `${race.name}を制し、${name}がキャリア通算${careerMilestone}勝に到達した。一戦一戦を大切に走り続けた積み重ねが、大きな数字となって結実した。次なる目標へ、歩みは止まらない。`,
+      photo: `記念すべき${careerMilestone}勝目を挙げた${name}` };
+  }
+  return null;
+}
+
 // v35(逆メンター): 弟子（プロテジェ）の現在の状態を、弟子入りからの経過年数から算出する純関数。
 // 成長力(growthPow)と、弟子を取った時の師（プレイヤー）の地力(mentorOvr)＝指導の質で伸びが決まる。
 // インクリメンタルな状態更新を持たず「年が進めば自然に育つ」形（保存・分岐に依存しない）。
