@@ -1555,11 +1555,41 @@ function App() {
       };
     });
   }
+  // v37: マイライフのチームTTは「チームの順位」で結果を出す（個人simへ落とさない）。
+  function mlFinishTeamTT(sim, race) {
+    const teams = sim.teamTT;
+    const playerTeam = teams.find(t => t.isPlayer);
+    const teamRank = playerTeam ? playerTeam.rank : teams.length;
+    const totalTeams = teams.length;
+    const pts = Math.round((PTS[teamRank - 1] || 0) * GRADE_MUL[race.grade]);
+    const prize = Math.round((PRIZES[teamRank - 1] || 1) * (0.4 + ml.classIdx * 0.25) * 2.4);
+    const baseTime = teams[0].time;
+    const teamStandings = teams.map(t => ({
+      rank: t.rank, name: t.teamName || t.team, isPlayer: !!t.isPlayer,
+      time: t.time, gap: t.time - baseTime,
+      riders: (t.riders || []).map(r => r.name),
+    }));
+    setMl(s => {
+      const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] };
+      const wpGain = worldPointsForFinish(teamRank, race.grade);
+      const worldPoints = (s.worldPoints || 0) + wpGain;
+      const worldRank = computeWorldRank(worldPoints, s.year);
+      const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
+      const careerPodiums = (s.careerPodiums || 0) + (teamRank <= 3 ? 1 : 0);
+      return {
+        ...s, player, points: s.points + pts, money: s.money + prize,
+        worldPoints, worldRank, worldRankBest, careerPodiums,
+        resultInfo: { race, teamTT: true, teamRank, totalTeams, pts, prize, teamStandings, wpGain, worldRank, worldRankPrev: s.worldRank },
+        screen: "mylife_result",
+      };
+    });
+  }
   function mlRaceFinish() {
     mlRaceLockRef.current = false;
     const sim = ml.result;
-    const me = sim.ranked.find(e => e.isPlayerChar);
     const race = ml.races[0];
+    if (sim.teamTT) { mlFinishTeamTT(sim, race); return; }
+    const me = sim.ranked.find(e => e.isPlayerChar);
     const pts = Math.round((PTS[me.rank - 1] || 0) * GRADE_MUL[race.grade]);
     // v14.3: 監督指示を全うできたかどうかで監督評価が増減する。賞金はクラス倍率に応じて即時支給
     // v33.5: セーブから復元した監督指示はJSONでcheck関数が失われているため、キーで正規テーブルから引き直す
@@ -1577,6 +1607,17 @@ function App() {
     // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
     const winner = sim.ranked[0];
     const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, !!winner.isPlayerChar, ml.year);
+    // v37: レース結果に「全順位表」を添える（着順・選手名・チーム名・トップとの秒差）。
+    // これで自分以外の選手も識別でき、観戦→結果の一貫した見え方になる。
+    const winTime = winner.finishTime;
+    const standings = sim.ranked.map(e => ({
+      rank: e.rank, name: e.name,
+      team: e.teamName || (e.team === "PLAYER" ? ml.team : e.team) || "—",
+      gap: Number.isFinite(e.finishTime) && Number.isFinite(winTime) ? e.finishTime - winTime : null,
+      isPlayer: !!e.isPlayerChar, isMyTeam: e.team === "PLAYER",
+      isRival: !!(e.isRival || e.isRival2), isAce: !!e.isAce,
+      worldRank: e.worldRank || null,
+    }));
     // v28: 通算タイトル記録（世界選手権・オリンピックで優勝したら）
     if (me.rank === 1 && race.milestone) recordTitle(race.milestone);
     // v28: 代表チームでの立場。世界選手権・オリンピックには代表監督から役割（エース/アシスト）が
@@ -1708,7 +1749,7 @@ function App() {
           // v34(UI): レース後サマリーの整理。フィニッシュタイム・トップとの差・下馬評の答え合わせ。
           finishTime: me.finishTime, gapSec: me.rank === 1 ? 0 : (me.finishTime - winner.finishTime),
           forecast: (() => { const fc = raceForecast(sim.entrants, race.tmpl?.favors); const my = fc.get(me); return my ? { rank: my.rank, mark: my.mark ? my.mark.label : "無印", markColor: my.mark ? my.mark.color : "#9aa3b5" } : null; })(),
-          newspaper },
+          newspaper, standings },
         screen: "mylife_result",
       };
     });

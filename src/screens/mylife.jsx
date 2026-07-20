@@ -765,7 +765,8 @@ export function renderMyLifeScreens(ctx) {
         <Eyebrow color={C.purple}>🏁 出走表 — {ml.result.raceMeta.name}</Eyebrow>
         <div style={{ fontSize: 11.5, color: C.sub }}>{ml.result.raceMeta.tmpl.kind}・{"★".repeat(ml.result.raceMeta.grade)}・{TYPES[ml.result.raceMeta.tmpl.favors].label}有利</div>
         <StartListPanel entrants={ml.result.entrants} favors={ml.result.raceMeta.tmpl.favors} />
-        <Btn onClick={() => setMl(s => ({ ...s, screen: "mylife_race" }))}>🏁 レースを始める</Btn>
+        {/* v37: チームTTは集団シミュ（観戦アニメ）が無いため、結果画面へ直行する */}
+        <Btn onClick={() => { if (ml.result.teamTT) { mlRaceFinish(); } else setMl(s => ({ ...s, screen: "mylife_race" })); }}>🏁 {ml.result.teamTT ? "チームタイムトライアルに挑む（結果へ）" : "レースを始める"}</Btn>
         <Btn outline color={C.sub} onClick={() => { mlRaceLockRef.current = false; setMl(s => ({ ...s, result: null, screen: "mylife_main" })); }}>← 出走を取りやめる</Btn>
       </div>
     );
@@ -779,8 +780,41 @@ export function renderMyLifeScreens(ctx) {
       </div>
     );
 
+    // v37: チームTTの結果画面（チーム順位表：チーム名／合算タイム／秒差／メンバー）。
+    if (ml.screen === "mylife_result" && ml.resultInfo && ml.resultInfo.teamTT) {
+      const { race, teamRank, totalTeams, pts, prize, teamStandings, wpGain, worldRank, worldRankPrev } = ml.resultInfo;
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "#2b2436", borderRadius: 12, padding: 16, borderTop: `4px solid ${teamRank === 1 ? C.yellow : teamRank <= 3 ? "#e8a13c" : C.blue}` }}>
+            <Eyebrow color={C.blue}>🚴‍♂️🚴‍♂️ チームタイムトライアル 結果</Eyebrow>
+            <div style={{ fontFamily: FONT_D, fontSize: 22, color: C.text, margin: "6px 0 2px" }}>チーム {teamRank}位 <span style={{ fontSize: 13, color: C.sub }}>/ {totalTeams}チーム</span></div>
+            <div style={{ fontSize: 12, color: C.sub }}>ポイント +{pts} ／ 賞金 +{prize}万円{wpGain ? ` ／ 世界ランクpt +${wpGain}` : ""}</div>
+            {worldRankPrev != null && worldRank != null && worldRank !== worldRankPrev && (
+              <div style={{ fontSize: 11.5, color: worldRank < worldRankPrev ? C.green : C.sub, marginTop: 2 }}>🌍 世界ランキング {worldRankPrev ?? "—"}位 → {worldRank}位</div>
+            )}
+          </div>
+          <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, overflow: "hidden" }}>
+            <div style={{ padding: "8px 12px", fontSize: 11, color: C.sub, borderBottom: `1px solid ${C.line}` }}>📋 チーム順位表（合算タイム・トップとの差）</div>
+            {teamStandings.map((t) => (
+              <div key={t.rank} style={{ padding: "7px 12px", background: t.isPlayer ? "rgba(79,143,232,0.12)" : "transparent", borderBottom: `1px solid ${C.bg}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                  <span style={{ width: 24, textAlign: "right", fontFamily: FONT_M, color: t.rank <= 3 ? C.yellow : C.sub, fontWeight: t.rank <= 3 ? 700 : 400 }}>{t.rank}</span>
+                  <span style={{ flex: 1, color: t.isPlayer ? C.blue : C.text, fontWeight: t.isPlayer ? 700 : 400 }}>{t.isPlayer ? "⭐ " : ""}{t.name}</span>
+                  <span style={{ fontFamily: FONT_M, fontSize: 12, color: t.gap === 0 ? C.green : C.sub }}>{t.rank === 1 ? fmtTime(t.time) : `+${fmtTime(t.gap)}`}</span>
+                </div>
+                {t.riders && t.riders.length > 0 && (
+                  <div style={{ fontSize: 10, color: C.sub, marginTop: 2, marginLeft: 32, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.riders.join("・")}</div>
+                )}
+              </div>
+            ))}
+          </div>
+          <Btn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</Btn>
+        </div>
+      );
+    }
+
     if (ml.screen === "mylife_result" && ml.resultInfo) {
-      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome, finishTime, gapSec, forecast, newspaper } = ml.resultInfo;
+      const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome, finishTime, gapSec, forecast, newspaper, standings } = ml.resultInfo;
       // v36(#6): 性格ベースの会話ドラマ（紙芝居/VN風）。ml.rivalDramaOn===false でオフにできる。
       const vnScene = (dlg) => (ml.rivalDramaOn !== false && dlg && dlg.lines) ? (
         <div style={{ marginTop: 8, display: "grid", gap: 6, borderTop: `1px dashed ${C.line}`, paddingTop: 8 }}>
@@ -885,6 +919,34 @@ export function renderMyLifeScreens(ctx) {
               <Eyebrow color={fulfilled ? C.green : C.red}>監督指示 — {fulfilled ? "達成" : "未達成"}</Eyebrow>
               <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{directive.label}</div>
               <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>監督評価 {evalDelta >= 0 ? "+" : ""}{evalDelta}</div>
+            </div>
+          )}
+          {/* v37: 全順位表（着順・選手名・チーム名・トップとの秒差）。自分・自チーム・ライバルを色分け */}
+          {standings && standings.length > 0 && (
+            <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, overflow: "hidden" }}>
+              <button onClick={() => setMl(s => ({ ...s, resultTableOpen: !s.resultTableOpen }))} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: "9px 12px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", color: C.sub, fontSize: 11.5 }}>
+                <span>📋 全順位表（{standings.length}名・選手名／チーム／秒差）</span>
+                <span style={{ fontWeight: 700 }}>{ml.resultTableOpen ? "▲ 閉じる" : "▼ 開く"}</span>
+              </button>
+              {ml.resultTableOpen && (
+                <div style={{ maxHeight: 320, overflowY: "auto", borderTop: `1px solid ${C.line}` }}>
+                  {standings.map((r) => {
+                    const bg = r.isPlayer ? "rgba(255,210,63,0.14)" : r.isMyTeam ? "rgba(79,143,232,0.08)" : "transparent";
+                    const nameColor = r.isPlayer ? C.yellow : r.isRival ? C.red : r.isMyTeam ? C.blue : C.text;
+                    return (
+                      <div key={r.rank} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", background: bg, borderBottom: `1px solid ${C.bg}`, fontSize: 12 }}>
+                        <span style={{ width: 26, textAlign: "right", fontFamily: FONT_M, color: r.rank <= 3 ? C.yellow : C.sub, fontWeight: r.rank <= 3 ? 700 : 400 }}>{r.rank}</span>
+                        <span style={{ flex: 1, color: nameColor, fontWeight: r.isPlayer ? 700 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {r.isPlayer ? "🚴 " : r.isRival ? "🔥 " : r.isAce ? "👑 " : ""}{r.name}
+                          {r.worldRank ? <span style={{ color: C.purple, fontSize: 10, marginLeft: 3 }}>🌍{r.worldRank}</span> : null}
+                        </span>
+                        <span style={{ width: 96, color: C.sub, fontSize: 10.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.team}</span>
+                        <span style={{ width: 52, textAlign: "right", fontFamily: FONT_M, color: r.gap === 0 || r.gap == null ? C.green : C.sub }}>{r.rank === 1 ? "TOP" : r.gap == null ? "—" : `+${fmtTime(r.gap)}`}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
           {(ml.rivalDramaOn !== false && rivalOutcome && rivalOutcome.scene)

@@ -5,7 +5,7 @@ import { GRAND_TOURS, OVERSEAS_VENUES, PRODIGY_CHANCE_BY_CLASS, REGIONS, SCOUT_C
 import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "../data/progression.js";
 import { C } from "../data/theme.js";
 import { SUB_STAT_KEYS, genSubStats, hasAbility, hasGoldAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities } from "../core/core.js";
-import { AI_STYLES, assignAIRoles, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
+import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
 import { loadMlLegends } from "../breeding/breeding.js";
 
 export function totalTitleCount() {
@@ -745,7 +745,10 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       return {
         id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, ...e,
-        team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
+        // v37: 自チームの選手は team を "PLAYER" に統一（プレイヤー本人と同じ）。これでチームTTの
+        // チーム集計が自分＋チームメイトで正しくまとまり、集団simのエース同一チーム判定（牽引ペース
+        // 合わせ）も効く。表示名 teamName は自チーム名のまま。
+        team: isMyTeam ? "PLAYER" : d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
       };
     });
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
@@ -841,6 +844,13 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     teamEntrants.forEach(en => riders.push(en));
   });
   const sim = { entrants: riders, riders, course, groupMode: "full", raceMeta, breakSurvived: false };
+  // v37: チームTTはペロトンではなくチーム単位の合算タイム。マイライフでも「個人の順位」ではなく
+  // 「チームの順位」で結果を出す（従来は teamTT 未対応で個人simへ落ちて個人リザルトになっていた）。
+  if (raceMeta.tmpl && raceMeta.tmpl.teamTT) {
+    computeTeamTT(sim, 1);
+    sim.hadBreak = false;
+    return sim;
+  }
   // v32（条件付き作戦）：選択した作戦をレース全体の指示（集団牽引の強さ・エース発射）へ反映
   const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
   simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
