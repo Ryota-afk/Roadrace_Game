@@ -1853,13 +1853,17 @@ export function mlWorldNews(seed, year, legendPool) {
 export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
   const next = { ...(prev || {}) };
   (rankedEntrants || []).forEach(e => {
+    if (e.isPlayerChar) return; // 自分は raceLog で別管理
+    if (!Number.isFinite(e.rank)) return;
     const isRival = !!(e.isRival || e.isRival2);
     const isMate = teammateIds && teammateIds.has(e.id);
-    if (!isRival && !isMate) return;
-    if (!Number.isFinite(e.rank)) return;
+    // v37: 永続ワールドロースター化に伴い、AI相手（world）も含めて全出走選手を追跡する。
+    const kind = isRival ? "rival" : isMate ? "teammate" : "world";
     const cur = next[e.id]
       ? { ...next[e.id], byYear: { ...next[e.id].byYear } }
-      : { id: e.id, name: e.name, team: e.teamName || e.team, kind: isRival ? "rival" : "teammate", races: 0, wins: 0, podiums: 0, top10: 0, bestRank: 99, byYear: {} };
+      : { id: e.id, name: e.name, team: e.teamName || e.team, kind, races: 0, wins: 0, podiums: 0, top10: 0, bestRank: 99, byYear: {} };
+    // 既存記録のkindがrival/teammateなら維持（worldに降格させない）
+    if (cur.kind === "world" && kind !== "world") cur.kind = kind;
     const r = e.rank;
     cur.name = e.name; cur.team = e.teamName || e.team || cur.team;
     cur.races += 1;
@@ -1873,6 +1877,31 @@ export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
     next[e.id] = cur;
   });
   return next;
+}
+
+// v37: 自分が出走しなかった月のレース結果を軽量に決着させる（ワールドの選手だけで順位付け）。
+// 地形適性（コース得意脚質との一致）＋強さ階級baseline＋ノイズでスコアリングし、pseudo-entrants を返す。
+// これを mlUpdateRiderStats に渡すことで、自分が出ていないレースの成績も台帳に積める。
+export function mlWorldRaceLite(ml, seed) {
+  const rosters = ml.worldRosters || {};
+  const race = (ml.races && ml.races[0]) || {};
+  const favors = race.tmpl ? race.tmpl.favors : null;
+  const rng = mulberry(((seed || 1) >>> 0) || 1);
+  const entrants = [];
+  Object.entries(rosters).forEach(([teamName, riders]) => {
+    (riders || []).forEach(wr => {
+      const typeMatch = (favors && wr.type === favors) ? 8 : 0;
+      entrants.push({ id: wr.id, name: wr.name, teamName, score: (wr.baseline || 0) + typeMatch + (rng() - 0.5) * 14 });
+    });
+  });
+  [ml.rival, ml.rival2].forEach((rv, idx) => {
+    if (!rv) return;
+    const typeMatch = (favors && rv.type === favors) ? 8 : 0;
+    entrants.push({ id: rv.id, name: rv.name, teamName: rv.team, isRival: idx === 0, isRival2: idx === 1, score: 6 + typeMatch + (rng() - 0.5) * 14 });
+  });
+  entrants.sort((a, b) => b.score - a.score);
+  entrants.forEach((e, i) => { e.rank = i + 1; });
+  return entrants;
 }
 
 // 台帳を「自分・ライバル・チームメイト」の表示用リストへ整形（純関数）。
@@ -1892,14 +1921,39 @@ export function mlRiderStatsRows(ml) {
     });
     rows.push({ id: p.id, name: p.name, team: ml.team, kind: "self", ...agg, byYear: { [year]: agg.yr } });
   }
-  Object.values(stats).forEach(s => {
+  // 近しい面々（自分・ライバル・仲間）だけをこの画面に。ワールド全体は mlWorldTeamStats で。
+  Object.values(stats).filter(s => s.kind !== "world").forEach(s => {
     const yr = s.byYear && s.byYear[year] ? s.byYear[year] : { races: 0, wins: 0, podiums: 0 };
     rows.push({ ...s, yr });
   });
-  // 種別（自分→ライバル→仲間）＆通算勝利数で並べる
   const kindOrder = { self: 0, rival: 1, teammate: 2 };
   rows.sort((a, b) => (kindOrder[a.kind] - kindOrder[b.kind]) || (b.wins - a.wins) || (a.bestRank - b.bestRank));
   return rows;
+}
+
+// v37: 全チームの選手名鑑＋成績（チームごとにグルーピング）。永続ワールドロースターの全選手を、
+// 蓄積した成績（riderStats）と突き合わせて返す。未出走の選手も0成績で表示する。
+export function mlWorldTeamStats(ml) {
+  const stats = ml.riderStats || {};
+  const rosters = ml.worldRosters || {};
+  const year = ml.year || 1;
+  const teams = [];
+  Object.entries(rosters).forEach(([teamName, riders]) => {
+    const teamInfo = MYLIFE_TEAMS.find(t => t.name === teamName);
+    const rows = (riders || []).map(wr => {
+      const s = stats[wr.id];
+      const yr = s && s.byYear && s.byYear[year] ? s.byYear[year] : { races: 0, wins: 0, podiums: 0 };
+      return { id: wr.id, name: wr.name, type: wr.type,
+        races: s ? s.races : 0, wins: s ? s.wins : 0, podiums: s ? s.podiums : 0,
+        bestRank: s ? s.bestRank : 99, yr };
+    });
+    rows.sort((a, b) => (b.wins - a.wins) || (b.podiums - a.podiums) || (a.bestRank - b.bestRank));
+    const teamWins = rows.reduce((a, r) => a + r.wins, 0);
+    const teamPodiums = rows.reduce((a, r) => a + r.podiums, 0);
+    teams.push({ teamName, color: teamInfo ? teamInfo.color : "#9aa3b5", trait: teamInfo ? teamInfo.trait : "", riders: rows, teamWins, teamPodiums });
+  });
+  teams.sort((a, b) => (b.teamWins - a.teamWins) || (b.teamPodiums - a.teamPodiums));
+  return teams;
 }
 
 export function mlMediaHeadline(ml) {

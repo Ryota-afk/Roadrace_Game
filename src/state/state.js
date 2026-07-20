@@ -112,6 +112,38 @@ export const MYLIFE_TEAMS = [
   { name: "北斗プロサイクル", color: "#c084fc", tier: 1, spec: "PUN", trait: "勝負師揃い" },
 ];
 
+// v37: 永続ワールドロースター。従来はAI相手を毎レース使い捨てで生成していたため、
+// 同じ選手が二度と現れず「毎レース違うチーム」に見え、成績も追えなかった。キャリア開始時に
+// 各チーム固定の選手団（安定id・名前・脚質・性格・特能・強さ階級baseline）を生成して永続化し、
+// 毎レース同じ顔ぶれが出走するようにする（強さは baseline＋その時のクラス/年で文脈スケール）。
+export function genWorldRosters(rng, count = 6) {
+  const rosters = {};
+  const banned = new Set();
+  const typeKeys = Object.keys(TYPES);
+  const persPool = ["hotblood", "seeker", "artisan", "free", "smart", "maverick", "showman", "tactician"];
+  MYLIFE_TEAMS.forEach(d => {
+    const riders = [];
+    for (let i = 0; i < count; i++) {
+      const useSpec = d.spec && (i === 0 || rng() < 0.5);
+      const type = useSpec ? d.spec : typeKeys[Math.floor(rng() * typeKeys.length)];
+      const px = rng();
+      const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius" : persPool[Math.floor(rng() * persPool.length)];
+      const gp = rng();
+      const growthPow = gp < 0.10 ? "S" : gp < 0.35 ? "A" : gp < 0.75 ? "B" : "C";
+      // baseline＝そのチーム内での強さ階級（エースは強く、下位はドメスティーク）
+      const baseline = i === 0 ? 5 + Math.round(rng() * 4) : Math.round(rng() * 8 - 3);
+      riders.push({
+        id: ridState.value++, name: pickRiderName(rng, banned), type, personality,
+        abilities: rollAbilities(rng), goldAbilities: [], growthPow,
+        age: 20 + Math.floor(rng() * 10), baseline, joinYear: 1,
+      });
+    }
+    riders.sort((a, b) => b.baseline - a.baseline); // エースが先頭
+    rosters[d.name] = riders;
+  });
+  return rosters;
+}
+
 export const ML_ACHIEVEMENTS = [
   { id: "first_win", icon: "🥇", label: "初勝利", desc: "レースで初めて優勝する", reward: { money: 30 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.rank === 1) },
@@ -578,6 +610,8 @@ export function initMyLife() {
     rival2: null, rivalRecord2: null,
     // v37: 永続キャラ（ライバル/仲間）の成績台帳
     riderStats: {},
+    // v37: 永続ワールドロースター（各AIチーム固定の選手団）
+    worldRosters: {},
     // v15: 人生の岐路イベントで解決済みかどうか・恒常効果の有無を保持するフラグ
     flags: { married: false, marriageResolved: false, injuryResolved: false, rushedInjuryComeback: false, hasChild: false, childResolved: false, childFocusedCareer: false, mentor: false, mentorName: null, mentorActive: false },
     rewardedAchievements: [],
@@ -606,6 +640,7 @@ const ML_SAVE_FIELDS = [
   "protege", // v35(逆メンター): 弟子（プロテジェ）
   "rivalDramaOn", // v36(#6): 性格ベースのライバル会話ドラマの表示 on/off
   "riderStats", // v37: 永続キャラ（ライバル/仲間）の成績台帳
+  "worldRosters", // v37: 永続ワールドロースター（各AIチーム固定の選手団）
 ];
 
 export function saveMyLife(ml) {
@@ -693,7 +728,7 @@ export const ML_TACTICS = {
   assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを押し上げる献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
 
-export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars) {
+export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars, worldRosters) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
   const aiCap = diffDef.abilCap ?? 94; // v35(バランス): 難易度別のAI能力上限（hard/oniは94超）
@@ -746,6 +781,20 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         members.push(st);
       });
       for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned }));
+    } else if (worldRosters && worldRosters[d.name] && worldRosters[d.name].length) {
+      // v37: 永続ワールドロースターから同じ顔ぶれを出走させる（identityは固定・stats は文脈スケール）。
+      // 各選手の stats は id＋year でシードして年内は安定、年が進むと power の上昇で強くなる。
+      const roster = worldRosters[d.name];
+      roster.slice(0, Math.min(aiSquadN, roster.length)).forEach(wr => {
+        const wrng = mulberry(((wr.id * 2654435761) ^ ((year || 1) * 40503)) >>> 0);
+        const st = newRider(power + (wr.baseline || 0), wrng, { type: wr.type, cap: aiCap, banned: nameBanned });
+        st.id = wr.id; st.name = wr.name; st.type = wr.type; st.personality = wr.personality || st.personality;
+        if (wr.abilities) st.abilities = wr.abilities;
+        st.goldAbilities = wr.goldAbilities || [];
+        st.growthPow = wr.growthPow || st.growthPow;
+        members.push(st);
+      });
+      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned, cap: aiCap }));
     } else {
       for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap }));
     }
