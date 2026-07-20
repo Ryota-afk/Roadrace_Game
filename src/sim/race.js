@@ -580,12 +580,28 @@ export function rankSim(sim) {
 
 // --- Phase 2追補（取りこぼし関数を追加抽出）---
 export const MAX_GAP_MUL = 1.35;
+// v36修正: 千切れた選手を1点にクランプすると「10人が全員同タイム＝横一線ゴール」になり不自然だった。
+// 上限を超えた後方集団を、順位を保ったまま細い帯(TAIL_BAND_MUL)へ圧縮し、各自に異なるタイムを残す。
+export const TAIL_BAND_MUL = 0.12;
 
 export function capExcessiveGaps(entrants) {
   if (entrants.length === 0) return;
-  const winnerTime = Math.min(...entrants.map(e => e.finishTime));
+  const finite = entrants.filter(e => Number.isFinite(e.finishTime));
+  if (!finite.length) return;
+  const winnerTime = Math.min(...finite.map(e => e.finishTime));
   const cap = winnerTime * MAX_GAP_MUL;
-  entrants.forEach(en => { if (en.finishTime > cap) en.finishTime = cap; });
+  const over = finite.filter(e => e.finishTime > cap);
+  if (!over.length) return;
+  const maxOver = Math.max(...over.map(e => e.finishTime));
+  if (maxOver <= cap) return;
+  const band = winnerTime * TAIL_BAND_MUL;
+  // 元のタイム順（＝実力順）を保ったまま [cap, cap+band] に写像し、
+  // さらに順序ごとの微小オフセットで完全な同タイム（横一線）を防ぐ。
+  over.sort((a, b) => a.finishTime - b.finishTime);
+  over.forEach((e, i) => {
+    const frac = (e.finishTime - cap) / (maxOver - cap); // 0..1（順序保存）
+    e.finishTime = cap + frac * band + i * 0.05;
+  });
 }
 
 export function riderHash01(id, salt) { return ((id * 2654435761 + salt * 40503) % 100000) / 100000; }

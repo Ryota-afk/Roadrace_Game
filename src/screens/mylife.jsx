@@ -14,7 +14,7 @@ import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
 export function renderMyLifeScreens(ctx) {
-  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
+  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
@@ -865,7 +865,7 @@ export function renderMyLifeScreens(ctx) {
               <Eyebrow color={rivalOutcome.beat ? C.green : C.red}>🔥 {rivalOutcome.tierLabel || "ライバル"}対決 — {rivalOutcome.beat ? "勝利" : "敗北"}</Eyebrow>
               <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{rivalOutcome.name}は{rivalOutcome.rank}位でフィニッシュ。{rivalOutcome.line || (rivalOutcome.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。")}</div>
               {rivalOutcome.promoted && <div style={{ fontSize: 12, color: rivalOutcome.tierColor || C.yellow, marginTop: 5, fontWeight: 700 }}>{rivalOutcome.promoted}</div>}
-              {vnScene(rivalOutcome.dialogue)}
+              {!rivalOutcome.scene && vnScene(rivalOutcome.dialogue)}
             </div>
           )}
           {rivalOutcome2 && (
@@ -887,9 +887,46 @@ export function renderMyLifeScreens(ctx) {
               <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>監督評価 {evalDelta >= 0 ? "+" : ""}{evalDelta}</div>
             </div>
           )}
-          {newspaper
-            ? <Btn color={newspaper.accent} onClick={() => setMl(s => ({ ...s, screen: "mylife_newspaper" }))}>📰 号外が届いた！ →</Btn>
-            : <Btn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</Btn>}
+          {(ml.rivalDramaOn !== false && rivalOutcome && rivalOutcome.scene)
+            ? <Btn color={rivalOutcome.tierColor || C.purple} onClick={() => setMl(s => ({ ...s, rivalSceneReply: null, screen: "mylife_rival_scene" }))}>💬 {rivalOutcome.name}と言葉を交わす →</Btn>
+            : newspaper
+              ? <Btn color={newspaper.accent} onClick={() => setMl(s => ({ ...s, screen: "mylife_newspaper" }))}>📰 号外が届いた！ →</Btn>
+              : <Btn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</Btn>}
+        </div>
+      );
+    }
+
+    // v36修正: レース後のライバル対話シーン（返答を選べる双方向イベント）。
+    if (ml.screen === "mylife_rival_scene" && ml.resultInfo?.rivalOutcome?.scene) {
+      const sc = ml.resultInfo.rivalOutcome.scene;
+      const oc = ml.resultInfo.rivalOutcome;
+      const reply = ml.rivalSceneReply;
+      const Bubble = ({ who, name, text }) => (
+        <div style={{ display: "flex", justifyContent: who === "me" ? "flex-end" : "flex-start" }}>
+          <div style={{ maxWidth: "86%", background: who === "me" ? "rgba(79,143,232,0.14)" : "rgba(232,84,79,0.12)", border: `1px solid ${who === "me" ? C.blue : C.red}`, borderRadius: 10, padding: "7px 10px" }}>
+            <div style={{ fontSize: 9.5, color: who === "me" ? C.blue : C.red, fontWeight: 700, marginBottom: 1 }}>{who === "me" ? "🚴 " : "🔥 "}{name}</div>
+            <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>{text}</div>
+          </div>
+        </div>
+      );
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "linear-gradient(180deg, rgba(201,139,240,0.08), #201e26)", border: `1px solid ${oc.tierColor || C.purple}`, borderRadius: 12, padding: 14 }}>
+            <Eyebrow color={oc.tierColor || C.purple}>💬 {sc.persLabel ? `${sc.persLabel}な` : ""}{sc.tierLabel}・{oc.name}との対話</Eyebrow>
+            <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
+              <Bubble who="rival" name={sc.opening.name} text={sc.opening.text} />
+              {reply && <Bubble who="me" name={ml.player.name} text={reply.playerLine} />}
+              {reply && <Bubble who="rival" name={reply.reply.name} text={reply.reply.text} />}
+            </div>
+          </div>
+          {!reply
+            ? (<div style={{ display: "grid", gap: 8 }}>
+                <div style={{ fontSize: 11, color: C.sub, textAlign: "center" }}>どう返す？</div>
+                {sc.responses.map((r, i) => (
+                  <Btn key={i} color={r.tone === "fire" ? C.red : C.blue} onClick={() => mlResolveRivalScene(i)}>{r.tone === "fire" ? "🔥 " : "🤝 "}{r.label}</Btn>
+                ))}
+              </div>)
+            : (<Btn onClick={mlRivalSceneContinue}>{ml.resultInfo.newspaper ? "📰 号外が届いた！ →" : "続ける →"}</Btn>)}
         </div>
       );
     }

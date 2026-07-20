@@ -977,6 +977,46 @@ const PLAYER_LINES = {
   loseClose: ["「あと一歩…。この差は、必ず埋めてみせる。", "「悔しい。でも、この距離ならいつか抜ける。"],
   lose: ["「完敗だ…。だが、この背中は追い続ける。", "「今日は届かなかった。次までに、必ず強くなる。"],
 };
+// v36修正: 会話ドラマを一往復の紙芝居から「返答を選べる双方向イベント」へ。プレイヤーの返し
+// （称える/強気 or 認める/悔しさ）に、ライバルが性格で反応する。返答は心情（メンタル）・人気・
+// 因縁度(heat)に効く。
+const RIVAL_REPLY = {
+  hotblood: { respect: ["…ふん、お前にそう言われると悪い気はしねえ。次も本気で来いよ！"], fire: ["はっ、言うじゃねえか！ その意気だ、次はもっと熱くいこうぜ！"] },
+  seeker: { respect: ["その言葉、胸に刻んでおく。互いに高め合おう。"], fire: ["……いい目だ。その闘志こそ、私が求めていたものだ。"] },
+  artisan: { respect: ["礼を言うよ。良い勝負は、良い相手あってこそだ。"], fire: ["威勢がいいね。なら私も、もっと腕を磨かせてもらおう。"] },
+  free: { respect: ["なんだ、素直だなあ。そういうの、嫌いじゃないよ。"], fire: ["おっと、やる気だねぇ。じゃあ次はもっと本気で遊ぼうか！"] },
+  smart: { respect: ["冷静な自己分析だ。感情に流されない君は、厄介な相手になる。"], fire: ["面白い。その強気がどこまで通用するか、次で試させてもらう。"] },
+  genius: { respect: ["殊勝じゃないか。少し見直したよ。"], fire: ["いいね、その顔。退屈しのぎには、それくらいでないとね。"] },
+  normal: { respect: ["こちらこそ。良い刺激になります、これからも。"], fire: ["その意気ですね。負けていられません、次も全力で。"] },
+};
+const PLAYER_RESPOND = {
+  winRespect: { label: "健闘を称える", line: "いいレースだった。お前がいたから、俺も出し切れた。" },
+  winFire: { label: "さらに強気に出る", line: "次も、その次も、前を走るのは俺だ。ついてこい。" },
+  loseRespect: { label: "潔く負けを認める", line: "完敗だ。今日のお前は強かった。素直に認めるよ。" },
+  loseFire: { label: "悔しさをぶつける", line: "…覚えてろ。この借りは、次のレースで必ず返す。" },
+};
+export function rivalScene({ rival, beat, gapSec, heatAfter, playerName, seed }) {
+  if (!rival) return null;
+  const pers = rival.personality || "normal";
+  const V = RIVAL_VOICE[pers] || RIVAL_VOICE.normal;
+  const R = RIVAL_REPLY[pers] || RIVAL_REPLY.normal;
+  const tier = rivalHeatTier(heatAfter);
+  const rng = mulberry(((seed || 1) >>> 0) || 1);
+  const pick = a => a[Math.floor(rng() * a.length)] || a[0];
+  const opening = { name: rival.name, text: pick(beat ? V.whenBeaten : V.whenWon).replace(/」?$/, "」") };
+  const mkResp = (r, tone) => ({
+    label: r.label, playerLine: r.line.replace(/」?$/, "」"),
+    reply: { name: rival.name, text: pick(tone === "respect" ? R.respect : R.fire).replace(/」?$/, "」") },
+    tone,
+    effects: beat
+      ? (tone === "respect" ? { mentalDelta: 2, heatDelta: 1 } : { popularityDelta: 3, heatDelta: 2 })
+      : (tone === "respect" ? { mentalDelta: 2, heatDelta: 1 } : { mentalDelta: 3, heatDelta: 2 }),
+  });
+  const responses = beat
+    ? [mkResp(PLAYER_RESPOND.winRespect, "respect"), mkResp(PLAYER_RESPOND.winFire, "fire")]
+    : [mkResp(PLAYER_RESPOND.loseRespect, "respect"), mkResp(PLAYER_RESPOND.loseFire, "fire")];
+  return { persLabel: PERSONALITIES[pers]?.label || "", tierLabel: tier.label, tierColor: tier.color, opening, responses };
+}
 export function rivalDialogue({ rival, beat, gapSec, heatAfter, playerName, seed }) {
   if (!rival) return null;
   const pers = rival.personality || "normal";

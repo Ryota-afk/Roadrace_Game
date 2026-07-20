@@ -855,10 +855,15 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     // 千切れても3分も離される事故は不自然。ここでエース（＝連動する自分）の離され幅を上限で抑え、
     // 「アシストしたのに自分もエースも壊滅的大敗」という理不尽を防ぐ（山岳決着は大差が正当なので対象外）。
     const finSeg = course.segs[course.finalIdx] ? course.segs[course.finalIdx].type : "flat";
-    const bunchFinish = finSeg === "flat" || finSeg === "sprint" || finSeg === "hill";
-    if (bunchFinish && Number.isFinite(assistedAceRef.finishTime)) {
+    // v36修正: 献身の安全網を全地形に拡張。従来は平坦・スプリント・丘の集団ゴールでしか
+    // 離され幅を抑えておらず、山岳決着では上限が無く「アシストしたのにエースも自分も+70秒の
+    // 壊滅的大敗」が起きていた。地形ごとに妥当な上限（集団ゴールは僅差／登坂は差が付きやすい）で
+    // エースの離され幅をクランプし、献身が必ず「エースを勝負圏へ届ける」形にする。
+    if (Number.isFinite(assistedAceRef.finishTime)) {
       const winnerTime = Math.min(...riders.map(e => e.finishTime).filter(Number.isFinite));
-      assistedAceRef.finishTime = Math.min(assistedAceRef.finishTime, winnerTime + 45);
+      const capGap = (finSeg === "climb" || finSeg === "mtn") ? 45
+        : (finSeg === "tt") ? 30 : 20; // 集団ゴール＝勝負圏（+20秒）／登坂＝+45秒
+      assistedAceRef.finishTime = Math.min(assistedAceRef.finishTime, winnerTime + capGap);
     }
     // 献身のアシストは自分の結果を常にエースに委ねる。エースの前でゴールせず（差して譲る）、
     // 万一遅れても役目を終えてエースのすぐ後ろ(+0.4秒)へ回り込む＝「自分だけ大敗」を無くす。
