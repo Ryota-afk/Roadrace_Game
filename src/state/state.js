@@ -116,32 +116,97 @@ export const MYLIFE_TEAMS = [
 // 同じ選手が二度と現れず「毎レース違うチーム」に見え、成績も追えなかった。キャリア開始時に
 // 各チーム固定の選手団（安定id・名前・脚質・性格・特能・強さ階級baseline）を生成して永続化し、
 // 毎レース同じ顔ぶれが出走するようにする（強さは baseline＋その時のクラス/年で文脈スケール）。
+const WORLD_PERS_POOL = ["hotblood", "seeker", "artisan", "free", "smart", "maverick", "showman", "tactician"];
+
+// v38: ワールド選手を1人生成。genWorldRosters（初期化）と ageWorldRosters（新人補充）で共用。
+// opts で年齢・baseline・脚質固定・入団年を上書きできる。
+function genOneWorldRider(rng, spec, banned, opts = {}) {
+  const typeKeys = Object.keys(TYPES);
+  const useSpec = opts.forceSpec ? true : (spec && rng() < 0.5);
+  const type = useSpec ? spec : typeKeys[Math.floor(rng() * typeKeys.length)];
+  const px = rng();
+  const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius" : WORLD_PERS_POOL[Math.floor(rng() * WORLD_PERS_POOL.length)];
+  const gp = rng();
+  const growthPow = gp < 0.10 ? "S" : gp < 0.35 ? "A" : gp < 0.75 ? "B" : "C";
+  const baseline = opts.baseline != null ? opts.baseline
+    : (opts.ace ? 5 + Math.round(rng() * 4) : Math.round(rng() * 8 - 3));
+  return {
+    id: ridState.value++, name: pickRiderName(rng, banned), type, personality,
+    abilities: rollAbilities(rng), goldAbilities: [], growthPow,
+    age: opts.age != null ? opts.age : 20 + Math.floor(rng() * 10),
+    baseline, joinYear: opts.joinYear || 1,
+  };
+}
+
 export function genWorldRosters(rng, count = 6) {
   const rosters = {};
   const banned = new Set();
-  const typeKeys = Object.keys(TYPES);
-  const persPool = ["hotblood", "seeker", "artisan", "free", "smart", "maverick", "showman", "tactician"];
   MYLIFE_TEAMS.forEach(d => {
     const riders = [];
     for (let i = 0; i < count; i++) {
-      const useSpec = d.spec && (i === 0 || rng() < 0.5);
-      const type = useSpec ? d.spec : typeKeys[Math.floor(rng() * typeKeys.length)];
-      const px = rng();
-      const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius" : persPool[Math.floor(rng() * persPool.length)];
-      const gp = rng();
-      const growthPow = gp < 0.10 ? "S" : gp < 0.35 ? "A" : gp < 0.75 ? "B" : "C";
-      // baseline＝そのチーム内での強さ階級（エースは強く、下位はドメスティーク）
-      const baseline = i === 0 ? 5 + Math.round(rng() * 4) : Math.round(rng() * 8 - 3);
-      riders.push({
-        id: ridState.value++, name: pickRiderName(rng, banned), type, personality,
-        abilities: rollAbilities(rng), goldAbilities: [], growthPow,
-        age: 20 + Math.floor(rng() * 10), baseline, joinYear: 1,
-      });
+      const r = genOneWorldRider(rng, d.spec, banned, { ace: i === 0, forceSpec: i === 0 && !!d.spec });
+      banned.add(r.name);
+      riders.push(r);
     }
     riders.sort((a, b) => b.baseline - a.baseline); // エースが先頭
     rosters[d.name] = riders;
   });
   return rosters;
+}
+
+// 成長曲線のピーク年齢（成長力が高いほど遅咲き＝長く伸びる）
+function growthPeakAge(growthPow) {
+  return growthPow === "S" ? 29 : growthPow === "A" ? 28 : growthPow === "B" ? 27 : 26;
+}
+function growthStep(growthPow) {
+  return growthPow === "S" ? 2.6 : growthPow === "A" ? 1.9 : growthPow === "B" ? 1.2 : 0.7;
+}
+
+// v38: 年次成長・引退で世代交代。年に一度（シーズン終わり）呼び出す。
+// 各選手を1歳加齢し、ピーク前は成長・ピーク後は衰え。高齢者は引退して新人に置き換わる。
+// 戻り値: { worldRosters: 更新後, retired: [{team, name, age, type}...], debuted: [{team, name, age}...] }
+export function ageWorldRosters(prevRosters, rng, year) {
+  const next = {};
+  const retired = [];
+  const debuted = [];
+  const banned = new Set();
+  // 既存の名前を banned に集めて重複回避
+  Object.values(prevRosters || {}).forEach(list => (list || []).forEach(r => banned.add(r.name)));
+  MYLIFE_TEAMS.forEach(d => {
+    const src = (prevRosters && prevRosters[d.name]) || [];
+    const out = [];
+    src.forEach(r => {
+      const age = (r.age || 24) + 1;
+      const peak = growthPeakAge(r.growthPow);
+      let baseline = r.baseline || 0;
+      if (age <= peak) {
+        baseline += growthStep(r.growthPow);
+      } else {
+        baseline -= 0.8 + (age - peak) * 0.35; // 加齢で加速的に衰える
+      }
+      baseline = Math.max(-9, Math.min(14, Math.round(baseline)));
+      // 引退判定: 38歳で強制、33歳以上は確率的（年齢が上がるほど高確率）
+      const retireChance = age >= 38 ? 1 : (age >= 33 ? 0.18 + (age - 33) * 0.06 : 0);
+      if (retireChance > 0 && rng() < retireChance) {
+        retired.push({ team: d.name, name: r.name, age, type: r.type });
+        banned.delete(r.name);
+        // 新人ルーキーで補充
+        const rookie = genOneWorldRider(rng, d.spec, banned, {
+          age: 20 + Math.floor(rng() * 3),
+          baseline: Math.round(rng() * 6 - 3),
+          joinYear: year,
+        });
+        banned.add(rookie.name);
+        debuted.push({ team: d.name, name: rookie.name, age: rookie.age });
+        out.push(rookie);
+      } else {
+        out.push({ ...r, age, baseline });
+      }
+    });
+    out.sort((a, b) => b.baseline - a.baseline); // エースが先頭に再ソート
+    next[d.name] = out;
+  });
+  return { worldRosters: next, retired, debuted };
 }
 
 export const ML_ACHIEVEMENTS = [

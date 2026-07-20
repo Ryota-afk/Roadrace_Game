@@ -18,7 +18,7 @@ import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins,
 import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, rankSim, riderHash01, rollWeather, simulateTicks } from "./sim/race.js";
 import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
@@ -1977,6 +1977,15 @@ function App() {
       const money = Math.max(0, s.money + Math.round(s.salary / 12) + popIncome - livingCost);
       if (s.month === 11) {
         player.age += 1;
+        // v38: ワールド選手の世代交代。年度替わりに全チームの選手を1歳加齢させ、
+        // ピーク前は成長・ピーク後は衰えを反映。高齢者は引退して新人ルーキーに置き換わる。
+        // これで「同じ顔ぶれが永遠に同じ強さ」ではなく、若手台頭とベテラン引退の流れが生まれる。
+        const agerng = mulberry(((s.year + 1) * 2246822519) >>> 0);
+        const aged = ageWorldRosters(s.worldRosters, agerng, s.year + 1);
+        aged.retired.slice(0, 3).forEach(r => {
+          const debut = aged.debuted.find(d => d.team === r.team);
+          log.push(`【${s.year}年目 3月】🌍 世代交代：${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : "後継者の台頭が待たれる"}`);
+        });
         // v36(弟子深化): 弟子がこの年度替わりでOVRの節目(70/80/90)を越えたら祝いのニュースを記録
         if (s.protege) {
           const news = protegeMilestoneNews(s.protege, s.year, s.year + 1);
@@ -2044,7 +2053,7 @@ function App() {
             races: [mlGenRace(s.year + 1, 0, classIdx)],
             directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
             contractOffers: [stayOffer, ...offerTeams], biddingWar,
-            salary, money, managerEval,
+            salary, money, managerEval, worldRosters: aged.worldRosters,
             screen: "mylife_contract", log,
           });
         }
@@ -2052,7 +2061,7 @@ function App() {
           ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
           races: [mlGenRace(s.year + 1, 0, classIdx)],
           directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-          salary, money, managerEval,
+          salary, money, managerEval, worldRosters: aged.worldRosters,
           screen: "mylife_main", log,
         });
       }
