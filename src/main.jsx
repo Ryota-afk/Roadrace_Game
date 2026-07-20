@@ -1759,6 +1759,9 @@ function App() {
     } else if (mode === "rest") {
       // v35: ガラスの体は回復も鈍い（休んでも抜けきらない＝より頻繁な休養を強いる）
       player.fatigue = Math.max(0, player.fatigue - 35 * (glassBody ? 0.78 : 1));
+      // v36(#8): 完全休養を「疲労を抜くだけ」から意味のある回復へ。休むと心も整い（メンタル微増）、
+      // フォームに上向きの偏り（フレッシュな脚＝後段のフォーム計算でrest分岐が下振れを消す）が付く。
+      growSub(player, "mental", 0.5);
       player.streak = 0;
     } else if (mode === "event") {
       player.fatigue = Math.max(0, player.fatigue - 5);
@@ -1815,7 +1818,11 @@ function App() {
     // ＝ピークは維持し続けられず、大レースに合わせて仕上げる駆け引きになる
     const nextForm = mode === "peak"
       ? curForm + 24
-      : curForm + (48 - curForm) * 0.30 + dir * swingMag;
+      // v36(#8): 完全休養はフレッシュな脚。基準を少し上（52）に引き上げ、月々の下振れを消して
+      // 小さな上げ底（+4）を付ける＝大レース前に「休んで整える」戦術的価値を持たせる。
+      : mode === "rest"
+        ? curForm + (52 - curForm) * 0.35 + Math.abs(dir) * swingMag * 0.5 + 4
+        : curForm + (48 - curForm) * 0.30 + dir * swingMag;
     player.form = Math.max(0, Math.min(100, Math.round(nextForm)));
     player.formForecast = rollCondDir(); // 翌月の波の向きを予報
     return player;
@@ -2074,7 +2081,24 @@ function App() {
     if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, mlGrowthCap(year)));
     // v27: 個人スポンサー依頼イベント用。人気度も増減させられるようにする
     if (effects.popularityDelta) player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + effects.popularityDelta));
+    // v36(#8): 私生活イベントを有意義に。メンタル（フォーム安定・大舞台に効く副ステータス）を育てられる
+    if (effects.mentalDelta) growSub(player, "mental", effects.mentalDelta);
+    // v36(#8): フォーム（当日の仕上がり）を直接動かせる（気分転換で調子が上向く等）
+    if (effects.formDelta) player.form = Math.max(0, Math.min(100, (player.form ?? 50) + effects.formDelta));
     return player;
+  }
+  // v36(#8): イベントの効果を「人気+6・メンタル+2・疲労-8」の形で結果文に添え、手応えを明示する
+  function eventEffectSummary(effects) {
+    if (!effects) return "";
+    const parts = [];
+    if (effects.popularityDelta) parts.push(`人気${effects.popularityDelta > 0 ? "+" : ""}${effects.popularityDelta}`);
+    if (effects.managerEvalDelta) parts.push(`監督評価${effects.managerEvalDelta > 0 ? "+" : ""}${effects.managerEvalDelta}`);
+    if (effects.mentalDelta) parts.push(`メンタル+${effects.mentalDelta}`);
+    if (effects.abBoost) parts.push(`能力+${effects.abBoost}`);
+    if (effects.formDelta) parts.push(`フォーム${effects.formDelta > 0 ? "+" : ""}${effects.formDelta}`);
+    if (effects.moneyDelta) parts.push(`+${effects.moneyDelta}万円`);
+    if (effects.fatigueDelta) parts.push(`疲労${effects.fatigueDelta > 0 ? "+" : ""}${effects.fatigueDelta}`);
+    return parts.length ? `（${parts.join("・")}）` : "";
   }
   function mlTriggerEvent() {
     const ev = ML_EVENTS[Math.floor(Math.random() * ML_EVENTS.length)];
@@ -2105,7 +2129,9 @@ function App() {
       const managerEval = Math.max(0, Math.min(100, s.managerEval + (choice.effects.managerEvalDelta || 0)));
       // v27: スポンサー依頼イベントの報酬（お金）を即時反映する
       const money = s.money + (choice.effects.moneyDelta || 0);
-      return { ...s, player, money, managerEval, pendingEvent: null, eventResultText: choice.result, screen: "mylife_event_result" };
+      // v36(#8): 得た成果を結果文に明示（手応えのないイベントにしない）
+      const resultText = choice.result + " " + eventEffectSummary(choice.effects);
+      return { ...s, player, money, managerEval, pendingEvent: null, eventResultText: resultText, screen: "mylife_event_result" };
     });
   }
   // v14.3: マイライフ専用ショップ（年俸で得た資金を使う）。パーツはPARTS/PART_SLOTSを

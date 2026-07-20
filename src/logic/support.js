@@ -953,57 +953,70 @@ export const ML_BACKGROUNDS = {
     meritLabel: "💼 即戦力", merit: "高い完成度で即通用。初期監督評価+12（早くからエース起用・好条件の移籍）＆支度金+100万＆「無尽蔵のエンジン」持ち" },
 };
 
+// v36(#8): 取材・私生活イベントを有意義に。各選択が「人気（＝スポンサー収入）」「メンタル
+// （＝フォーム安定・大舞台）」「監督評価」「地力」「疲労」のどれかに実効的に効く二択へ強化。
+// フレーバーだけの微差をやめ、育成方針として選ぶ意味を持たせた（効果は結果画面に明示）。
 export const ML_EVENTS = [
   { title: "地元メディアの取材", text: "地元テレビ局が調子について取材したいと申し出た。",
     choices: [
-      { label: "前向きにアピールする", result: "自信に満ちた受け答えで注目を集めた。少し気を張ったが手応えを感じている。", effects: { fatigueDelta: 4, abBoost: 1 } },
-      { label: "謙虚に答える", result: "謙虚な受け答えが好感を持たれた。気負わず過ごせた。", effects: { fatigueDelta: -4 } },
+      { label: "前向きにアピールする", result: "自信に満ちた受け答えでファンの心を掴んだ。知名度が上がった。", effects: { popularityDelta: 7, fatigueDelta: 5 } },
+      { label: "謙虚に落ち着いて答える", result: "気負わぬ受け答えが好感を呼び、自分自身も平常心を取り戻せた。", effects: { mentalDelta: 3, fatigueDelta: -5 } },
     ] },
   { title: "個人スポンサーとの会食", text: "個人スポンサーの担当者から食事に誘われた。",
     choices: [
-      { label: "しっかり交流する", result: "関係を深めることができ、期待に応えたいという気持ちが強くなった。", effects: { abBoost: 2, fatigueDelta: 6 } },
-      { label: "早めに切り上げて休む", result: "体調を優先し、早めに休んだ。", effects: { fatigueDelta: -10 } },
+      { label: "しっかり交流する", result: "関係を深め、スポンサーの期待と信頼を勝ち取った。", effects: { popularityDelta: 5, managerEvalDelta: 3, fatigueDelta: 8 } },
+      { label: "早めに切り上げて休む", result: "体調を最優先し、しっかり英気を養った。", effects: { fatigueDelta: -14, mentalDelta: 1 } },
     ] },
   { title: "実家に顔を出す", text: "オフの合間、久しぶりに実家に顔を出した。",
     choices: [
-      { label: "ゆっくり休養する", result: "心身ともにリフレッシュでき、疲れが抜けた。", effects: { fatigueDelta: -25 } },
-      { label: "自主トレに励む", result: "休みの日も鍛錬を怠らず、地力が少し上がった。", effects: { abBoost: 3, fatigueDelta: 5 } },
+      { label: "ゆっくり心身を休める", result: "家族と過ごす時間に心がほぐれ、疲れも気持ちの張りもすっかり抜けた。", effects: { fatigueDelta: -28, mentalDelta: 3 } },
+      { label: "地元で自主トレに励む", result: "慣れた道での鍛錬で、地力が確かに一段上がった。", effects: { abBoost: 4, fatigueDelta: 6 } },
     ] },
   { title: "ライバルからの挑発", text: "SNSでライバル選手から挑発めいた投稿があった。",
     choices: [
-      { label: "闘志を燃やす", result: "闘志に火がつき、練習に熱が入った。", effects: { abBoost: 3, fatigueDelta: 10 } },
-      { label: "受け流す", result: "冷静に受け流し、平常心を保った。", effects: { fatigueDelta: -2 } },
+      { label: "闘志を燃やす", result: "負けん気に火がつき、練習に鬼気迫る熱が入った。心も鍛えられた。", effects: { abBoost: 3, mentalDelta: 2, fatigueDelta: 10 } },
+      { label: "泰然と受け流す", result: "動じず受け流したことで、勝負所での胆力が一段増した。", effects: { mentalDelta: 4, fatigueDelta: -3 } },
     ] },
   { title: "監督との面談", text: "監督に呼ばれ、今後の起用方針について話をした。",
     choices: [
-      { label: "エースを目指したいと伝える", result: "強い意欲を評価された一方、気合が入りすぎて少し力んでしまった。", effects: { abBoost: 2, fatigueDelta: 6, managerEvalDelta: 4 } },
-      { label: "チームのために尽くすと伝える", result: "誠実な姿勢が信頼につながった。", effects: { fatigueDelta: -6, managerEvalDelta: 6 } },
+      { label: "エースを目指したいと伝える", result: "強い意欲が評価され、起用の期待が高まった。", effects: { managerEvalDelta: 7, mentalDelta: 1, fatigueDelta: 5 } },
+      { label: "チームのために尽くすと伝える", result: "誠実な姿勢が厚い信頼につながった。", effects: { managerEvalDelta: 9, fatigueDelta: -4 } },
     ] },
   { title: "違和感のある一日", text: "練習中、脚に軽い張りを感じた。",
     choices: [
-      { label: "無理せず様子を見る", result: "早めのケアで大事に至らず、疲労も抜けた。", effects: { fatigueDelta: -15 } },
-      { label: "気にせず追い込む", result: "その日は乗り切ったが、疲労が蓄積した。", effects: { abBoost: 2, fatigueDelta: 18 } },
+      { label: "無理せず入念にケアする", result: "早めのケアで大事に至らず、コンディションも上向いた。", effects: { fatigueDelta: -18, formDelta: 4 } },
+      { label: "気にせず追い込む", result: "その日は乗り切って地力を伸ばしたが、疲労が深く残った。", effects: { abBoost: 3, fatigueDelta: 18 } },
     ] },
-  // v25: イベントの種類をさらに増やしてほしいという要望を受けて追加
   { title: "地元の子供たちからサイン会の依頼", text: "地域の子供向けサイクリング教室から、サイン会に来てほしいと依頼が来た。",
     choices: [
-      { label: "喜んで引き受ける", result: "子供たちの憧れの眼差しに、身の引き締まる思いがした。", effects: { fatigueDelta: 3, abBoost: 1 } },
-      { label: "手紙だけ送る", result: "無理のない形で気持ちを届けた。", effects: { fatigueDelta: -3 } },
+      { label: "喜んで引き受ける", result: "子供たちの憧れの眼差しに応え、地域の人気者になった。", effects: { popularityDelta: 7, fatigueDelta: 4 } },
+      { label: "手紙とサイン色紙を送る", result: "無理のない形で気持ちを届け、穏やかに過ごせた。", effects: { popularityDelta: 2, fatigueDelta: -6, mentalDelta: 1 } },
     ] },
   { title: "先輩選手から食事に誘われる", text: "チームの先輩から「たまには飯でも」と誘われた。",
     choices: [
-      { label: "経験談を聞かせてもらう", result: "貴重な経験談を聞け、走りへのヒントを得た気がする。", effects: { abBoost: 2, fatigueDelta: 2 } },
-      { label: "気楽に楽しむ", result: "肩の力を抜いた楽しい時間を過ごせた。", effects: { fatigueDelta: -6 } },
+      { label: "経験談を聞かせてもらう", result: "修羅場をくぐった先輩の言葉が、走りと心の糧になった。", effects: { abBoost: 2, mentalDelta: 2, fatigueDelta: 2 } },
+      { label: "気楽に楽しむ", result: "肩の力を抜いた時間で、しっかりリフレッシュできた。", effects: { fatigueDelta: -10, mentalDelta: 1 } },
     ] },
   { title: "新しいトレーニング理論の紹介", text: "海外で話題のトレーニング理論を紹介する記事を読んだ。",
     choices: [
-      { label: "さっそく取り入れてみる", result: "新しい刺激になり、動きに変化の兆しが見えた。", effects: { abBoost: 3, fatigueDelta: 8 } },
-      { label: "今のやり方を信じて続ける", result: "これまで積み上げてきたやり方を貫くことにした。", effects: { fatigueDelta: -2 } },
+      { label: "さっそく取り入れてみる", result: "新しい刺激が体に変化をもたらし、地力が伸びた。", effects: { abBoost: 4, fatigueDelta: 8 } },
+      { label: "今のやり方を信じて貫く", result: "積み上げた流儀を貫く覚悟が、揺るがぬ芯を育てた。", effects: { mentalDelta: 3, fatigueDelta: -2 } },
     ] },
   { title: "地方紙にインタビューが掲載", text: "地方紙の取材を受けた記事が、思いのほか大きく掲載された。",
     choices: [
-      { label: "手応えを噛みしめる", result: "評価されている実感が自信につながった。", effects: { abBoost: 1, managerEvalDelta: 2 } },
-      { label: "浮かれず淡々と過ごす", result: "普段通りのペースを崩さず過ごせた。", effects: { fatigueDelta: -4 } },
+      { label: "手応えを噛みしめる", result: "評価される実感が自信となり、知名度も評価も上がった。", effects: { popularityDelta: 5, managerEvalDelta: 2 } },
+      { label: "浮かれず淡々と過ごす", result: "平常心を崩さず、次に向けて心を整えた。", effects: { mentalDelta: 2, fatigueDelta: -4 } },
+    ] },
+  // v36(#8): 私生活の充実を描く新イベント（休息・趣味・恋愛・地域貢献）
+  { title: "束の間のオフ、趣味に没頭", text: "レースの合間、久しぶりにまとまった休みが取れた。",
+    choices: [
+      { label: "何も考えず好きなことに使う", result: "完全に頭を空にして遊んだ。心のコップが満たされ、気力が漲ってきた。", effects: { mentalDelta: 4, fatigueDelta: -12 } },
+      { label: "体を動かしてアクティブに過ごす", result: "オフでも軽く汗を流し、体を鈍らせずに保った。", effects: { abBoost: 2, formDelta: 3, fatigueDelta: -4 } },
+    ] },
+  { title: "ファンからの応援の手紙", text: "闘病中の少年から「あなたの走りに勇気をもらった」という手紙が届いた。",
+    choices: [
+      { label: "返事を書き、必ず勝つと誓う", result: "誰かの希望である責任が、静かな闘志となって胸に宿った。", effects: { mentalDelta: 4, popularityDelta: 3 } },
+      { label: "そっと胸にしまい走りで応える", result: "言葉より走りで応えると決め、練習にも身が入った。", effects: { abBoost: 2, mentalDelta: 2, fatigueDelta: 5 } },
     ] },
 ];
 

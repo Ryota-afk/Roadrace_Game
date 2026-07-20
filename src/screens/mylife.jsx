@@ -554,9 +554,9 @@ export function renderMyLifeScreens(ctx) {
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（focus中心）</Btn>
-              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("rest")}>😴 完全休養</Btn>
+              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("rest")} title="疲労を大きく回復し、脚がフレッシュに（フォームの下振れを消して微増）＋メンタルも整う。大レース前の仕上げに">😴 完全休養</Btn>
               <Btn small outline color={"#e8a13c"} onClick={() => mlAdvanceMonth("peak")}>🎯 ピーキング調整（フォームを上げる）</Btn>
-              <Btn small outline color={C.purple} onClick={mlTriggerEvent}>🎤 取材・私生活イベント</Btn>
+              <Btn small outline color={C.purple} onClick={mlTriggerEvent} title="人気（スポンサー収入）・メンタル（フォーム安定/大舞台）・監督評価・地力のいずれかを選んで伸ばす二択イベント">🎤 取材・私生活イベント</Btn>
               {(ml.player.popularity || 0) >= 20 && (
                 <Btn small outline color={"#e8a13c"} onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事</Btn>
               )}
