@@ -788,8 +788,13 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const leg = legendTeams[d.name];
       const legStats = newRider(power + 8, rng, { type: leg.type, banned: nameBanned, cap: aiCap });
       legStats.abilities = leg.specialAbilities || legStats.abilities;
-      AB_KEYS.forEach(k => { if (leg.finalAbilities && leg.finalAbilities[k] != null) legStats[k] = leg.finalAbilities[k]; });
-      SUB_STAT_KEYS.forEach(k => { if (leg.finalSubStats && leg.finalSubStats[k] != null) legStats[k] = leg.finalSubStats[k]; });
+      // v37: 過去選手（引退した殿堂選手）は全盛期より衰えて登場する。周回で殿堂が増えるほど
+      // 全盛期のまま無限に湧いてインフレする問題を抑える（現役スター＝worldStarは対象外）。
+      // 現役時OVRが高いレジェンドほど衰えも大きめ（LEGEND_DECAY_BASE〜。最低でも-8%）。
+      const legOvr0 = leg.finalAbilities ? AB_KEYS.reduce((a, k) => a + (leg.finalAbilities[k] || 0), 0) / AB_KEYS.length : 70;
+      const decay = Math.max(0.82, 0.92 - Math.max(0, legOvr0 - 80) * 0.006);
+      AB_KEYS.forEach(k => { if (leg.finalAbilities && leg.finalAbilities[k] != null) legStats[k] = Math.round(leg.finalAbilities[k] * decay); });
+      SUB_STAT_KEYS.forEach(k => { if (leg.finalSubStats && leg.finalSubStats[k] != null) legStats[k] = Math.round(leg.finalSubStats[k] * decay); });
       const le = effAbilities(legStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...le,
