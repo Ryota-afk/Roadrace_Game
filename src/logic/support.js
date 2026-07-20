@@ -363,7 +363,68 @@ export const EFFECT_APPLIERS = {
     return { ...s, roster, __eventNote: `🤕 ${pick.name}が無理がたたって故障してしまった…` };
   },
   wheelGrant: (s, v) => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + v } }),
+  // v36(#9): 性格イベントで「特定の1名」を対象にするための適用子（vは{id,v}）。
+  riderAbById: (s, { id, v }) => {
+    const pick = s.roster.find(r => r.id === id);
+    if (!pick) return s;
+    return { ...s, roster: s.roster.map(r => r.id === id
+      ? { ...r, ...Object.fromEntries(AB_KEYS.map(k => [k, Math.max(22, Math.min(94, Math.round(r[k] + v)))])) } : r),
+      __eventNote: `📈 ${pick.name}の地力が伸びた（全能力+${v}）` };
+  },
+  riderCondById: (s, { id, v }) => {
+    const pick = s.roster.find(r => r.id === id);
+    if (!pick) return s;
+    return { ...s, roster: s.roster.map(r => r.id === id ? { ...r, cond: Math.max(1, Math.min(5, r.cond + v)) } : r),
+      __eventNote: v > 0 ? `😊 ${pick.name}のコンディションが上向いた` : `😔 ${pick.name}の調子が下がった` };
+  },
+  riderFatigueById: (s, { id, v }) => {
+    const pick = s.roster.find(r => r.id === id);
+    if (!pick) return s;
+    return { ...s, roster: s.roster.map(r => r.id === id ? { ...r, fatigue: Math.max(0, Math.min(100, r.fatigue + v)) } : r) };
+  },
 };
+
+// v36(#9): 性格ベースのチームイベント（シーズン）。ロースターから1名を選び、その選手の性格に応じた
+// 出来事＋二択を生成する（対象選手のidを効果に埋め込む）。該当者がいなければnull。
+const SEASON_PERS_EVENTS = {
+  hotblood: (r) => ({ title: `${r.name}がチームを鼓舞`, text: `熱血漢の${r.name}が「今年こそやってやる！」とチーム全体に檄を飛ばしている。`,
+    choices: [
+      { label: "勢いに乗る", result: `${r.name}の熱がチームに伝播し、全員の士気が上がった。本人は少し飛ばしすぎた。`, effects: { rosterCondAll: 1, riderFatigueById: { id: r.id, v: 10 } } },
+      { label: "落ち着かせる", result: `熱くなりすぎないよう声をかけ、${r.name}をうまくクールダウンさせた。`, effects: { riderFatigueById: { id: r.id, v: -12 }, riderCondById: { id: r.id, v: 1 } } },
+    ] }),
+  seeker: (r) => ({ title: `${r.name}が限界に挑む`, text: `求道者気質の${r.name}が「もっと強くなりたい」と、限界を超える猛練習を志願してきた。`,
+    choices: [
+      { label: "挑戦を見守る", result: `追い込みを許すと、${r.name}は殻を破って一段成長した。代償に疲労も深い。`, effects: { riderAbById: { id: r.id, v: 2 }, riderFatigueById: { id: r.id, v: 14 } } },
+      { label: "無理はさせない", result: `オーバーワークを戒め、計画的な調整に切り替えさせた。`, effects: { riderCondById: { id: r.id, v: 1 }, riderFatigueById: { id: r.id, v: -8 } } },
+    ] }),
+  artisan: (r) => ({ title: `${r.name}が機材を突き詰める`, text: `職人肌の${r.name}が、ポジションと機材のセッティングを細部まで詰めたいと言い出した。`,
+    choices: [
+      { label: "とことん付き合う", result: `納得いくまで詰めた結果、${r.name}の走りに無駄がなくなった。`, effects: { riderAbById: { id: r.id, v: 2 } } },
+      { label: "ほどほどで休ませる", result: `凝りすぎる前に切り上げさせ、しっかり休養を取らせた。`, effects: { riderFatigueById: { id: r.id, v: -12 }, riderCondById: { id: r.id, v: 1 } } },
+    ] }),
+  free: (r) => ({ title: `${r.name}のマイペース`, text: `自由人の${r.name}が、練習の合間に気ままな寄り道をして周囲をやきもきさせている。`,
+    choices: [
+      { label: "大らかに見守る", result: `本人らしさを尊重すると、チームの雰囲気も和み、${r.name}も伸び伸び走れた。`, effects: { rosterCondAll: 1 } },
+      { label: "少し引き締める", result: `けじめをつけるよう促し、${r.name}も気を引き締めた。`, effects: { riderCondById: { id: r.id, v: 1 }, riderFatigueById: { id: r.id, v: -6 } } },
+    ] }),
+  smart: (r) => ({ title: `${r.name}が戦術を提案`, text: `智将肌の${r.name}が、次戦に向けた緻密な作戦プランを持ちかけてきた。`,
+    choices: [
+      { label: "作戦を採用する", result: `${r.name}の分析をチームで共有し、全員の狙いが噛み合った。`, effects: { rosterCondAll: 1 } },
+      { label: "本人の武器も磨かせる", result: `戦術眼を評価しつつ、自身の走力も伸ばすよう助言した。`, effects: { riderAbById: { id: r.id, v: 2 } } },
+    ] }),
+  genius: (r) => ({ title: `${r.name}が退屈そうにしている`, text: `天才肌の${r.name}が、いまの練習に物足りなさを感じているようだ。`,
+    choices: [
+      { label: "高い課題を与える", result: `歯応えのあるメニューに${r.name}は目を輝かせ、才能をさらに開花させた。`, effects: { riderAbById: { id: r.id, v: 3 }, riderFatigueById: { id: r.id, v: 8 } } },
+      { label: "自由にやらせる", result: `本人の裁量に任せると、気分良く調子を上げてきた。`, effects: { riderCondById: { id: r.id, v: 1 } } },
+    ] }),
+};
+export function seasonPersonalityEvent(roster, rng) {
+  const r0 = rng || Math.random;
+  const pool = (roster || []).filter(r => r.injury === 0 && SEASON_PERS_EVENTS[r.personality]);
+  if (!pool.length) return null;
+  const r = pool[Math.floor(r0() * pool.length)];
+  return SEASON_PERS_EVENTS[r.personality](r);
+}
 
 export function applyEventEffects(s, effects) {
   let ns = s;
@@ -1019,6 +1080,53 @@ export const ML_EVENTS = [
       { label: "そっと胸にしまい走りで応える", result: "言葉より走りで応えると決め、練習にも身が入った。", effects: { abBoost: 2, mentalDelta: 2, fatigueDelta: 5 } },
     ] },
 ];
+
+// v36(#9): 性格ベースの私生活イベント（マイライフ）。プレイヤー自身の性格に応じた出来事が起き、
+// その性格らしい二択を選ぶ。取材・私生活イベントの一部として、性格を持つ選手にだけ差し込まれる。
+export const ML_PERSONALITY_EVENTS = {
+  hotblood: [
+    { title: "抑えきれない闘志", text: "レースの映像を見返すうち、悔しさと闘志がこみ上げて眠れなくなった。",
+      choices: [
+        { label: "衝動のまま夜通し追い込む", result: "燃え上がる情熱を練習にぶつけ、地力を一気に引き上げた。反動で疲労は深い。", effects: { abBoost: 4, fatigueDelta: 14 } },
+        { label: "深呼吸して頭を冷やす", result: "昂りを鎮め、勝負所で活きる冷静さを手に入れた。", effects: { mentalDelta: 4, fatigueDelta: -8 } },
+      ] },
+  ],
+  seeker: [
+    { title: "強さへの探求", text: "「本当の強さとは何か」──答えを求め、あなたは自分と向き合っていた。",
+      choices: [
+        { label: "限界の先へ体を追い込む", result: "苦しみの果てに、また一つ壁を越えた。", effects: { abBoost: 4, fatigueDelta: 12 } },
+        { label: "走りを理論で見つめ直す", result: "感覚を言語化し、揺るがぬ芯を得た。", effects: { mentalDelta: 4 } },
+      ] },
+  ],
+  artisan: [
+    { title: "細部への こだわり", text: "職人肌のあなたは、ペダリングと機材の詰めが気になって仕方がない。",
+      choices: [
+        { label: "納得いくまで突き詰める", result: "無駄のない動きが仕上がり、当日の仕上がりが一段上がった。", effects: { formDelta: 7, fatigueDelta: 4 } },
+        { label: "実戦感覚を優先する", result: "机上より実走を選び、地力を確かに伸ばした。", effects: { abBoost: 3 } },
+      ] },
+  ],
+  free: [
+    { title: "気の向くままに", text: "自由人のあなたは、ふと思い立って予定のない一日を過ごすことにした。",
+      choices: [
+        { label: "何にも縛られず遊ぶ", result: "心が軽くなり、また走りたい気持ちが湧いてきた。", effects: { mentalDelta: 4, fatigueDelta: -10 } },
+        { label: "気ままにペダルを回す", result: "遊びのように走るうち、体も動きも自然と整った。", effects: { abBoost: 2, formDelta: 3 } },
+      ] },
+  ],
+  smart: [
+    { title: "データとの対話", text: "智将肌のあなたは、パワーデータとレース映像を照らし合わせて分析に没頭した。",
+      choices: [
+        { label: "弱点をピンポイント補強", result: "課題を的確に潰し、効率よく地力を伸ばした。", effects: { abBoost: 3 } },
+        { label: "レース展開を読み込む", result: "勝ち筋のパターンが頭に入り、仕上がりと胆力が増した。", effects: { mentalDelta: 2, formDelta: 4 } },
+      ] },
+  ],
+  genius: [
+    { title: "持て余す才能", text: "何をやっても人よりできてしまう。天才肌のあなたは、少し退屈さえ感じていた。",
+      choices: [
+        { label: "自らに高い課題を課す", result: "歯応えのある挑戦に才能がさらに開花した。", effects: { abBoost: 4, fatigueDelta: 8 } },
+        { label: "感覚のままに流す", result: "肩の力を抜いて走ると、不思議と調子が上向いた。", effects: { formDelta: 5 } },
+      ] },
+  ],
+};
 
 export const ML_SPONSOR_GIGS = [
   { title: "スポーツ用品ブランドのCM撮影", text: "個人スポンサーから、新製品のテレビCM出演のオファーが届いた。",
