@@ -592,6 +592,8 @@ export function renderMyLifeScreens(ctx) {
                 )}
               <Btn small outline color={"#e8a13c"} onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
               <Btn small outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🚪 静かに引退</Btn>
+              {/* v36(#6): ライバル会話ドラマ（紙芝居/VN風）の on/off トグル */}
+              <Btn small outline color={ml.rivalDramaOn === false ? C.sub : C.purple} onClick={() => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false }))}>🎭 会話ドラマ：{ml.rivalDramaOn === false ? "OFF" : "ON"}</Btn>
               <Btn small outline color={C.red} onClick={() => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>🔄 最初からやり直す</Btn>
               <Btn small outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
             </div>
@@ -779,6 +781,20 @@ export function renderMyLifeScreens(ctx) {
 
     if (ml.screen === "mylife_result" && ml.resultInfo) {
       const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome, finishTime, gapSec, forecast } = ml.resultInfo;
+      // v36(#6): 性格ベースの会話ドラマ（紙芝居/VN風）。ml.rivalDramaOn===false でオフにできる。
+      const vnScene = (dlg) => (ml.rivalDramaOn !== false && dlg && dlg.lines) ? (
+        <div style={{ marginTop: 8, display: "grid", gap: 6, borderTop: `1px dashed ${C.line}`, paddingTop: 8 }}>
+          <div style={{ fontSize: 10, color: C.sub }}>🎭 {dlg.persLabel ? `${dlg.persLabel}な` : ""}{dlg.tierLabel}との一幕</div>
+          {dlg.lines.map((ln, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: ln.who === "me" ? "flex-end" : "flex-start" }}>
+              <div style={{ maxWidth: "86%", background: ln.who === "me" ? "rgba(79,143,232,0.14)" : "rgba(232,84,79,0.12)", border: `1px solid ${ln.who === "me" ? C.blue : C.red}`, borderRadius: 10, padding: "6px 9px" }}>
+                <div style={{ fontSize: 9.5, color: ln.who === "me" ? C.blue : C.red, fontWeight: 700, marginBottom: 1 }}>{ln.who === "me" ? "🚴 " : "🔥 "}{ln.name}</div>
+                <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55 }}>{ln.text}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null;
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.yellow}` }}>
@@ -849,6 +865,7 @@ export function renderMyLifeScreens(ctx) {
               <Eyebrow color={rivalOutcome.beat ? C.green : C.red}>🔥 {rivalOutcome.tierLabel || "ライバル"}対決 — {rivalOutcome.beat ? "勝利" : "敗北"}</Eyebrow>
               <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{rivalOutcome.name}は{rivalOutcome.rank}位でフィニッシュ。{rivalOutcome.line || (rivalOutcome.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。")}</div>
               {rivalOutcome.promoted && <div style={{ fontSize: 12, color: rivalOutcome.tierColor || C.yellow, marginTop: 5, fontWeight: 700 }}>{rivalOutcome.promoted}</div>}
+              {vnScene(rivalOutcome.dialogue)}
             </div>
           )}
           {rivalOutcome2 && (
@@ -860,6 +877,7 @@ export function renderMyLifeScreens(ctx) {
                   : `${rivalOutcome2.name}は${rivalOutcome2.rank}位でフィニッシュ。${rivalOutcome2.line || (rivalOutcome2.beat ? "今回はあなたが上手だった。" : "悔しい結果に終わった。")}`}
               </div>
               {!rival2Intro && rivalOutcome2.promoted && <div style={{ fontSize: 12, color: rivalOutcome2.tierColor || C.yellow, marginTop: 5, fontWeight: 700 }}>{rivalOutcome2.promoted}</div>}
+              {!rival2Intro && vnScene(rivalOutcome2.dialogue)}
             </div>
           )}
           {directive && (

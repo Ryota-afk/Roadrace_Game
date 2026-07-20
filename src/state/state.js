@@ -594,6 +594,7 @@ const ML_SAVE_FIELDS = [
   "careerWins", "careerPodiums", "careerBigWins", "careerTitles", "careerClassics",
   "teammates", "tactic", "careerHistory",
   "protege", // v35(逆メンター): 弟子（プロテジェ）
+  "rivalDramaOn", // v36(#6): 性格ベースのライバル会話ドラマの表示 on/off
 ];
 
 export function saveMyLife(ml) {

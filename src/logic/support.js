@@ -870,6 +870,71 @@ export function rivalDrama({ beat, gapSec, rivalName, rivalRank, myRank, heatBef
   return { line, promoted, tier: after };
 }
 
+// v36(#6): 性格ベースのライバル会話ドラマ（紙芝居/VN風）。ライバルの性格・勝敗・接戦度・因縁度で
+// 台詞を分岐し、短い掛け合いを生成する。whenBeaten＝プレイヤーが勝ってライバルが敗れた時、
+// whenWon＝ライバルが勝った時、vow＝因縁が深い時に添える決意の一言。
+const RIVAL_VOICE = {
+  hotblood: {
+    whenBeaten: ["「くそぉっ…！ 今日はお前の勝ちだ。だが次は、次こそは俺が前でゴールする！", "「認めるさ、今日は速かった。でもな、この悔しさが俺を強くするんだ！"],
+    whenWon: ["「はっはァ！ 見たか、これが俺の走りだ！ ついてこられたか？", "「まだまだだな！ お前が本気を出す前に、俺が突き放させてもらった！"],
+    vow: ["「燃えてきたぜ…お前がいるから、俺はもっと速くなれる。次も本気で来い！"],
+  },
+  seeker: {
+    whenBeaten: ["「……強い。今のあなたには、確かに届かなかった。", "「敗因は明確だ。私はまだ、自分の限界の先に手が届いていない。"],
+    whenWon: ["「これが今の私の答えだ。あなたの走りも、悪くなかった。", "「勝ち負けは過程に過ぎない。私はただ、より速い自分を求め続けるだけだ。"],
+    vow: ["「あなたという壁があるから、私は歩みを止められない。……感謝している。"],
+  },
+  artisan: {
+    whenBeaten: ["「ふむ、完敗だ。あなたのラインどり、無駄がなかった。盗ませてもらうよ。", "「悔しいが、美しい勝ち方だった。職人として、認めざるを得ない。"],
+    whenWon: ["「計算通りさ。一つひとつの仕事を、丁寧に積み重ねただけだ。", "「派手さはないが、これが私の流儀でね。届かなかったろう？"],
+    vow: ["「あなたと競るたび、自分の技が磨かれていく。良い好敵手を持ったものだ。"],
+  },
+  free: {
+    whenBeaten: ["「あーあ、負けちゃった。まあいいや、今日は楽しかったし！", "「やるねぇ。ちょっと本気出せばよかったかな〜、なんてね。"],
+    whenWon: ["「あははっ、勝っちゃった！ 気持ちよかった〜！", "「たまたまだよ、たまたま。でも勝ちは勝ち、もらっとくね！"],
+    vow: ["「君と走るの、けっこう好きなんだよね。次もよろしく！"],
+  },
+  smart: {
+    whenBeaten: ["「……想定の範囲外だ。あなたの脚を、少し見誤っていたようだね。", "「データ上は私が有利だったはずだが。面白い、修正して次に臨むとしよう。"],
+    whenWon: ["「盤面は最初から見えていた。あなたが仕掛ける前に、決着はついていたのさ。", "「勝つべくして勝った。感情ではなく、戦術がレースを決めるんだ。"],
+    vow: ["「あなたは私の計算を狂わせる、数少ない変数だ。……嫌いじゃない。"],
+  },
+  genius: {
+    whenBeaten: ["「へえ、僕を負かすなんて。少しは楽しめそうだね、君となら。", "「まぐれか、実力か。次で見極めさせてもらうよ。"],
+    whenWon: ["「言ったろう？ 僕に勝つのは、まだ早いって。", "「才能の差、と言ったら怒るかい？ でも事実なんだから仕方ない。"],
+    vow: ["「君が僕に追いつく日を、退屈しのぎに待っていてあげるよ。"],
+  },
+  normal: {
+    whenBeaten: ["「参りました。今日はあなたの方が一枚上手でした。", "「悔しいですけど、完敗です。次は負けません。"],
+    whenWon: ["「勝てた…！ 練習の成果が出ました。", "「今日は流れが味方してくれました。でも実力で掴んだ勝ちです。"],
+    vow: ["「あなたと競り合えるのが、今は何より励みになります。次も全力で。"],
+  },
+};
+const PLAYER_LINES = {
+  winClose: ["「ギリギリだった…お前がいると、いつも力を出し切れる。", "「危なかった。次も、その次も、負けるつもりはない。"],
+  win: ["「まだ伸びるさ。次はもっと差をつけてみせる。", "「今日は獲った。だが慢心はしない。"],
+  loseClose: ["「あと一歩…。この差は、必ず埋めてみせる。", "「悔しい。でも、この距離ならいつか抜ける。"],
+  lose: ["「完敗だ…。だが、この背中は追い続ける。", "「今日は届かなかった。次までに、必ず強くなる。"],
+};
+export function rivalDialogue({ rival, beat, gapSec, heatAfter, playerName, seed }) {
+  if (!rival) return null;
+  const pers = rival.personality || "normal";
+  const close = Math.abs(gapSec == null ? 99 : gapSec) < 4;
+  const tier = rivalHeatTier(heatAfter);
+  const rng = mulberry(((seed || 1) >>> 0) || 1);
+  const pick = arr => arr[Math.floor(rng() * arr.length)] || arr[0];
+  const V = RIVAL_VOICE[pers] || RIVAL_VOICE.normal;
+  const rivalLine = pick(beat ? V.whenBeaten : V.whenWon);
+  const meLine = beat ? pick(close ? PLAYER_LINES.winClose : PLAYER_LINES.win)
+    : pick(close ? PLAYER_LINES.loseClose : PLAYER_LINES.lose);
+  const lines = [
+    { who: "rival", name: rival.name, text: rivalLine.replace(/」?$/, "」") },
+    { who: "me", name: playerName || "自分", text: meLine.replace(/」?$/, "」") },
+  ];
+  if (tier.key >= 2) lines.push({ who: "rival", name: rival.name, text: pick(V.vow).replace(/」?$/, "」") });
+  return { lines, tierLabel: tier.label, tierColor: tier.color, persLabel: PERSONALITIES[pers]?.label || "" };
+}
+
 export const ML_BACKGROUNDS = {
   highschool: { label: "高校卒", age: 18, powerBase: 40, growth: "late", powDist: [0.16, 0.46, 0.80],
     desc: "能力はまだ粗削りだが伸びしろは最大級。長い目で育てる叩き上げタイプ",
