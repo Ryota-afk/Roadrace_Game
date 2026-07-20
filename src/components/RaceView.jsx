@@ -240,6 +240,10 @@ export class RaceErrorBoundary extends React.Component {
 }
 
 export function RaceView({ sim, onFinish }) {
+  // v37: マイライフは自チーム選手も team==="PLAYER" に統一したため、「操作アバター＝あなた本人」は
+  // isPlayerChar で判定する（シーズンは単一アバターが無いので従来どおり team==="PLAYER"＝自チーム）。
+  const hasAvatar = sim.entrants.some(e => e.isPlayerChar);
+  const isAvatar = (e) => hasAvatar ? !!e.isPlayerChar : (e.team === "PLAYER");
   const [hud, setHud] = useState({ top: [], seg: "", clock: 0, done: false, comment: "", gap: null });
   const [ridersUi, setRidersUi] = useState([]);
   const [cam, setCam] = useState({ start: 0, end: MIN_VIEW_FRAC });
@@ -337,6 +341,14 @@ export function RaceView({ sim, onFinish }) {
   const playerLeadout = playerAce && playerAce.mode === "draft"
     ? ridersUi.find(r => r.isPlayer && !r.isAce && r.mode === "pull" && r.gid === playerAce.gid)
     : null;
+  // v37: 観戦マップの名前ラベル対象＝先頭3名＋自分／自チーム／ライバル（識別できる面々）。
+  // 混雑を避けて数名に絞る。姓（名前の先頭トークン）だけ表示する。
+  const labelIds = (() => {
+    const set = new Set();
+    [...ridersUi].sort((a, b) => b.frac - a.frac).slice(0, 3).forEach(r => set.add(r.id));
+    ridersUi.forEach(r => { if (r.isPlayer || r.isRival || (r.isMyTeam && r.isAce)) set.add(r.id); });
+    return set;
+  })();
 
   useEffect(() => {
     const riders = sim.entrants.map((e) => ({
@@ -507,14 +519,16 @@ export function RaceView({ sim, onFinish }) {
           const contenders = sortedByFinish
             .filter(r => r.e.finishTime - winnerTime < SPRINT_CONTENDER_GAP_SEC)
             .slice(0, SPRINT_MAX_CONTENDERS)
-            .map(r => ({ id: r.e.id, name: r.e.name, color: r.color, isAce: r.e.isAce, isPlayer: r.e.team === "PLAYER", gapSec: r.e.finishTime - winnerTime }));
+            .map(r => ({ id: r.e.id, name: r.e.name, color: r.color, isAce: r.e.isAce, isPlayer: isAvatar(r.e), gapSec: r.e.finishTime - winnerTime }));
           setCinematic({ contenders });
         }
       }
       setRidersUi(riders.map(r => ({
-        id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: r.e.team === "PLAYER",
+        id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: isAvatar(r.e),
         gid: r.gid, slot: r.slot, dropStreak: r.dropStreak, attackStreak: r.attackStreak, biasX: r.biasX,
         elong: r.elong, tilt: r.tilt,
+        // v37: 観戦マップに名前ラベルを出すため、選手名と識別フラグを持たせる
+        name: r.e.name, isRival: !!(r.e.isRival || r.e.isRival2), isMyTeam: r.e.team === "PLAYER",
       })));
       if (now - lastHud > 300 || clock >= PLAY_DUR) {
         lastHud = now;
@@ -676,6 +690,14 @@ export function RaceView({ sim, onFinish }) {
                     {r.isPlayer && <circle r={r.isAce ? 8 : 6.5} fill="none" stroke="#27d3ff" strokeWidth="1.8" />}
                     <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
                     {r.isPlayer && <circle r="1.7" fill="#14171d" />}
+                    {/* v37: 観戦マップの名前ラベル（先頭・自分・ライバル・自チームエースのみ） */}
+                    {labelIds.has(r.id) && (
+                      <text y={-9} textAnchor="middle" fontSize="9" paintOrder="stroke" stroke="#14171d" strokeWidth="2.4"
+                        fill={r.isPlayer ? C.yellow : r.isRival ? "#ff6b6b" : r.isMyTeam ? "#7db8ff" : "#eef0f5"}
+                        style={{ fontWeight: r.isPlayer ? 800 : 600 }}>
+                        {(r.isPlayer ? "🚴" : r.isRival ? "🔥" : "") + (r.name ? r.name.split(" ")[0] : "")}
+                      </text>
+                    )}
                   </g>
                 );
               })}
