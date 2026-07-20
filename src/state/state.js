@@ -939,10 +939,41 @@ export const META_KEY = "roadrace_v12_meta";
 export function loadMeta() {
   try {
     const raw = localStorage.getItem(META_KEY);
-    if (!raw) return { totalEarnedCP: 0 };
+    if (!raw) return { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] };
     const m = JSON.parse(raw);
-    return { totalEarnedCP: m.totalEarnedCP || 0 };
-  } catch (e) { return { totalEarnedCP: 0 }; }
+    // v37: CPショップ用に cpSpent（累計使用CP）・cpUnlocks（購入済みid）を保持
+    return { totalEarnedCP: m.totalEarnedCP || 0, cpSpent: m.cpSpent || 0, cpUnlocks: Array.isArray(m.cpUnlocks) ? m.cpUnlocks : [] };
+  } catch (e) { return { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] }; }
+}
+// v37: CPショップ。貯めたCP（残高＝totalEarnedCP−cpSpent）を使って恒久解禁を購入する。
+export function cpBalance(meta) { return Math.max(0, (meta.totalEarnedCP || 0) - (meta.cpSpent || 0)); }
+
+// 購入式の恒久解禁カタログ（従来の自動ミルストーンとは別の"選んで買う"プレミアム枠）。
+export const CP_SHOP = [
+  { id: "s_rookie", cost: 45, category: "シーズン", label: "エース級新人 確定枠", desc: "シーズン開始時、成長ランクS確定の逸材が1名追加加入", season: { prodigyRookie: 1 } },
+  { id: "s_budget", cost: 30, category: "シーズン", label: "開幕資金 +800万円", desc: "シーズン開始時の資金が+800万円", season: { budget: 800 } },
+  { id: "s_equip", cost: 55, category: "シーズン", label: "全設備 Lv+3", desc: "フレーム・ホイールの強化レベルが+3された状態でスタート", season: { equipLv: 3 } },
+  { id: "m_gold", cost: 60, category: "マイライフ", label: "デビュー時 金特1つ確定", desc: "新人が必ず特能を1つ金特で持ってデビューする", mylife: { debutGold: true } },
+  { id: "m_growth", cost: 45, category: "マイライフ", label: "初期成長力 +1段 確定", desc: "デビュー時、成長力が確定で1段階アップ", mylife: { growthUp: true } },
+  { id: "m_money", cost: 25, category: "マイライフ", label: "支度金 +300万円", desc: "デビュー時の所持金が+300万円", mylife: { money: 300 } },
+  { id: "m_reroll", cost: 35, category: "マイライフ", label: "リセマラ当たり率 大幅UP", desc: "デビュー当たり特能（天啓/天賦の才）の抽選が大きく上がる", mylife: { boonBonus: 0.25 } },
+  { id: "x_boost", cost: 70, category: "特別", label: "英才教育：初期能力ブースト", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6でスタート", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
+];
+export function cpOwned(meta, id) { return (meta.cpUnlocks || []).includes(id); }
+export function cpBuy(meta, id) {
+  const item = CP_SHOP.find(x => x.id === id);
+  if (!item || cpOwned(meta, id) || cpBalance(meta) < item.cost) return meta;
+  return { ...meta, cpSpent: (meta.cpSpent || 0) + item.cost, cpUnlocks: [...(meta.cpUnlocks || []), id] };
+}
+export function cpShopSeasonPerks(meta) {
+  const acc = { prodigyRookie: 0, budget: 0, equipLv: 0, rosterBoost: 0 };
+  CP_SHOP.forEach(it => { if (cpOwned(meta, it.id)) { const s = it.season || {}; acc.prodigyRookie += s.prodigyRookie || 0; acc.budget += s.budget || 0; acc.equipLv += s.equipLv || 0; acc.rosterBoost += s.rosterBoost || 0; } });
+  return acc;
+}
+export function cpShopMylifePerks(meta) {
+  const acc = { debutGold: false, growthUp: false, money: 0, boonBonus: 0, statBoost: 0 };
+  CP_SHOP.forEach(it => { if (cpOwned(meta, it.id)) { const m = it.mylife || {}; if (m.debutGold) acc.debutGold = true; if (m.growthUp) acc.growthUp = true; acc.money += m.money || 0; acc.boonBonus += m.boonBonus || 0; acc.statBoost += m.statBoost || 0; } });
+  return acc;
 }
 
 export function saveMeta(meta) {

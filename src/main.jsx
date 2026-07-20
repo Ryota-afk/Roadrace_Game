@@ -18,7 +18,7 @@ import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins,
 import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, rankSim, riderHash01, rollWeather, simulateTicks } from "./sim/race.js";
 import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
@@ -510,6 +510,8 @@ function App() {
   // v14: マイライフモードはシーズンモードとは完全に別の状態を持つ（タイトル画面で選択）。
   // superMode: null=モード未選択（タイトル）／"season"=既存のチーム運営／"mylife"=新モード
   const [superMode, setSuperMode] = useState(null);
+  const [uiTick, setUiTick] = useState(0); // v37: CPショップ購入後の再描画トリガー
+  const buyCpItem = (id) => { const meta = loadMeta(); const next = cpBuy(meta, id); if (next !== meta) { saveMeta(next); setUiTick(t => t + 1); } };
   const [ml, setMl] = useState(initMyLife);
   const mlRaceLockRef = useRef(false);
   const mlCreateArgsRef = useRef(null); // v36(#5): リセマラ引き直し用に直近の作成引数を保持
@@ -562,7 +564,7 @@ function App() {
     if (newly.length === 0) return;
     const moneyTotal = newly.reduce((sum, a) => sum + (a.reward?.money || 0), 0);
     const cpTotal = newly.reduce((sum, a) => sum + (a.reward?.cp || 0), 0);
-    if (cpTotal > 0) { const meta = loadMeta(); saveMeta({ totalEarnedCP: meta.totalEarnedCP + cpTotal }); }
+    if (cpTotal > 0) { const meta = loadMeta(); saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + cpTotal }); }
     setG(s => ({
       ...s,
       budget: s.budget + moneyTotal,
@@ -578,7 +580,7 @@ function App() {
     if (newly.length === 0) return;
     const moneyTotal = newly.reduce((sum, a) => sum + (a.reward?.money || 0), 0);
     const cpTotal = newly.reduce((sum, a) => sum + (a.reward?.cp || 0), 0);
-    if (cpTotal > 0) { const meta = loadMeta(); saveMeta({ totalEarnedCP: meta.totalEarnedCP + cpTotal }); }
+    if (cpTotal > 0) { const meta = loadMeta(); saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + cpTotal }); }
     setMl(s => ({
       ...s,
       money: s.money + moneyTotal,
@@ -595,7 +597,7 @@ function App() {
       clearAwardedRef.current = true;
       const earned = computeClearPoints(g.year, g.difficulty);
       const meta = loadMeta();
-      saveMeta({ totalEarnedCP: meta.totalEarnedCP + earned });
+      saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + earned });
     }
     if (g.screen !== "clear") clearAwardedRef.current = false;
   }, [g.screen]);
@@ -606,7 +608,7 @@ function App() {
     if (ml.screen === "mylife_retired" && !mlClearAwardedRef.current) {
       mlClearAwardedRef.current = true;
       const res = computeMyLifeClearPoints(ml);
-      if (res.total > 0) { const meta = loadMeta(); saveMeta({ totalEarnedCP: meta.totalEarnedCP + res.total }); }
+      if (res.total > 0) { const meta = loadMeta(); saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + res.total }); }
       setMl(s => ({ ...s, awardedCP: res }));
     }
     if (ml.screen !== "mylife_retired") mlClearAwardedRef.current = false;
@@ -1234,9 +1236,13 @@ function App() {
     // 特殊能力を持ってデビュー（人気・評価・資金の初期ボーナスは後段の state 初期化で反映）。
     const perk = bg.perk || {};
     // v37: 生涯CPによるマイライフ特典（支度金・人気・評価・成長力抽選・当たり特能抽選の強化）。
-    const cpPerks = mlCpPerks(loadMeta().totalEarnedCP);
+    const cpMeta = loadMeta();
+    const cpPerks = mlCpPerks(cpMeta.totalEarnedCP);
+    const cpShop = cpShopMylifePerks(cpMeta); // v37: CPショップで購入済みの特典
     const growthLottery = (perk.growthLottery || 0) + cpPerks.growthLottery;
     if (growthLottery && rng() < growthLottery) player.growthPow = bumpGrowthPow(player.growthPow, 1);
+    if (cpShop.growthUp) player.growthPow = bumpGrowthPow(player.growthPow, 1); // ショップ：成長力+1確定
+    if (cpShop.statBoost) AB_KEYS.forEach(k => { player[k] = Math.min(94, (player[k] || 0) + cpShop.statBoost); }); // ショップ：初期能力+6
     if (perk.startAbility && ABILITIES[perk.startAbility] && !(player.abilities || []).includes(perk.startAbility)) {
       player.abilities = [...(player.abilities || []), perk.startAbility];
     }
@@ -1250,7 +1256,7 @@ function App() {
         return a && !a.bad && !a.breedOnly && !(player.abilities || []).includes(id);
       });
       const br = rng();
-      const bb = cpPerks.boonBonus; // v37: CPで当たり特能の抽選窓を広げる
+      const bb = cpPerks.boonBonus + cpShop.boonBonus; // v37: CP（自動＋ショップ）で当たり特能の抽選窓を広げる
       if (br < 0.04 + bb * 0.4 && (player.abilities || []).some(id => ABILITIES[id] && !ABILITIES[id].bad)) {
         const goodId = (player.abilities || []).find(id => ABILITIES[id] && !ABILITIES[id].bad && !(player.goldAbilities || []).includes(id));
         if (goodId) {
@@ -1268,6 +1274,14 @@ function App() {
       }
     }
     if (debutBoon) player.debutBoon = debutBoon;
+    // v37: CPショップ「デビュー時 金特1つ確定」＝良特能を1つ金特化（無ければ差し脚を付与して金特化）
+    if (cpShop.debutGold) {
+      let goldId = (player.abilities || []).find(id => ABILITIES[id] && !ABILITIES[id].bad && !(player.goldAbilities || []).includes(id));
+      if (!goldId) { goldId = "kicker"; if (!(player.abilities || []).includes(goldId)) player.abilities = [...(player.abilities || []), goldId]; }
+      player.goldAbilities = [...(player.goldAbilities || [])];
+      if (!player.goldAbilities.includes(goldId)) player.goldAbilities.push(goldId);
+      if (!player.debutBoon) player.debutBoon = { label: "🌟 英才の証", note: `CP特典で「${ABILITIES[goldId].label}」を金特で持ってデビュー` };
+    }
     player.joinOvr = overall(player);
     if (inh) {
       if (inh.growthPowBump) {
@@ -1412,7 +1426,7 @@ function App() {
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
       directive: mlGenDirective(1, 0, 0, 30),
-      managerEval: 30 + (perk.evalBonus || 0) + cpPerks.eval, salary: initialSalary, money: (perk.moneyBonus || 0) + cpPerks.money,
+      managerEval: 30 + (perk.evalBonus || 0) + cpPerks.eval, salary: initialSalary, money: (perk.moneyBonus || 0) + cpPerks.money + cpShop.money,
       partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
       gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
       houseLv: -1, carLv: -1,
@@ -2719,7 +2733,45 @@ function App() {
             </div>
           );
         })()}
+        <Btn color={C.yellow} onClick={() => setSuperMode("cpshop")}>🛒 CPショップで解禁を購入する</Btn>
         <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
+      </div>
+    );
+  }
+
+  // v37: CPショップ。貯めたCP残高で恒久解禁を購入する（自動ミルストーンとは別のプレミアム枠）。
+  if (superMode === "cpshop") {
+    const meta = loadMeta();
+    const bal = cpBalance(meta);
+    const catColor = { "シーズン": C.blue, "マイライフ": C.red, "特別": C.yellow };
+    return wrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: "linear-gradient(180deg, rgba(255,210,63,0.10), #201e26)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}`, textAlign: "center" }}>
+          <div style={{ fontSize: 30 }}>🛒</div>
+          <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 20, margin: "4px 0" }}>CPショップ</h2>
+          <div style={{ fontSize: 12, color: C.sub }}>使えるCP残高</div>
+          <div style={{ fontFamily: FONT_M, fontSize: 26, color: C.yellow, fontWeight: 800 }}>{bal}<span style={{ fontSize: 13 }}>pt</span></div>
+          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>生涯獲得 {meta.totalEarnedCP}pt ／ 使用済み {meta.cpSpent || 0}pt。購入は恒久で、次のシーズン/新人に反映されます</div>
+        </div>
+        {CP_SHOP.map((it) => {
+          const owned = cpOwned(meta, it.id);
+          const affordable = bal >= it.cost;
+          return (
+            <div key={it.id} style={{ background: C.panel, borderRadius: 10, border: `1px solid ${owned ? C.green : C.line}`, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, opacity: owned ? 0.85 : 1 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 9.5, color: catColor[it.category] || C.sub, border: `1px solid ${catColor[it.category] || C.line}`, borderRadius: 5, padding: "0 5px" }}>{it.category}</span>
+                  <span style={{ fontFamily: FONT_D, fontSize: 13.5, color: C.text, fontWeight: 700 }}>{it.label}</span>
+                </div>
+                <div style={{ fontSize: 11, color: C.sub, marginTop: 3, lineHeight: 1.5 }}>{it.desc}</div>
+              </div>
+              {owned
+                ? <span style={{ fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>✓ 解禁済</span>
+                : <Btn small color={affordable ? C.yellow : C.sub} outline={!affordable} onClick={() => affordable && buyCpItem(it.id)}>{it.cost}pt</Btn>}
+            </div>
+          );
+        })}
+        <Btn outline color={C.sub} onClick={() => setSuperMode("prestige")}>← 生涯評価に戻る</Btn>
       </div>
     );
   }

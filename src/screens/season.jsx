@@ -10,9 +10,9 @@ import { CHASE_MODES, HOME_ABILITY_BONUS, MONTHS, ROLES, SEG_AB, SEG_COLOR, UNLO
 import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
-import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, STAFF_META, staffEffectText, staffMemberName, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
+import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, addProdigyRookie, bumpEquipLv, bumpRosterAbAll, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, STAFF_META, staffEffectText, staffMemberName, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
-import { computePrestige, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
+import { computePrestige, cpShopSeasonPerks, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
 
 export function renderSeasonScreens(ctx) {
   const { acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap } = ctx;
@@ -126,7 +126,13 @@ export function renderSeasonScreens(ctx) {
         </div>
         <Btn onClick={() => {
           const name = teamNameChoice.trim();
-          const base = applyCpMilestones({ ...initGame(), difficulty: diffChoice, teamName: name || "あなたのチーム" }, meta.totalEarnedCP);
+          let base = applyCpMilestones({ ...initGame(), difficulty: diffChoice, teamName: name || "あなたのチーム" }, meta.totalEarnedCP);
+          // v37: CPショップで購入済みのシーズン特典を適用
+          const shop = cpShopSeasonPerks(meta);
+          for (let i = 0; i < shop.prodigyRookie; i++) base = addProdigyRookie(base);
+          if (shop.budget) base = { ...base, budget: base.budget + shop.budget };
+          if (shop.equipLv) base = bumpEquipLv(base, shop.equipLv);
+          if (shop.rosterBoost) base = bumpRosterAbAll(base, shop.rosterBoost);
           setG({ ...base, screen: "scoutpolicy_initial" });
         }}>この内容でゲーム開始 →</Btn>
         <Btn outline color={C.red} onClick={() => {
@@ -135,7 +141,7 @@ export function renderSeasonScreens(ctx) {
             `累計クリアポイント（${meta.totalEarnedCP}pt）と、それに紐づく永続ボーナス・難易度解禁をすべて消去します。この操作は取り消せません。よろしいですか？`,
             () => askConfirm(
               "本当によろしいですか？もう一度確認します。クリアポイントは元に戻せません。",
-              () => { saveMeta({ totalEarnedCP: 0 }); setDiffChoice("easy"); setG(s => ({ ...s })); }
+              () => { saveMeta({ totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] }); setDiffChoice("easy"); setG(s => ({ ...s })); }
             )
           );
         }}>クリアポイントをリセット（累計{meta.totalEarnedCP}pt消去）</Btn>
