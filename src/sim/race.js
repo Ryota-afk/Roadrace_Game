@@ -442,7 +442,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const ownCapable = tickDistance(en, segType, "pull", course.steepness);
         let dist;
         // v37: 食らいつく脚＝集団に残る基準が緩む（千切れにくい）。ドラフトの「ついていける」閾値を下げる。
-        const keepThresh = (windActive ? 0.80 : 0.9) - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
+        // v38(#1): フィナーレの絞り込み。終盤（残り25%）は勝負に向けてペースが上がり位置取り争いも
+        // 激しくなるため、大集団ほど「ついていける」閾値が上がる＝実力が足りない選手から自然に絞られる。
+        // 平坦系で「ほぼ全員が20秒以内の塊ゴール」になる違和感を抑える（小集団の逃げ切りには影響小）。
+        const finaleTight = (en.pos / course.length > 0.75) ? Math.min(0.05, 0.012 + members.length * 0.001) : 0;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -547,7 +551,9 @@ export function resolveFinishClusters(entrants, finishSegType) {
         const energyFactor = 0.85 + Math.max(0, Math.min(1, (en.energy + 20) / 120)) * 0.15;
         return { en, score: finishAbility(en, finishSegType) * energyFactor * jitter };
       }).sort((a, b) => b.score - a.score);
-      const spread = Math.min(3.0, 0.3 * (scored.length - 1));
+      // v38(#1): 大集団のゴールスプリントは数珠つなぎに伸びる（従来は上限3秒で20人が団子だった）。
+      // クラスタが大きいほど先頭から最後尾までの着差が広がる（最大7秒）
+      const spread = Math.min(7.0, 0.3 * (scored.length - 1));
       scored.forEach((s, k) => {
         const frac = scored.length > 1 ? k / (scored.length - 1) : 0;
         s.en.finishTime = baseTime + frac * spread;
