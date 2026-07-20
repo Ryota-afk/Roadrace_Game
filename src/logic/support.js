@@ -1705,7 +1705,7 @@ export function teamChemistryTier(squad) {
   return { ...tier, avgTenure: avg };
 }
 
-export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel, teamName) {
+export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel, teamName, rivalRosters, year) {
   // v13: 難易度による他チームの強さ補正（aiMul）。省略時はnormal相当
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
@@ -1746,8 +1746,25 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
       const alumni = (rivalAlumni || []).filter(a => a.signedTeam === d.name).slice(0, aiSquadN);
       const alumniIds = new Set(alumni.map(a => a.id));
       const members = alumni.map(a => ({ ...a }));
-      // v35(シーズン深掘り): チームの個性（spec）に沿って選手を生成。エースは必ずその脚質、
-      // 他メンバーも過半数がその脚質に寄る＝スプリント軍団/山岳の名門等の対戦の駆け引きが生まれる
+      // v38: 永続ライバルロースターから同じ顔ぶれを出走させる（identity固定・stats は id＋year で
+      // シードして年内安定・power で文脈スケール）。従来は毎レース使い捨て生成で「同じチーム名でも
+      // 毎回別人」だったため、宿敵が育つ感覚も相手の通算成績も追えなかった。マイライフと同じ根治。
+      const roster = rivalRosters && rivalRosters[d.name];
+      if (roster && roster.length) {
+        roster.slice(0, Math.min(aiSquadN, roster.length)).forEach(wr => {
+          if (members.length >= aiSquadN) return;
+          if (alumniIds.has(wr.id)) return; // 既にalumniで出走している選手は重複させない
+          const wrng = mulberry(((wr.id * 2654435761) ^ ((year || 1) * 40503)) >>> 0);
+          const st = newRider(power + (wr.baseline || 0), wrng, { type: wr.type, cap: aiCap, banned: nameBanned });
+          st.id = wr.id; st.name = wr.name; st.type = wr.type; st.personality = wr.personality || st.personality;
+          if (wr.abilities) st.abilities = wr.abilities;
+          st.goldAbilities = wr.goldAbilities || [];
+          st.growthPow = wr.growthPow || st.growthPow;
+          members.push(st);
+        });
+      }
+      // v35(シーズン深掘り): ロースターで埋まらない残り枠はチームの個性（spec）に沿って補完。
+      // エースは必ずその脚質、他メンバーも過半数がその脚質に寄る＝対戦の駆け引きが生まれる
       for (let i = members.length; i < aiSquadN; i++) {
         const useSpec = d.spec && (i === 0 || rng() < 0.55);
         members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap, type: useSpec ? d.spec : undefined }));

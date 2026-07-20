@@ -807,6 +807,13 @@ function App() {
           else survivors.push(n);
         });
         const year = s.year + 1;
+        // v38: ライバルチームも年次で世代交代（加齢→成長/衰え→引退→新人補充）。
+        // これで周回の相手が固定強度で止まらず、若手台頭とベテラン引退の流れが生まれる。
+        const agedRivals = ageWorldRosters(s.rivalRosters, mulberry((year * 2246822519) >>> 0), year, RIVAL_TEAMS);
+        agedRivals.retired.slice(0, 3).forEach(r => {
+          const debut = agedRivals.debuted.find(d => d.team === r.team);
+          log.push(`【${s.year}年目 世代交代】🌍 ${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : ""}`);
+        });
         const upkeep = survivors.length * UPKEEP_PER_RIDER;
         const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
         const managerLv = s.staff?.manager || 0;
@@ -857,6 +864,7 @@ function App() {
           // v25: ユース育成枠も年度が変わるたびにリセットする
           youthUsed: false,
           yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame, rivalAlumni: survivingAlumni,
+          rivalRosters: agedRivals.worldRosters,
           screen: info.cleared ? "clear" : "yearend", tab: "home",
         };
       }
@@ -955,7 +963,7 @@ function App() {
     // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
     const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
     // v29: 出走表用に事前生成した相手チーム布陣があればそれを使い、顔ぶれを一致させる
-    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, g.pendingAiTeams, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName);
+    const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, g.pendingAiTeams, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName, g.rivalRosters, g.year);
     // v35(チームTT): チームTTはペロトン演出を持たないため、観戦を選んでも結果画面へ直行する
     const effWatch = race.tmpl.teamTT ? false : watch;
     setG(s => ({
@@ -996,7 +1004,7 @@ function App() {
       const aceId = gc.starters.length === 1 ? gc.starters[0] : (s.sel.ace || gc.aceId);
       const roles = s.sel.roles || gc.roles;
       // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty, undefined, s.dynastyLevel, s.teamName);
+      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty, undefined, s.dynastyLevel, s.teamName, s.rivalRosters, s.year);
       simResult = sim; raceRef = gc.race;
       return {
         ...s, roster: roster2, result: sim,

@@ -138,10 +138,10 @@ function genOneWorldRider(rng, spec, banned, opts = {}) {
   };
 }
 
-export function genWorldRosters(rng, count = 6) {
+export function genWorldRosters(rng, count = 6, teams = MYLIFE_TEAMS) {
   const rosters = {};
   const banned = new Set();
-  MYLIFE_TEAMS.forEach(d => {
+  teams.forEach(d => {
     const riders = [];
     for (let i = 0; i < count; i++) {
       const r = genOneWorldRider(rng, d.spec, banned, { ace: i === 0, forceSpec: i === 0 && !!d.spec });
@@ -165,14 +165,14 @@ function growthStep(growthPow) {
 // v38: 年次成長・引退で世代交代。年に一度（シーズン終わり）呼び出す。
 // 各選手を1歳加齢し、ピーク前は成長・ピーク後は衰え。高齢者は引退して新人に置き換わる。
 // 戻り値: { worldRosters: 更新後, retired: [{team, name, age, type}...], debuted: [{team, name, age}...] }
-export function ageWorldRosters(prevRosters, rng, year) {
+export function ageWorldRosters(prevRosters, rng, year, teams = MYLIFE_TEAMS) {
   const next = {};
   const retired = [];
   const debuted = [];
   const banned = new Set();
   // 既存の名前を banned に集めて重複回避
   Object.values(prevRosters || {}).forEach(list => (list || []).forEach(r => banned.add(r.name)));
-  MYLIFE_TEAMS.forEach(d => {
+  teams.forEach(d => {
     const src = (prevRosters && prevRosters[d.name]) || [];
     const out = [];
     src.forEach(r => {
@@ -438,6 +438,10 @@ export function initGame() {
     teamName: "あなたのチーム",
     year: 1, month: 0, classIdx: 0, points: 0, budget: 300,
     roster,
+    // v38: 永続ライバルロースター。従来はレースごとにAI相手を使い捨て生成しており、同じチーム名でも
+    // 毎レース別人が出走していた（宿敵が育たず相手の成績も追えない）。開始時に各ライバルチーム固定の
+    // 選手団を生成して永続化し、毎レース同じ顔ぶれが（その年の地力で）出走するようにする。年度末に加齢。
+    rivalRosters: genWorldRosters(mulberry(Date.now() % 999983 + 4242), 6, RIVAL_TEAMS),
     equip: { frame: 0, wheels: 0, facility: 0 },
     staff: { manager: 0, trainer: 0, doctor: 0, scout: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
@@ -498,6 +502,7 @@ const SAVE_FIELDS = [
   "camp", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
   "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed", "obCoach", "homeRegion", "teamName",
+  "rivalRosters", "rivalStats",
 ];
 
 export function serializeState(g) {
