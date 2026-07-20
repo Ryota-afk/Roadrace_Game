@@ -9,12 +9,12 @@ import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilit
 import { MONTHS } from "../data/course.js";
 import { CLASSES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
+import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
 export function renderMyLifeScreens(ctx) {
-  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
+  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
@@ -200,6 +200,49 @@ export function renderMyLifeScreens(ctx) {
           }}>この内容でデビュー →</Btn>
           <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>🏛 歴代選手の殿堂を見る</Btn>
           <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
+        </div>
+      );
+    }
+
+    // v36(#5リセマラ): 素質診断。デビュー前に成長力・性格・特能・素質ランクを確認し、
+    // 気に入るまで「引き直す」できる（確定するまでセーブされない）。
+    if (ml.screen === "mylife_scout" && ml.player) {
+      const r = ml.player;
+      const tr = mlTalentRank(r);
+      const pw = POW[r.growthPow];
+      const persLabel = tr.parts?.persLabel || "普通";
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "linear-gradient(180deg, rgba(255,210,63,0.08), #201e26)", border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+            <Eyebrow color={C.yellow}>🔍 素質診断 — スカウトの評価</Eyebrow>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0 6px" }}>
+              <div style={{ minWidth: 62, textAlign: "center", background: "rgba(0,0,0,0.25)", border: `2px solid ${tr.color}`, borderRadius: 12, padding: "6px 8px" }}>
+                <div style={{ fontSize: 9.5, color: C.sub }}>素質</div>
+                <div style={{ fontFamily: FONT_D, fontWeight: 800, fontSize: 30, color: tr.color, lineHeight: 1 }}>{tr.rank}</div>
+              </div>
+              <div>
+                <div style={{ fontFamily: FONT_D, fontSize: 17, color: C.text }}>{r.name}<span style={{ marginLeft: 6, fontSize: 11, color: TYPES[r.type].color }}>{TYPES[r.type].label}</span></div>
+                <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{r.age}歳・{ML_BACKGROUNDS[r.background]?.label} ／ OVR <b style={{ color: C.yellow, fontFamily: FONT_M }}>{overall(r)}</b></div>
+                <div style={{ fontSize: 11.5, marginTop: 2 }}>
+                  <span style={{ color: pw?.color || C.text, fontWeight: 700 }}>成長力 {r.growthPow}</span>
+                  <span style={{ color: C.sub }}> ・ 性格 </span><span style={{ color: r.personality === "genius" ? C.yellow : C.text }}>{persLabel}</span>
+                </div>
+              </div>
+            </div>
+            {r.debutBoon && (
+              <div style={{ background: "rgba(255,122,192,0.10)", border: `1px solid #ff7ac0`, borderRadius: 8, padding: "7px 10px", margin: "6px 0" }}>
+                <div style={{ fontSize: 12, color: "#ff7ac0", fontWeight: 700 }}>{r.debutBoon.label}</div>
+                <div style={{ fontSize: 11, color: C.text, marginTop: 1 }}>{r.debutBoon.note}</div>
+              </div>
+            )}
+            <div style={{ marginTop: 6 }}><TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} /></div>
+            <div style={{ marginTop: 8 }}><AbilityGrid r={r} /></div>
+          </div>
+          <Btn onClick={mlConfirmCandidate}>この素質でデビュー →</Btn>
+          <Btn outline color={C.blue} onClick={mlRerollCandidate}>🎲 素質を引き直す（リセマラ）</Btn>
+          <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", lineHeight: 1.6 }}>
+            成長力・性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓（金特）」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。
+          </div>
         </div>
       );
     }

@@ -512,6 +512,7 @@ function App() {
   const [superMode, setSuperMode] = useState(null);
   const [ml, setMl] = useState(initMyLife);
   const mlRaceLockRef = useRef(false);
+  const mlCreateArgsRef = useRef(null); // v36(#5): リセマラ引き直し用に直近の作成引数を保持
   // v12バグ修正: window.confirm()はモバイル端末（特にホーム画面追加時のPWA表示や
   // 一部のアプリ内ブラウザ）で表示されない・即falseを返すことがあり、その場合
   // 「最初から」等のボタンを押しても確認ダイアログがブロックされて何も起きない
@@ -1205,6 +1206,7 @@ function App() {
   }
   const ML_MILESTONE_LABEL = { worlds: { eyebrow: "🌍 世界選手権", color: C.blue }, olympics: { eyebrow: "🥇 オリンピック", color: C.yellow } };
   function mlCreateChar(type, background, master, partner) {
+    mlCreateArgsRef.current = { type, background, master, partner }; // v36(#5): 引き直し用に保持
     const rng = mulberry(Date.now() % 999983);
     const team = MYLIFE_TEAMS[Math.floor(Math.random() * MYLIFE_TEAMS.length)];
     const bg = ML_BACKGROUNDS[background];
@@ -1220,6 +1222,33 @@ function App() {
     if (perk.startAbility && ABILITIES[perk.startAbility] && !(player.abilities || []).includes(perk.startAbility)) {
       player.abilities = [...(player.abilities || []), perk.startAbility];
     }
+    // v36(#5リセマラ): デビュー素質の当たり抽選。稀に「天啓（金特）」「天賦の才（特能+1）」
+    // 「才能の片鱗（成長力+1）」を持って生まれ、リセマラで狙う価値を作る。配合キャラは後段で
+    // 特能枠を使い切るため素質ボーナスは配合なしのときのみ（生い立ちの素質＝叩き上げの物語）。
+    let debutBoon = null;
+    if (!(master && partner)) {
+      const goodPool = Object.keys(ABILITIES).filter(id => {
+        const a = ABILITIES[id];
+        return a && !a.bad && !a.breedOnly && !(player.abilities || []).includes(id);
+      });
+      const br = rng();
+      if (br < 0.04 && (player.abilities || []).some(id => ABILITIES[id] && !ABILITIES[id].bad)) {
+        const goodId = (player.abilities || []).find(id => ABILITIES[id] && !ABILITIES[id].bad && !(player.goldAbilities || []).includes(id));
+        if (goodId) {
+          player.goldAbilities = [...(player.goldAbilities || []), goodId];
+          debutBoon = { label: "🌟 天啓", note: `ひらめきを得て「${ABILITIES[goodId].label}」が金特で開花している` };
+        }
+      } else if (br < 0.13 && goodPool.length && (player.abilities || []).length < 4) {
+        const id = goodPool[Math.floor(rng() * goodPool.length)];
+        player.abilities = [...(player.abilities || []), id];
+        debutBoon = { label: "✨ 天賦の才", note: `生まれ持った才能で特殊能力「${ABILITIES[id].label}」を余分に宿している` };
+      } else if (br < 0.26) {
+        const before = player.growthPow;
+        player.growthPow = bumpGrowthPow(player.growthPow, 1);
+        if (player.growthPow !== before) debutBoon = { label: "🌱 才能の片鱗", note: `秘めた伸びしろを感じさせる（成長力${before}→${player.growthPow}）` };
+      }
+    }
+    if (debutBoon) player.debutBoon = debutBoon;
     player.joinOvr = overall(player);
     if (inh) {
       if (inh.growthPowBump) {
@@ -1380,8 +1409,20 @@ function App() {
       teammates: mlGenTeammates(rng, team.name, 3, [player.name, rival.name, rival2.name], 1),
       tactic: "balanced", careerHistory: [],
       log: initLog,
-      screen: "mylife_main",
+      // v36(#5リセマラ): デビュー前に素質を確認できる「素質診断」画面へ。引き直し（リセマラ）が
+      // ここで完結する。確定するまで自動セーブは走らない（mylife_main のときだけ保存されるため）。
+      screen: "mylife_scout",
     }));
+  }
+  // v36(#5リセマラ): 素質診断からの引き直し。直近の作成引数で再ロールし、素質診断に留まる。
+  function mlRerollCandidate() {
+    const a = mlCreateArgsRef.current;
+    if (!a) return;
+    mlCreateChar(a.type, a.background, a.master, a.partner);
+  }
+  // v36(#5リセマラ): この素質でデビュー確定。mylife_main へ遷移して初めて自動セーブが走る。
+  function mlConfirmCandidate() {
+    setMl(s => ({ ...s, screen: "mylife_main" }));
   }
   function mlSetFocus(key) {
     setMl(s => ({ ...s, player: { ...s.player, focus: key } }));
@@ -2522,7 +2563,7 @@ function App() {
   }
 
   // ================= v14: マイライフモード 画面群 =================
-  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
+  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
 
   if (superMode === "mylife") return renderMyLifeScreens(ctx);
 

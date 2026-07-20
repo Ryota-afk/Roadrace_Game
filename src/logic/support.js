@@ -1597,6 +1597,31 @@ export function protegeState(protege, year) {
     trainMul: Number(trainMul.toFixed(2)), bondMul: Number(bondMul.toFixed(2)) };
 }
 
+// v36(#5リセマラ): デビュー時の「素質ランク」を算出する純関数。成長力・性格・特殊能力（金特/良特/悪特）・
+// 爆発力（配合の伸びしろ）を総合し SS〜D で格付け。リセマラで狙う目標をひと目で示す。
+export function mlTalentRank(player) {
+  if (!player) return { rank: "C", color: "#9aa3b5", score: 0 };
+  const powScore = { S: 3, A: 2, B: 1, C: 0 }[player.growthPow] ?? 1;
+  const pers = PERSONALITIES[player.personality];
+  const persScore = player.personality === "genius" ? 2.2 : (player.personality === "normal" ? 0 : 0.5);
+  const abils = player.abilities || [];
+  const gold = player.goldAbilities || [];
+  let goodCount = 0, badCount = 0;
+  abils.forEach(id => { const a = ABILITIES[id]; if (!a) return; if (a.bad) badCount++; else goodCount++; });
+  const goldCount = gold.filter(id => ABILITIES[id] && !ABILITIES[id].bad).length;
+  const growthRare = (player.growth === "super_late" || player.growth === "super_early") ? 1 : 0;
+  const score = powScore * 2 + persScore + goodCount * 0.8 + goldCount * 1.7
+    + (player.talentCap || 0) * 0.25 + (player.bakuhatsu || 0) * 0.15 + growthRare - badCount * 0.9;
+  let rank, color;
+  if (score >= 11.5) { rank = "SS"; color = "#ff7ac0"; }
+  else if (score >= 8.5) { rank = "S"; color = "#ffd23f"; }
+  else if (score >= 5.8) { rank = "A"; color = "#35c07e"; }
+  else if (score >= 2.5) { rank = "B"; color = "#4f8fe8"; }
+  else { rank = "C"; color = "#9aa3b5"; }
+  return { rank, color, score: Number(score.toFixed(1)),
+    parts: { powScore, persLabel: pers?.label || "普通", goodCount, badCount, goldCount } };
+}
+
 // v36(弟子深化): 弟子の指導イベント。毎月ごく稀に発生し、師（プレイヤー）が関わり方を選ぶ。
 // 「厳しく鍛える」系＝鍛錬(guideBonus)が伸び師も少し消耗、「寄り添う」系＝絆(bond)が深まり師も癒やされる。
 // 弟子を"育てている実感"と、育て方による個性差を生む。TYPESに依存しない汎用シーン（名前は画面で差し込む）。
