@@ -46,6 +46,12 @@ export const GOLD_CONDITIONS = {
   pave_sp:     r => (r.raceLog || []).some(e => e.monument === "pave" && e.rank === 1),
   ardennes_sp: r => (r.raceLog || []).some(e => e.monument === "ardennes" && e.rank === 1),
   autumn_sp:   r => (r.raceLog || []).some(e => e.monument === "autumn" && e.rank === 1),
+  // v37: 新特能の金特条件（実績で金特化）。金特効果は sim 側（hasGoldAbility）で配線済み。
+  kicker:      r => countWins(r) >= 8,                                   // 差し脚で勝ち星を量産
+  climbengine: r => r.type === "CLM" && (r.raceLog || []).length >= 20,  // 山を走り込んだクライマー
+  rouleur:     r => countRoleUses(r, e => e.role === "breakaway") >= 5,  // 逃げを打ち続けた鉄脚
+  grinder:     r => (r.raceLog || []).length >= 25,                      // 幾多のレースを完走した粘り
+  sponge:      r => (r.raceLog || []).length >= 20,                      // 場数から学び続けた
 };
 
 export const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];
