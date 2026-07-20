@@ -52,6 +52,10 @@ export const GOLD_CONDITIONS = {
   rouleur:     r => countRoleUses(r, e => e.role === "breakaway") >= 5,  // 逃げを打ち続けた鉄脚
   grinder:     r => (r.raceLog || []).length >= 25,                      // 幾多のレースを完走した粘り
   sponge:      r => (r.raceLog || []).length >= 20,                      // 場数から学び続けた
+  // v37(第2弾)
+  allclimber:  r => r.type === "CLM" && countWins(r) >= 6,               // 山を制した岳人
+  bigheart:    r => countWins(r) >= 10,                                  // 大舞台を勝ち抜いた
+  diesel:      r => (r.raceLog || []).length >= 30,                      // 走り込んだ鉄の心肺
 };
 
 export const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];

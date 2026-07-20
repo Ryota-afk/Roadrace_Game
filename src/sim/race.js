@@ -68,7 +68,9 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   // v29: メンタルも★3で能力に反映（±約8%）。特性big/nervousと重ねる
   const mental = r.mental ?? 50;
   const mentalBig = grade === 3 ? 1 + (mental - 50) / 600 : 1;
-  const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig;
+  // v37(第2弾): 大舞台の申し子＝★3/★4で+7%（世界選手権・五輪でも発揮）。既存bigは★3のみ+6%。
+  const bigheartMul = (grade >= 3 && hasAbility(r, "bigheart")) ? (hasGoldAbility(r, "bigheart") ? 1.10 : 1.07) : 1;
+  const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig * bigheartMul;
   const wMul = rainMul(r, weather);
   const mMul = monumentMul(r, monument); // v34(C-2): 古典適性（石畳巧者）
   AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul * mMul; });
@@ -186,6 +188,9 @@ export function segmentAbility(segType, e, steepness) {
   if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += hasGoldAbility(e, "closer") ? 8 : 4;
   // v31.2: 配合限定「二刀流」。丘陵・山岳・スプリントの各区間で+5（登坂型とスプリント型の血を併せ持つ証）
   if (hasAbility(e, "hybrid") && ["hill", "climb", "mtn", "sprint"].includes(segType)) ab += 5;
+  // v37(第2弾): 岳人＝丘/登/山で+4、重量級（悪特性）＝登/山で-4
+  if (hasAbility(e, "allclimber") && ["hill", "climb", "mtn"].includes(segType)) ab += hasGoldAbility(e, "allclimber") ? 8 : 4;
+  if (hasAbility(e, "heavy") && ["climb", "mtn"].includes(segType)) ab -= 4;
   return ab;
 }
 
@@ -261,7 +266,8 @@ export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこ
 // 集団に吸収されて draft/pull へ戻れば solo/attack ではなくなり自動的に無効化される。
 function energyDrain(en, mode, segType, steepness) {
   // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（金特で更に軽減）
-  const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88) : 1;
+  const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88)
+    : hasAbility(en, "diesel") ? (hasGoldAbility(en, "diesel") ? 0.88 : 0.93) : 1; // v37(第2弾): 鉄の心肺＝汎用の消耗軽減
   // v37: 地形特化のエコラン（消耗軽減）。登坂＝山の吸血鬼、平坦＆独走/逃げ＝巡航機関。
   const climbEco = (hasAbility(en, "climbengine") && (segType === "climb" || segType === "mtn")) ? (hasGoldAbility(en, "climbengine") ? 0.78 : 0.85) : 1;
   // 巡航機関は平坦に加え、独走・逃げ（solo/attack）でも垂れにくい＝逃げ脚質・独走屋に効く
@@ -463,8 +469,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             const edgeMul = segType === "sprint" ? 1.7 : 0.9;
             // v28: 「豪脚のラストスパート」は最終区間の追い込みが上乗せされる
             const finishKick = (hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0)
-              // v37: 剛脚の差し脚＝最終直線の追い込みがさらに鋭い（finisherと重複可）
-              + (hasAbility(en, "kicker") ? (hasGoldAbility(en, "kicker") ? 0.05 : 0.03) : 0);
+              // v37: 剛脚の差し脚＝最終直線の追い込みがさらに鋭い（finisherと重複可）／勝負弱い＝鈍る（悪特性）
+              + (hasAbility(en, "kicker") ? (hasGoldAbility(en, "kicker") ? 0.05 : 0.03) : 0)
+              - (hasAbility(en, "choke") ? 0.03 : 0);
             // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
             const accelKick = ((en.accel ?? 50) - 50) / 900;
             const mentalKick = ((en.mental ?? 50) - 50) / 1500;
@@ -489,7 +496,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const backRatio = sheltered ? Math.min(1, (en.slot || 0) / Math.max(1, members.length - 1)) : 0;
         const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
         // v15: 横風耐性を持つ選手は横風区間でのドラフト消耗ペナルティが軽減される（1.25→1.1）
-        const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
+        const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "windguard") ? 1.03 : hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
         // v17: チームケミストリー（squad構築時にchemMulを付与。未設定なら1で無効果）
         const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1);
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));

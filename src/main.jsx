@@ -719,6 +719,7 @@ function App() {
         if (starterIds) n.benchMonths = (n.benchMonths || 0) + 1;
       }
       if (hasAbility(n, "recover")) n.fatigue = Math.max(0, n.fatigue - 15);
+      if (hasAbility(n, "recover2")) n.fatigue = Math.max(0, n.fatigue - 25); // v37(第2弾): 超回復
       // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
       const swing = hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1;
       const dir = (n.condForecast != null) ? n.condForecast : rollCondDir();
@@ -1889,6 +1890,7 @@ function App() {
     if (houseLv >= 0) player.fatigue = Math.max(0, player.fatigue - ML_HOUSES[houseLv].fatigueBonus);
     // v15: 「回復力」を持つ選手は毎月さらに疲労-15（シーズンモードと同じ効果）
     if (hasAbility(player, "recover")) player.fatigue = Math.max(0, player.fatigue - 15);
+    if (hasAbility(player, "recover2")) player.fatigue = Math.max(0, player.fatigue - 25); // v37(第2弾): 超回復
     // v15: 人生の岐路イベントで得た恒常効果（結婚による生活の安定／無理な怪我復帰の後遺症）
     if (flags.married) player.fatigue = Math.max(0, player.fatigue - 4);
     if (flags.rushedInjuryComeback) player.fatigue = Math.min(100, player.fatigue + 3);

@@ -55,12 +55,17 @@ export const ABILITIES = {
   closer:      { label: "勝負師", desc: "ゴールスプリント・山頂フィニッシュで能力+4", category: "展開・役割" },
   // v37: 特能拡充。最終直線の追い込みが鋭い「差し脚」（finisherと別枠で最終区間の伸び）
   kicker:      { label: "剛脚の差し脚", desc: "最終直線での追い込みがさらに鋭くなる", category: "展開・役割" },
+  // v37(第2弾): 展開・地形
+  allclimber:  { label: "岳人", desc: "丘陵・登坂・山岳の全区間で能力+4", category: "地形適性" },
+  windguard:   { label: "横風の達人", desc: "横風区間でのドラフト消耗ペナルティをほぼ無効化", category: "展開・役割" },
+  choke:       { label: "勝負弱い", desc: "最終直線での追い込みが鈍い", category: "展開・役割", bad: true },
   crosswind_sp:{ label: "横風耐性", desc: "横風区間でのドラフト消耗が軽減される", category: "展開・役割" },
   rain_sp:     { label: "悪天候巧者", desc: "雨天レースでの能力低下が軽減され、落車のリスクも下がる", category: "展開・役割" },
   // v28: 最終スプリント区間（勝負どころ）での追い込みが鋭くなる
   finisher:    { label: "豪脚のラストスパート", desc: "最終スプリント区間での追い込みが強くなる", category: "展開・役割" },
   // メンタル・大舞台
   big:         { label: "大舞台に強い", desc: "★3レースで全能力+6%", category: "メンタル" },
+  bigheart:    { label: "大舞台の申し子", desc: "★3・★4の大舞台で全能力+7%（世界選手権・五輪でも発揮）", category: "メンタル" },
   // v28: 大舞台に弱い（★3で能力低下）。悪特性
   nervous:     { label: "大舞台に弱い", desc: "★3レースで全能力-5%", category: "メンタル", bad: true },
   // フィジカル
@@ -74,6 +79,9 @@ export const ABILITIES = {
   climbengine: { label: "山の吸血鬼", desc: "登り・山岳区間でのエネルギー消耗が軽くなる", category: "フィジカル" },
   rouleur:     { label: "鉄脚の巡航機関", desc: "平坦区間・独走・逃げでのエネルギー消耗が軽くなる（垂れにくい）", category: "フィジカル" },
   grinder:     { label: "食らいつく脚", desc: "集団から千切れにくくなる（ドラフトで粘れる）", category: "フィジカル" },
+  diesel:      { label: "鉄の心肺", desc: "レース中のエネルギー消耗が軽くなる（無尽蔵のエンジンより控えめ）", category: "フィジカル" },
+  recover2:    { label: "超回復", desc: "毎月の疲労回復が大きくなる", category: "フィジカル" },
+  heavy:       { label: "重量級", desc: "登坂・山岳区間で能力が落ちる", category: "フィジカル", bad: true },
   glass:       { label: "ガラスの体", desc: "脆い体。シーズン＝故障率2倍・離脱+1ヶ月／マイライフ＝疲労が溜まりやすく抜けにくい", category: "フィジカル", bad: true },
   moody:       { label: "ムラっ気", desc: "調子の変動が激しい", category: "フィジカル", bad: true },
   // 成長
