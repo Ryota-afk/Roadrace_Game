@@ -197,7 +197,7 @@ export function newRider(power, rng, opts = {}) {
   const abilities = rollAbilities(rng, { forceProdigy: opts.forceProdigy });
   const px = rng();
   let personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
-    : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
+    : ["hotblood", "seeker", "artisan", "free", "smart", "maverick", "showman", "tactician"][Math.floor(rng() * 8)];
   let growthPowVal = opts.growthPow || randPow(rng, opts.powDist);
   if (opts.forceProdigy) { personality = "genius"; growthPowVal = "S"; }
   const sub = genSubStats(type, rng, { personality, forceProdigy: opts.forceProdigy });

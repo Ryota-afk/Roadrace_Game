@@ -476,6 +476,21 @@ const SEASON_PERS_EVENTS = {
       { label: "高い課題を与える", result: `歯応えのあるメニューに${r.name}は目を輝かせ、才能をさらに開花させた。`, effects: { riderAbById: { id: r.id, v: 3 }, riderFatigueById: { id: r.id, v: 8 } } },
       { label: "自由にやらせる", result: `本人の裁量に任せると、気分良く調子を上げてきた。`, effects: { riderCondById: { id: r.id, v: 1 } } },
     ] }),
+  maverick: (r) => ({ title: `${r.name}が単独練習を望む`, text: `一匹狼の${r.name}が「チーム練習より一人で追い込みたい」と申し出てきた。`,
+    choices: [
+      { label: "独りの流儀を尊重する", result: `思う存分追い込ませると、${r.name}は独走力を大きく伸ばした。`, effects: { riderAbById: { id: r.id, v: 2 }, riderFatigueById: { id: r.id, v: 6 } } },
+      { label: "チームに引き込む", result: `根気よく対話し、${r.name}が少しだけ心を開いた。チームの結束が高まった。`, effects: { rosterCondAll: 1 } },
+    ] }),
+  showman: (r) => ({ title: `${r.name}がメディアの寵児に`, text: `目立ちたがりの${r.name}が取材やSNSで話題を集め、チームの注目度が上がっている。`,
+    choices: [
+      { label: "広告塔として前に出す", result: `${r.name}のスター性でスポンサーの覚えもめでたく、チームに追い風が吹いた。`, effects: { budget: 20, riderFatigueById: { id: r.id, v: 4 } } },
+      { label: "浮かれないよう釘を刺す", result: `地に足をつけるよう諭すと、${r.name}は走りで魅せると誓い、集中を取り戻した。`, effects: { riderCondById: { id: r.id, v: 1 } } },
+    ] }),
+  tactician: (r) => ({ title: `${r.name}が全体戦術を献策`, text: `策士の${r.name}が、チーム全体の勝ち筋を描いた緻密な作戦を持ち込んできた。`,
+    choices: [
+      { label: "チーム戦術に採り入れる", result: `${r.name}の描いた盤面を全員で共有し、連携が一段と噛み合った。`, effects: { rosterCondAll: 1 } },
+      { label: "本人の走力も伸ばさせる", result: `参謀としての目を評価しつつ、自身の脚も磨くよう促した。`, effects: { riderAbById: { id: r.id, v: 2 } } },
+    ] }),
 };
 export function seasonPersonalityEvent(roster, rng) {
   const r0 = rng || Math.random;
@@ -1029,6 +1044,21 @@ const RIVAL_VOICE = {
     whenWon: ["「勝てた…！ 練習の成果が出ました。", "「今日は流れが味方してくれました。でも実力で掴んだ勝ちです。"],
     vow: ["「あなたと競り合えるのが、今は何より励みになります。次も全力で。"],
   },
+  maverick: {
+    whenBeaten: ["「……ふん。群れないやり方が今日は裏目に出たか。だが俺の走りは変えない。", "「一人でも構わない。次はこの脚で、お前の前を独走してみせる。"],
+    whenWon: ["「群れなくても勝てる。俺はそれを証明しただけだ。", "「馴れ合いは要らない。強い奴が前を走る、ただそれだけさ。"],
+    vow: ["「お前だけは……認めてやる。俺を本気にさせる、数少ない一人だ。"],
+  },
+  showman: {
+    whenBeaten: ["「うわ、やられた！ でも今日の観客、盛り上がってたろ？ それでいいのさ。", "「主役を持っていかれたか。次はもっと派手に決めてやるよ、見てな！"],
+    whenWon: ["「どうだ、見てたか今の差し脚！ これが魅せるってことさ！", "「歓声が聞こえるだろ？ 勝つならこうでなくちゃな！"],
+    vow: ["「お前がいると舞台が締まる。次も最高のショーにしようぜ！"],
+  },
+  tactician: {
+    whenBeaten: ["「読みが甘かった。あなたの一手が、私の描いた図面を上回った。", "「敗着は明確だ。次までに布石を打ち直す。侮らないことだ。"],
+    whenWon: ["「盤面通りだ。仕掛けどころも、脚の温存も、すべて計算のうちさ。", "「勝負は脚だけでは決まらない。頭を使った者が勝つ。それだけだ。"],
+    vow: ["「あなたは私の計略を崩す厄介な変数だ。……だからこそ、面白い。"],
+  },
 };
 const PLAYER_LINES = {
   winClose: ["「ギリギリだった…お前がいると、いつも力を出し切れる。", "「危なかった。次も、その次も、負けるつもりはない。"],
@@ -1047,6 +1077,9 @@ const RIVAL_REPLY = {
   smart: { respect: ["冷静な自己分析だ。感情に流されない君は、厄介な相手になる。"], fire: ["面白い。その強気がどこまで通用するか、次で試させてもらう。"] },
   genius: { respect: ["殊勝じゃないか。少し見直したよ。"], fire: ["いいね、その顔。退屈しのぎには、それくらいでないとね。"] },
   normal: { respect: ["こちらこそ。良い刺激になります、これからも。"], fire: ["その意気ですね。負けていられません、次も全力で。"] },
+  maverick: { respect: ["……悪くない。馴れ合いは嫌いだが、お前の走りは嫌いじゃない。"], fire: ["いい目だ。孤高の俺を追ってこられるものなら、追ってみろ。"] },
+  showman: { respect: ["おっ、粋なこと言うねぇ。お前、いい相棒になりそうだ！"], fire: ["はっ、その負けん気こそ最高の演出だ！ 次も盛り上げようぜ！"] },
+  tactician: { respect: ["冷静だな。感情を制御できる相手ほど、崩しにくい。厄介だよ。"], fire: ["威勢がいい。だが勢いだけでは私の盤面は破れない。試してみるか？"] },
 };
 const PLAYER_RESPOND = {
   winRespect: { label: "健闘を称える", line: "いいレースだった。お前がいたから、俺も出し切れた。" },
@@ -1223,6 +1256,27 @@ export const ML_PERSONALITY_EVENTS = {
       choices: [
         { label: "自らに高い課題を課す", result: "歯応えのある挑戦に才能がさらに開花した。", effects: { abBoost: 4, fatigueDelta: 8 } },
         { label: "感覚のままに流す", result: "肩の力を抜いて走ると、不思議と調子が上向いた。", effects: { formDelta: 5 } },
+      ] },
+  ],
+  maverick: [
+    { title: "孤高の流儀", text: "チームの輪に馴染めない自分に、周囲は戸惑っている。だが群れないのがあなたの生き方だ。",
+      choices: [
+        { label: "独りで黙々と鍛える", result: "誰にも合わせず限界まで追い込み、独走の地力を磨き上げた。", effects: { abBoost: 4, fatigueDelta: 10 } },
+        { label: "少しだけ歩み寄る", result: "柄にもなく仲間と言葉を交わし、張り詰めていた心がほぐれた。", effects: { mentalDelta: 3, fatigueDelta: -6 } },
+      ] },
+  ],
+  showman: [
+    { title: "魅せる走りへの情熱", text: "「速いだけじゃ面白くない」。観客を沸かせる派手な勝ち方こそ、あなたの美学だ。",
+      choices: [
+        { label: "スター性で人気を掴む", result: "魅せる走りがファンを熱狂させ、知名度がぐっと上がった。", effects: { popularityDelta: 8, fatigueDelta: 3 } },
+        { label: "地道に瞬発力を磨く", result: "派手さの裏に確かな技術を。ラストの切れ味が増した。", effects: { abBoost: 3, formDelta: 3 } },
+      ] },
+  ],
+  tactician: [
+    { title: "レース盤面の研究", text: "策士のあなたは、あらゆる展開を想定して勝ち筋を組み立てるのが何より好きだ。",
+      choices: [
+        { label: "徹底的に戦術を練る", result: "無数の展開を頭に叩き込み、勝負勘と冷静さが研ぎ澄まされた。", effects: { mentalDelta: 4, formDelta: 2 } },
+        { label: "机上より実走で試す", result: "理論を実戦で検証し、走力そのものを一段引き上げた。", effects: { abBoost: 3, fatigueDelta: 5 } },
       ] },
   ],
 };
@@ -2177,7 +2231,7 @@ export function mlCreateRival(rng, playerName, playerTeamName, bannedNames, bann
   const name = pickRiderName(rng, banned);
   const px = rng();
   const personality = px < 0.30 ? "normal" : px < 0.35 ? "genius"
-    : ["hotblood", "seeker", "artisan", "free", "smart"][Math.floor(rng() * 5)];
+    : ["hotblood", "seeker", "artisan", "free", "smart", "maverick", "showman", "tactician"][Math.floor(rng() * 8)];
   const abilities = rollAbilities(rng);
   return { id: ridState.value++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, abilities };
 }

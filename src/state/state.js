@@ -53,6 +53,14 @@ export function riderNickname(r) {
   // 脚質を冠した称号にし、役割（献身のアシスト）や取りこぼし（悲運）も拾って多様化する
   const byTypeKing = { flat: "平坦の帝王", climb: "山岳の覇者", sprint: "豪脚のゴールハンター", stamina: "無尽蔵の機関車", solo: "独走の求道者" };
   const byType = { flat: "巡航の職人", climb: "山岳の申し子", sprint: "スプリンター", stamina: "鉄の脚", solo: "独走屋" };
+  // v37: 特能・性格に紐づく特別な異名（一定の実績を満たしたら優先して冠する）
+  const abils = r.abilities || [];
+  if (wins >= 2 && abils.includes("kicker")) return "剛脚のフィニッシャー";
+  if (wins >= 2 && abils.includes("climbengine")) return "山の吸血鬼";
+  if (podiums >= 3 && abils.includes("grinder")) return "不屈のねばり脚";
+  if ((wins >= 2 || podiums >= 4) && r.personality === "maverick") return "孤高の一匹狼";
+  if (wins >= 3 && r.personality === "showman") return "魅せる勝負師";
+  if (wins >= 3 && r.personality === "tactician") return "レースの支配者";
   if (supR >= 10 && supR >= aceR * 1.5 && wins <= 4) return "献身のアシスト";
   if (podiums >= 10 && wins <= 2) return "悲運の名脇役";
   if (wins >= 8) return byTypeKing[top] || "常勝の帝王";
@@ -666,7 +674,7 @@ export function mlGenTeammates(rng, teamName, count, bannedNames, year) {
     const type = typeKeys[Math.floor(rng() * typeKeys.length)];
     const name = pickRiderName(rng, banned);
     const px = rng();
-    const personality = px < 0.35 ? "normal" : ["hotblood", "seeker", "artisan", "free", "smart", "genius"][Math.floor(rng() * 6)];
+    const personality = px < 0.35 ? "normal" : ["hotblood", "seeker", "artisan", "free", "smart", "genius", "maverick", "showman", "tactician"][Math.floor(rng() * 9)];
     list.push({ id: ridState.value++, name, type, personality, abilities: rollAbilities(rng), team: teamName, joinYear: year || 1, winsForMe: 0 });
   }
   return list;

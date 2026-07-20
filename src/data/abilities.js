@@ -99,6 +99,10 @@ export const PERSONALITIES = {
   artisan:  { label: "職人", desc: "ｽﾀﾐﾅ↑ 独走↑ ｽﾌﾟﾘﾝﾄ↓", mul: { stamina: 1.35, solo: 1.15, sprint: 0.85 } },
   free:     { label: "自由人", desc: "独走↑ ｽﾀﾐﾅ↓", mul: { solo: 1.4, stamina: 0.7 } },
   smart:    { label: "秀才", desc: "平坦↑ 登坂↓", mul: { flat: 1.3, climb: 0.9 } },
+  // v37: パーソナリティ拡充（ウマーソナリティ参考）
+  maverick: { label: "一匹狼", desc: "独走↑↑ 平坦↓", mul: { solo: 1.45, flat: 0.85 } },
+  showman:  { label: "目立ちたがり", desc: "ｽﾌﾟﾘﾝﾄ↑↑ ｽﾀﾐﾅ↓", mul: { sprint: 1.4, stamina: 0.85 } },
+  tactician:{ label: "策士", desc: "平坦↑ 独走↑ ｽﾌﾟﾘﾝﾄ↓", mul: { flat: 1.25, solo: 1.2, sprint: 0.85 } },
 };
 
 export const COND_ARROW = ["↓↓", "↘", "→", "↗", "↑↑"];
