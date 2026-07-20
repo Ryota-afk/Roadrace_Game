@@ -1213,6 +1213,14 @@ function App() {
     const inh = master ? protegeInherit(master) : null;
     const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set(), abBonus: inh ? inh.abBonus : undefined });
     player.background = background;
+    // v36(#4): 経歴ごとの固有メリット。高校卒＝成長力アップ抽選、大学卒／実業団卒＝出自らしい
+    // 特殊能力を持ってデビュー（人気・評価・資金の初期ボーナスは後段の state 初期化で反映）。
+    const perk = bg.perk || {};
+    if (perk.growthLottery && rng() < perk.growthLottery) player.growthPow = bumpGrowthPow(player.growthPow, 1);
+    if (perk.startAbility && ABILITIES[perk.startAbility] && !(player.abilities || []).includes(perk.startAbility)) {
+      player.abilities = [...(player.abilities || []), perk.startAbility];
+    }
+    player.joinOvr = overall(player);
     if (inh) {
       if (inh.growthPowBump) {
         const gi = GROWTHPOW_ORDER.indexOf(player.growthPow);
@@ -1313,7 +1321,7 @@ function App() {
     player.focus = type === "CLM" ? "climb" : type === "SPR" ? "sprint" : "flat";
     // v25: 個人スポンサー・メディア人気度。チーム年俸とは別枠で、戦績に応じて上がる
     // 知名度が個人スポンサー収入（月極＋節目の一時金）に反映される
-    player.popularity = 0;
+    player.popularity = perk.popBonus || 0; // v36(#4): 大学卒は学生時代の実績で早くから注目される
     player.form = 50; // v29: ピーキング用のフォーム（50=平常）
     player.popMilestones = [];
     // v14.3: 経歴ごとの初任給（万円/年）。年俸・監督評価・資産はキャリア開始時に初期化する
@@ -1330,6 +1338,8 @@ function App() {
       `【1年目 4月】${bg.label}として${team.name}に新人選手加入`,
       `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`,
     ];
+    // v36(#4): 経歴ごとのメリットをログで明示（出自の選択に意味が出るように）
+    if (bg.meritLabel) initLog.push(`【1年目 4月】${bg.meritLabel}：${bg.merit}`);
     if (master) {
       initLog.push(`【1年目 4月】かつての名選手・${master.name}の教え子としてデビュー。師の教え「${inh.teaching.label}」を授かり、${AB_LABEL[inh.keys[0]]}を受け継いだ`);
       initLog.push(`【1年目 4月】継承特性「${ABILITIES[inh.lineageTrait].label}」を身につけている（${inh.teaching.desc}）`);
@@ -1354,7 +1364,7 @@ function App() {
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
       races: [mlGenRace(1, 0, 0)],
       directive: mlGenDirective(1, 0, 0, 30),
-      managerEval: 30, salary: initialSalary, money: 0,
+      managerEval: 30 + (perk.evalBonus || 0), salary: initialSalary, money: perk.moneyBonus || 0,
       partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
       gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
       houseLv: -1, carLv: -1,

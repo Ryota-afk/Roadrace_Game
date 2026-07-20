@@ -65,6 +65,7 @@ export function renderMyLifeScreens(ctx) {
                     <span style={{ fontSize: 11, color: C.sub }}>{b.age}歳スタート</span>
                   </div>
                   <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{b.desc}</div>
+                  {b.merit && <div style={{ fontSize: 11, color: C.green, marginTop: 4, lineHeight: 1.5 }}><b>{b.meritLabel}</b> {b.merit}</div>}
                 </button>
               ))}
             </div>
