@@ -53,6 +53,8 @@ export const ABILITIES = {
   escape:      { label: "逃げ屋", desc: "アタック（逃げ）中の能力+4", category: "展開・役割" },
   domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },
   closer:      { label: "勝負師", desc: "ゴールスプリント・山頂フィニッシュで能力+4", category: "展開・役割" },
+  // v37: 特能拡充。最終直線の追い込みが鋭い「差し脚」（finisherと別枠で最終区間の伸び）
+  kicker:      { label: "剛脚の差し脚", desc: "最終直線での追い込みがさらに鋭くなる", category: "展開・役割" },
   crosswind_sp:{ label: "横風耐性", desc: "横風区間でのドラフト消耗が軽減される", category: "展開・役割" },
   rain_sp:     { label: "悪天候巧者", desc: "雨天レースでの能力低下が軽減され、落車のリスクも下がる", category: "展開・役割" },
   // v28: 最終スプリント区間（勝負どころ）での追い込みが鋭くなる
@@ -68,6 +70,10 @@ export const ABILITIES = {
   steady_sp:   { label: "精密機械", desc: "調子の変動が小さく安定する", category: "フィジカル" },
   // v28: レース中のエネルギー消耗が軽い（長丁場・逃げで垂れにくい）
   engine:      { label: "無尽蔵のエンジン", desc: "レース中のエネルギー消耗が軽くなる", category: "フィジカル" },
+  // v37: 特能拡充。地形特化のエコラン（消耗軽減）＋集団に食らいつく粘り
+  climbengine: { label: "山の吸血鬼", desc: "登り・山岳区間でのエネルギー消耗が軽くなる", category: "フィジカル" },
+  rouleur:     { label: "鉄脚の巡航機関", desc: "平坦区間・独走・逃げでのエネルギー消耗が軽くなる（垂れにくい）", category: "フィジカル" },
+  grinder:     { label: "食らいつく脚", desc: "集団から千切れにくくなる（ドラフトで粘れる）", category: "フィジカル" },
   glass:       { label: "ガラスの体", desc: "脆い体。シーズン＝故障率2倍・離脱+1ヶ月／マイライフ＝疲労が溜まりやすく抜けにくい", category: "フィジカル", bad: true },
   moody:       { label: "ムラっ気", desc: "調子の変動が激しい", category: "フィジカル", bad: true },
   // 成長
@@ -75,6 +81,8 @@ export const ABILITIES = {
   lateblow_sp: { label: "遅咲き", desc: "28歳以降の練習効果+15%", category: "成長" },
   // v28: 若い頃の伸びが良い（マイライフの25歳以下で練習・出走経験+15%）
   genius_sp:   { label: "天才肌", desc: "25歳以下の練習・出走経験の伸びが+15%", category: "成長" },
+  // v37: 特能拡充。出走で得る経験（実戦での伸び）が大きい
+  sponge:      { label: "吸収の天才", desc: "レース出走で得る成長（出走経験）が+25%", category: "成長" },
   lazy_sp:     { label: "練習嫌い", desc: "練習効果-20%", category: "成長", bad: true },
   // v31.2: 配合限定特能（breedOnly）。通常のスカウト・後天習得では絶対に出現せず、
   // 特定条件の配合でしか手に入らない血統の証。TraitLineでは金色枠で表示する

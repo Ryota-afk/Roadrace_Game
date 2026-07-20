@@ -1808,7 +1808,8 @@ function App() {
       const raceGradeMul = (ctx && ctx.raceGrade) ? (GRADE_MUL[ctx.raceGrade] || 1) : 1;
       // v25: 新人時代に恩師の指導を受けている間は、出走経験の伸びにもボーナスがかかる
       // v28: 「天才肌」は25歳以下の伸びが+15%
-      const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1);
+      const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
+        * (hasAbility(player, "sponge") ? 1.25 : 1); // v37: 吸収の天才＝出走経験の伸び+25%
       const ph = growthPhase(player);
       raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
       // v29: メンタルは「大舞台の経験」で育つ。格上のレースほど大きく伸びる

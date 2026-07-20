@@ -262,12 +262,17 @@ export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこ
 function energyDrain(en, mode, segType, steepness) {
   // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（金特で更に軽減）
   const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88) : 1;
+  // v37: 地形特化のエコラン（消耗軽減）。登坂＝山の吸血鬼、平坦＆独走/逃げ＝巡航機関。
+  const climbEco = (hasAbility(en, "climbengine") && (segType === "climb" || segType === "mtn")) ? (hasGoldAbility(en, "climbengine") ? 0.78 : 0.85) : 1;
+  // 巡航機関は平坦に加え、独走・逃げ（solo/attack）でも垂れにくい＝逃げ脚質・独走屋に効く
+  const rouleurEco = (hasAbility(en, "rouleur") && (segType === "flat" || mode === "solo" || mode === "attack")) ? (hasGoldAbility(en, "rouleur") ? 0.78 : 0.85) : 1;
+  const terrainEcoMul = climbEco * rouleurEco;
   const brk = en.committedBreak && (mode === "solo" || mode === "attack")
     ? ({ mtn: 0.55, climb: 0.6, hill: 0.78, flat: 1, sprint: 1, tt: 1 }[segType] ?? 1) : 1;
   // v35: 献身のアシストに徹する選手は、賢く脚を使って（無駄に踏み過ぎず）自滅を避ける。
   // 長丁場のクリテ等で牽引しすぎて千切れ、自分もエースも大敗する事故を防ぐ。
   const assistMul = en.isAssisting ? 0.78 : 1;
-  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul * brk * assistMul;
+  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul * terrainEcoMul * brk * assistMul;
 }
 
 export function canPull(en, segType) {
@@ -430,7 +435,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const groupDist = puller.lastOwnDist;
         const ownCapable = tickDistance(en, segType, "pull", course.steepness);
         let dist;
-        if (ownCapable >= groupDist * (windActive ? 0.80 : 0.9)) {
+        // v37: 食らいつく脚＝集団に残る基準が緩む（千切れにくい）。ドラフトの「ついていける」閾値を下げる。
+        const keepThresh = (windActive ? 0.80 : 0.9) - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
+        if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
           // ゴールタイムが不自然なほど大量に完全一致してしまう（差が均質すぎる問題）。
@@ -455,7 +462,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             const sprintEdge = (segType === "sprint" ? 0.5 : 1) * (en.sprint - 70) / 260;
             const edgeMul = segType === "sprint" ? 1.7 : 0.9;
             // v28: 「豪脚のラストスパート」は最終区間の追い込みが上乗せされる
-            const finishKick = hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0;
+            const finishKick = (hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0)
+              // v37: 剛脚の差し脚＝最終直線の追い込みがさらに鋭い（finisherと重複可）
+              + (hasAbility(en, "kicker") ? (hasGoldAbility(en, "kicker") ? 0.05 : 0.03) : 0);
             // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
             const accelKick = ((en.accel ?? 50) - 50) / 900;
             const mentalKick = ((en.mental ?? 50) - 50) / 1500;
