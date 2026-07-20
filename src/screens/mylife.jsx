@@ -692,12 +692,12 @@ export function renderMyLifeScreens(ctx) {
           {teams.map((t) => (
             <div key={t.teamName} style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${t.color}`, overflow: "hidden" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "7px 12px", background: C.panel2 }}>
-                <span style={{ fontFamily: FONT_D, fontSize: 14, color: C.text }}>{t.teamName}<span style={{ fontSize: 10, color: C.sub, marginLeft: 6 }}>{t.trait}</span></span>
+                <span style={{ fontFamily: FONT_D, fontSize: 14, color: C.text }}>{t.isMyTeam ? "⭐ " : ""}{t.teamName}<span style={{ fontSize: 10, color: C.sub, marginLeft: 6 }}>{t.trait}</span></span>
                 <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>通算 <b style={{ color: C.yellow }}>{t.teamWins}</b>勝/{t.teamPodiums}表彰台</span>
               </div>
               {t.riders.map((r) => (
                 <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderTop: `1px solid ${C.bg}`, fontSize: 12 }}>
-                  <span style={{ flex: 1, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}<span style={{ fontSize: 9.5, color: TYPES[r.type]?.color, marginLeft: 4 }}>{TYPES[r.type]?.label}</span></span>
+                  <span style={{ flex: 1, color: r.self ? C.yellow : C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.self ? "🚴 " : ""}{r.name}<span style={{ fontSize: 9.5, color: TYPES[r.type]?.color, marginLeft: 4 }}>{TYPES[r.type]?.label}</span></span>
                   <span style={{ width: 54, textAlign: "center", fontFamily: FONT_M, fontSize: 10.5, color: C.sub }}>今{r.yr.races}走{r.yr.wins}勝</span>
                   <span style={{ width: 88, textAlign: "center", fontFamily: FONT_M, fontSize: 10.5, color: C.text }}>通{r.races}走 <span style={{ color: C.yellow }}>{r.wins}</span>/<span style={{ color: "#e8a13c" }}>{r.podiums}</span></span>
                   <span style={{ width: 34, textAlign: "right", fontFamily: FONT_M, fontSize: 10.5, color: r.bestRank === 1 ? C.yellow : C.sub }}>{r.bestRank >= 99 ? "—" : `${r.bestRank}位`}</span>

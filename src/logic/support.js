@@ -1906,6 +1906,10 @@ export function mlWorldRaceLite(ml, seed) {
   const rng = mulberry(((seed || 1) >>> 0) || 1);
   const entrants = [];
   Object.entries(rosters).forEach(([teamName, riders]) => {
+    // v38(#4): 自チームは worldRosters ではなく teammates が実体（レースに出るのはそちら）。
+    // ここで自チームのロースターに成績を積むと、名鑑に「出走したことのない幽霊選手」の成績が
+    // 表示されてしまうため除外する（チームメイトは自分の出走レースで台帳に積まれる）
+    if (teamName === ml.team) return;
     (riders || []).forEach(wr => {
       const typeMatch = (favors && wr.type === favors) ? 8 : 0;
       entrants.push({ id: wr.id, name: wr.name, teamName, score: (wr.baseline || 0) + typeMatch + (rng() - 0.5) * 14 });
@@ -1955,15 +1959,41 @@ export function mlWorldTeamStats(ml) {
   const rosters = ml.worldRosters || {};
   const year = ml.year || 1;
   const teams = [];
+  const statRow = (id, name, type, extra = {}) => {
+    const s = stats[id];
+    const yr = s && s.byYear && s.byYear[year] ? s.byYear[year] : { races: 0, wins: 0, podiums: 0 };
+    return { id, name, type,
+      races: s ? s.races : 0, wins: s ? s.wins : 0, podiums: s ? s.podiums : 0,
+      bestRank: s ? s.bestRank : 99, yr, ...extra };
+  };
   Object.entries(rosters).forEach(([teamName, riders]) => {
     const teamInfo = MYLIFE_TEAMS.find(t => t.name === teamName);
-    const rows = (riders || []).map(wr => {
-      const s = stats[wr.id];
-      const yr = s && s.byYear && s.byYear[year] ? s.byYear[year] : { races: 0, wins: 0, podiums: 0 };
-      return { id: wr.id, name: wr.name, type: wr.type,
-        races: s ? s.races : 0, wins: s ? s.wins : 0, podiums: s ? s.podiums : 0,
-        bestRank: s ? s.bestRank : 99, yr };
-    });
+    let rows;
+    if (teamName === ml.team) {
+      // v38(#4): 自チームは worldRosters の未使用選手団ではなく、実際にレースへ出ている
+      // 「自分＋固定チームメイト」を表示する（選手成績画面と同じ顔ぶれに統一）。
+      // 自分は raceLog から集計（riderStats は自分を対象外にしているため）。
+      rows = [];
+      const p = ml.player;
+      if (p) {
+        const log = p.raceLog || [];
+        const agg = { races: log.length, wins: 0, podiums: 0, bestRank: 99, yr: { races: 0, wins: 0, podiums: 0 } };
+        log.forEach(e => {
+          if (e.rank === 1) agg.wins++; if (e.rank <= 3) agg.podiums++;
+          agg.bestRank = Math.min(agg.bestRank, e.rank);
+          if (e.year === year) { agg.yr.races++; if (e.rank === 1) agg.yr.wins++; if (e.rank <= 3) agg.yr.podiums++; }
+        });
+        rows.push({ id: p.id, name: p.name, type: p.type, ...agg, self: true });
+      }
+      (ml.teammates || []).forEach(tm => rows.push(statRow(tm.id, tm.name, tm.type)));
+      // 自分を先頭に固定し、チームメイトは成績順
+      rows = [rows[0], ...rows.slice(1).sort((a, b) => (b.wins - a.wins) || (b.podiums - a.podiums) || (a.bestRank - b.bestRank))].filter(Boolean);
+      const teamWins = rows.reduce((a, r) => a + r.wins, 0);
+      const teamPodiums = rows.reduce((a, r) => a + r.podiums, 0);
+      teams.push({ teamName, color: teamInfo ? teamInfo.color : "#9aa3b5", trait: teamInfo ? teamInfo.trait : "", riders: rows, teamWins, teamPodiums, isMyTeam: true });
+      return;
+    }
+    rows = (riders || []).map(wr => statRow(wr.id, wr.name, wr.type));
     rows.sort((a, b) => (b.wins - a.wins) || (b.podiums - a.podiums) || (a.bestRank - b.bestRank));
     const teamWins = rows.reduce((a, r) => a + r.wins, 0);
     const teamPodiums = rows.reduce((a, r) => a + r.podiums, 0);
