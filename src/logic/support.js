@@ -3,7 +3,7 @@ import { legendBloodId, loadMlLegends, saveMlLegends } from "../breeding/breedin
 import { ASSIST_ROLES, GOLD_CONDITIONS, countRoleUses, countWins, hasAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "../core/core.js";
 import { ABILITIES, AB_KEYS, GROWTH, PERSONALITIES, TYPES } from "../data/abilities.js";
 import { BREED_NICKS } from "../data/breeding.js";
-import { MONTHS, VENUE_REGION } from "../data/course.js";
+import { MONTHS, VENUE_REGION, UNLOCK_TEMPLATES } from "../data/course.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C } from "../data/theme.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "../sim/race.js";
@@ -125,16 +125,75 @@ export const CP_MILESTONES = [
   { cp: 75, label: "★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2（大幅強化）", apply: s => bumpEquipLv(s, 2) },
   { cp: 90, label: "開幕資金 +300万円", desc: "初期資金にさらに+300万円", apply: s => ({ ...s, budget: s.budget + 300 }) },
   { cp: 100, label: "★★★ 逸材新人をもう1名確保＋全員能力+10", desc: "成長ランクS確定の逸材がもう1名加入し、ロースター全員の能力値も+10（集大成）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 10) },
+  // v37: 高CP帯の拡張（周回を重ねたプレイヤーへのさらなる開幕強化）
+  { cp: 130, label: "開幕資金 +600万円", desc: "初期資金にさらに+600万円", apply: s => ({ ...s, budget: s.budget + 600 }) },
+  { cp: 160, label: "★★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2（計Lv5相当）", apply: s => bumpEquipLv(s, 2) },
+  { cp: 200, label: "★★★★ 逸材新人をもう1名＋全員能力+12", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+12（頂点）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 12) },
 ];
 
 export function applyCpMilestones(state, totalEarnedCP) {
   return CP_MILESTONES.filter(m => totalEarnedCP >= m.cp).reduce((s, m) => m.apply(s), state);
 }
 
+// v37: マイライフ用CP特典。生涯CPに応じてデビュー時の支度金・人気・監督評価・成長力抽選・
+// 当たり特能抽選が強化される（＝CPがマイライフでも意味を持つ／周回で新人が有利になる）。
+export const ML_CP_MILESTONES = [
+  { cp: 10, label: "マイライフ:支度金 +50万円", perk: { money: 50 } },
+  { cp: 20, label: "マイライフ:初期人気 +10", perk: { pop: 10 } },
+  { cp: 40, label: "マイライフ:初期監督評価 +8", perk: { eval: 8 } },
+  { cp: 60, label: "マイライフ:成長力アップ抽選 +15%", perk: { growthLottery: 0.15 } },
+  { cp: 85, label: "マイライフ:デビュー当たり特能の抽選 +10%", perk: { boonBonus: 0.10 } },
+  { cp: 120, label: "マイライフ:支度金 +150万＆初期人気 +15", perk: { money: 150, pop: 15 } },
+];
+export function mlCpPerks(totalCP) {
+  const acc = { money: 0, pop: 0, eval: 0, growthLottery: 0, boonBonus: 0 };
+  ML_CP_MILESTONES.filter(m => totalCP >= m.cp).forEach(m => {
+    const p = m.perk || {};
+    acc.money += p.money || 0; acc.pop += p.pop || 0; acc.eval += p.eval || 0;
+    acc.growthLottery += p.growthLottery || 0; acc.boonBonus += p.boonBonus || 0;
+  });
+  return acc;
+}
+
 export function computeClearPoints(year, difficultyId) {
   const speedBonus = Math.max(0, 15 - Math.max(0, year - 2) * 2);
   const diffBonus = { easy: 0, normal: 4, hard: 10, oni: 22 }[difficultyId] || 0;
   return 5 + speedBonus + diffBonus;
+}
+
+// v37: マイライフのキャリアからも生涯クリアポイント(CP)を獲得できるように（メタ進行の統合）。
+// 引退時に、通算成績・タイトル・クラシック・世界ランク・現役年数から算出する純関数。
+export function computeMyLifeClearPoints(ml) {
+  if (!ml) return { total: 0, parts: [] };
+  const wins = ml.careerWins || 0;
+  const bigWins = ml.careerBigWins || 0;
+  const titles = ml.careerTitles || 0;
+  const classics = ml.careerClassics || 0;
+  const best = ml.worldRankBest;
+  const years = ml.year || 1;
+  const parts = [];
+  parts.push({ label: "完走ボーナス", cp: 3 });
+  const winCp = Math.min(40, wins); if (winCp) parts.push({ label: `通算${wins}勝`, cp: winCp });
+  const bigCp = Math.min(30, bigWins * 2); if (bigCp) parts.push({ label: `格上勝利${bigWins}回`, cp: bigCp });
+  const titleCp = titles * 8; if (titleCp) parts.push({ label: `世界/五輪タイトル${titles}回`, cp: titleCp });
+  const classicCp = classics * 5; if (classicCp) parts.push({ label: `クラシック制覇${classics}回`, cp: classicCp });
+  let rankCp = 0;
+  if (best != null) rankCp = best === 1 ? 30 : best <= 3 ? 20 : best <= 10 ? 12 : best <= 50 ? 5 : 0;
+  if (rankCp) parts.push({ label: `世界最高${best}位`, cp: rankCp });
+  const longCp = Math.min(10, Math.floor(years * 0.5)); if (longCp) parts.push({ label: `現役${years}年`, cp: longCp });
+  const total = parts.reduce((a, b) => a + b.cp, 0);
+  return { total, parts };
+}
+
+// v37: CP解禁の一覧（生涯評価画面で「何がいつ解禁されるか」を見せる）。
+// コース解禁(unlockCP)＋シーズン開幕ミルストーン(CP_MILESTONES)＋マイライフ特典(ML_CP_MILESTONES)を統合。
+export function cpUnlockRows(totalCP) {
+  const rows = [];
+  (UNLOCK_TEMPLATES || []).forEach(t => rows.push({ cp: t.unlockCP || 0, category: "コース", label: `新コース「${t.kind}」`, unlocked: totalCP >= (t.unlockCP || 0) }));
+  (CP_MILESTONES || []).forEach(m => rows.push({ cp: m.cp, category: "シーズン開幕", label: m.label, unlocked: totalCP >= m.cp }));
+  ML_CP_MILESTONES.forEach(m => rows.push({ cp: m.cp, category: "マイライフ", label: m.label, unlocked: totalCP >= m.cp }));
+  rows.sort((a, b) => a.cp - b.cp);
+  return rows;
 }
 
 export const COURSE_REC_KEY = "roadrace_v12_course_records";

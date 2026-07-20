@@ -1378,6 +1378,19 @@ export function renderMyLifeScreens(ctx) {
               <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.6 }}>{arch.desc}</div>
             </div>
           </div>
+          {/* v37: このキャリアで獲得した生涯クリアポイント（メタ進行＝次の新人が有利に） */}
+          {ml.awardedCP && ml.awardedCP.total > 0 && (
+            <div style={{ background: "linear-gradient(180deg, rgba(255,210,63,0.10), #201e26)", borderRadius: 10, border: `1px solid ${C.yellow}`, padding: "10px 12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: 11, color: C.yellow, fontWeight: 700 }}>🎖 生涯クリアポイント獲得</span>
+                <span style={{ fontFamily: FONT_M, fontSize: 18, color: C.yellow, fontWeight: 800 }}>+{ml.awardedCP.total}pt</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4, lineHeight: 1.6 }}>
+                {ml.awardedCP.parts.map((p, i) => `${p.label} +${p.cp}`).join("　")}
+              </div>
+              <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>CPは次にデビューする新人の支度金・人気・成長力抽選などに還元されます（生涯評価画面で確認）。</div>
+            </div>
+          )}
           {/* v35(逆メンター): 弟子への継承。育てた若手が後を継ぐ物語の締めくくり */}
           {ml.protege && (() => {
             const pr = protegeState(ml.protege, ml.year);
