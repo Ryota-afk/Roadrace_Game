@@ -353,6 +353,20 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // ギャップ維持の消耗が軽くなる（committedBreak）。平坦・スプリントでは恩恵ゼロ＝吸収される。
       en.committedBreak = !!(directive.aceEarly && en.isAce);
       en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
+      en.leadoutFor = null; en.isLeadingOut = false;
+    });
+    // v38: リードアウト指名。各チームでエース（＝射出される選手）に対し、平坦/スプリント寄りの
+    // 非エース1名を「リードアウト役」に割り当てる。最終区間で同集団にいれば前を牽いてエースを
+    // 射出し（エースにスリングショットの伸び）、脚を使い切ったら流して後方へ下がる（視認できる動き）。
+    const _byTeam = {};
+    riders.forEach(en => { (_byTeam[en.team] = _byTeam[en.team] || []).push(en); });
+    Object.values(_byTeam).forEach(mem => {
+      if (mem.length < 2) return;
+      const ace = mem.find(e => e.isAce);
+      if (!ace) return;
+      const cand = mem.filter(e => !e.isAce && !e.isAssisting)
+        .sort((a, b) => ((b.sprint || 0) + (b.flat || 0)) - ((a.sprint || 0) + (a.flat || 0)))[0];
+      if (cand) cand.leadoutFor = ace.id;
     });
   } else {
     riders.forEach(en => {
@@ -448,6 +462,17 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
     Object.values(groups).forEach(members => {
       const puller = members.find(en => en.mode === "pull");
       if (!puller) return;
+      // v38: リードアウト検出。最終区間で、自エースと同集団にいてまだ脚が残るリードアウト役を
+      // 「射出中」にする。エースはスリングショットの伸びを得る（slingshotAceIds）。
+      const finalSegNow = course.segTypeAt(members[0].pos).idx === course.finalIdx;
+      const slingshotAceIds = new Set();
+      if (finalSegNow) {
+        members.forEach(en => {
+          const active = en.leadoutFor != null && en.energy > 30 && members.some(a => a.id === en.leadoutFor && !a.finished);
+          en.isLeadingOut = active;
+          if (active) slingshotAceIds.add(en.leadoutFor);
+        });
+      }
       members.filter(en => en.mode === "draft").forEach(en => {
         const segInfo = course.segTypeAt(en.pos);
         const segType = segInfo.type;
@@ -458,10 +483,12 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const ownCapable = tickDistance(en, segType, "pull", course.steepness);
         let dist;
         // v37: 食らいつく脚＝集団に残る基準が緩む（千切れにくい）。ドラフトの「ついていける」閾値を下げる。
-        // v38(#1): フィナーレの絞り込み。終盤（残り25%）は勝負に向けてペースが上がり位置取り争いも
-        // 激しくなるため、大集団ほど「ついていける」閾値が上がる＝実力が足りない選手から自然に絞られる。
-        // 平坦系で「ほぼ全員が20秒以内の塊ゴール」になる違和感を抑える（小集団の逃げ切りには影響小）。
-        const finaleTight = (en.pos / course.length > 0.75) ? Math.min(0.05, 0.012 + members.length * 0.001) : 0;
+        // v38(#1): フィナーレの絞り込み。最終区間（ゴール勝負のストレート）だけ、勝負に向けて
+        // ペースが上がり位置取り争いも激しくなるため、大集団ほど「ついていける」閾値が上がる＝実力が
+        // 足りない選手から自然に絞られる。平坦系の「20秒以内に20人」の塊ゴールを抑える。
+        // 最終区間限定にして、周回の長いクリテで残り25%全体に効いて千切れが複利的に増える（＝大敗
+        // 多発）のを防ぐ（小集団の逃げ切りには影響小）。
+        const finaleTight = (segInfo.idx === course.finalIdx) ? Math.min(0.045, 0.01 + members.length * 0.0009) : 0;
         const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
@@ -470,7 +497,14 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
           // スプリント区間に限り、各選手自身のスプリント適性（ownCapable/groupDistの比）と
           // 小さな運要素を反映した微差を加え、集団のままでも着差にばらつきが出るようにする
           const isFinalSeg = segInfo.idx === course.finalIdx;
-          if (isFinalSeg && en.isAssisting && !en.isAce) {
+          if (isFinalSeg && en.isLeadingOut && !en.isAce) {
+            // v38: リードアウト役は最終区間で前を牽いて集団の頭に上がり（surge）、エースを射出する。
+            // 脚が残る間だけ（energy>30）前に出て、使い切ったら isLeadingOut が外れて通常処理へ→
+            // 自然に後方へ流れる（＝見た目のリードアウト→ピールオフ）。
+            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.02;
+            dist = groupDist * (1.05 + luck);
+            en.leadoutSurging = true;
+          } else if (isFinalSeg && en.isAssisting && !en.isAce) {
             // v36修正: 献身のアシストは最終直線で仕事を終え、勝負を譲って流す（スプリントしない）。
             // ＝先頭で競らず、集団の後方へ自然に下がる。これにより「アシストなのに自分がぶっちぎって
             // 先頭ゴール→リザルトでは2位」という観戦とリザルトの食い違いを、シミュレーション自体で
@@ -491,7 +525,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             const finishKick = (hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0)
               // v37: 剛脚の差し脚＝最終直線の追い込みがさらに鋭い（finisherと重複可）／勝負弱い＝鈍る（悪特性）
               + (hasAbility(en, "kicker") ? (hasGoldAbility(en, "kicker") ? 0.05 : 0.03) : 0)
-              - (hasAbility(en, "choke") ? 0.03 : 0);
+              - (hasAbility(en, "choke") ? 0.03 : 0)
+              // v38: リードアウト役が同集団で射出してくれているエースは、風除け＋加速で伸びる（スリングショット）
+              + (slingshotAceIds.has(en.id) ? 0.045 : 0);
             // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
             const accelKick = ((en.accel ?? 50) - 50) / 900;
             const mentalKick = ((en.mental ?? 50) - 50) / 1500;
@@ -518,8 +554,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // v15: 横風耐性を持つ選手は横風区間でのドラフト消耗ペナルティが軽減される（1.25→1.1）
         const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "windguard") ? 1.03 : hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
         // v17: チームケミストリー（squad構築時にchemMulを付与。未設定なら1で無効果）
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1);
+        // v38: リードアウトの射出は脚を激しく使う（前を牽くのでドラフト保護が薄い）＝surge中は消耗増。
+        const leadoutDrainMul = en.leadoutSurging ? 2.2 : 1;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
+        en.leadoutSurging = false;
       });
     });
     // 4. 履歴記録・ゴール判定
