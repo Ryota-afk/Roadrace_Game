@@ -9,7 +9,7 @@ import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilit
 import { MONTHS } from "../data/course.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { mlFactorCollection, MLCP_DIFF_MUL, CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
+import { mlFactorCollection, mlLineageForest, MLCP_DIFF_MUL, CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
@@ -1698,6 +1698,44 @@ export function renderMyLifeScreens(ctx) {
       );
     }
 
+    if (ml.screen === "mylife_lineage") {
+      const forest = mlLineageForest();
+      const totalLeg = loadMlLegends().length;
+      const tierColor = ["#7c8aa5", "#6fbf73", "#4f8fe8", "#ffd23f"];
+      return mlWrap(
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "linear-gradient(180deg,#233026,#1d2a22)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.green}` }}>
+            <Eyebrow color={C.green}>🌳 系譜ツリー</Eyebrow>
+            <div style={{ fontSize: 12, color: C.sub, marginTop: 4, lineHeight: 1.6 }}>歴代選手（{totalLeg}名）を系統（血の流れ）ごとにまとめました。配合を重ねると世代（🧬N代目）が進み、系統が「確立→名門→大系統」へ育ちます。</div>
+          </div>
+          {totalLeg === 0 && <div style={{ fontSize: 12.5, color: C.sub, padding: 10 }}>まだ殿堂選手がいません。選手を引退させると系譜が始まります。</div>}
+          {forest.map(g => (
+            <div key={g.lineageName} style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", border: `1px solid ${tierColor[g.tier.tier]}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
+                <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{g.lineageName}</span>
+                <span style={{ fontSize: 11, color: tierColor[g.tier.tier], fontWeight: 700 }}>{g.tier.label}{g.tier.tier > 0 ? `（因子+${g.tier.tier}）` : ""}・{g.size}名</span>
+              </div>
+              <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+                {g.members.map((m, i) => (
+                  <div key={i} style={{ paddingLeft: Math.min(4, m.generation) * 14, position: "relative" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 12.5 }}>
+                      <span style={{ color: C.sub, fontFamily: FONT_M, fontSize: 10 }}>{m.generation > 0 ? "└" : "●"}</span>
+                      <span style={{ fontFamily: FONT_D, color: C.text, fontWeight: 700 }}>{m.name}</span>
+                      <span style={{ fontSize: 10, color: TYPES[m.type]?.color }}>{TYPES[m.type]?.label}</span>
+                      {m.generation > 0 && <span style={{ fontSize: 10, color: "#e56cc8" }}>🧬{m.generation}代目{m.plusValue > 0 ? `+${m.plusValue}` : ""}</span>}
+                      <span style={{ fontSize: 10, color: C.sub }}>OVR{m.overall}</span>
+                    </div>
+                    {m.nickname && <div style={{ fontSize: 10, color: C.purple, fontStyle: "italic", paddingLeft: 16 }}>「{m.nickname}」</div>}
+                    {m.parents.length > 0 && <div style={{ fontSize: 9.5, color: C.sub, paddingLeft: 16 }}>親：{m.parents.join(" × ")}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>← 殿堂に戻る</Btn>
+        </div>
+      );
+    }
     if (ml.screen === "mylife_factors") {
       const cats = mlFactorCollection();
       const totalLeg = loadMlLegends().length;
@@ -1734,9 +1772,12 @@ export function renderMyLifeScreens(ctx) {
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <Eyebrow color={C.purple}>🏛 マイライフ殿堂</Eyebrow>
-              <Btn small outline color={"#e56cc8"} onClick={() => setMl(s => ({ ...s, screen: "mylife_factors" }))}>🧬 因子図鑑</Btn>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Btn small outline color={"#e56cc8"} onClick={() => setMl(s => ({ ...s, screen: "mylife_lineage" }))}>🌳 系譜ツリー</Btn>
+                <Btn small outline color={"#e56cc8"} onClick={() => setMl(s => ({ ...s, screen: "mylife_factors" }))}>🧬 因子図鑑</Btn>
+              </div>
             </div>
             <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>これまでのプレイで引退した歴代選手の記録です（{legends.length}名）。2人を親に選んで「配合」で教え子を作れます。</div>
           </div>

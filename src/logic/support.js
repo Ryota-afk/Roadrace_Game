@@ -1,5 +1,5 @@
 // 表示ヘルパー関数＋残存データ定数（Phase 4-1で main.jsx から分離）。
-import { legendBloodId, loadMlLegends, saveMlLegends } from "../breeding/breeding.js";
+import { legendBloodId, loadMlLegends, saveMlLegends, loadBloodlines, mlBloodlineTier } from "../breeding/breeding.js";
 import { ASSIST_ROLES, GOLD_CONDITIONS, countRoleUses, countWins, hasAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "../core/core.js";
 import { ABILITIES, AB_KEYS, GROWTH, PERSONALITIES, TYPES } from "../data/abilities.js";
 import { BREED_NICKS } from "../data/breeding.js";
@@ -245,6 +245,33 @@ export function buildBloodMap(legends) {
   const map = {};
   (legends || []).forEach(l => { const id = legendBloodId(l); if (id) map[id] = l; });
   return map;
+}
+
+// v38(#9 B-4): 系譜フォレスト。殿堂選手を系統（lineageName）ごとにまとめ、世代順に親子の連なりを
+// 返す純関数。ダイナスティ（血の連なり）を可視化し、A案（統合ダイナスティ）の入口にする。
+// 戻り値: [{ lineageName, tier, size, members: [{name,type,generation,plusValue,overall,nickname,parents:[name]}] }]
+export function mlLineageForest(legends) {
+  const legs = legends || loadMlLegends();
+  const map = buildBloodMap(legs);
+  const blood = loadBloodlines();
+  const groups = {};
+  legs.forEach(l => {
+    const key = l.lineageName || `${l.name || "無名"}系`;
+    (groups[key] = groups[key] || []).push(l);
+  });
+  return Object.entries(groups).map(([lineageName, members]) => {
+    const rec = blood[lineageName];
+    const tier = mlBloodlineTier(rec);
+    const rows = members
+      .slice()
+      .sort((a, b) => (a.generation || 0) - (b.generation || 0) || (a.retiredAt || 0) - (b.retiredAt || 0))
+      .map(l => ({
+        name: l.name, type: l.type, generation: l.generation || 0, plusValue: l.plusValue || 0,
+        overall: l.overall || 0, nickname: l.nickname || null,
+        parents: (l.parents || []).map(pid => bloodIdToName(pid, map)).filter(n => n && n !== "？"),
+      }));
+    return { lineageName, tier, size: members.length, members: rows };
+  }).sort((a, b) => (b.tier.tier - a.tier.tier) || (b.size - a.size));
 }
 
 export function breedNickTableRows() {
