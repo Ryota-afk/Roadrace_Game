@@ -316,7 +316,7 @@ export function renderMyLifeScreens(ctx) {
             <AbilityGrid r={r} cap={mlGrowthCap(ml.year, r)} />
             <SubStatLine r={r} />
             <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year, r)}以上＝限界突破（バーの薄い帯＝上限までの伸びしろ・数字の小さな+も伸びしろ）{r.talentCap ? `／才能キャップ+${r.talentCap}` : ""}</div>
-            <div style={{ fontSize: 9.5, color: C.sub, marginTop: 6 }}>コース適性（種目別の総合地力／★＝今月のレースが有利とする種目）</div>
+            <div style={{ fontSize: 9.5, color: C.sub, marginTop: 6 }}>コース適性 S〜G（種目別の総合地力／★＝今月のレースが有利とする種目）</div>
             <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
             {/* v30: フレーバーテキストは特能と能力値の間に挟まって視認性を損ねていたため、
                 カード末尾の独立したプロフィール欄（区切り線付き）に移動した */}

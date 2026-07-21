@@ -2297,6 +2297,28 @@ export function mlWorldBoard(ml) {
 
 export const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world", "ironman", "stardom"];
 
+// v38(#9 B-1): 適性グレード（ウイポの適性表）。既存の種目別地力スコア（disciplineScore）に S〜G の
+// 文字グレードを付与し「どの地形で輝くか」を一目で読めるようにする。数値の羅列より直感的で、将来の
+// A案（因子で適性を継承）の土台にもなる。sim・スコアの算出式は不変（適性表と結果は矛盾しない）。
+export function aptGrade(score) {
+  if (score >= 90) return "S";
+  if (score >= 82) return "A";
+  if (score >= 74) return "B";
+  if (score >= 66) return "C";
+  if (score >= 58) return "D";
+  if (score >= 50) return "E";
+  if (score >= 42) return "F";
+  return "G";
+}
+export const APT_GRADE_COLOR = { S: "#ffd23f", A: "#ff8a5c", B: "#e8734a", C: "#6fbf73", D: "#4f8fe8", E: "#8a93a6", F: "#8a93a6", G: "#5a6274" };
+// 選手の種目別適性を {key,label,score,grade} で返す（DisciplineGrid 表示用）
+export function riderAptitudes(r) {
+  return DISCIPLINE_KEYS.map(k => {
+    const score = disciplineScore(r, k);
+    return { key: k, label: DISCIPLINES[k].label, score, grade: aptGrade(score) };
+  });
+}
+
 export function mlAmbitionPath(ml) { return ML_AMBITION_PATHS[ml.ambitionPath] || ML_AMBITION_PATHS.victory; }
 
 export function mlCurrentAmbition(ml) {

@@ -1,6 +1,6 @@
 // 表示用サブコンポーネント（Phase 4-1で main.jsx から分離）。
 import React from "react";
-import { ABILITY_CATEGORY_ORDER, DISCIPLINES, DISCIPLINE_KEYS, buildDesc, disciplineScore, loadCourseRecords, raceForecast } from "../logic/support.js";
+import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, DISCIPLINES, DISCIPLINE_KEYS, aptGrade, buildDesc, disciplineScore, loadCourseRecords, raceForecast } from "../logic/support.js";
 import { Eyebrow } from "./ui.jsx";
 import { GOLD_CONDITIONS } from "../core/core.js";
 import { ABILITIES, AB_COLOR, AB_KEYS, AB_LABEL, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL, PERSONALITIES, TYPES } from "../data/abilities.js";
@@ -278,12 +278,18 @@ export function DisciplineGrid({ r, highlightKey }) {
       {DISCIPLINE_KEYS.map(k => {
         const score = disciplineScore(r, k);
         const hi = k === highlightKey;
+        // v38(#9 B-1): ウイポ風の S〜G 適性グレードを併記（一目でどの地形が得意か読める）
+        const grade = aptGrade(score);
+        const gc = APT_GRADE_COLOR[grade] || C.sub;
         return (
           <div key={k}>
             <div style={{ fontSize: 9.5, color: hi ? C.yellow : C.sub }}>{DISCIPLINES[k].label}{hi ? " ★" : ""}</div>
-            <div style={{ fontFamily: FONT_M, fontSize: 12.5, color: hi ? C.yellow : C.text }}>{score}</div>
-            <div style={{ height: 3, background: C.line, borderRadius: 2 }}>
-              <div style={{ height: 3, width: `${Math.min(100, score)}%`, background: hi ? C.yellow : C.purple, borderRadius: 2 }} />
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 800, color: gc, lineHeight: 1 }}>{grade}</span>
+              <span style={{ fontFamily: FONT_M, fontSize: 11, color: hi ? C.yellow : C.sub }}>{score}</span>
+            </div>
+            <div style={{ height: 3, background: C.line, borderRadius: 2, marginTop: 1 }}>
+              <div style={{ height: 3, width: `${Math.min(100, score)}%`, background: hi ? C.yellow : gc, borderRadius: 2 }} />
             </div>
           </div>
         );
