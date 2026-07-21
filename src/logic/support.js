@@ -1881,7 +1881,8 @@ export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
     const isRival = !!(e.isRival || e.isRival2);
     const isMate = teammateIds && teammateIds.has(e.id);
     // v37: 永続ワールドロースター化に伴い、AI相手（world）も含めて全出走選手を追跡する。
-    const kind = isRival ? "rival" : isMate ? "teammate" : "world";
+    // v38(#3): 弟子（isProtege）は専用の kind で区別（成績画面で「弟子」として表示）。
+    const kind = e.isProtege ? "protege" : isRival ? "rival" : isMate ? "teammate" : "world";
     const cur = next[e.id]
       ? { ...next[e.id], byYear: { ...next[e.id].byYear } }
       : { id: e.id, name: e.name, team: e.teamName || e.team, kind, races: 0, wins: 0, podiums: 0, top10: 0, bestRank: 99, byYear: {} };
@@ -1948,12 +1949,12 @@ export function mlRiderStatsRows(ml) {
     });
     rows.push({ id: p.id, name: p.name, team: ml.team, kind: "self", ...agg, byYear: { [year]: agg.yr } });
   }
-  // 近しい面々（自分・ライバル・仲間）だけをこの画面に。ワールド全体は mlWorldTeamStats で。
+  // 近しい面々（自分・ライバル・仲間・弟子）だけをこの画面に。ワールド全体は mlWorldTeamStats で。
   Object.values(stats).filter(s => s.kind !== "world").forEach(s => {
     const yr = s.byYear && s.byYear[year] ? s.byYear[year] : { races: 0, wins: 0, podiums: 0 };
     rows.push({ ...s, yr });
   });
-  const kindOrder = { self: 0, rival: 1, teammate: 2 };
+  const kindOrder = { self: 0, rival: 1, protege: 2, teammate: 3 };
   rows.sort((a, b) => (kindOrder[a.kind] - kindOrder[b.kind]) || (b.wins - a.wins) || (a.bestRank - b.bestRank));
   return rows;
 }

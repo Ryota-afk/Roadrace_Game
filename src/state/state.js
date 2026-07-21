@@ -816,7 +816,7 @@ export const ML_TACTICS = {
   assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを押し上げる献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
 
-export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars, worldRosters) {
+export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars, worldRosters, protege) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
   // v38(#6): マイライフのAI能力上限を難易度で引き上げる。従来は easy/normal/hard がどれも94上限で
@@ -865,12 +865,27 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     const members = [];
     // v32（固定チームメイト）：自分のチームは、保存済みの固定メンバーを現在の地力で登場させる
     if (isMyTeam && teammates && teammates.length) {
-      teammates.slice(0, Math.max(1, aiSquadN)).forEach((tm, i) => {
+      // v38(#3): 弟子（プロテジェ）を自チームの1枠として実際にレースへ出す。従来は数値が育つだけで
+      // レースにも同チームにも現れず「本当に数字だけ」だった。弟子は現在のOVR（curOvr）で地力が決まり、
+      // 育つほど強く出走する。id/名前/脚質を固定＝成績台帳にも積まれる（isProtege マーク）。
+      const protegeSlot = (protege && protege.id != null) ? 1 : 0;
+      const tmSlots = Math.max(1, aiSquadN - protegeSlot);
+      teammates.slice(0, tmSlots).forEach((tm, i) => {
         const st = newRider(power + (i === 0 ? 4 : 0), rng, { type: tm.type, banned: nameBanned });
         st.id = tm.id; st.name = tm.name; st.type = tm.type; st.personality = tm.personality || st.personality;
         if (tm.abilities) st.abilities = tm.abilities;
         members.push(st);
       });
+      if (protegeSlot) {
+        const pOvr = protege.curOvr || protege.ovr0 || 55;
+        const prng = mulberry(((protege.id * 2654435761) ^ ((year || 1) * 40503)) >>> 0);
+        const st = newRider(pOvr, prng, { type: protege.type, cap: aiCap, banned: nameBanned });
+        st.id = protege.id; st.name = protege.name; st.type = protege.type;
+        st.personality = protege.personality || st.personality;
+        if (protege.abilities) st.abilities = protege.abilities;
+        st.isProtege = true;
+        members.push(st);
+      }
       for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned }));
     } else if (worldRosters && worldRosters[d.name] && worldRosters[d.name].length) {
       // v37: 永続ワールドロースターから同じ顔ぶれを出走させる（identityは固定・stats は文脈スケール）。
@@ -900,6 +915,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         // チーム集計が自分＋チームメイトで正しくまとまり、集団simのエース同一チーム判定（牽引ペース
         // 合わせ）も効く。表示名 teamName は自チーム名のまま。
         team: isMyTeam ? "PLAYER" : d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
+        isProtege: !!r.isProtege,
       };
     });
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {

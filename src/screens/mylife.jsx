@@ -665,7 +665,7 @@ export function renderMyLifeScreens(ctx) {
     // v37: 選手成績台帳（自分・ライバル・チームメイトの今季／通算スタッツ）
     if (ml.screen === "mylife_riderstats" && ml.player) {
       const rows = mlRiderStatsRows(ml);
-      const kindLabel = { self: { t: "あなた", c: C.yellow }, rival: { t: "ライバル", c: C.red }, teammate: { t: "チームメイト", c: C.blue } };
+      const kindLabel = { self: { t: "あなた", c: C.yellow }, rival: { t: "ライバル", c: C.red }, protege: { t: "弟子", c: C.green }, teammate: { t: "チームメイト", c: C.blue } };
       return mlWrap(
         <div style={{ display: "grid", gap: 10 }}>
           <Eyebrow color={C.red}>📊 選手成績 — {ml.year}年目 時点</Eyebrow>
@@ -683,7 +683,7 @@ export function renderMyLifeScreens(ctx) {
                 <div key={r.id} style={{ display: "flex", gap: 6, alignItems: "center", padding: "7px 10px", borderBottom: `1px solid ${C.bg}`, background: r.kind === "self" ? "rgba(255,210,63,0.10)" : "transparent" }}>
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ color: kl.c, fontWeight: r.kind === "self" ? 700 : 500, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
-                      {r.kind === "self" ? "🚴 " : r.kind === "rival" ? "🔥 " : "🤝 "}{r.name}
+                      {r.kind === "self" ? "🚴 " : r.kind === "rival" ? "🔥 " : r.kind === "protege" ? "🎓 " : "🤝 "}{r.name}
                     </span>
                     <span style={{ fontSize: 9.5, color: C.sub }}>{kl.t}・{r.team}</span>
                   </span>
