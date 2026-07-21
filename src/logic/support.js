@@ -2319,6 +2319,37 @@ export function riderAptitudes(r) {
   });
 }
 
+// v38(#9 B-3): 因子図鑑。殿堂入りした歴代選手が「残した因子」を横断的に集計する純関数。
+// ウイポの因子集めに相当し、周回を重ねるほど脚質・特能・適性の因子が star（保有選手数）で貯まる。
+// これらは既存の系統ボーナス（mlBloodlineBonus）で配合・弟子継承に効いており、その"収集"を可視化する。
+// 戻り値: [{ category, items: [{key,label,count,color,members:[name...]}] }]（count降順）
+export function mlFactorCollection(legends) {
+  const legs = legends || loadMlLegends();
+  const typeC = {}, abilC = {}, aptC = {};
+  const typeMembers = {}, abilMembers = {}, aptMembers = {};
+  const push = (m, k, name) => { (m[k] = m[k] || []); if (name && m[k].length < 8 && !m[k].includes(name)) m[k].push(name); };
+  legs.forEach(l => {
+    if (l.type) { typeC[l.type] = (typeC[l.type] || 0) + 1; push(typeMembers, l.type, l.name); }
+    (l.specialAbilities || []).forEach(id => {
+      if (ABILITIES[id] && !ABILITIES[id].bad) { abilC[id] = (abilC[id] || 0) + 1; push(abilMembers, id, l.name); }
+    });
+    if (l.finalAbilities) {
+      const r = { ...l.finalAbilities, type: l.type };
+      riderAptitudes(r).forEach(a => {
+        if (a.grade === "S" || a.grade === "A") { aptC[a.key] = (aptC[a.key] || 0) + 1; push(aptMembers, a.key, l.name); }
+      });
+    }
+  });
+  const sortItems = (obj, members, labelFn, colorFn) => Object.entries(obj)
+    .map(([k, count]) => ({ key: k, label: labelFn(k), count, color: colorFn ? colorFn(k) : C.purple, members: members[k] || [] }))
+    .sort((a, b) => b.count - a.count);
+  return [
+    { category: "脚質因子", icon: "🚴", items: sortItems(typeC, typeMembers, k => (TYPES[k] ? TYPES[k].label : k), k => (TYPES[k] ? TYPES[k].color : C.sub)) },
+    { category: "特能因子", icon: "✨", items: sortItems(abilC, abilMembers, k => (ABILITIES[k] ? ABILITIES[k].label : k)) },
+    { category: "適性因子（S/A適性）", icon: "🏔️", items: sortItems(aptC, aptMembers, k => (DISCIPLINES[k] ? DISCIPLINES[k].label : k), k => APT_GRADE_COLOR.A) },
+  ];
+}
+
 export function mlAmbitionPath(ml) { return ML_AMBITION_PATHS[ml.ambitionPath] || ML_AMBITION_PATHS.victory; }
 
 export function mlCurrentAmbition(ml) {
