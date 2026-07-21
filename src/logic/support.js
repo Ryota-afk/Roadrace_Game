@@ -129,6 +129,10 @@ export const CP_MILESTONES = [
   { cp: 130, label: "開幕資金 +600万円", desc: "初期資金にさらに+600万円", apply: s => ({ ...s, budget: s.budget + 600 }) },
   { cp: 160, label: "★★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2（計Lv5相当）", apply: s => bumpEquipLv(s, 2) },
   { cp: 200, label: "★★★★ 逸材新人をもう1名＋全員能力+12", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+12（頂点）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 12) },
+  // v38(#5): 200pt頭打ちの解消。さらに上のCP帯を追加し、周回の到達目標を延伸する。
+  { cp: 250, label: "開幕資金 +1000万円", desc: "初期資金にさらに+1000万円", apply: s => ({ ...s, budget: s.budget + 1000 }) },
+  { cp: 320, label: "★★★★ チーム設備 Lv3底上げ", desc: "フレーム・ホイールの強化レベルがさらに+3", apply: s => bumpEquipLv(s, 3) },
+  { cp: 400, label: "★★★★★ 逸材新人をもう1名＋全員能力+15（極致）", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+15（メタ進行の極致）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 15) },
 ];
 
 export function applyCpMilestones(state, totalEarnedCP) {
@@ -144,6 +148,10 @@ export const ML_CP_MILESTONES = [
   { cp: 60, label: "マイライフ:成長力アップ抽選 +15%", perk: { growthLottery: 0.15 } },
   { cp: 85, label: "マイライフ:デビュー当たり特能の抽選 +10%", perk: { boonBonus: 0.10 } },
   { cp: 120, label: "マイライフ:支度金 +150万＆初期人気 +15", perk: { money: 150, pop: 15 } },
+  // v38(#5): 高CP帯のマイライフ特典を延伸
+  { cp: 170, label: "マイライフ:初期監督評価 +12＆成長力抽選 +15%", perk: { eval: 12, growthLottery: 0.15 } },
+  { cp: 240, label: "マイライフ:デビュー当たり特能の抽選 +15%＆支度金 +300万", perk: { boonBonus: 0.15, money: 300 } },
+  { cp: 330, label: "マイライフ:初期人気 +25＆監督評価 +12（頂点）", perk: { pop: 25, eval: 12 } },
 ];
 export function mlCpPerks(totalCP) {
   const acc = { money: 0, pop: 0, eval: 0, growthLottery: 0, boonBonus: 0 };
@@ -2287,7 +2295,7 @@ export function mlWorldBoard(ml) {
   return { top, around, myRank, myPts, rivalRank, rival2Rank };
 }
 
-export const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world"];
+export const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world", "ironman", "stardom"];
 
 export function mlAmbitionPath(ml) { return ML_AMBITION_PATHS[ml.ambitionPath] || ML_AMBITION_PATHS.victory; }
 

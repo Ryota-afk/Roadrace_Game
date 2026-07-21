@@ -597,11 +597,35 @@ export const ML_AMBITION_PATHS = {
     label: "献身の道", icon: "🤝", color: "#4f8fe8",
     desc: "自分の勝利より仲間とチームのために走る、名脇役の生き方。",
     rungs: [
-      { key: "d10",     label: "アシスト役で10戦走る",         metric: "supportRaces", target: 10, reward: { money: 80,  pop: 3 } },
-      { key: "d_pod",   label: "それでも通算表彰台10回",        metric: "careerPodiums", target: 10, reward: { money: 160, ab: 1 } },
-      { key: "d30",     label: "アシスト役で通算30戦",         metric: "supportRaces", target: 30, reward: { money: 280, ab: 2 } },
-      { key: "d60",     label: "アシスト役で通算60戦",         metric: "supportRaces", target: 60, reward: { money: 450, ab: 2, growth: 1 } },
-      { key: "d_pod20", label: "献身を貫き通算表彰台20回",      metric: "careerPodiums", target: 20, reward: { money: 600, ab: 3 } },
+      // v38(#7): 「アシスト60戦」の作業感を解消。目標戦数を圧縮し、献身と表彰台を交互に配置して
+      // 通常プレイの中で自然に達成できるはしごにした（アシスト作戦を選ぶと着実に進む）。
+      { key: "d5",      label: "アシスト役で5戦走る",           metric: "supportRaces", target: 5,  reward: { money: 80,  pop: 3 } },
+      { key: "d_pod",   label: "それでも通算表彰台8回",         metric: "careerPodiums", target: 8,  reward: { money: 160, ab: 1 } },
+      { key: "d15",     label: "アシスト役で通算15戦",         metric: "supportRaces", target: 15, reward: { money: 280, ab: 2 } },
+      { key: "d_pod15", label: "献身を貫き通算表彰台15回",      metric: "careerPodiums", target: 15, reward: { money: 420, ab: 2, growth: 1 } },
+      { key: "d30",     label: "生涯を捧げアシスト通算30戦",    metric: "supportRaces", target: 30, reward: { money: 650, ab: 3 } },
+    ],
+  },
+  ironman: {
+    label: "鉄人の道", icon: "🔩", color: "#7fa8d0",
+    desc: "何年も第一線で走り続ける。長く戦い抜くことそのものを誇りとする生き方。",
+    rungs: [
+      { key: "i_y3",  label: "プロ3年目を迎える",       metric: "yearsActive", target: 3,  reward: { money: 90,  pop: 3 } },
+      { key: "i_r30", label: "通算30戦に出走",          metric: "careerRaces", target: 30, reward: { money: 160, ab: 1 } },
+      { key: "i_y7",  label: "プロ7年目を迎える",       metric: "yearsActive", target: 7,  reward: { money: 300, ab: 2 } },
+      { key: "i_r80", label: "通算80戦に出走",          metric: "careerRaces", target: 80, reward: { money: 460, ab: 2, growth: 1 } },
+      { key: "i_y12", label: "プロ12年目（不屈の鉄人）", metric: "yearsActive", target: 12, reward: { money: 750, ab: 3, growth: 1 } },
+    ],
+  },
+  stardom: {
+    label: "スターの道", icon: "✨", color: "#e878b0",
+    desc: "競技の枠を超えた人気者になる。走りだけでなく存在で魅了する生き方。",
+    rungs: [
+      { key: "s_p20", label: "人気度20に到達",           metric: "popularity", target: 20, reward: { money: 120, pop: 4 } },
+      { key: "s_p40", label: "人気度40（地元の英雄）",     metric: "popularity", target: 40, reward: { money: 220, pop: 6 } },
+      { key: "s_p60", label: "人気度60（全国区のスター）",  metric: "popularity", target: 60, reward: { money: 380, ab: 2 } },
+      { key: "s_p80", label: "人気度80（時代の顔）",       metric: "popularity", target: 80, reward: { money: 600, ab: 2, growth: 1 } },
+      { key: "s_p95", label: "人気度95（生きる伝説）",     metric: "popularity", target: 95, reward: { money: 900, ab: 3 } },
     ],
   },
   world: {
@@ -624,6 +648,10 @@ export function mlAmbitionMetricValue(ml, metric) {
   if (metric === "careerTitles") return ml.careerTitles || 0;
   if (metric === "rankAtMost") return ml.worldRank == null ? 999 : ml.worldRank;
   if (metric === "supportRaces") return ((ml.player && ml.player.raceLog) || []).filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
+  // v38(#7): 新しい道（鉄人／スター）用の指標
+  if (metric === "yearsActive") return ml.year || 1;
+  if (metric === "careerRaces") return ((ml.player && ml.player.raceLog) || []).length;
+  if (metric === "popularity") return Math.round((ml.player && ml.player.popularity) || 0);
   return 0;
 }
 
@@ -1065,6 +1093,14 @@ export const CP_SHOP = [
   { id: "m_money", cost: 25, category: "マイライフ", label: "支度金 +300万円", desc: "デビュー時の所持金が+300万円", mylife: { money: 300 } },
   { id: "m_reroll", cost: 35, category: "マイライフ", label: "リセマラ当たり率 大幅UP", desc: "デビュー当たり特能（天啓/天賦の才）の抽選が大きく上がる", mylife: { boonBonus: 0.25 } },
   { id: "x_boost", cost: 70, category: "特別", label: "英才教育：初期能力ブースト", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6でスタート", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
+  // v38(#5): 高CP帯の使い道を拡充（200ptで頭打ちの解消）。既存perk枠を再利用し、周回で貯めたCPを
+  // 長く注ぎ込める上位枠を用意。全買いに約1000CP必要になり、CPが「貯まりきる」感覚を解消する。
+  { id: "s_rookie2", cost: 100, category: "シーズン", label: "エース級新人 確定枠（2人目）", desc: "シーズン開始時、成長ランクS確定の逸材がさらに1名加入（計2名）", season: { prodigyRookie: 1 } },
+  { id: "s_equip2", cost: 95, category: "シーズン", label: "全設備 Lv+3（さらに）", desc: "フレーム・ホイールの強化レベルがさらに+3された状態でスタート", season: { equipLv: 3 } },
+  { id: "s_budget2", cost: 60, category: "シーズン", label: "開幕資金 +1500万円", desc: "シーズン開始時の資金がさらに+1500万円", season: { budget: 1500 } },
+  { id: "m_reroll2", cost: 80, category: "マイライフ", label: "リセマラ当たり率 特大UP", desc: "デビュー当たり特能（天啓/天賦の才）の抽選がさらに大きく上がる", mylife: { boonBonus: 0.30 } },
+  { id: "m_money2", cost: 55, category: "マイライフ", label: "支度金 +700万円", desc: "デビュー時の所持金がさらに+700万円", mylife: { money: 700 } },
+  { id: "x_boost2", cost: 120, category: "特別", label: "頂点の英才教育：能力ブースト（さらに）", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6（x_boostと重複可）", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
 ];
 export function cpOwned(meta, id) { return (meta.cpUnlocks || []).includes(id); }
 export function cpBuy(meta, id) {
