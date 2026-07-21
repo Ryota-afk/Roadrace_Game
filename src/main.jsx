@@ -18,7 +18,7 @@ import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins,
 import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, rankSim, riderHash01, rollWeather, simulateTicks } from "./sim/race.js";
 import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, sharedWorldRosters, advanceWorldYear, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
@@ -2786,8 +2786,11 @@ function App() {
         {/* v38(#9 A-1): 統合ダイナスティ・ハブ。殿堂・系統・因子・系譜は両モード＆周回をまたいで
             共有される「あなたの王朝」の背骨。生涯評価（両モード共通の画面）から辿れるようにする。 */}
         <div style={{ background: "linear-gradient(180deg,#233026,#1d2a22)", borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.green}` }}>
-          <Eyebrow color={C.green}>🌳 あなたのダイナスティ</Eyebrow>
-          <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 8px", lineHeight: 1.6 }}>歴代の名選手・確立した系統・集めた因子は、シーズンとマイライフの両方の世界に受け継がれる共通の資産です。</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
+            <Eyebrow color={C.green}>🌳 あなたのダイナスティ</Eyebrow>
+            <span style={{ fontSize: 11, color: C.green, fontFamily: FONT_M }}>🌍 世界 {loadWorldMeta().year} 年目</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 8px", lineHeight: 1.6 }}>歴代の名選手・確立した系統・集めた因子、そして世界のペロトンは、シーズンとマイライフの両方＆全周回で受け継がれる<b style={{ color: C.green }}>1つの世界</b>の資産です。世界はあなたが年を進めるたびに歳を取り、世代交代していきます。</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Btn small outline color={C.green} onClick={() => setSuperMode("dynasty_lineage")}>🌳 系譜ツリー</Btn>
             <Btn small outline color={"#e56cc8"} onClick={() => setSuperMode("dynasty_factors")}>🧬 因子図鑑</Btn>

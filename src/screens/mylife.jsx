@@ -11,10 +11,10 @@ import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
 import { mlFactorCollection, mlLineageForest, MLCP_DIFF_MUL, CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initGame, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
 export function renderMyLifeScreens(ctx) {
-  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode, wrap } = ctx;
+  const { ML_MILESTONE_LABEL, askConfirm, g, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setG, setMl, setSuperMode, wrap } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
@@ -1563,6 +1563,13 @@ export function renderMyLifeScreens(ctx) {
               ))}
             </div>
           )}
+          {/* v38(#9 A-4): 選手→監督の転身ブリッジ。引退した英雄を招聘して、同じ世界でチーム運営へ
+              地続きに進む＝「選手として走る→引退→監督として率いる」が1本の物語になる。 */}
+          <div style={{ background: "linear-gradient(180deg,#233026,#1d2a22)", borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.green}` }}>
+            <Eyebrow color={C.green}>🏢 監督として、第二のキャリアへ</Eyebrow>
+            <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px", lineHeight: 1.6 }}>現役を退いた{ml.player.name}を創設メンバーに迎え、同じ世界でチームを率いる監督としての人生を歩みます（シーズンモードへ・招聘レジェンドとして自動選択）。</div>
+            <Btn small color={C.green} onClick={() => { setSuperMode("season"); setG({ ...initGame(), screen: "newgame_setup", legendRecruitIdx: 0 }); }}>🏢 監督として新チームを率いる（{ml.player.name}を招聘）</Btn>
+          </div>
           <Btn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</Btn>
           <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>🏛 歴代選手の殿堂を見る</Btn>
           <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
