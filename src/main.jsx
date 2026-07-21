@@ -1438,6 +1438,7 @@ function App() {
     }
     setMl(s => ({
       ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
+      difficulty: s.mlDiffChoice || "easy", // v38(#6): マイライフの難易度（相手強さ・CP倍率）
       races: [mlGenRace(1, 0, 0)],
       directive: mlGenDirective(1, 0, 0, 30),
       managerEval: 30 + (perk.evalBonus || 0) + cpPerks.eval, salary: initialSalary, money: (perk.moneyBonus || 0) + cpPerks.money + cpShop.money,
@@ -1564,7 +1565,7 @@ function App() {
       directiveKey = race.nationalRole;
     }
     const worldStars = mlWorldStarsForYear(ml.worldSeed, ml.year, loadMlLegends());
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, worldStars, ml.worldRosters);
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, worldStars, ml.worldRosters);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
     setMl(s => ({ ...s, result: sim, screen: "mylife_startlist" }));
   }
@@ -1576,7 +1577,7 @@ function App() {
     const tmplByType = { SPR: TEMPLATES[0], CLM: TEMPLATES[3], RUL: TEMPLATES[2], PUN: TEMPLATES[2], TT: TEMPLATES[5] };
     const tmpl = tmplByType[ml.player.type] || TEMPLATES[2];
     const meta = { id: `ml-lastrace-${ml.year}`, name: `${ml.player.name} 引退記念ラストレース`, tmpl, grade: 4, cls: ml.classIdx, rivalPresent: true, rival2Present: true, weather: "clear", isLastRace: true };
-    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", undefined, ml.worldRosters);
+    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", undefined, ml.worldRosters);
     setMl(s => ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
   }
   function mlLastRaceFinish() {

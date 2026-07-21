@@ -710,6 +710,7 @@ export function initMyLife() {
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
     // v32: 固定チームメイト・条件付き作戦・キャリアグラフ用の年次記録
     teammates: [], tactic: "balanced", careerHistory: [],
+    difficulty: "easy", mlDiffChoice: "easy", // v38(#6): 難易度
   };
 }
 
@@ -727,6 +728,7 @@ const ML_SAVE_FIELDS = [
   "rivalDramaOn", // v36(#6): 性格ベースのライバル会話ドラマの表示 on/off
   "riderStats", // v37: 永続キャラ（ライバル/仲間）の成績台帳
   "worldRosters", // v37: 永続ワールドロースター（各AIチーム固定の選手団）
+  "difficulty", // v38(#6): マイライフの難易度（相手強さ・CP倍率）
 ];
 
 export function saveMyLife(ml) {
@@ -817,7 +819,10 @@ export const ML_TACTICS = {
 export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars, worldRosters) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
-  const aiCap = diffDef.abilCap ?? 94; // v35(バランス): 難易度別のAI能力上限（hard/oniは94超）
+  // v38(#6): マイライフのAI能力上限を難易度で引き上げる。従来は easy/normal/hard がどれも94上限で
+  // 実質同強度になり、能力を極めた終盤（100超）に対して hard でも相手が頭打ちで無双できた。
+  // hard=102/oni=112 まで許容し、極まった選手にも歯応えが残るようにする（season側のDIFFICULTIESは不変）。
+  const aiCap = ({ easy: 92, normal: 96, hard: 102, oni: 112 })[difficultyId] ?? (diffDef.abilCap ?? 94);
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
   // v22: クラスさえ上がれば以降は相手のレベルが固定されてしまい、キャリア後半は練習しなくても

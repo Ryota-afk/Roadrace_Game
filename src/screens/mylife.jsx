@@ -7,9 +7,9 @@ import { Btn, Eyebrow } from "../components/ui.jsx";
 import { fmtRelTime, fmtTime, overall } from "../core/core.js";
 import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../data/abilities.js";
 import { MONTHS } from "../data/course.js";
-import { CLASSES } from "../data/progression.js";
+import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
+import { MLCP_DIFF_MUL, CLASS_TIER_COLOR, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, SUB_STAT_LABEL, WEATHER, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, formatAchievementReward, growthPhase, hasMyLifeSave, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGradeColor, mlGrowthCap, mlLivingCost, mlPrivateCampCost, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, mlTalentRank, mlWorldBoard, mlWorldNews, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS } from "../sim/race.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, loadMyLifeGame, myLifeSaveInfo, mlCareerArchetype, mlFirstUnmetRung, riderCareerSummary, riderNickname } from "../state/state.js";
 
@@ -68,6 +68,26 @@ export function renderMyLifeScreens(ctx) {
                   {b.merit && <div style={{ fontSize: 11, color: C.green, marginTop: 4, lineHeight: 1.5 }}><b>{b.meritLabel}</b> {b.merit}</div>}
                 </button>
               ))}
+            </div>
+          </div>
+          <div>
+            <Eyebrow>難易度（相手の強さ・成長上限・クリアポイント倍率）</Eyebrow>
+            <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+              {DIFFICULTIES.map((d) => {
+                const cpMul = MLCP_DIFF_MUL[d.id] ?? 1;
+                const sel = (ml.mlDiffChoice || "easy") === d.id;
+                return (
+                  <button key={d.id} onClick={() => setMl(s => ({ ...s, mlDiffChoice: d.id }))}
+                    style={{ textAlign: "left", padding: "9px 12px", borderRadius: 10, cursor: "pointer",
+                      background: sel ? "rgba(255,210,63,0.12)" : C.panel, border: `1.5px solid ${sel ? C.yellow : C.line}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{d.label}</span>
+                      <span style={{ fontSize: 11, color: cpMul > 1 ? C.green : C.sub }}>CP ×{cpMul}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.sub, marginTop: 2, lineHeight: 1.5 }}>{d.desc}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
           {(() => {

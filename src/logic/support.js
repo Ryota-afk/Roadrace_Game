@@ -181,9 +181,15 @@ export function computeMyLifeClearPoints(ml) {
   if (best != null) rankCp = best === 1 ? 30 : best <= 3 ? 20 : best <= 10 ? 12 : best <= 50 ? 5 : 0;
   if (rankCp) parts.push({ label: `世界最高${best}位`, cp: rankCp });
   const longCp = Math.min(10, Math.floor(years * 0.5)); if (longCp) parts.push({ label: `現役${years}年`, cp: longCp });
-  const total = parts.reduce((a, b) => a + b.cp, 0);
-  return { total, parts };
+  const rawTotal = parts.reduce((a, b) => a + b.cp, 0);
+  // v38(#5/#6): 難易度でCP獲得を増減。イージー周回でCPが溢れる（3人殿堂で200pt頭打ち）問題に対し、
+  // イージーは獲得を抑え、挑戦（ノーマル以上）ほど多く報いる＝CPは「難所を越えた勲章」になる。
+  const diffMul = MLCP_DIFF_MUL[ml.difficulty] ?? 1;
+  const total = Math.round(rawTotal * diffMul);
+  if (diffMul !== 1) parts.push({ label: `難易度補正 ×${diffMul}`, cp: total - rawTotal });
+  return { total, parts, diffMul };
 }
+export const MLCP_DIFF_MUL = { easy: 0.7, normal: 1.0, hard: 1.5, oni: 2.2 };
 
 // v37: CP解禁の一覧（生涯評価画面で「何がいつ解禁されるか」を見せる）。
 // コース解禁(unlockCP)＋シーズン開幕ミルストーン(CP_MILESTONES)＋マイライフ特典(ML_CP_MILESTONES)を統合。
