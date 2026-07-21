@@ -376,6 +376,17 @@ export function renderMyLifeScreens(ctx) {
               </div>
             );
           })()}
+          {/* v38修正: 監督指示は毎レースの必須情報（達成で監督評価↑）なので折りたたみの外に出し、常時表示にする */}
+          {ml.directive && (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.blue}` }}>
+              <Eyebrow color={C.blue}>監督指示</Eyebrow>
+              <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.directive.label}</div>
+              <div style={{ fontSize: 11.5, color: C.sub }}>{ml.directive.desc}</div>
+              <div style={{ fontSize: 11, color: C.sub, marginTop: 5 }}>
+                監督評価: <span style={{ color: managerEvalTier(ml.managerEval).color, fontWeight: 700 }}>{managerEvalTier(ml.managerEval).label}</span>
+              </div>
+            </div>
+          )}
           {/* v34(UI): チーム・キャリア状況を折りたたみ、毎月の行動（レース/練習）を主画面の上部に出す */}
           <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}` }}>
             <button onClick={() => setMl(s => ({ ...s, uiStatusOpen: !s.uiStatusOpen }))} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: "9px 12px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", color: C.sub, fontSize: 11.5 }}>
@@ -436,16 +447,6 @@ export function renderMyLifeScreens(ctx) {
               </div>
             );
           })()}
-          {ml.directive && (
-            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-              <Eyebrow color={C.blue}>監督指示</Eyebrow>
-              <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.directive.label}</div>
-              <div style={{ fontSize: 11.5, color: C.sub }}>{ml.directive.desc}</div>
-              <div style={{ fontSize: 11, color: C.sub, marginTop: 5 }}>
-                監督評価: <span style={{ color: managerEvalTier(ml.managerEval).color, fontWeight: 700 }}>{managerEvalTier(ml.managerEval).label}</span>
-              </div>
-            </div>
-          )}
           {ml.flags?.mentorActive && (
             <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.green}` }}>
               <Eyebrow color={C.green}>🧑‍🏫 恩師の指導</Eyebrow>

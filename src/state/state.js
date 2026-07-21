@@ -896,8 +896,12 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       // v38(#3): 弟子（プロテジェ）を自チームの1枠として実際にレースへ出す。従来は数値が育つだけで
       // レースにも同チームにも現れず「本当に数字だけ」だった。弟子は現在のOVR（curOvr）で地力が決まり、
       // 育つほど強く出走する。id/名前/脚質を固定＝成績台帳にも積まれる（isProtege マーク）。
-      const protegeSlot = (protege && protege.id != null) ? 1 : 0;
-      const tmSlots = Math.max(1, aiSquadN - protegeSlot);
+      // v38修正: プレイヤー本人はこのあと別途 riders に追加されるため、自チームのチームメイト枠は
+      // 「aiSquadN - 1」に抑える。従来は members を aiSquadN 個作った上にプレイヤーを足していたため、
+      // 自チームだけ他チームより1人多くなっていた（＝自チームだけ人数が多い問題）。
+      const memberTarget = Math.max(0, aiSquadN - 1);
+      const protegeSlot = (protege && protege.id != null && memberTarget >= 1) ? 1 : 0;
+      const tmSlots = Math.max(0, memberTarget - protegeSlot);
       teammates.slice(0, tmSlots).forEach((tm, i) => {
         const st = newRider(power + (i === 0 ? 4 : 0), rng, { type: tm.type, banned: nameBanned });
         st.id = tm.id; st.name = tm.name; st.type = tm.type; st.personality = tm.personality || st.personality;
@@ -914,7 +918,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         st.isProtege = true;
         members.push(st);
       }
-      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned }));
+      for (let i = members.length; i < memberTarget; i++) members.push(newRider(power, rng, { banned: nameBanned }));
     } else if (worldRosters && worldRosters[d.name] && worldRosters[d.name].length) {
       // v37: 永続ワールドロースターから同じ顔ぶれを出走させる（identityは固定・stats は文脈スケール）。
       // 各選手の stats は id＋year でシードして年内は安定、年が進むと power の上昇で強くなる。
