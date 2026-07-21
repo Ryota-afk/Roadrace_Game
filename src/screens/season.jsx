@@ -12,7 +12,7 @@ import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
 import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, addProdigyRookie, bumpEquipLv, bumpRosterAbAll, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, STAFF_META, staffEffectText, staffMemberName, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
-import { computePrestige, cpShopSeasonPerks, genMonthRaces, genScouts, initGame, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
+import { computePrestige, cpShopSeasonPerks, genMonthRaces, genScouts, initGame, legendToSeasonRider, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
 
 export function renderSeasonScreens(ctx) {
   const { acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap } = ctx;
@@ -83,6 +83,35 @@ export function renderSeasonScreens(ctx) {
             })}
           </div>
         </div>
+        {(() => {
+          // v38(#9 A-2): マイライフで育てた殿堂選手を、シーズンの創設メンバーとして1名招聘できる。
+          // 「選手として育てた英雄を、監督として率いる」A案の核心ループ。全盛期をやや過ぎたベテランとして加入。
+          const legends = [...loadMlLegends()].reverse();
+          if (legends.length === 0) return null;
+          const selIdx = g.legendRecruitIdx;
+          return (
+            <div>
+              <Eyebrow color={"#e56cc8"}>🌳 レジェンド招聘（マイライフで育てた名選手を1名迎える）</Eyebrow>
+              <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px", lineHeight: 1.5 }}>あなたが選手として育て上げ引退した英雄を、監督として率いるチームの創設メンバーに迎えられます（全盛期をやや過ぎたベテランとして加入・任意）。</div>
+              <div style={{ display: "grid", gap: 5, maxHeight: 210, overflowY: "auto" }}>
+                {legends.map((leg, i) => {
+                  const sel = selIdx === i;
+                  return (
+                    <button key={i} onClick={() => setG(s => ({ ...s, legendRecruitIdx: sel ? null : i }))}
+                      style={{ textAlign: "left", padding: "8px 10px", borderRadius: 8, cursor: "pointer",
+                        background: sel ? "rgba(229,108,200,0.12)" : C.panel, border: `1.5px solid ${sel ? "#e56cc8" : C.line}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{sel ? "✔ " : ""}{leg.name}<span style={{ marginLeft: 6, fontSize: 10, color: TYPES[leg.type]?.color }}>{TYPES[leg.type]?.label}</span></span>
+                        <span style={{ fontSize: 10.5, color: C.sub }}>OVR{leg.overall || "—"}{(leg.generation || 0) > 0 ? ` ・🧬${leg.generation}代目` : ""}</span>
+                      </div>
+                      {leg.nickname && <div style={{ fontSize: 10, color: C.purple, fontStyle: "italic" }}>「{leg.nickname}」</div>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
         <div>
           <Eyebrow>永続ボーナス（累計クリアポイントで自動解禁・消費なし）</Eyebrow>
           <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
@@ -133,7 +162,14 @@ export function renderSeasonScreens(ctx) {
           if (shop.budget) base = { ...base, budget: base.budget + shop.budget };
           if (shop.equipLv) base = bumpEquipLv(base, shop.equipLv);
           if (shop.rosterBoost) base = bumpRosterAbAll(base, shop.rosterBoost);
-          setG({ ...base, screen: "scoutpolicy_initial" });
+          // v38(#9 A-2): 招聘したレジェンドを創設メンバーとしてロースターへ加える
+          if (g.legendRecruitIdx != null) {
+            const legends = [...loadMlLegends()].reverse();
+            const leg = legends[g.legendRecruitIdx];
+            const recruit = leg && legendToSeasonRider(leg);
+            if (recruit) base = { ...base, roster: [...base.roster, recruit], captainId: recruit.id };
+          }
+          setG({ ...base, legendRecruitIdx: null, screen: "scoutpolicy_initial" });
         }}>この内容でゲーム開始 →</Btn>
         <Btn outline color={C.red} onClick={() => {
           // v14.11: 生涯合計値の消去は取り消せないため、二重確認（2段階の確認モーダル）を挟む
@@ -457,6 +493,7 @@ export function renderSeasonScreens(ctx) {
                     <button onClick={() => openRename("選手名を変更", r.name, v => setG(s => ({ ...s, roster: s.roster.map(x => x.id === r.id ? { ...x, name: v } : x) })))} title="名前を変更" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, marginLeft: 4, padding: 0, opacity: 0.7 }}>✏️</button>
                     {r.id === g.captainId && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.yellow, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🎖 主将</span>}
                     {r.age <= 18 && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.green, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🌱 ユース</span>}
+                    {r.isLegendRecruit && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: "#e56cc8", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }} title={r.legendNickname ? `「${r.legendNickname}」` : ""}>🌳 招聘レジェンド</span>}
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color, border: `1px solid ${t.color}`, borderRadius: 4, padding: "1px 5px" }}>{t.label}</span>
                     <span style={{ marginLeft: 5, fontFamily: FONT_M, fontSize: 12, color: POW[r.growthPow].color }}>成長{r.growthPow}</span>
                     <span style={{ marginLeft: 5, fontSize: 11, color: potentialHint(r).color }}>{potentialHint(r).label}</span>

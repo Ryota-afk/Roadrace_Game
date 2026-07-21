@@ -260,6 +260,30 @@ export function computeAchievements(ml) {
   return ML_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(ml) }));
 }
 
+// v38(#9 A-2): 引退した殿堂選手（マイライフで育てた名選手）を、シーズンの自チームの選手として
+// 迎え入れるためのブリッジ。最終能力から少し衰えた（全盛期を過ぎて加入する）ベテランとして生成し、
+// 名前・脚質・特能・二つ名を引き継ぐ。「選手として育てた英雄を、監督として率いる」A案の核心ループ。
+export function legendToSeasonRider(leg) {
+  if (!leg || !leg.finalAbilities) return null;
+  const fa = leg.finalAbilities, fs = leg.finalSubStats || {};
+  const decay = 0.94; // 全盛期をやや過ぎて加入
+  const r = {
+    id: ridState.value++, name: leg.name, type: leg.type || "RUL",
+    flat: Math.round((fa.flat || 60) * decay), climb: Math.round((fa.climb || 60) * decay),
+    sprint: Math.round((fa.sprint || 60) * decay), stamina: Math.round((fa.stamina || 60) * decay),
+    solo: Math.round((fa.solo || 60) * decay),
+    accel: Math.round((fs.accel ?? 55) * decay), build: fs.build ?? 55, mental: Math.round((fs.mental ?? 58)),
+    age: 31, growth: "normal", growthPow: leg.growthPow || "B",
+    abilities: [...(leg.specialAbilities || [])], goldAbilities: [], personality: "normal",
+    fatigue: 20, cond: 3, condForecast: 0, injury: 0, streak: 0,
+    focus: "flat", joinOvr: 0, parts: { frame: null, tire: null, wheels: null, nutrition: null },
+    raceLog: [], favorite: true, tenure: 0,
+    isLegendRecruit: true, legendNickname: leg.nickname || null, lineageName: leg.lineageName || null,
+  };
+  r.joinOvr = overall(r);
+  return r;
+}
+
 export function initRoster() {
   // v12バグ修正: 初期メンバー6名の名前が完全固定されており、新しくゲームを始めても
   // 毎回同じ名前になってしまうと気になるとのフィードバックを受け、能力値・年齢・役割の
