@@ -313,6 +313,19 @@ export function renderMyLifeScreens(ctx) {
                 </div>
               );
             })()}
+            {(() => {
+              // v38(#9 B-2): 活力バー。長期の伸びしろの芯。低いと練習・出走経験の伸びが鈍る＝休養で戻す
+              const vit = r.vitality == null ? 100 : r.vitality;
+              const vc = vit >= 70 ? C.green : vit >= 40 ? "#e8a13c" : "#c86";
+              const vl = vit >= 70 ? "充実" : vit >= 40 ? "やや消耗" : "枯渇気味";
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 10.5, color: C.sub }}>活力（伸びしろの芯）</span>
+                  <div style={{ flex: 1, height: 5, background: C.line, borderRadius: 3 }}><div style={{ width: `${vit}%`, height: 5, background: vc, borderRadius: 3 }} /></div>
+                  <span style={{ fontFamily: FONT_M, fontSize: 11, color: vc, width: 58, textAlign: "right" }}>{Math.round(vit)}・{vl}</span>
+                </div>
+              );
+            })()}
             <AbilityGrid r={r} cap={mlGrowthCap(ml.year, r)} />
             <SubStatLine r={r} />
             <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year, r)}以上＝限界突破（バーの薄い帯＝上限までの伸びしろ・数字の小さな+も伸びしろ）{r.talentCap ? `／才能キャップ+${r.talentCap}` : ""}</div>

@@ -1246,6 +1246,7 @@ function App() {
     const inh = master ? protegeInherit(master) : null;
     const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set(), abBonus: inh ? inh.abBonus : undefined });
     player.background = background;
+    player.vitality = 100; // v38(#9 B-2): 活力（長期の伸びしろの芯）。満タンでデビュー
     // v36(#4): 経歴ごとの固有メリット。高校卒＝成長力アップ抽選、大学卒／実業団卒＝出自らしい
     // 特殊能力を持ってデビュー（人気・評価・資金の初期ボーナスは後段の state 初期化で反映）。
     const perk = bg.perk || {};
@@ -1813,6 +1814,11 @@ function App() {
   // 恒常効果もここで反映する
   function mlApplyMonthEffect(player0, mode, ctx) {
     const player = { ...player0 };
+    // v38(#9 B-2): 活力（バイタリティ）。疲労が短期の"その月の重さ"なのに対し、活力は長期の
+    // "伸びしろの芯・鮮度"。走り込むほど（特に格上レース）少しずつ減り、完全休養やオフで回復する。
+    // 活力が高いほど成長が満額に近く、低いと伸びが鈍る＝「休ませて育てる」戦略性が生まれる。
+    if (player.vitality == null) player.vitality = 100;
+    const vitMul = 0.55 + 0.45 * Math.min(1, Math.max(0, player.vitality) / 70); // 活力70+で満額、低いほど鈍化
     const gear = (ctx && ctx.gear) || {};
     const carLv = ctx ? ctx.carLv : -1;
     const houseLv = ctx ? ctx.houseLv : -1;
@@ -1843,9 +1849,12 @@ function App() {
       // v25: 新人時代に恩師の指導を受けている間は、出走経験の伸びにもボーナスがかかる
       // v28: 「天才肌」は25歳以下の伸びが+15%
       const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
-        * (hasAbility(player, "sponge") ? 1.25 : 1); // v37: 吸収の天才＝出走経験の伸び+25%
+        * (hasAbility(player, "sponge") ? 1.25 : 1) // v37: 吸収の天才＝出走経験の伸び+25%
+        * vitMul; // v38(#9 B-2): 活力が低いと出走経験の伸びも鈍る
       const ph = growthPhase(player);
       raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
+      // v38(#9 B-2): レースで活力を消耗（格上ほど大きい）。走らせすぎると伸びの芯が細る
+      player.vitality = Math.max(0, player.vitality - (5 + (ctx && ctx.raceGrade ? ctx.raceGrade : 1) * 2));
       // v29: メンタルは「大舞台の経験」で育つ。格上のレースほど大きく伸びる
       growSub(player, "mental", 0.35 * raceGradeMul * Math.max(0.25, ph.gain));
       // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
@@ -1864,7 +1873,8 @@ function App() {
         * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
         * (flags.childFocusedCareer ? 1.05 : 1)
         // v25: 新人時代に恩師の指導を受けている間は練習効果+15%
-        * (flags.mentorActive ? 1.15 : 1);
+        * (flags.mentorActive ? 1.15 : 1)
+        * vitMul; // v38(#9 B-2): 活力が低いと練習効果も鈍る
       const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
       const focusMul = gear.monitor ? 1.10 : 1;
       // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
@@ -1878,6 +1888,7 @@ function App() {
       growSub(player, "accel", subG * (player.focus === "sprint" || player.focus === "flat" ? 1.3 : 0.7));
       growSub(player, "mental", subG * 0.6);
       player.fatigue = Math.max(0, player.fatigue - 15 * (glassBody ? 0.75 : 1));
+      player.vitality = Math.max(0, player.vitality - 3); // v38(#9 B-2): 練習でも活力を少し使う
       player.streak = 0;
     } else if (mode === "rest") {
       // v35: ガラスの体は回復も鈍い（休んでも抜けきらない＝より頻繁な休養を強いる）
@@ -1885,6 +1896,7 @@ function App() {
       // v36(#8): 完全休養を「疲労を抜くだけ」から意味のある回復へ。休むと心も整い（メンタル微増）、
       // フォームに上向きの偏り（フレッシュな脚＝後段のフォーム計算でrest分岐が下振れを消す）が付く。
       growSub(player, "mental", 0.5);
+      player.vitality = Math.min(100, player.vitality + 22); // v38(#9 B-2): 完全休養で活力を大きく回復
       player.streak = 0;
     } else if (mode === "event") {
       player.fatigue = Math.max(0, player.fatigue - 5);
@@ -1994,6 +2006,8 @@ function App() {
       const money = Math.max(0, s.money + Math.round(s.salary / 12) + popIncome - livingCost);
       if (s.month === 11) {
         player.age += 1;
+        // v38(#9 B-2): オフシーズンで活力が回復（走り込んだ体もひと冬でリフレッシュ）。若いほど戻りが良い。
+        player.vitality = Math.min(100, (player.vitality == null ? 100 : player.vitality) + (player.age <= 27 ? 40 : player.age <= 32 ? 30 : 20));
         // v38: ワールド選手の世代交代。年度替わりに全チームの選手を1歳加齢させ、
         // ピーク前は成長・ピーク後は衰えを反映。高齢者は引退して新人ルーキーに置き換わる。
         // これで「同じ顔ぶれが永遠に同じ強さ」ではなく、若手台頭とベテラン引退の流れが生まれる。
