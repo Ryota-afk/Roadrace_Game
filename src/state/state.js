@@ -47,10 +47,19 @@ export function riderNickname(r) {
   const races = log.length;
   const supR = log.filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
   const aceR = log.filter(e => ["ace", "lead"].includes(e.role)).length;
-  const abs = { flat: r.flat, climb: r.climb, sprint: r.sprint, stamina: r.stamina, solo: r.solo };
-  const top = Object.entries(abs).sort((a, b) => b[1] - a[1])[0][0];
+  const abs = { flat: r.flat || 0, climb: r.climb || 0, sprint: r.sprint || 0, stamina: r.stamina || 0, solo: r.solo || 0 };
+  // v38(#8): 能力が均等に極まると Object.entries の順序（flat が先頭）で必ず flat が選ばれ、
+  // 殿堂の二つ名が全員「平坦の帝王」になっていた。脚質(type)を最優先のタイブレークにする＝
+  // 首位と僅差(3以内)に脚質相応の能力があればそれを採用。これで脚質どおりの多彩な称号になる。
+  const typeAbil = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[r.type];
+  const sortedAbs = Object.entries(abs).sort((a, b) => b[1] - a[1]);
+  const topVal = sortedAbs[0][1];
+  const tiedKeys = sortedAbs.filter(([, v]) => topVal - v <= 3).map(([k]) => k);
+  const top = (typeAbil && tiedKeys.includes(typeAbil)) ? typeAbil : sortedAbs[0][0];
   // v31.4: 「勝ち星が多い＝みんな伝説の勝ち師」で没個性化していたため、勝利数上位は
   // 脚質を冠した称号にし、役割（献身のアシスト）や取りこぼし（悲運）も拾って多様化する
+  // v38(#8): PUN（パンチャー）専用の帝王称号を追加し、脚質ごとに必ず別称号になるようにした。
+  const punKing = r.type === "PUN" ? "起伏の覇王" : null;
   const byTypeKing = { flat: "平坦の帝王", climb: "山岳の覇者", sprint: "豪脚のゴールハンター", stamina: "無尽蔵の機関車", solo: "独走の求道者" };
   const byType = { flat: "巡航の職人", climb: "山岳の申し子", sprint: "スプリンター", stamina: "鉄の脚", solo: "独走屋" };
   // v37: 特能・性格に紐づく特別な異名（一定の実績を満たしたら優先して冠する）
@@ -63,7 +72,7 @@ export function riderNickname(r) {
   if (wins >= 3 && r.personality === "tactician") return "レースの支配者";
   if (supR >= 10 && supR >= aceR * 1.5 && wins <= 4) return "献身のアシスト";
   if (podiums >= 10 && wins <= 2) return "悲運の名脇役";
-  if (wins >= 8) return byTypeKing[top] || "常勝の帝王";
+  if (wins >= 8) return punKing || byTypeKing[top] || "常勝の帝王";
   if (wins >= 5) return "常勝の帝王";
   if (wins >= 3) return "勝利の申し子";
   if (podiums >= 12) return "表彰台の主";
