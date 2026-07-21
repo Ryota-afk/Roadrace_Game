@@ -22,7 +22,7 @@ import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEA
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
-import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlNewspaper, mlPrivateCampCost, ML_PROTEGE_EVENTS, mlUpdateRiderStats, mlWorldRaceLite, protegeMilestoneNews, protegeState, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalDialogue, rivalScene, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonPersonalityEvent, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
+import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlNewspaper, mlPrivateCampCost, ML_PROTEGE_EVENTS, mlUpdateRiderStats, mlWorldRaceLite, mlFactorCollection, mlLineageForest, protegeMilestoneNews, protegeState, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalDialogue, rivalScene, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonPersonalityEvent, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
 // ---- 画面ディスパッチ（Phase 4-2）----
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -2780,8 +2780,89 @@ function App() {
             </div>
           );
         })()}
+        {/* v38(#9 A-1): 統合ダイナスティ・ハブ。殿堂・系統・因子・系譜は両モード＆周回をまたいで
+            共有される「あなたの王朝」の背骨。生涯評価（両モード共通の画面）から辿れるようにする。 */}
+        <div style={{ background: "linear-gradient(180deg,#233026,#1d2a22)", borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.green}` }}>
+          <Eyebrow color={C.green}>🌳 あなたのダイナスティ</Eyebrow>
+          <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 8px", lineHeight: 1.6 }}>歴代の名選手・確立した系統・集めた因子は、シーズンとマイライフの両方の世界に受け継がれる共通の資産です。</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Btn small outline color={C.green} onClick={() => setSuperMode("dynasty_lineage")}>🌳 系譜ツリー</Btn>
+            <Btn small outline color={"#e56cc8"} onClick={() => setSuperMode("dynasty_factors")}>🧬 因子図鑑</Btn>
+          </div>
+        </div>
         <Btn color={C.yellow} onClick={() => setSuperMode("cpshop")}>🛒 CPショップで解禁を購入する</Btn>
         <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
+      </div>
+    );
+  }
+
+  // v38(#9 A-1): 統合ダイナスティ — 系譜ツリー（両モード共通・生涯評価から開く）
+  if (superMode === "dynasty_lineage") {
+    const forest = mlLineageForest();
+    const totalLeg = loadMlLegends().length;
+    const tierColor = ["#7c8aa5", "#6fbf73", "#4f8fe8", "#ffd23f"];
+    return wrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: "linear-gradient(180deg,#233026,#1d2a22)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.green}` }}>
+          <h2 style={{ fontFamily: FONT_D, color: C.green, fontSize: 20, margin: "0 0 4px" }}>🌳 系譜ツリー</h2>
+          <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>歴代選手（{totalLeg}名）を系統（血の流れ）ごとにまとめました。配合を重ねると世代（🧬N代目）が進み、系統が「確立→名門→大系統」へ育ちます。</div>
+        </div>
+        {totalLeg === 0 && <div style={{ fontSize: 12.5, color: C.sub, padding: 10 }}>まだ殿堂選手がいません。マイライフで選手を引退させると系譜が始まります。</div>}
+        {forest.map(g => (
+          <div key={g.lineageName} style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", border: `1px solid ${tierColor[g.tier.tier]}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
+              <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{g.lineageName}</span>
+              <span style={{ fontSize: 11, color: tierColor[g.tier.tier], fontWeight: 700 }}>{g.tier.label}{g.tier.tier > 0 ? `（因子+${g.tier.tier}）` : ""}・{g.size}名</span>
+            </div>
+            <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+              {g.members.map((m, i) => (
+                <div key={i} style={{ paddingLeft: Math.min(4, m.generation) * 14 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 12.5 }}>
+                    <span style={{ color: C.sub, fontFamily: FONT_M, fontSize: 10 }}>{m.generation > 0 ? "└" : "●"}</span>
+                    <span style={{ fontFamily: FONT_D, color: C.text, fontWeight: 700 }}>{m.name}</span>
+                    <span style={{ fontSize: 10, color: TYPES[m.type]?.color }}>{TYPES[m.type]?.label}</span>
+                    {m.generation > 0 && <span style={{ fontSize: 10, color: "#e56cc8" }}>🧬{m.generation}代目{m.plusValue > 0 ? `+${m.plusValue}` : ""}</span>}
+                    <span style={{ fontSize: 10, color: C.sub }}>OVR{m.overall}</span>
+                  </div>
+                  {m.nickname && <div style={{ fontSize: 10, color: C.purple, fontStyle: "italic", paddingLeft: 16 }}>「{m.nickname}」</div>}
+                  {m.parents.length > 0 && <div style={{ fontSize: 9.5, color: C.sub, paddingLeft: 16 }}>親：{m.parents.join(" × ")}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <Btn outline color={C.sub} onClick={() => setSuperMode("prestige")}>← 生涯評価に戻る</Btn>
+      </div>
+    );
+  }
+
+  // v38(#9 A-1): 統合ダイナスティ — 因子図鑑（両モード共通・生涯評価から開く）
+  if (superMode === "dynasty_factors") {
+    const cats = mlFactorCollection();
+    const totalLeg = loadMlLegends().length;
+    return wrap(
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: "linear-gradient(180deg,#2e2436,#241d2c)", borderRadius: 12, padding: 16, borderTop: `4px solid #e56cc8` }}>
+          <h2 style={{ fontFamily: FONT_D, color: "#e56cc8", fontSize: 20, margin: "0 0 4px" }}>🧬 因子図鑑</h2>
+          <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>歴代の殿堂選手（{totalLeg}名）が残した「因子」の集まりです。★＝その因子を持つ選手の数。周回を重ねるほど因子が貯まり、系統を通じて配合・弟子継承に受け継がれます。</div>
+        </div>
+        {totalLeg === 0 && <div style={{ fontSize: 12.5, color: C.sub, padding: 10 }}>まだ殿堂選手がいません。マイライフで選手を引退させると因子が集まり始めます。</div>}
+        {cats.map(cat => (
+          <div key={cat.category} style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.line}` }}>
+            <Eyebrow color={C.purple}>{cat.icon} {cat.category}</Eyebrow>
+            {cat.items.length === 0 && <div style={{ fontSize: 11, color: C.sub, marginTop: 6 }}>まだこの種類の因子はありません。</div>}
+            <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+              {cat.items.map(it => (
+                <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", background: C.bg, borderRadius: 8 }}>
+                  <span style={{ fontFamily: FONT_D, fontSize: 13, color: it.color, fontWeight: 700, minWidth: 92 }}>{it.label}</span>
+                  <span style={{ fontFamily: FONT_M, fontSize: 12, color: "#ffd23f", letterSpacing: -1 }}>{"★".repeat(Math.min(6, it.count))}{it.count > 6 ? ` ×${it.count}` : ""}</span>
+                  <span style={{ flex: 1, fontSize: 10, color: C.sub, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.members.slice(0, 3).join("・")}{it.members.length > 3 ? "…" : ""}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <Btn outline color={C.sub} onClick={() => setSuperMode("prestige")}>← 生涯評価に戻る</Btn>
       </div>
     );
   }
