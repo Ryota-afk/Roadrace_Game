@@ -1455,7 +1455,7 @@ function App() {
       ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory",
       careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
       // v32: 固定チームメイト・作戦・キャリア記録
-      teammates: mlGenTeammates(rng, team.name, 3, [player.name, rival.name, rival2.name], 1),
+      teammates: mlGenTeammates(rng, team.name, 5, [player.name, rival.name, rival2.name], 1),
       // v37: 永続ワールドロースター（各AIチーム固定の選手団）。毎レース同じ顔ぶれが出走する
       worldRosters: genWorldRosters(rng),
       tactic: "balanced", careerHistory: [],
@@ -2175,7 +2175,7 @@ function App() {
       }
       // v32: 移籍で所属が変わったら固定チームメイトも新チームの顔ぶれに一新する
       const newTeammates = offer.team !== s.team
-        ? mlGenTeammates(mulberry(Date.now() % 999983 + s.year * 13), offer.team, 3, [s.player.name, s.rival?.name, s.rival2?.name].filter(Boolean), s.year)
+        ? mlGenTeammates(mulberry(Date.now() % 999983 + s.year * 13), offer.team, 5, [s.player.name, s.rival?.name, s.rival2?.name].filter(Boolean), s.year)
         : s.teammates;
       return { ...s, team: offer.team, classIdx, races, directive, salary, money, teammates: newTeammates, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
     });

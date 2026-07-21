@@ -791,7 +791,7 @@ export function loadMyLifeGame() {
     // v32: 固定チームメイト未設定の旧セーブは、現所属チームのメンバーを今生成する
     if ((!merged.teammates || merged.teammates.length === 0) && merged.player && merged.team) {
       const trng = mulberry(Date.now() % 999983 + 7);
-      merged.teammates = mlGenTeammates(trng, merged.team, 3, [merged.player.name], merged.year || 1);
+      merged.teammates = mlGenTeammates(trng, merged.team, 5, [merged.player.name], merged.year || 1);
     }
     if (!merged.tactic) merged.tactic = "balanced";
     if (!Array.isArray(merged.careerHistory)) merged.careerHistory = [];
