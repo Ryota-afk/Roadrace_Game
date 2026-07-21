@@ -214,6 +214,11 @@ const ATTACK_TICKS = 25;          // アタック持続（25秒）
 // エースの早期発射（ATTACK_TICKS）よりやや長めにし、集団から確実に離れる間合いを作る
 const BREAKAWAY_ATTACK_TICKS = 30;
 const MAX_TICKS = 2500;
+// v38(#2): スタミナ管理AI。牽引役はエネルギーがこの下限を割ると牽引をやめて集団内に戻り
+// （draft）回復し、上限まで戻るまで牽引に復帰しない（ヒステリシスでバタつき防止）。牽引しっぱなしの
+// 自滅（＝アシスト大敗や早め逃げの燃え尽きの一因）を抑え、現実のローテーション（先頭交代→後方回復）を再現。
+const PULL_MIN_ENERGY = 24;
+const PULL_RESUME_ENERGY = 44;
 
 function effortCost(mode, segType, steepness) {
   if (mode === "pull") return 1.0;
@@ -289,6 +294,17 @@ export function canPull(en, segType) {
   // 最終直線で勝負を譲る（sit up）ことで、観戦と一致したまま「エースを勝負圏へ届ける」形にする。
   if (en.isAssisting) return false;
   if (en.energy <= 0) return false;
+  // v38(#2): スタミナ管理。勝負を賭けた逃げ（breakaway/committedBreak）以外は、消耗したら
+  // 牽引を降りて集団内で回復し、脚が戻ったら再び牽引に加わる。牽引の抱え込みによる自滅を防ぐ。
+  const committed = en.role === "breakaway" || en.committedBreak;
+  if (!committed) {
+    if (en.recovering) {
+      if (en.energy < PULL_RESUME_ENERGY) return false; // まだ回復中
+      en.recovering = false;                            // 十分戻った→牽引復帰
+    } else if (en.energy < PULL_MIN_ENERGY) {
+      en.recovering = true; return false;               // 消耗→後方で回復へ
+    }
+  }
   if (en.role === "breakaway") return true;
   if (en.role === "lead") return true;
   if (en.role === "sub") return true;
