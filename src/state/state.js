@@ -225,6 +225,39 @@ export function ageWorldRosters(prevRosters, rng, year, teams = MYLIFE_TEAMS) {
   return { worldRosters: next, retired, debuted };
 }
 
+// v38(#9 A-3): 共有ワールド。シーズンとマイライフ、そして全周回で「1つの世界」を共有する。
+// 保存するのは seed と worldYear の2値だけ（選手オブジェクトのidは保存しない＝id衝突を避ける）。
+// 顔ぶれは seed から決定論的に生成し worldYear まで加齢して都度再構成する（idは毎回ridStateから新規採番
+// ＝単調増加で衝突なし）。これにより「同じ世界が両モード・周回をまたいで年を取り続ける」連続性が生まれる。
+export const WORLD_KEY = "roadrace_v12_world";
+export function loadWorldMeta() {
+  try {
+    const raw = localStorage.getItem(WORLD_KEY);
+    if (raw) { const w = JSON.parse(raw); if (w && w.seed != null) return { seed: w.seed >>> 0, year: Math.max(1, w.year || 1) }; }
+  } catch (e) { /* noop */ }
+  const meta = { seed: (((Date.now() % 999983) ^ 0x9e3779b9) >>> 0) || 12345, year: 1 };
+  try { localStorage.setItem(WORLD_KEY, JSON.stringify(meta)); } catch (e) { /* noop */ }
+  return meta;
+}
+export function advanceWorldYear() {
+  const m = loadWorldMeta();
+  const next = { seed: m.seed, year: (m.year || 1) + 1 };
+  try { localStorage.setItem(WORLD_KEY, JSON.stringify(next)); } catch (e) { /* noop */ }
+  return next;
+}
+// 共有ワールドの「現在（worldYear）」の顔ぶれを決定論的に再構成して返す。teams で対象チームを絞れる。
+export function sharedWorldRosters(teams = MYLIFE_TEAMS) {
+  const m = loadWorldMeta();
+  let rosters = genWorldRosters(mulberry(m.seed), 6, MYLIFE_TEAMS);
+  for (let y = 2; y <= m.year; y++) {
+    rosters = ageWorldRosters(rosters, mulberry((y * 2246822519) >>> 0), y, MYLIFE_TEAMS).worldRosters;
+  }
+  if (teams === MYLIFE_TEAMS) return rosters;
+  const sub = {};
+  teams.forEach(d => { if (rosters[d.name]) sub[d.name] = rosters[d.name]; });
+  return sub;
+}
+
 export const ML_ACHIEVEMENTS = [
   { id: "first_win", icon: "🥇", label: "初勝利", desc: "レースで初めて優勝する", reward: { money: 30 },
     check: (ml) => (ml.player?.raceLog || []).some(e => e.rank === 1) },
@@ -479,9 +512,10 @@ export function initGame() {
     year: 1, month: 0, classIdx: 0, points: 0, budget: 300,
     roster,
     // v38: 永続ライバルロースター。従来はレースごとにAI相手を使い捨て生成しており、同じチーム名でも
-    // 毎レース別人が出走していた（宿敵が育たず相手の成績も追えない）。開始時に各ライバルチーム固定の
-    // 選手団を生成して永続化し、毎レース同じ顔ぶれが（その年の地力で）出走するようにする。年度末に加齢。
-    rivalRosters: genWorldRosters(mulberry(Date.now() % 999983 + 4242), 6, RIVAL_TEAMS),
+    // 毎レース別人が出走していた（宿敵が育たず相手の成績も追えない）。開始時に固定の選手団を持つ。
+    // v38(#9 A-3): 共有ワールドから取得＝新しいシーズンでも前回・マイライフと同じ顔ぶれの相手が
+    // （年を取った状態で）出走する。世界が1つに繋がる。
+    rivalRosters: sharedWorldRosters(RIVAL_TEAMS),
     equip: { frame: 0, wheels: 0, facility: 0 },
     staff: { manager: 0, trainer: 0, doctor: 0, scout: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },

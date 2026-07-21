@@ -18,7 +18,7 @@ import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins,
 import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, rankSim, riderHash01, rollWeather, simulateTicks } from "./sim/race.js";
 import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, sharedWorldRosters, advanceWorldYear, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
@@ -810,6 +810,7 @@ function App() {
         // v38: ライバルチームも年次で世代交代（加齢→成長/衰え→引退→新人補充）。
         // これで周回の相手が固定強度で止まらず、若手台頭とベテラン引退の流れが生まれる。
         const agedRivals = ageWorldRosters(s.rivalRosters, mulberry((year * 2246822519) >>> 0), year, RIVAL_TEAMS);
+        advanceWorldYear(); // v38(#9 A-3): 共有ワールドも1年進める（世界が周回・両モードをまたいで年を取る）
         agedRivals.retired.slice(0, 3).forEach(r => {
           const debut = agedRivals.debuted.find(d => d.team === r.team);
           log.push(`【${s.year}年目 世代交代】🌍 ${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : ""}`);
@@ -1457,7 +1458,8 @@ function App() {
       // v32: 固定チームメイト・作戦・キャリア記録
       teammates: mlGenTeammates(rng, team.name, 5, [player.name, rival.name, rival2.name], 1),
       // v37: 永続ワールドロースター（各AIチーム固定の選手団）。毎レース同じ顔ぶれが出走する
-      worldRosters: genWorldRosters(rng),
+      // v38(#9 A-3): 共有ワールドから取得＝新キャリアでも前回・シーズンと同じ世界（年を取った状態）で始まる
+      worldRosters: sharedWorldRosters(),
       tactic: "balanced", careerHistory: [],
       log: initLog,
       // v36(#5リセマラ): デビュー前に素質を確認できる「素質診断」画面へ。引き直し（リセマラ）が
@@ -2013,6 +2015,7 @@ function App() {
         // これで「同じ顔ぶれが永遠に同じ強さ」ではなく、若手台頭とベテラン引退の流れが生まれる。
         const agerng = mulberry(((s.year + 1) * 2246822519) >>> 0);
         const aged = ageWorldRosters(s.worldRosters, agerng, s.year + 1);
+        advanceWorldYear(); // v38(#9 A-3): 共有ワールドも1年進める（世界が周回・両モードをまたいで年を取る）
         aged.retired.slice(0, 3).forEach(r => {
           const debut = aged.debuted.find(d => d.team === r.team);
           log.push(`【${s.year}年目 3月】🌍 世代交代：${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : "後継者の台頭が待たれる"}`);
