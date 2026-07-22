@@ -1719,7 +1719,7 @@ function App() {
         // v36修正: 接戦（8秒未満）か因縁が深まった時（heat≥4）だけ、返答を選べる双方向の対話シーンを用意。
         // 毎戦だと冗長なので"見せ場"に限定する。
         const sceneWorthy = Math.abs(gapSec) < 8 || heatAfter >= 4;
-        const scene = sceneWorthy ? rivalScene({ rival: s.rival, beat, gapSec, heatAfter, playerName: s.player.name, seed: s.year * 137 + s.month * 7 + me.rank }) : null;
+        const scene = sceneWorthy ? rivalScene({ rival: s.rival, beat, gapSec, heatAfter, playerName: s.player.name, seed: s.year * 137 + s.month * 7 + me.rank, record: s.rivalRecord, big: !!(race.milestone || race.monument || race.grade >= 4) }) : null;
         rivalOutcome = { name: rivalEntrant.name, rank: rivalEntrant.rank, beat, line: drama.line, promoted: drama.promoted, tierLabel: drama.tier.label, tierColor: drama.tier.color, dialogue, scene };
       }
       // v26: 複数ライバル制。2人目の好敵手は初対戦時だけ「新たな好敵手が現れた」という

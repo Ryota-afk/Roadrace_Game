@@ -1165,6 +1165,8 @@ export function renderMyLifeScreens(ctx) {
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: "linear-gradient(180deg, rgba(201,139,240,0.08), #201e26)", border: `1px solid ${oc.tierColor || C.purple}`, borderRadius: 12, padding: 14 }}>
             <Eyebrow color={oc.tierColor || C.purple}>💬 {sc.persLabel ? `${sc.persLabel}な` : ""}{sc.tierLabel}・{oc.name}との対話</Eyebrow>
+            {sc.situation && <div style={{ fontSize: 11.5, color: C.sub, fontStyle: "italic", lineHeight: 1.6, margin: "6px 0 2px", paddingLeft: 8, borderLeft: `2px solid ${oc.tierColor || C.purple}` }}>{sc.situation}</div>}
+            {sc.recordLine && <div style={{ fontSize: 10.5, color: oc.tierColor || C.purple, fontFamily: FONT_M, marginBottom: 2 }}>🔥 {sc.recordLine}</div>}
             <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
               <Bubble who="rival" name={sc.opening.name} text={sc.opening.text} />
               {reply && <Bubble who="me" name={ml.player.name} text={reply.playerLine} />}

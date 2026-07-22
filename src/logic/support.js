@@ -1131,7 +1131,17 @@ const PLAYER_RESPOND = {
   loseRespect: { label: "潔く負けを認める", line: "完敗だ。今日のお前は強かった。素直に認めるよ。" },
   loseFire: { label: "悔しさをぶつける", line: "…覚えてろ。この借りは、次のレースで必ず返す。" },
 };
-export function rivalScene({ rival, beat, gapSec, heatAfter, playerName, seed }) {
+// v38(改善:会話を厚く): その一戦の状況（接戦/圧勝/完敗/大舞台）を地の文で描写し、会話に文脈を与える。
+// 同じ性格の台詞でも「今この瞬間」の物語として立ち上がるようにする。
+const RIVAL_SITUATION = {
+  close: ["わずかな差だった。ゴール後、荒い息のまま二人の視線が交差する。", "紙一重。決着の余韻が残る中、彼／彼女がゆっくりと口を開いた。", "最後まで並走した末の一瞬の差。互いの脚を、誰より知っている。"],
+  blowoutWin: ["圧倒的な走りだった。悔しさを噛み殺しながら、彼／彼女が近づいてくる。", "背中も見せない完勝。それでも相手は、まっすぐこちらを見据えていた。"],
+  blowoutLose: ["完敗だった。息を整えるこちらへ、彼／彼女が静かに歩み寄る。", "力の差を見せつけられた。だが、うつむいている場合ではない。"],
+  bigWin: ["大舞台を制した高揚の中、宿敵がこちらへ手を伸ばしてきた。", "最高の舞台での勝利。その熱気の中で、二人はまた向き合う。"],
+  bigLose: ["大一番で敗れた悔しさ。それでも、この舞台で競えたことに意味がある。", "大舞台の敗北は重い。だが宿敵の存在が、次への焔を灯す。"],
+  normal: ["レースを終え、二人はまた言葉を交わす。", "ゴール後のわずかな時間。宿敵との、いつもの掛け合いが始まる。"],
+};
+export function rivalScene({ rival, beat, gapSec, heatAfter, playerName, seed, record, big }) {
   if (!rival) return null;
   const pers = rival.personality || "normal";
   const V = RIVAL_VOICE[pers] || RIVAL_VOICE.normal;
@@ -1139,6 +1149,16 @@ export function rivalScene({ rival, beat, gapSec, heatAfter, playerName, seed })
   const tier = rivalHeatTier(heatAfter);
   const rng = mulberry(((seed || 1) >>> 0) || 1);
   const pick = a => a[Math.floor(rng() * a.length)] || a[0];
+  // 状況（接戦/圧勝/完敗/大舞台）を選んで地の文にする
+  const ag = Math.abs(gapSec || 0);
+  const sitKey = big ? (beat ? "bigWin" : "bigLose")
+    : ag < 3 ? "close"
+    : ag > 30 ? (beat ? "blowoutWin" : "blowoutLose")
+    : "normal";
+  const situation = pick(RIVAL_SITUATION[sitKey] || RIVAL_SITUATION.normal);
+  // 通算対戦成績を一言で（因縁の積み重ねを可視化）
+  const w = record?.wins || 0, l = record?.losses || 0, m = record?.meetings || 0;
+  const recordLine = m >= 2 ? `通算 ${w}勝${l}敗——${w > l ? "今はあなたが上だ" : w < l ? "まだ分が悪い" : "五分の戦いが続く"}` : null;
   const opening = { name: rival.name, text: pick(beat ? V.whenBeaten : V.whenWon).replace(/」?$/, "」") };
   const mkResp = (r, tone) => ({
     label: r.label, playerLine: r.line.replace(/」?$/, "」"),
@@ -1151,7 +1171,7 @@ export function rivalScene({ rival, beat, gapSec, heatAfter, playerName, seed })
   const responses = beat
     ? [mkResp(PLAYER_RESPOND.winRespect, "respect"), mkResp(PLAYER_RESPOND.winFire, "fire")]
     : [mkResp(PLAYER_RESPOND.loseRespect, "respect"), mkResp(PLAYER_RESPOND.loseFire, "fire")];
-  return { persLabel: PERSONALITIES[pers]?.label || "", tierLabel: tier.label, tierColor: tier.color, opening, responses };
+  return { persLabel: PERSONALITIES[pers]?.label || "", tierLabel: tier.label, tierColor: tier.color, situation, recordLine, opening, responses };
 }
 export function rivalDialogue({ rival, beat, gapSec, heatAfter, playerName, seed }) {
   if (!rival) return null;
