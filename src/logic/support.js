@@ -83,9 +83,12 @@ export const softFactor = (v, cap = 88) => (v < cap ? 1 : Math.exp(-(v - cap) / 
 
 export const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * softFactor(r[k], cap); };
 
+// v38(改善): 副ステ（加速力/体格/メンタル）の上限を 94→110、フル成長域を 88→100 に拡張。
+// 従来はメンタルが数年で94にカンストして「大舞台の経験で育つ」意味が消えていた。天井を上げ、
+// 高域はソフトキャップで緩やかに伸ばす＝キャリアを通じて育て続けられる長期ステータスにする。
 export function growSub(r, key, amount) {
   const v = r[key] ?? 50;
-  r[key] = Math.min(94, v + amount * softFactor(v, 88));
+  r[key] = Math.min(110, v + amount * softFactor(v, 100));
 }
 
 export function rollCondDir() {

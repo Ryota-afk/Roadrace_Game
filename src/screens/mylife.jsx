@@ -532,13 +532,39 @@ export function renderMyLifeScreens(ctx) {
               </div>
             )}
           </div>
-          <div>
-            <Eyebrow>今月の練習メニュー</Eyebrow>
-            <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
-              style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, marginTop: 6 }}>
-              {AB_KEYS.map(k => <option key={k} value={k}>{AB_LABEL[k]}強化</option>)}
-            </select>
-          </div>
+          {(() => {
+            // v38(改善:練習の焦点を戦略的に): 各能力の「伸びしろ」と、脚質・今月のレース・伸びしろから
+            // 導いた「⭐推奨」を提示。どこを鍛えるべきかを一目で判断できるようにする。
+            const capV = mlGrowthCap(ml.year, r);
+            const typeKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[r.type];
+            const raceFav = race?.tmpl?.favors;
+            const raceKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[raceFav];
+            const roomOf = (k) => Math.max(0, capV - (r[k] || 0));
+            const scoreOf = (k) => (k === typeKey ? 10 : 0) + (k === raceKey ? 6 : 0) + Math.min(6, roomOf(k) / 6);
+            const recKey = AB_KEYS.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
+            const roomLabel = (k) => { const rm = roomOf(k); return rm >= 22 ? "伸びしろ大" : rm >= 10 ? "伸びしろ中" : rm >= 3 ? "伸びしろ小" : "頭打ち"; };
+            const recWhy = [recKey === typeKey ? "脚質の主武器" : null, recKey === raceKey ? "今月のレースが有利" : null, roomOf(recKey) >= 15 ? "伸びしろ大" : null].filter(Boolean).join("・") || "バランス";
+            return (
+              <div>
+                <Eyebrow>今月の練習メニュー</Eyebrow>
+                <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
+                  style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, marginTop: 6, width: "100%", boxSizing: "border-box" }}>
+                  {AB_KEYS.map(k => <option key={k} value={k}>{k === recKey ? "⭐ " : ""}{AB_LABEL[k]}強化（{roomLabel(k)}）</option>)}
+                </select>
+                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5, lineHeight: 1.5 }}>
+                  ⭐推奨：<b style={{ color: C.green }}>{AB_LABEL[recKey]}</b>（{recWhy}）
+                  {r.focus !== recKey && <span style={{ color: "#e8a13c" }}>　※今は{AB_LABEL[r.focus]}を強化中</span>}
+                </div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                  {AB_KEYS.map(k => (
+                    <span key={k} style={{ fontSize: 9.5, fontFamily: FONT_M, color: k === r.focus ? C.yellow : C.sub, background: C.panel2, borderRadius: 5, padding: "1px 6px", border: k === recKey ? `1px solid ${C.green}` : "1px solid transparent" }}>
+                      {AB_LABEL[k]} {Math.round(r[k] || 0)}<span style={{ color: roomOf(k) >= 10 ? C.green : C.sub }}>（+{roomOf(k)}）</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <div style={{
             background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
             border: `1.5px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.line}`,
