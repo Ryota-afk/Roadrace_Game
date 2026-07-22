@@ -353,7 +353,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // ギャップ維持の消耗が軽くなる（committedBreak）。平坦・スプリントでは恩恵ゼロ＝吸収される。
       en.committedBreak = !!(directive.aceEarly && en.isAce);
       en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
-      en.leadoutFor = null; en.isLeadingOut = false;
+      en.leadoutFor = null; en.isLeadingOut = false; en.chaseHeat = 0;
     });
     // v38: リードアウト指名。各チームでエース（＝射出される選手）に対し、平坦/スプリント寄りの
     // 非エース1名を「リードアウト役」に割り当てる。最終区間で同集団にいれば前を牽いてエースを
@@ -397,6 +397,29 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
     // 2. モード決定（pull/draft/solo/attack）：ロール・ローテーション周期・無線指示から
     const groups = {};
     active.forEach(en => { (groups[en.groupId] = groups[en.groupId] || []).push(en); });
+    // v38(改善:集団スプリント抑制): 平坦系の終盤、大集団が保たれていると「集団スプリントで勝てない」
+    // 非スプリンター型のAIが痺れを切らして飛び出す（早めに仕掛ける）。攻撃は集団の追走ペースを引き上げ
+    // （chaseHeat）、脚のない選手がふるい落とされて隊列が伸びる＝30人団子ゴールが減る。プレイヤー本人は
+    // 自分の作戦に従うので対象外。
+    Object.values(groups).forEach(members => {
+      if (members.length < 6) return;
+      const seg0 = course.segTypeAt(members[0].pos);
+      if (seg0.idx === course.finalIdx) return; // 最終直線ではもう遅い
+      const prog = members[0].pos / course.length;
+      if (prog < 0.40 || prog > 0.86) return;
+      if (!["flat", "sprint", "tt"].includes(seg0.type)) return; // 平坦系のみ（丘・登坂は自然に選抜される）
+      // 大集団のまま終盤に近づくと、集団スプリントで勝てない非スプリンターが痺れを切らして飛び出す。
+      // 攻撃した本人だけがソロで前に出る（＝集団を1人ずつ抜けさせて隊列を伸ばす）。集団本体の消耗は
+      // 増やさない＝プレイヤーが不当にふるい落とされて大敗するのを避けつつ、動きのあるレースにする。
+      members.forEach(en => {
+        if (en.isPlayerChar || en.isAce || en.attackLeft > 0 || en.committedBreak || en.mode === "solo" || en.energy < 42) return;
+        const peak = Math.max(en.flat || 0, en.climb || 0, en.sprint || 0, en.stamina || 0, en.solo || 0);
+        const sprintGap = peak - (en.sprint || 0); // スプリントが弱いほど大きい＝集団ゴールで不利
+        if (sprintGap < 8) return; // スプリント型は集団ゴールを待つ
+        const chance = Math.min(0.05, 0.008 + (members.length - 6) * 0.0012 + (sprintGap - 8) * 0.0009);
+        if (Math.random() < chance) { en.attackLeft = BREAKAWAY_ATTACK_TICKS; en.committedBreak = true; }
+      });
+    });
     Object.values(groups).forEach(members => {
       if (members.length === 1) {
         const en = members[0];
@@ -489,7 +512,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // 最終区間限定にして、周回の長いクリテで残り25%全体に効いて千切れが複利的に増える（＝大敗
         // 多発）のを防ぐ（小集団の逃げ切りには影響小）。
         const finaleTight = (segInfo.idx === course.finalIdx) ? Math.min(0.045, 0.01 + members.length * 0.0009) : 0;
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
+        // v38(改善): 誰かが仕掛けて集団が色めき立っている間（chaseHeat>0）は、集団についていく基準が上がる
+        // ＝脚のない選手がふるい落とされ隊列が伸びる（＝集団スプリントの人数が減る）
+        const chaseTight = (en.chaseHeat > 0) ? 0.02 : 0;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + chaseTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -556,7 +582,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // v17: チームケミストリー（squad構築時にchemMulを付与。未設定なら1で無効果）
         // v38: リードアウトの射出は脚を激しく使う（前を牽くのでドラフト保護が薄い）＝surge中は消耗増。
         const leadoutDrainMul = en.leadoutSurging ? 2.2 : 1;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul;
+        // v38(改善): 追走ペースが上がっている間は消耗も増える（chaseHeatは毎tick減衰）
+        const chaseDrainMul = en.chaseHeat > 0 ? 1.10 : 1;
+        if (en.chaseHeat > 0) en.chaseHeat -= 1;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * chaseDrainMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
       });
@@ -606,12 +635,13 @@ export function resolveFinishClusters(entrants, finishSegType) {
         const energyFactor = 0.85 + Math.max(0, Math.min(1, (en.energy + 20) / 120)) * 0.15;
         return { en, score: finishAbility(en, finishSegType) * energyFactor * jitter };
       }).sort((a, b) => b.score - a.score);
-      // v38(#1): 大集団のゴールスプリントは数珠つなぎに伸びる（従来は上限3秒で20人が団子だった）。
-      // クラスタが大きいほど先頭から最後尾までの着差が広がる（最大7秒）
-      const spread = Math.min(7.0, 0.3 * (scored.length - 1));
+      // v38(#1/改善): 大集団のゴールスプリントは数珠つなぎに伸びる。クラスタが大きいほど先頭から
+      // 最後尾までの着差が広がる（最大14秒）。さらに後方ほど間延びする（frac^1.25）＝集団の頭は
+      // 詰まり、後ろは千切れ気味に流れ込む現実的な着差にし、「全員が10秒以内」の団子感を緩和する。
+      const spread = Math.min(14.0, 0.5 * (scored.length - 1));
       scored.forEach((s, k) => {
         const frac = scored.length > 1 ? k / (scored.length - 1) : 0;
-        s.en.finishTime = baseTime + frac * spread;
+        s.en.finishTime = baseTime + Math.pow(frac, 1.25) * spread;
       });
     }
     i = j;
