@@ -239,6 +239,9 @@ export class RaceErrorBoundary extends React.Component {
   }
 }
 
+// v38(改善#1): 観戦の再生速度をレースをまたいで記憶する（毎回×1にリセットされる退屈を解消）。
+// モジュールレベルの変数なのでRaceViewの再マウント（次のレース）でも保持される。
+let lastRaceSpeed = 2;
 export function RaceView({ sim, onFinish }) {
   // v37: マイライフは自チーム選手も team==="PLAYER" に統一したため、「操作アバター＝あなた本人」は
   // isPlayerChar で判定する（シーズンは単一アバターが無いので従来どおり team==="PLAYER"＝自チーム）。
@@ -253,8 +256,8 @@ export function RaceView({ sim, onFinish }) {
   // 観戦画面はカメラ操作のみの純粋な観戦専用画面になった
   const [finalSeg, setFinalSeg] = useState(false); // 最終区間突入フラグ（カメラの超ズーム・スロー演出のトリガー）
   const [cinematic, setCinematic] = useState(null); // v12: 最終直線シネマティック演出のスナップショット（一度だけ計算）
-  const speedRef = useRef(1);
-  const [speedUi, setSpeedUi] = useState(1);
+  const speedRef = useRef(lastRaceSpeed);
+  const [speedUi, setSpeedUi] = useState(lastRaceSpeed);
   const skipRef = useRef(false);
   const tickRef = useRef(null);
   const rtRef = useRef(0);
@@ -533,7 +536,15 @@ export function RaceView({ sim, onFinish }) {
       if (now - lastHud > 300 || clock >= PLAY_DUR) {
         lastHud = now;
         const sorted = [...riders].sort((a, b) => b.frac - a.frac);
-        const top = sorted.slice(0, 5).map(r => ({ name: r.e.name, team: r.e.team, gap: (sorted[0].frac - r.frac) * totalRef.current }));
+        // v38(改善#2): ライブ順位表のギャップを「距離」ではなく「タイム差（秒）」で出す。従来は距離を
+        // そのまま fmtGap(秒扱い) に渡していたため、終盤で集団になると先頭数名が全員「TOP」になり誰が
+        // 勝っているか読めなかった。先頭の到達進捗と経過時間からペースを逆算して秒差に変換する。
+        const leadFracNow = sorted[0].frac || 1e-6;
+        const paceFracPerSec = leadFracNow / Math.max(1, rt); // 先頭のフラク進行/秒
+        const top = sorted.slice(0, 5).map((r, i) => ({
+          name: r.e.name, team: r.e.team, isPlayer: isAvatar(r.e),
+          gap: i === 0 ? 0 : (leadFracNow - r.frac) / Math.max(1e-6, paceFracPerSec),
+        }));
         let segLabel = course.segs[course.segs.length - 1].label;
         for (let j = 0; j < course.segs.length; j++) { if (leadFrac <= course.cumFrac[j] + 1e-6) { segLabel = course.segs[j].label; break; } }
         // ライブギャップ表示（逃げ集団 vs 追走）：先頭グループと2番手グループの位置差を秒換算
@@ -620,8 +631,8 @@ export function RaceView({ sim, onFinish }) {
         <div style={{ background: C.panel2, borderRadius: 6, padding: "6px 10px", minWidth: 165 }}>
           {hud.top.map((r, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
-              <span style={{ color: r.team === "PLAYER" ? C.yellow : C.text }}>{i + 1}. {r.name}{r.team === "PLAYER" ? " ●" : ""}</span>
-              <span style={{ fontFamily: FONT_M, color: C.sub }}>{fmtGap(r.gap)}</span>
+              <span style={{ color: r.isPlayer ? C.yellow : (r.team === "PLAYER" ? "#bfe3ff" : C.text) }}>{i + 1}. {r.name}{r.isPlayer ? " 🚴" : (r.team === "PLAYER" ? " ●" : "")}</span>
+              <span style={{ fontFamily: FONT_M, color: r.isPlayer ? C.yellow : C.sub }}>{fmtGap(r.gap)}</span>
             </div>
           ))}
         </div>
@@ -740,7 +751,7 @@ export function RaceView({ sim, onFinish }) {
       )}
       <div style={{ display: "flex", gap: 8 }}>
         {!hud.done && (<>
-          <Btn small outline color={C.text} onClick={() => { const nx = speedUi === 4 ? 1 : speedUi * 2; speedRef.current = nx; setSpeedUi(nx); }}>×{speedUi}</Btn>
+          <Btn small outline color={C.text} onClick={() => { const nx = speedUi >= 8 ? 1 : speedUi * 2; speedRef.current = nx; setSpeedUi(nx); lastRaceSpeed = nx; }}>×{speedUi}</Btn>
           <Btn small outline color={C.text} onClick={() => { skipRef.current = true; if (tickRef.current) tickRef.current(); }}>スキップ</Btn>
         </>)}
         {hud.done && <Btn small onClick={onFinish}>結果を見る →</Btn>}
