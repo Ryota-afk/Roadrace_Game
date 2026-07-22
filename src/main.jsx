@@ -1974,6 +1974,11 @@ function App() {
       const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
       const raceWeather = (mode === "race" && s.resultInfo) ? s.resultInfo.race.weather : null;
       const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, raceExpKeys, raceGrade, raceWeather };
+      // v38(改善:育成の手応え): 月次アクション前の能力・OVR・活力を控えておき、後で「今月の成長」を可視化する
+      const _preAb = {}; AB_KEYS.forEach(k => { _preAb[k] = s.player[k] || 0; });
+      const _preSub = { accel: s.player.accel || 0, mental: s.player.mental || 0 };
+      const _preOvr = overall(s.player);
+      const _preVit = s.player.vitality == null ? 100 : s.player.vitality;
       let player = mlApplyMonthEffect(s.player, mode, ctx);
       const log = [...s.log];
       if (ML_SPECIAL_TRAINING[mode]) log.push(`【${s.year}年目 ${MONTHS[s.month]}】${ML_SPECIAL_TRAINING[mode].label}を実施した`);
@@ -2114,10 +2119,29 @@ function App() {
         const worldLite = mlWorldRaceLite(s, s.year * 1000 + s.month * 17 + 3);
         riderStats = mlUpdateRiderStats(s.riderStats, worldLite, new Set(), s.year);
       }
+      // v38(改善:育成の手応え): 「今月の成長」レポート。伸びた能力（丸め後で+1以上、または生の伸びが
+      // 大きいもの）とOVR・活力の増減をまとめ、主画面に出す。毎月の積み上げを目に見える手応えにする。
+      const growthDeltas = AB_KEYS.map(k => {
+        const beforeR = Math.round(_preAb[k]); const afterR = Math.round(player[k] || 0);
+        return { key: k, label: AB_LABEL[k], before: beforeR, after: afterR, raw: (player[k] || 0) - _preAb[k], up: afterR - beforeR };
+      }).filter(d => d.up > 0).sort((a, b) => b.up - a.up || b.raw - a.raw);
+      const subDeltas = [];
+      { const a = Math.round(player.accel || 0) - Math.round(_preSub.accel); if (a > 0) subDeltas.push({ label: "加速力", up: a }); }
+      { const m = Math.round(player.mental || 0) - Math.round(_preSub.mental); if (m > 0) subDeltas.push({ label: "メンタル", up: m }); }
+      const ovrAfter = overall(player);
+      // OVRが10の節目（60/70/80/90…）を越えたら祝う＝成長のピークを演出
+      const ovrMilestone = (ovrAfter >= 50 && Math.floor(ovrAfter / 10) > Math.floor(_preOvr / 10)) ? Math.floor(ovrAfter / 10) * 10 : null;
+      if (ovrMilestone) log.push(`【${s.year}年目 ${MONTHS[s.month]}】📈 総合力（OVR）が${ovrMilestone}に到達した！`);
+      const growthReport = {
+        mode, deltas: growthDeltas, subDeltas, ovrMilestone,
+        ovrBefore: _preOvr, ovrAfter, ovrUp: ovrAfter - _preOvr,
+        vitBefore: Math.round(_preVit), vitAfter: Math.round(player.vitality == null ? 100 : player.vitality),
+        month: s.month, year: s.year,
+      };
       const base = {
         ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)],
         directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
-        money, managerEval, riderStats,
+        money, managerEval, riderStats, growthReport,
         screen: "mylife_main", log,
       };
       // v36(弟子深化): 弟子がいる間は、毎月ごく稀に指導イベントが発生する。関わり方で

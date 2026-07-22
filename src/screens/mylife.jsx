@@ -342,6 +342,33 @@ export function renderMyLifeScreens(ctx) {
               </div>
             )}
           </div>
+          {/* v38(改善:育成の手応え): 「今月の成長」。直近の月次アクションで伸びた能力・OVR・活力を
+              目に見える形で示し、毎月の積み上げに手応えを持たせる。 */}
+          {ml.growthReport && (ml.growthReport.deltas.length > 0 || ml.growthReport.ovrUp > 0 || ml.growthReport.subDeltas.length > 0) && (() => {
+            const gr = ml.growthReport;
+            return (
+              <div style={{ background: "linear-gradient(180deg, rgba(125,208,160,0.12), transparent)", borderRadius: 10, border: `1px solid ${C.green}`, padding: "9px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: 11.5, color: C.green, fontWeight: 700 }}>📈 先月の成長</span>
+                  {gr.ovrUp > 0 && <span style={{ fontFamily: FONT_M, fontSize: 13, color: C.yellow, fontWeight: 700 }}>OVR {gr.ovrBefore}→{gr.ovrAfter} <span style={{ color: C.green }}>(+{gr.ovrUp})</span></span>}
+                </div>
+                {gr.ovrMilestone && <div style={{ fontSize: 12.5, color: C.yellow, fontWeight: 700, marginTop: 5 }}>🎉 総合力 {gr.ovrMilestone} 到達！新たな領域へ</div>}
+                {(gr.deltas.length > 0 || gr.subDeltas.length > 0) ? (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                    {gr.deltas.map(d => (
+                      <span key={d.key} style={{ fontFamily: FONT_M, fontSize: 11.5, color: C.text, background: C.panel2, borderRadius: 6, padding: "2px 8px" }}>
+                        {d.label} <b style={{ color: C.green }}>{d.before}→{d.after}</b> <span style={{ color: C.green }}>+{d.up}</span>
+                      </span>
+                    ))}
+                    {gr.subDeltas.map((d, i) => (
+                      <span key={"s" + i} style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub, background: C.panel2, borderRadius: 6, padding: "2px 8px" }}>{d.label} +{d.up}</span>
+                    ))}
+                  </div>
+                ) : <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5 }}>この能力帯では伸びが緩やか。練習の焦点や活力・休養を見直すと伸びやすくなります。</div>}
+                {gr.vitAfter !== gr.vitBefore && <div style={{ fontSize: 10, color: gr.vitAfter > gr.vitBefore ? C.green : "#c86", marginTop: 5 }}>💚 活力 {gr.vitBefore}→{gr.vitAfter}{gr.vitAfter > gr.vitBefore ? "（休養で回復）" : "（走り込みで消耗）"}</div>}
+              </div>
+            );
+          })()}
           {/* v35(D 物語): メディアナラティブ。キャリアの現状から「記事になる角度」を選び見出し＋記事を生成 */}
           {(() => {
             const media = mlMediaHeadline(ml);
