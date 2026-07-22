@@ -1115,6 +1115,8 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   }
   // v32（条件付き作戦）：選択した作戦をレース全体の指示（集団牽引の強さ・エース発射）へ反映
   const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
+  // v38(改善): モニュメント（丘陵/山岳の古典）は選抜性の高いハードな一日レース。集団を絞る選抜フラグを立てる。
+  course.selective = !!(raceMeta.monument || raceMeta.grade >= 4);
   simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
   rankSim(sim);
   // v36修正: レース後にfinishTimeを書き換えると、観戦アニメ（posHist）と着順（finishTime）が

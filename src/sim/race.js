@@ -407,7 +407,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       if (seg0.idx === course.finalIdx) return; // 最終直線ではもう遅い
       const prog = members[0].pos / course.length;
       if (prog < 0.40 || prog > 0.86) return;
-      if (!["flat", "sprint", "tt"].includes(seg0.type)) return; // 平坦系のみ（丘・登坂は自然に選抜される）
+      // v38(改善): 平坦系＋丘（丘陵クラシック等）で発動。丘は committedBreak に消耗軽減が付くため
+      // 飛び出しが決まりやすく、隊列が伸びる。純登坂/山岳は自然選抜に任せて対象外。
+      if (!["flat", "sprint", "tt", "hill"].includes(seg0.type)) return;
+      const onHill = seg0.type === "hill";
       // 大集団のまま終盤に近づくと、集団スプリントで勝てない非スプリンターが痺れを切らして飛び出す。
       // 攻撃した本人だけがソロで前に出る（＝集団を1人ずつ抜けさせて隊列を伸ばす）。集団本体の消耗は
       // 増やさない＝プレイヤーが不当にふるい落とされて大敗するのを避けつつ、動きのあるレースにする。
@@ -416,7 +419,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const peak = Math.max(en.flat || 0, en.climb || 0, en.sprint || 0, en.stamina || 0, en.solo || 0);
         const sprintGap = peak - (en.sprint || 0); // スプリントが弱いほど大きい＝集団ゴールで不利
         if (sprintGap < 8) return; // スプリント型は集団ゴールを待つ
-        const chance = Math.min(0.05, 0.008 + (members.length - 6) * 0.0012 + (sprintGap - 8) * 0.0009);
+        // 丘では飛び出しが決まりやすい（消耗軽減）ので発動率を上げ、登り適性のある選手が仕掛ける
+        const climbEdge = onHill ? Math.max(0, ((en.climb || 0) - (en.sprint || 0))) / 200 : 0;
+        const chance = Math.min(0.06, 0.008 + (members.length - 6) * 0.0012 + (sprintGap - 8) * 0.0009 + (onHill ? 0.012 : 0) + climbEdge);
         if (Math.random() < chance) { en.attackLeft = BREAKAWAY_ATTACK_TICKS; en.committedBreak = true; }
       });
     });
@@ -515,7 +520,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // v38(改善): 誰かが仕掛けて集団が色めき立っている間（chaseHeat>0）は、集団についていく基準が上がる
         // ＝脚のない選手がふるい落とされ隊列が伸びる（＝集団スプリントの人数が減る）
         const chaseTight = (en.chaseHeat > 0) ? 0.02 : 0;
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + chaseTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
+        // v38(改善): モニュメント/最上級グレードの選抜レースは、丘・登坂・最終で集団についていく基準が
+        // 上がる＝実力上位だけが残る「select group」の決着に。極まった選手は残り、力の劣る選手はふるわれる。
+        const selectiveTight = (course.selective && (["hill", "climb", "mtn"].includes(segType) || segInfo.idx === course.finalIdx)) ? 0.035 : 0;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + chaseTight + selectiveTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -585,7 +593,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // v38(改善): 追走ペースが上がっている間は消耗も増える（chaseHeatは毎tick減衰）
         const chaseDrainMul = en.chaseHeat > 0 ? 1.10 : 1;
         if (en.chaseHeat > 0) en.chaseHeat -= 1;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * chaseDrainMul;
+        // v38(改善): モニュメント等の選抜レースは、丘・登坂の消耗が大きく累積し、スタミナの劣る選手が
+        // 繰り返しの登りで脱落していく＝均質に強い集団でもゴール前に「select group」へ絞られる。
+        // ドラフトの風除け（shelterMul）を一部打ち消す係数なので、体力のある選手（＝極まった主人公）は残る。
+        const selectiveDrainMul = (course.selective && ["hill", "climb", "mtn"].includes(segType)) ? 1.45 : 1;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * chaseDrainMul * selectiveDrainMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
       });
