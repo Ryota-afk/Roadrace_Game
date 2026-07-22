@@ -946,8 +946,28 @@ export function renderMyLifeScreens(ctx) {
           ))}
         </div>
       ) : null;
+      // v38(改善③④): 結果の感情的ペイオフ。着順に応じて大きく反応するヒーローバナー。
+      // 「ただの数字」から「その一戦の記憶に残る瞬間」へ。下馬評を上回れば会心の走りも添える。
+      const beatForecast = forecast && rank < forecast.rank - 1;
+      const big = race.milestone || race.monument;
+      const hero = rank === 1
+        ? { icon: "🏆", title: big ? "大舞台を制覇！！" : "優勝！！", sub: "頂点に立った——この一勝がキャリアを彩る。", bg: "linear-gradient(135deg,#3a2f10,#241d0c)", color: "#ffd23f", border: "#ffd23f" }
+        : rank <= 3
+        ? { icon: rank === 2 ? "🥈" : "🥉", title: `${rank}位・表彰台！`, sub: "あと一歩。だが確かな手応えを掴んだ。", bg: "linear-gradient(135deg,#33291a,#221b12)", color: "#e8a13c", border: "#e8a13c" }
+        : rank <= 10
+        ? { icon: "👏", title: `${rank}位・上位入賞`, sub: "集団の前で戦えた。着実な一歩。", bg: C.panel, color: C.green, border: C.green }
+        : rank <= Math.ceil(total * 0.5)
+        ? { icon: "🚴", title: `${rank}位`, sub: "中団でレースを終えた。次へ向けて糧にしたい。", bg: C.panel, color: C.sub, border: C.line }
+        : { icon: "💧", title: `${rank}位`, sub: "厳しい一戦。この悔しさを、次の走りにぶつける。", bg: C.panel, color: "#c86", border: "#c86" };
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: hero.bg, borderRadius: 14, padding: "18px 16px", border: `2px solid ${hero.border}`, textAlign: "center" }}>
+            <div style={{ fontSize: 46, lineHeight: 1 }}>{hero.icon}</div>
+            <div style={{ fontFamily: FONT_D, fontSize: 26, fontWeight: 800, color: hero.color, margin: "6px 0 2px" }}>{hero.title}</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>{hero.sub}</div>
+            {beatForecast && <div style={{ fontSize: 12.5, color: C.green, fontWeight: 700, marginTop: 6 }}>⤴ 下馬評{forecast.mark}を覆す会心の走り！</div>}
+            <div style={{ fontFamily: FONT_M, fontSize: 12, color: C.sub, marginTop: 8 }}>{rank}位 / {total}人中{finishTime != null ? ` ・ ${rank === 1 ? fmtTime(finishTime) : `トップ +${fmtTime(gapSec)}`}` : ""}</div>
+          </div>
           <div style={{ background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.yellow}` }}>
             <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : undefined}>{race.milestone ? `${ML_MILESTONE_LABEL[race.milestone].eyebrow} RESULT` : race.monument ? "🏛️ モニュメント RESULT" : "RESULT"} — {race.name}</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0 1px" }}>{rank}位 / {total}人中</div>
