@@ -267,34 +267,49 @@ export const cycMod = (v, m) => ((v % m) + m) % m;
 
 // v39.9: ヘルメット色のバリエーション（同一チーム色でも見分けが付くように）
 export const CAP_COLORS = ["#e9e2d4", "#d94f4f", "#e0b23c", "#4b7fc1", "#43a047", "#7e57c2", "#eeeeee", "#2b3038"];
-// v39.10: ドット絵風の前傾レーサー（進行方向＝右向き）。接地点(x,y)にブロック(rect)で描く。拡縮しない。
-// px(a,b,w,h,fill): 足元(0,0)基準・上向きにbだけ上げた位置へ w×h のピクセルブロックを置く。
+// v39.11: ロードバイクに乗ったレーサーのドット絵（側面・進行方向＝右）。細い前後同径ホイール＋ダイヤ型
+// フレーム＋ドロップハンドル、選手はドロップを握って深く前傾したエアロ姿勢。接地点(x,y)に描く。拡縮なし。
 function IsoRider({ x, y, color, cap, isPlayer, isAce, surging }) {
-  const s = isAce ? 1.12 : 1;
-  const u = 1.6 * s;
-  const px = (a, b, w, h, fill) => <rect x={(a * u).toFixed(2)} y={(-(b + h) * u).toFixed(2)} width={(w * u).toFixed(2)} height={(h * u).toFixed(2)} fill={fill} shapeRendering="crispEdges" />;
+  const s = isAce ? 1.14 : 1, u = 1.45 * s;
+  const X = (a) => +(a * u).toFixed(2), Y = (b) => +(-b * u).toFixed(2);
+  const px = (a, b, w, h, f) => <rect x={X(a)} y={Y(b + h)} width={(w * u).toFixed(2)} height={(h * u).toFixed(2)} fill={f} shapeRendering="crispEdges" />;
+  const ln = (a, b, c, d, f, wd = 1) => <line x1={X(a)} y1={Y(b)} x2={X(c)} y2={Y(d)} stroke={f} strokeWidth={(wd * u).toFixed(2)} strokeLinecap="round" />;
+  const FR = "#aeb4be";
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-      <ellipse cx="0" cy={1 * s} rx={7 * s} ry={2 * s} fill="#000" opacity="0.22" />
-      {surging && <g><rect x={-11 * s} y={-6 * s} width={7 * s} height="1.2" fill="#fff" opacity="0.34" /><rect x={-10 * s} y={-9 * s} width={5 * s} height="1.1" fill="#fff" opacity="0.22" /></g>}
-      {/* 車輪（ドット風の暗いリング） */}
-      <circle cx={-3.6 * s} cy={-1.6 * s} r={2.5 * s} fill="none" stroke="#14171d" strokeWidth={1.5 * s} />
-      <circle cx={3.6 * s} cy={-1.6 * s} r={2.5 * s} fill="none" stroke="#14171d" strokeWidth={1.5 * s} />
-      {/* フレーム */}
-      {px(-2.4, 1.2, 4.8, 0.7, "#cfd3d9")}
-      {px(-0.3, 1.2, 0.8, 1.4, "#b6bbc4")}
-      {/* 脚 */}
-      {px(-1.6, 0.9, 1.0, 1.4, "#20242c")}
-      {/* 胴（ジャージ＝識別色）を階段状に前傾 */}
-      {px(-1.2, 2.2, 2.2, 1.6, color)}
-      {px(0.1, 3.6, 2.2, 1.6, color)}
-      {px(1.4, 4.9, 2.0, 1.5, color)}
-      {/* 腕→ハンドル */}
-      {px(1.9, 2.4, 1.3, 0.7, "#20242c")}
-      {/* 頭＋ヘルメット（色でバリエーション） */}
-      {isPlayer && <rect x={(1.2 * u).toFixed(2)} y={(-8.6 * u).toFixed(2)} width={(3.8 * u).toFixed(2)} height={(4.2 * u).toFixed(2)} rx={u} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
-      {px(2.6, 5.9, 1.9, 1.7, "#f2d2a8")}
-      {px(2.4, 7.4, 2.3, 0.9, cap || "#e9e2d4")}
+      <ellipse cx="0" cy={0.9 * s} rx={8.5 * s} ry={2 * s} fill="#000" opacity="0.22" />
+      {surging && <g><rect x={-13 * s} y={-6.5 * s} width={8 * s} height={1.2 * s} fill="#fff" opacity="0.32" /><rect x={-11 * s} y={-9.5 * s} width={5 * s} height={1 * s} fill="#fff" opacity="0.2" /></g>}
+      {/* 前後ホイール（細リム＋ハブ） */}
+      <circle cx={X(-5.4)} cy={Y(2.4)} r={2.9 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
+      <circle cx={X(5.4)} cy={Y(2.4)} r={2.9 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
+      <circle cx={X(-5.4)} cy={Y(2.4)} r={0.5 * u} fill="#12141a" />
+      <circle cx={X(5.4)} cy={Y(2.4)} r={0.5 * u} fill="#12141a" />
+      {/* ダイヤ型フレーム（チェーンステー/シートチューブ/ダウンチューブ/トップチューブ/フォーク） */}
+      {ln(-5.4, 2.4, 0.2, 2.4, FR, 0.9)}
+      {ln(0.2, 2.4, -1.4, 7, FR, 1)}
+      {ln(0.2, 2.4, 5.4, 4.6, FR, 1)}
+      {ln(-1.4, 7, 5.2, 4.9, FR, 1)}
+      {ln(-5.4, 2.4, -1.4, 7, FR, 0.9)}
+      {ln(5.4, 2.4, 5.4, 4.9, FR, 0.9)}
+      {/* ドロップハンドル */}
+      {ln(5.2, 4.9, 6.2, 4.9, FR, 0.9)}
+      {ln(6.2, 4.9, 6.2, 3.6, FR, 0.9)}
+      {/* サドル */}
+      {px(-2.4, 6.8, 1.9, 0.6, "#20242c")}
+      {/* 脚（ペダリング） */}
+      {ln(-1.2, 6.6, 0.3, 2.6, "#242830", 1.3)}
+      {ln(0.3, 2.6, 1.6, 3.4, "#242830", 1.1)}
+      {/* 深い前傾の胴（ジャージ＝識別色）：ほぼ水平な背中 */}
+      {px(-2.2, 6.6, 2.0, 1.7, color)}
+      {px(-0.6, 6.9, 1.9, 1.6, color)}
+      {px(1.0, 7.0, 1.8, 1.5, color)}
+      {/* 腕→ドロップ */}
+      {ln(2.6, 7.2, 5.8, 4.6, "#242830", 1.1)}
+      {/* 頭＋エアロヘルメット（色でバリエーション・後方に尾） */}
+      {isPlayer && <rect x={X(-2.6)} y={Y(9.6)} width={(8.4 * u).toFixed(2)} height={(4 * u).toFixed(2)} rx={u} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
+      {px(3.0, 7.0, 1.7, 1.6, "#f2d2a8")}
+      {px(2.2, 8.3, 2.7, 0.95, cap || "#e9e2d4")}
+      {px(1.7, 8.3, 0.7, 0.7, cap || "#e9e2d4")}
     </g>
   );
 }
@@ -443,7 +458,7 @@ export class RaceErrorBoundary extends React.Component {
 
 // v38(改善#1): 観戦の再生速度をレースをまたいで記憶する（毎回×1にリセットされる退屈を解消）。
 // モジュールレベルの変数なのでRaceViewの再マウント（次のレース）でも保持される。
-let lastRaceSpeed = 2;
+let lastRaceSpeed = 1;
 export function RaceView({ sim, onFinish }) {
   // v37: マイライフは自チーム選手も team==="PLAYER" に統一したため、「操作アバター＝あなた本人」は
   // isPlayerChar で判定する（シーズンは単一アバターが無いので従来どおり team==="PLAYER"＝自チーム）。
@@ -475,7 +490,7 @@ export function RaceView({ sim, onFinish }) {
   // until までの間 slow を clock 進行に掛け、focusId があればカメラをその選手の集団へ寄せる。
   const beatRef = useRef({ until: 0, slow: 1, focusId: null });
   const flammeRef = useRef(false); // 「残り1km（フラムルージュ）」の一度きり演出フラグ
-  const PLAY_DUR = 40;
+  const PLAY_DUR = 56;  // v39.11: 展開（先頭交代・逃げ・判断の効果）を見やすくするため再生を長めに
   const course = sim.course;
   // v39.3(演出): 実況ラインのバリエーション。区間・展開ごとに複数から決定的/準ランダムに選ぶ。
   const flammeFrac = (course.cumFrac && course.finalIdx > 0) ? Math.max(0.5, course.cumFrac[course.finalIdx - 1] - 0.045) : 0.9;
@@ -900,7 +915,11 @@ export function RaceView({ sim, onFinish }) {
           gap: i === 0 ? 0 : (leadFracNow - r.frac) / Math.max(1e-6, paceFracPerSec),
         }));
         let segLabel = course.segs[course.segs.length - 1].label;
-        for (let j = 0; j < course.segs.length; j++) { if (leadFrac <= course.cumFrac[j] + 1e-6) { segLabel = course.segs[j].label; break; } }
+        let segTypeNow = course.segs[course.segs.length - 1].type;
+        for (let j = 0; j < course.segs.length; j++) { if (leadFrac <= course.cumFrac[j] + 1e-6) { segLabel = course.segs[j].label; segTypeNow = course.segs[j].type; break; } }
+        // v39.11: 現在地形のおおまかな勾配%（course.steepnessで強弱）。俯瞰マップのHUDに出す。
+        const gradeBase = { climb: 7, mtn: 10, hill: 3.5, flat: 0, sprint: 0, tt: 0 }[segTypeNow] || 0;
+        const segSteep = gradeBase > 0 ? Math.round(gradeBase * (course.steepness || 1) * 10) / 10 : 0;
         // ライブギャップ表示（逃げ集団 vs 追走）：先頭グループと2番手グループの位置差を秒換算
         let gapText = null;
         const gidSet = [...new Set(sorted.map(r => r.gid))];
@@ -963,7 +982,7 @@ export function RaceView({ sim, onFinish }) {
         }
         const isDone = clock >= PLAY_DUR;
         const lap = course.laps > 1 ? course.lapAtFrac(leadFrac) : null;
-        setHud({ top, seg: segLabel, clock: rt, done: isDone, comment, gap: gapText, lap });
+        setHud({ top, seg: segLabel, segType: segTypeNow, segSteep, clock: rt, done: isDone, comment, gap: gapText, lap });
         if (isDone && !done) { done = true; if (intervalId) clearInterval(intervalId); return; }
       }
     };
@@ -980,11 +999,17 @@ export function RaceView({ sim, onFinish }) {
     };
   }, [sim]);
 
+  // v39.11: 現在の地形で俯瞰/側面マップの地の色を変え、走っている場所の性格を伝える。
+  const TERRAIN_BG = { climb: "#4a3d2f", mtn: "#3b3e45", hill: "#43502e", sprint: "#33414c", flat: "#3f5a3a", tt: "#39544f" };
+  const TERRAIN_BG_SIDE = { climb: "#2b2419", mtn: "#22242a", hill: "#27301b", sprint: "#1e2830", flat: "#232a20", tt: "#203230" };
+  const terrainBg = TERRAIN_BG[hud.segType] || "#3f5a3a";
+  const terrainBgSide = TERRAIN_BG_SIDE[hud.segType] || "#232a20";
+  const TERRAIN_ICON = { climb: "⛰", mtn: "🏔", hill: "🌄", sprint: "🏁", flat: "🌾", tt: "🕐" };
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <div style={{ background: C.panel2, borderLeft: `4px solid ${C.yellow}`, borderRadius: 6, padding: "6px 10px" }}>
-          <div style={{ fontFamily: FONT_D, fontSize: 12, color: C.yellow }}>{hud.seg}{hud.lap ? `（${hud.lap}/${sim.course.laps}周）` : ""}</div>
+          <div style={{ fontFamily: FONT_D, fontSize: 12, color: C.yellow }}>{TERRAIN_ICON[hud.segType] || ""} {hud.seg}{hud.lap ? `（${hud.lap}/${sim.course.laps}周）` : ""}{hud.segSteep ? ` ▲${hud.segSteep}%` : ""}</div>
           <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.text }}>{fmtTime(hud.clock)}</div>
           {hud.gap && <div style={{ fontFamily: FONT_M, fontSize: 10.5, color: C.green, marginTop: 2 }}>{hud.gap}</div>}
         </div>
@@ -1037,7 +1062,7 @@ export function RaceView({ sim, onFinish }) {
         <>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${TOP_H}`, background: "#3f5a3a", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${TOP_H}`, background: terrainBg, borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "background-color 0.6s, border-color 0.2s" }}>
               {/* v12: 集団の2次元的な広がり（団子状〜エシュロン時の斜め隊列）に対して
                   道幅が狭すぎて選手がはみ出て見える問題を修正するため大幅に拡張。
                   さらに拡張してほしいという追加フィードバックを繰り返し受け再拡大。
@@ -1097,7 +1122,7 @@ export function RaceView({ sim, onFinish }) {
           </div>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${SIDE_H}`, background: "#232a20", borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "border-color 0.2s" }}>
+            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${SIDE_H}`, background: terrainBgSide, borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "background-color 0.6s, border-color 0.2s" }}>
               <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
               <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="16" />
               {ridersUi.map(r => {
@@ -1132,7 +1157,7 @@ export function RaceView({ sim, onFinish }) {
       )}
       <div style={{ display: "flex", gap: 8 }}>
         {!hud.done && !decision && (<>
-          <Btn small outline color={C.text} onClick={() => { const nx = speedUi >= 8 ? 1 : speedUi * 2; speedRef.current = nx; setSpeedUi(nx); lastRaceSpeed = nx; }}>×{speedUi}</Btn>
+          <Btn small outline color={C.text} onClick={() => { const nx = speedUi >= 8 ? 0.5 : speedUi * 2; speedRef.current = nx; setSpeedUi(nx); lastRaceSpeed = nx; }}>×{speedUi}</Btn>
           <Btn small outline color={C.text} onClick={() => { skipRef.current = true; if (tickRef.current) tickRef.current(); }}>スキップ</Btn>
         </>)}
         {hud.done && <Btn small onClick={onFinish}>結果を見る →</Btn>}
