@@ -355,8 +355,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
       en.leadoutFor = null; en.isLeadingOut = false;
       // v39(A案): レース中の「判断カード」でプレイヤーが選ぶ動きの状態。conserveLeft>0の間は
-      // 脚を溜める（牽引しない＋消耗軽減）、finaleSend は最終区間の追い込みが鋭くなる。
-      en.conserveLeft = 0; en.finaleSend = false;
+      // 脚を溜める（牽引しない＋消耗軽減）、finaleSend（数値）は最終区間の追い込みの上乗せ、
+      // holdOn>0の間は歯を食いしばって集団に食らいつく（keepThreshが下がる＝千切れにくい）。
+      en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0;
     });
     // v38: リードアウト指名。各チームでエース（＝射出される選手）に対し、平坦/スプリント寄りの
     // 非エース1名を「リードアウト役」に割り当てる。最終区間で同集団にいれば前を牽いてエースを
@@ -526,7 +527,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // v38(改善): モニュメント/最上級グレードの選抜レースは、丘・登坂・最終で集団についていく基準が
         // 上がる＝実力上位だけが残る「select group」の決着に。極まった選手は残り、力の劣る選手はふるわれる。
         const selectiveTight = (course.selective && (["hill", "climb", "mtn"].includes(segType) || segInfo.idx === course.finalIdx)) ? 0.035 : 0;
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? 0.05 : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -565,8 +566,8 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
               - (hasAbility(en, "choke") ? 0.03 : 0)
               // v38: リードアウト役が同集団で射出してくれているエースは、風除け＋加速で伸びる（スリングショット）
               + (slingshotAceIds.has(en.id) ? 0.045 : 0)
-              // v39(A案): 「全力で踏む」判断＝最終直線で脚を残さず絞り出す（追い込みが鋭くなる）
-              + (en.finaleSend ? 0.05 : 0);
+              // v39(A案): 「全力で踏む／差し脚」判断＝最終直線で脚を残さず絞り出す（追い込みの上乗せ・数値）
+              + (en.finaleSend || 0);
             // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
             const accelKick = ((en.accel ?? 50) - 50) / 900;
             const mentalKick = ((en.mental ?? 50) - 50) / 1500;
@@ -609,6 +610,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
     // 4. 履歴記録・ゴール判定
     active.forEach(en => {
       if (en.conserveLeft > 0) en.conserveLeft--; // v39(A案): 温存の残りtickを消化
+      if (en.holdOn > 0) en.holdOn--;             // v39(A案): 食らいつく残りtickを消化
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
       en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
       if (en.pos >= course.length && !en.finished) { en.finished = true; en.finishTime = tick * TICK_SEC; }
@@ -631,15 +633,29 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
 // セットするだけの純関数。RACE_MOVES のキーが RaceView のカード選択肢と対応する。
 export const RACE_MOVES = {
   // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣
-  attack: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.conserveLeft = 0; },
+  // 得意地形・逃げ屋のアタックは、脚質・特性による能力ブースト（escape/地形適性）がsim側で乗るため、
+  // 同じ attack でも「その選手ならでは」の伸びになる（専用ムーブを増やさず必勝ボタン化を避ける）。
+  attack: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; },
   // 🛡 脚を溜める：集団後方で牽かず消耗を抑える。勝負所に脚を残す堅実策
-  conserve: (r) => { r.conserveLeft = 80; r.attackLeft = 0; r.committedBreak = false; },
+  conserve: (r) => { r.conserveLeft = 80; r.attackLeft = 0; r.committedBreak = false; r.holdOn = 0; },
+  // 🦴 食らいついて粘る：歯を食いしばって集団に残る（千切れにくい）。食らいつく脚と好相性
+  hangOn: (r) => { r.holdOn = 130; r.conserveLeft = 50; r.attackLeft = 0; r.committedBreak = false; },
   // 🚴 流れに任せる：特別な動きはせず展開に乗る（基準の挙動）
-  hold: (r) => { r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  hold: (r) => { r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; r.holdOn = 0; },
   // 🔥 早駆け：ここから一気に踏んで抜け出し、そのままゴールまで踏み切る
-  send: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.finaleSend = true; r.conserveLeft = 0; },
-  // ⏳ 差しにかける：ギリギリまで脚を溜め、最終直線で鋭く伸びる
-  kick: (r) => { r.conserveLeft = 55; r.finaleSend = true; r.attackLeft = 0; r.committedBreak = false; },
+  send: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.finaleSend = 0.06; r.conserveLeft = 0; },
+  // ⏳ 差しにかける：最終直線まで脚を溜め、そこで鋭く伸びる（最終区間の追い込みを上乗せ）
+  kick: (r) => { r.finaleSend = 0.09; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  // 🗡 会心の差し脚：差し脚・豪脚型が最終直線で最大の切れ味を出す（追い込み最大）
+  kickBig: (r) => { r.finaleSend = 0.15; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  // 🏁 スプリント勝負：集団のゴールスプリントに合わせ、番手をキープして最後に爆発させる
+  sprintWait: (r) => { r.finaleSend = 0.11; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  // 🤝 エースを射出：アシストが自分の脚を使ってエースの最終スプリントを援護する（自分の順位は二の次）
+  assistLaunch: (r, riders) => {
+    r.conserveLeft = 25; r.attackLeft = 0; r.committedBreak = false; r.finaleSend = 0; r.holdOn = 0;
+    const ace = riders && riders.find(o => o.team === r.team && o.isAce && o.id !== r.id);
+    if (ace) { ace.finaleSend = Math.max(ace.finaleSend || 0, 0.06); ace.conserveLeft = Math.max(ace.conserveLeft || 0, 40); }
+  },
 };
 
 // v39(A案): レースを途中tickから「フォーク」して再計算する。注目選手にプレイヤーの選択(moveId)を
@@ -653,10 +669,11 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
     en.committedBreak = false;
     en.isLeadingOut = false;
     en.leadoutSurging = false;
-    if (en.id !== focusId) { en.conserveLeft = 0; en.finaleSend = false; }
+    // 注目選手以外の判断由来の状態はリセット（assistLaunchでエースに付けた分は下で再適用される）
+    if (en.id !== focusId) { en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; }
   });
   const focus = riders.find(en => en.id === focusId);
-  if (focus && RACE_MOVES[moveId]) RACE_MOVES[moveId](focus);
+  if (focus && RACE_MOVES[moveId]) RACE_MOVES[moveId](focus, riders);
   simulateTicks(sim.course, riders, fromTick, sim.directive || { chaseMode: "normal", aceEarly: false }, sim.groupMode === "solo");
   rankSim(sim);
   return sim;
