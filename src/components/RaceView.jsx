@@ -286,12 +286,27 @@ export const cycMod = (v, m) => ((v % m) + m) % m;
 export const CAP_COLORS = ["#e9e2d4", "#d94f4f", "#e0b23c", "#4b7fc1", "#43a047", "#7e57c2", "#eeeeee", "#2b3038"];
 // v39.11: ロードバイクに乗ったレーサーのドット絵（側面・進行方向＝右）。細い前後同径ホイール＋ダイヤ型
 // フレーム＋ドロップハンドル、選手はドロップを握って深く前傾したエアロ姿勢。接地点(x,y)に描く。拡縮なし。
-function IsoRider({ x, y, color, cap, isPlayer, isAce, surging }) {
+function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple }) {
   const s = isAce ? 1.14 : 1, u = 1.45 * s;
   const X = (a) => +(a * u).toFixed(2), Y = (b) => +(-b * u).toFixed(2);
   const px = (a, b, w, h, f) => <rect x={X(a)} y={Y(b + h)} width={(w * u).toFixed(2)} height={(h * u).toFixed(2)} fill={f} shapeRendering="crispEdges" />;
   const ln = (a, b, c, d, f, wd = 1) => <line x1={X(a)} y1={Y(b)} x2={X(c)} y2={Y(d)} stroke={f} strokeWidth={(wd * u).toFixed(2)} strokeLinecap="round" />;
   const FR = "#aeb4be";
+  // v39.14(残像対策): 大人数のときはノード数を抑えた簡易スプライトで描く（1人あたり約20→7ノード）。
+  // 端末の描画負荷が下がり、尾を引くような残像が出にくくなる。シルエットは自転車のまま。
+  if (simple) {
+    return (
+      <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
+        <ellipse cx="0" cy={0.9 * s} rx={7.5 * s} ry={1.8 * s} fill="#000" opacity="0.22" />
+        <circle cx={X(-5.4)} cy={Y(2.4)} r={2.7 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
+        <circle cx={X(5.4)} cy={Y(2.4)} r={2.7 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
+        {ln(-5.4, 2.4, 5.4, 4.6, FR, 0.9)}
+        {px(-2.2, 6.4, 5.2, 1.8, color)}
+        {isPlayer && <rect x={X(-2.8)} y={Y(9.4)} width={(8.6 * u).toFixed(2)} height={(3.6 * u).toFixed(2)} rx={u} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
+        {px(2.6, 7.4, 2.4, 1.5, cap || "#e9e2d4")}
+      </g>
+    );
+  }
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
       <ellipse cx="0" cy={0.9 * s} rx={8.5 * s} ry={2 * s} fill="#000" opacity="0.22" />
@@ -341,9 +356,14 @@ export function FinalSprintCinematic({ contenders }) {
   const [now, setNow] = useState(() => performance.now());
   const startRef = useRef(performance.now());
   const camRef = useRef(null); // v39.6: 追走カメラの平滑化用（先頭交代時のカメラ移動をなめらかに）
+  // v39.14(残像対策): 毎フレーム全選手のSVG（1人あたり十数ノード）を再構築すると端末によっては
+  // 描画が追いつかず残像・尾を引いて見える。約30fpsに間引いて1フレームあたりの再構築量を半減させる。
   useEffect(() => {
-    let raf;
-    const loop = () => { setNow(performance.now()); raf = requestAnimationFrame(loop); };
+    let raf, last = 0;
+    const loop = (t) => {
+      if (t - last >= 32) { last = t; setNow(performance.now()); }
+      raf = requestAnimationFrame(loop);
+    };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
@@ -443,9 +463,9 @@ export function FinalSprintCinematic({ contenders }) {
           return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#14171d"} />;
         })}
         {/* 選手（立ったスプライト） */}
-        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging} />)}
+        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging} simple={n > 10 && !r.c.isPlayer && !r.c.isAce} />)}
       </svg>
-      <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />
+      {fade > 0.01 && <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />}
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
         {soloWin ? "🏁 独走フィニッシュ" : n > 1 ? (bunch ? `🏁 大集団のゴールスプリント（${n}名）` : "🏁 ゴールスプリント") : "🏁 単独ゴール"}{close && approaching ? " — スロー再生" : ""}
       </div>

@@ -81,7 +81,19 @@ export const persMul = (r, k) => (PERSONALITIES[r.personality]?.mul[k]) || 1;
 
 export const softFactor = (v, cap = 88) => (v < cap ? 1 : Math.exp(-(v - cap) / 4));
 
-export const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * softFactor(r[k], cap); };
+// v39.14(バランス): 能力成長の逓減カーブ。従来のsoftFactorは「capまで減速ゼロ→capで壁」だったため、
+// 伸びが一直線に上限へ張り付き、2年ほどでカンスト＝以降の成長に手応えが無くなっていた。
+// 上限の手前TAPERから徐々に鈍らせ、「最後の20点は簡単には埋まらない」育成カーブにする。
+export const GROWTH_TAPER = 42;
+export const GROWTH_AT_CAP = 0.2;                  // 上限到達時点の伸び倍率（ここから先はさらに急減衰）
+export const growthFactor = (v, cap = 88) => {
+  // 上限超過は急減衰。上限ぴったりで倍率が跳ね上がらないよう、逓減カーブの終端値から連続させる
+  if (v >= cap) return GROWTH_AT_CAP * Math.exp(-(v - cap) / 4);
+  const t = Math.max(0, Math.min(1, (v - (cap - GROWTH_TAPER)) / GROWTH_TAPER));
+  return 1 - (1 - GROWTH_AT_CAP) * t * t;
+};
+
+export const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * growthFactor(r[k], cap); };
 
 // v38(改善): 副ステ（加速力/体格/メンタル）の上限を 94→110、フル成長域を 88→100 に拡張。
 // 従来はメンタルが数年で94にカンストして「大舞台の経験で育つ」意味が消えていた。天井を上げ、

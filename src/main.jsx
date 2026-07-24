@@ -1829,7 +1829,11 @@ function App() {
     const carLv = ctx ? ctx.carLv : -1;
     const houseLv = ctx ? ctx.houseLv : -1;
     const flags = (ctx && ctx.flags) || {};
-    const growthCap = mlGrowthCap(ctx && ctx.year, player);
+    // v39.14(バランス): 難易度で成長上限を変える。従来は難易度がAIの強さにしか効かず、どの難易度でも
+    // 2年ほどでカンストして「成長の楽しみ」が消えていた。上位難易度ほど天井が低く、伸ばし切るには
+    // 長いキャリアと良い育成（活力・コーチ・特能）が要る＝難易度が育成そのものの手応えに直結する。
+    const diffCapAdj = ({ easy: 4, normal: 0, hard: -5, oni: -10 })[(ctx && ctx.difficulty) || "easy"] ?? 0;
+    const growthCap = mlGrowthCap(ctx && ctx.year, player) + diffCapAdj;
     // v35(バランス): マイライフには選手本人の故障システムが無く、「ガラスの体」（危険度＝濃い配合の代償）が
     // 完全に無効化されていた（＝インブリードがノーリスクで爆発力を得られる抜け穴）。故障システムを新設せず、
     // 脆い体を「疲労が溜まりやすく抜けにくい」形で表現し、健康管理（休養の頻度）に実コストを課す。
@@ -1977,7 +1981,7 @@ function App() {
         ? [...new Set(s.result.course.segs.map(seg => SEG_AB[seg.type]))] : [];
       const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
       const raceWeather = (mode === "race" && s.resultInfo) ? s.resultInfo.race.weather : null;
-      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, raceExpKeys, raceGrade, raceWeather };
+      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather };
       // v38(改善:育成の手応え): 月次アクション前の能力・OVR・活力を控えておき、後で「今月の成長」を可視化する
       const _preAb = {}; AB_KEYS.forEach(k => { _preAb[k] = s.player[k] || 0; });
       const _preSub = { accel: s.player.accel || 0, mental: s.player.mental || 0 };
