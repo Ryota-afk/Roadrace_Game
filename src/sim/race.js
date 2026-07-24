@@ -353,7 +353,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // ギャップ維持の消耗が軽くなる（committedBreak）。平坦・スプリントでは恩恵ゼロ＝吸収される。
       en.committedBreak = !!(directive.aceEarly && en.isAce);
       en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
-      en.leadoutFor = null; en.isLeadingOut = false; en.chaseHeat = 0;
+      en.leadoutFor = null; en.isLeadingOut = false;
+      // v39(A案): レース中の「判断カード」でプレイヤーが選ぶ動きの状態。conserveLeft>0の間は
+      // 脚を溜める（牽引しない＋消耗軽減）、finaleSend は最終区間の追い込みが鋭くなる。
+      en.conserveLeft = 0; en.finaleSend = false;
     });
     // v38: リードアウト指名。各チームでエース（＝射出される選手）に対し、平坦/スプリント寄りの
     // 非エース1名を「リードアウト役」に割り当てる。最終区間で同集団にいれば前を牽いてエースを
@@ -375,6 +378,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       en.posHist = en.posHist.slice(0, fromTick); en.energyHist = en.energyHist.slice(0, fromTick);
       en.modeHist = en.modeHist.slice(0, fromTick); en.groupHist = en.groupHist.slice(0, fromTick);
       en.slotHist = en.slotHist.slice(0, fromTick);
+      // v39(A案 bugfix): 完走済みの状態が持ち越されると active が空になり再開ループが即break（=再計算されない）。
+      // fromTick時点でまだゴールしていない選手（pos<コース長）はレース続行として finished を解除する。
+      if (en.pos < course.length) { en.finished = false; en.finishTime = null; }
       if (directive.aceEarly && en.isAce) { en.attackLeft = ATTACK_TICKS; en.committedBreak = true; }
     });
   }
@@ -398,9 +404,8 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
     const groups = {};
     active.forEach(en => { (groups[en.groupId] = groups[en.groupId] || []).push(en); });
     // v38(改善:集団スプリント抑制): 平坦系の終盤、大集団が保たれていると「集団スプリントで勝てない」
-    // 非スプリンター型のAIが痺れを切らして飛び出す（早めに仕掛ける）。攻撃は集団の追走ペースを引き上げ
-    // （chaseHeat）、脚のない選手がふるい落とされて隊列が伸びる＝30人団子ゴールが減る。プレイヤー本人は
-    // 自分の作戦に従うので対象外。
+    // 非スプリンター型のAIが痺れを切らして飛び出す（早めに仕掛ける）。飛び出した本人だけがソロで前へ出て
+    // 集団を1人ずつ抜けさせ隊列が伸びる＝30人団子ゴールが減る。プレイヤー本人は自分の作戦に従うので対象外。
     Object.values(groups).forEach(members => {
       if (members.length < 6) return;
       const seg0 = course.segTypeAt(members[0].pos);
@@ -434,7 +439,8 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         return;
       }
       const segType = course.segTypeAt(members[0].pos).type;
-      let eligible = members.filter(en => canPull(en, segType));
+      // v39(A案): 「脚を溜める」判断中の選手は前を牽かない（集団後方で温存する）
+      let eligible = members.filter(en => canPull(en, segType) && !(en.conserveLeft > 0));
       let rotSpan = ROTATION_PERIOD_TICKS;
       // v12: 自チームが関与するグループはプレイヤーの事前作戦（directive.chaseMode）に従う。
       // AIチームのみのグループは、そのグループの多数派チームが持つ隠しスタイル
@@ -517,13 +523,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // 最終区間限定にして、周回の長いクリテで残り25%全体に効いて千切れが複利的に増える（＝大敗
         // 多発）のを防ぐ（小集団の逃げ切りには影響小）。
         const finaleTight = (segInfo.idx === course.finalIdx) ? Math.min(0.045, 0.01 + members.length * 0.0009) : 0;
-        // v38(改善): 誰かが仕掛けて集団が色めき立っている間（chaseHeat>0）は、集団についていく基準が上がる
-        // ＝脚のない選手がふるい落とされ隊列が伸びる（＝集団スプリントの人数が減る）
-        const chaseTight = (en.chaseHeat > 0) ? 0.02 : 0;
         // v38(改善): モニュメント/最上級グレードの選抜レースは、丘・登坂・最終で集団についていく基準が
         // 上がる＝実力上位だけが残る「select group」の決着に。極まった選手は残り、力の劣る選手はふるわれる。
         const selectiveTight = (course.selective && (["hill", "climb", "mtn"].includes(segType) || segInfo.idx === course.finalIdx)) ? 0.035 : 0;
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + chaseTight + selectiveTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -561,7 +564,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
               + (hasAbility(en, "kicker") ? (hasGoldAbility(en, "kicker") ? 0.05 : 0.03) : 0)
               - (hasAbility(en, "choke") ? 0.03 : 0)
               // v38: リードアウト役が同集団で射出してくれているエースは、風除け＋加速で伸びる（スリングショット）
-              + (slingshotAceIds.has(en.id) ? 0.045 : 0);
+              + (slingshotAceIds.has(en.id) ? 0.045 : 0)
+              // v39(A案): 「全力で踏む」判断＝最終直線で脚を残さず絞り出す（追い込みが鋭くなる）
+              + (en.finaleSend ? 0.05 : 0);
             // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
             const accelKick = ((en.accel ?? 50) - 50) / 900;
             const mentalKick = ((en.mental ?? 50) - 50) / 1500;
@@ -590,20 +595,20 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // v17: チームケミストリー（squad構築時にchemMulを付与。未設定なら1で無効果）
         // v38: リードアウトの射出は脚を激しく使う（前を牽くのでドラフト保護が薄い）＝surge中は消耗増。
         const leadoutDrainMul = en.leadoutSurging ? 2.2 : 1;
-        // v38(改善): 追走ペースが上がっている間は消耗も増える（chaseHeatは毎tick減衰）
-        const chaseDrainMul = en.chaseHeat > 0 ? 1.10 : 1;
-        if (en.chaseHeat > 0) en.chaseHeat -= 1;
         // v38(改善): モニュメント等の選抜レースは、丘・登坂の消耗が大きく累積し、スタミナの劣る選手が
         // 繰り返しの登りで脱落していく＝均質に強い集団でもゴール前に「select group」へ絞られる。
         // ドラフトの風除け（shelterMul）を一部打ち消す係数なので、体力のある選手（＝極まった主人公）は残る。
         const selectiveDrainMul = (course.selective && ["hill", "climb", "mtn"].includes(segType)) ? 1.45 : 1;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * chaseDrainMul * selectiveDrainMul;
+        // v39(A案): 「脚を溜める」判断中は集団の中で賢く脚を使い、消耗が軽くなる（＝勝負所に脚を残せる）
+        const conserveMul = en.conserveLeft > 0 ? 0.74 : 1;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
       });
     });
     // 4. 履歴記録・ゴール判定
     active.forEach(en => {
+      if (en.conserveLeft > 0) en.conserveLeft--; // v39(A案): 温存の残りtickを消化
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
       en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
       if (en.pos >= course.length && !en.finished) { en.finished = true; en.finishTime = tick * TICK_SEC; }
@@ -619,6 +624,42 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
     }
   });
   return tick;
+}
+
+// v39(A案): レース中の「判断カード」でプレイヤーが選ぶ動きを、注目選手の状態に落とし込む定義。
+// simulateTicks が解釈するフィールド（attackLeft/committedBreak/conserveLeft/finaleSend）を
+// セットするだけの純関数。RACE_MOVES のキーが RaceView のカード選択肢と対応する。
+export const RACE_MOVES = {
+  // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣
+  attack: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.conserveLeft = 0; },
+  // 🛡 脚を溜める：集団後方で牽かず消耗を抑える。勝負所に脚を残す堅実策
+  conserve: (r) => { r.conserveLeft = 80; r.attackLeft = 0; r.committedBreak = false; },
+  // 🚴 流れに任せる：特別な動きはせず展開に乗る（基準の挙動）
+  hold: (r) => { r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  // 🔥 早駆け：ここから一気に踏んで抜け出し、そのままゴールまで踏み切る
+  send: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.finaleSend = true; r.conserveLeft = 0; },
+  // ⏳ 差しにかける：ギリギリまで脚を溜め、最終直線で鋭く伸びる
+  kick: (r) => { r.conserveLeft = 55; r.finaleSend = true; r.attackLeft = 0; r.committedBreak = false; },
+};
+
+// v39(A案): レースを途中tickから「フォーク」して再計算する。注目選手にプレイヤーの選択(moveId)を
+// 適用し、fromTick以降の履歴（posHist等）と着順を作り直す。posHist[0..fromTick]はそのまま残るので、
+// 観戦アニメは判断の瞬間から地続きに続く（＝選択が結果を変える）。再開時は進行中の一時的な戦闘状態を
+// 一旦リセットし、fromTickから自然に再展開させる（履歴に残らないattackLeft等の持ち越しを防ぐ）。
+export function resumeSim(sim, fromTick, focusId, moveId) {
+  const riders = sim.entrants;
+  riders.forEach(en => {
+    en.attackLeft = 0;
+    en.committedBreak = false;
+    en.isLeadingOut = false;
+    en.leadoutSurging = false;
+    if (en.id !== focusId) { en.conserveLeft = 0; en.finaleSend = false; }
+  });
+  const focus = riders.find(en => en.id === focusId);
+  if (focus && RACE_MOVES[moveId]) RACE_MOVES[moveId](focus);
+  simulateTicks(sim.course, riders, fromTick, sim.directive || { chaseMode: "normal", aceEarly: false }, sim.groupMode === "solo");
+  rankSim(sim);
+  return sim;
 }
 
 // v35(バランス): フィニッシュクラスタ（僅差でゴールした集団）を決着させる決め手の能力。

@@ -1117,7 +1117,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   const tac = ML_TACTICS[tactic] || ML_TACTICS.balanced;
   // v38(改善): モニュメント（丘陵/山岳の古典）は選抜性の高いハードな一日レース。集団を絞る選抜フラグを立てる。
   course.selective = !!(raceMeta.monument || raceMeta.grade >= 4);
-  simulateTicks(course, riders, 0, { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly }, false);
+  // v39(A案): レース中の判断カードでfromTickから再計算するため、作戦（directive）をsimに保持する
+  sim.directive = { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly };
+  simulateTicks(course, riders, 0, sim.directive, false);
   rankSim(sim);
   // v36修正: レース後にfinishTimeを書き換えると、観戦アニメ（posHist）と着順（finishTime）が
   // 食い違い「先頭でゴールしたのにリザルト2位」等の同期ズレが起きていた。着順の書き換えは全廃し、

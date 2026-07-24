@@ -1670,16 +1670,6 @@ export function pickMandateMonths(n, seed) {
   return out.sort((a, b) => a - b);
 }
 
-export function abilityFor(segType, e) {
-  if (segType === "flat") return e.flat;
-  if (segType === "hill") return e.climb * 0.55 + e.flat * 0.45;
-  if (segType === "climb") return e.climb;
-  if (segType === "sprint") return e.sprint;
-  if (segType === "mtn") return e.climb * 0.7 + e.sprint * 0.3;
-  if (segType === "tt") return e.solo * 0.6 + e.flat * 0.4;
-  return e.flat;
-}
-
 export function computeStandings(g) {
   const monthProg = Math.max(0.08, (g.month + 1) / 12);
   const need = CLASSES[g.classIdx].need;
@@ -1859,7 +1849,9 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
     return { sim, aiTeams: aiTeamsUsed };
   }
   // v12: 無線指示の廃止に伴い、作戦（chaseMode/aceEarly）は出走前に決定済みのものをそのまま渡す
-  simulateTicks(course, riders, 0, directive || { chaseMode: "normal", aceEarly: false }, groupMode === "solo");
+  // v39(A案): レース中の判断カードでfromTickから再計算するため、作戦（directive）をsimに保持する
+  sim.directive = directive || { chaseMode: "normal", aceEarly: false };
+  simulateTicks(course, riders, 0, sim.directive, groupMode === "solo");
   rankSim(sim);
   // 逃げ切り判定（表示用）：エントラント中に逃げ役がいて、ゴール時点でメイン集団と別グループのままか
   const breakers = riders.filter(en => en.role === "breakaway");

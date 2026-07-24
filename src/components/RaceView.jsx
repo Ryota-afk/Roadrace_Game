@@ -4,7 +4,35 @@ import { FINISH_COMMENTARY, SEG_COMMENTARY } from "../data/course.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
 import { Btn, Eyebrow } from "./ui.jsx";
 import { fmtGap, fmtTime, strHash } from "../core/core.js";
-import { TICK_SEC, riderHash01 } from "../sim/race.js";
+import { TICK_SEC, riderHash01, resumeSim } from "../sim/race.js";
+
+// v39(A案): レース中の「判断カード」定義。注目選手のコース進捗(frac)が at を越えた瞬間に再生を止め、
+// プレイヤーに選択を提示する。選んだ move は resumeSim でその地点から結果へ反映される。
+// 最終区間より手前で発火するよう at をコース形状に合わせて調整し、teamTT等の履歴が無いsimでは出さない。
+export function buildDecisions(course, focusEnt) {
+  if (!focusEnt || !focusEnt.posHist || focusEnt.posHist.length < 60) return [];
+  const finalStart = (course.cumFrac && course.finalIdx > 0) ? course.cumFrac[course.finalIdx - 1] : 0.85;
+  const at2 = Math.min(0.80, Math.max(0.58, finalStart - 0.03));
+  const at1 = Math.min(0.5, at2 - 0.15);
+  return [
+    {
+      id: "mid", at: at1, title: "⚡ 中盤の判断", sub: "隊列が動き出した。ここでどう動く？",
+      choices: [
+        { move: "attack", label: "⚡ 仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" },
+        { move: "conserve", label: "🛡 脚を溜める", desc: "集団後方で温存し、勝負所に脚を残す" },
+        { move: "hold", label: "🚴 流れに任せる", desc: "展開に乗って様子を見る" },
+      ],
+    },
+    {
+      id: "finale", at: at2, title: "🔥 勝負所の判断", sub: "ゴールが近い。仕掛けどころだ",
+      choices: [
+        { move: "send", label: "🔥 早駆け", desc: "一気に抜け出してゴールまで踏み切る" },
+        { move: "kick", label: "⏳ 差しにかける", desc: "ギリギリまで待ち、最終直線で鋭く伸びる" },
+        { move: "hold", label: "🚴 集団で勝負", desc: "無理せず集団のスプリントに合わせる" },
+      ],
+    },
+  ];
+}
 
 export function interpFrac(en, rt, course) {
   const idx = rt / TICK_SEC;
@@ -271,6 +299,41 @@ export function RaceView({ sim, onFinish }) {
   const PLAY_DUR = 40;
   const course = sim.course;
 
+  // v39(A案): レース中の判断カード。注目選手（マイライフ＝本人／シーズン＝エース）の展開に
+  // 割り込んで再生を止め、選択を結果へ反映する。paused中はclockを進めず、選択後に resumeSim で
+  // fromTick以降を作り直してから再生を継続する（rtが飛ばないよう clock を張り直す）。
+  const focusEnt = useMemo(() =>
+    sim.entrants.find(e => e.isPlayerChar)
+    || sim.entrants.find(e => e.team === "PLAYER" && e.isAce)
+    || sim.entrants.find(e => e.team === "PLAYER"), [sim]);
+  const decisions = useMemo(() => buildDecisions(course, focusEnt), [sim]);
+  const [decision, setDecision] = useState(null);
+  const decisionRef = useRef(null);
+  const pausedRef = useRef(false);
+  const clockRef = useRef(0);
+  const firedRef = useRef(new Set());
+  const [resimBusy, setResimBusy] = useState(false);
+
+  const resolveDecision = (moveId) => {
+    const d = decisionRef.current;
+    if (!d) return;
+    setResimBusy(true);
+    // 再計算はやや重いので、カードのボタン押下→UI反映を挟んでから実行する
+    setTimeout(() => {
+      resumeSim(sim, d.fromTick, focusEnt.id, moveId);
+      totalRef.current = Math.max(...sim.entrants.map(e => e.finishTime), 1);
+      const rtNow = d.fromTick * TICK_SEC;
+      clockRef.current = Math.min(PLAY_DUR, (rtNow / totalRef.current) * PLAY_DUR);
+      const chosen = d.choices.find(c => c.move === moveId);
+      liveRef.current = { text: `📻 あなたの判断：「${chosen ? chosen.label.replace(/^[^ぁ-んァ-ヶ一-龠]+/, "").trim() || chosen.label : "—"}」`, until: performance.now() + 3200 };
+      decisionRef.current = null;
+      setDecision(null);
+      setResimBusy(false);
+      pausedRef.current = false;
+      if (tickRef.current) tickRef.current();
+    }, 30);
+  };
+
   // v11: カメラの選手フィーチャー切替（自チーム選手のみ対象、結果ロック後も切替は常に可能）
   const playerRoster = useMemo(() => sim.entrants.filter(e => e.team === "PLAYER"), [sim]);
   const selectCam = (mode) => {
@@ -381,25 +444,30 @@ export function RaceView({ sim, onFinish }) {
     let prevGapSec = null, lastDynCommentAt = 0;
     // v35(UI): 注目選手（マイライフ＝プレイヤー本人／シーズン＝自チームのエース）を名指しで実況する。
     // 順位の急変・先頭浮上・遅れを検知して、レースを「自分の物語」として盛り上げる。
-    const focusEnt = sim.entrants.find(e => e.isPlayerChar)
-      || sim.entrants.find(e => e.team === "PLAYER" && e.isAce)
-      || sim.entrants.find(e => e.team === "PLAYER");
     const focusId = focusEnt ? focusEnt.id : null;
     const focusName = focusEnt ? focusEnt.name : null;
     let prevFocusRank = null, lastFocusSampleAt = 0;
 
-    let clock = 0, prev = performance.now(), done = false, lastHud = 0, intervalId = null;
+    clockRef.current = 0;
+    firedRef.current = new Set();
+    pausedRef.current = false;
+    decisionRef.current = null;
+    let prev = performance.now(), done = false, lastHud = 0, intervalId = null;
     const tick = () => {
       if (done) return;
       const now = performance.now();
+      // v39(A案): 判断カード提示中は再生を凍結（clockを進めない）。dtスパイクを避けるためprevは更新する
+      if (pausedRef.current) { prev = now; return; }
       const dt = Math.min(0.05, (now - prev) / 1000);
       prev = now;
+      let clock = clockRef.current;
       if (skipRef.current) clock = PLAY_DUR;
       else {
         // v11: 最終区間突入後はスプリント演出のため進行を追加で減速（スキップ時は対象外）
         const slowFactor = finalSegRef.current ? SPRINT_SLOWDOWN : 1;
         clock = Math.min(PLAY_DUR, clock + dt * speedRef.current * slowFactor);
       }
+      clockRef.current = clock;
       const rt = (clock / PLAY_DUR) * totalRef.current;
       rtRef.current = rt;
       let leadFrac = 0;
@@ -423,6 +491,22 @@ export function RaceView({ sim, onFinish }) {
         r.attackStreak = modeStreakAt(r.e, rt, "attack", ATTACK_VISUAL_TICKS);
         if (r.frac > leadFrac) leadFrac = r.frac;
       });
+      // v39(A案): 判断カードの発火判定。注目選手がまだ走っていて（未ゴール）、最終区間より手前、
+      // スキップ中でなく、しきい値fracを越えた最初のカードを提示して再生を止める。
+      if (!pausedRef.current && !skipRef.current && !finalSegRef.current && focusId != null && decisions.length) {
+        const focusR = riders.find(r => r.e.id === focusId);
+        if (focusR && rt < focusR.e.finishTime) {
+          const d = decisions.find(dc => !firedRef.current.has(dc.id) && focusR.frac >= dc.at);
+          if (d) {
+            firedRef.current.add(d.id);
+            const fromTick = Math.max(1, Math.min(focusR.e.posHist.length - 1, Math.floor(rt / TICK_SEC)));
+            decisionRef.current = { ...d, fromTick };
+            pausedRef.current = true;
+            setDecision(decisionRef.current);
+            return; // このフレームは凍結（カメラ/HUD更新もスキップ）
+          }
+        }
+      }
       // v10: カメラズーム。ゴール済みの選手は枠決めの対象から外し、まだ走っている選手の
       // 広がりに合わせてズーム幅を自動調整する（先頭に少し前方の余白を持たせる）
       // v11: 「ゴール済み」は静的なen.finished（precompute直後は常にtrue）ではなく、
@@ -637,7 +721,28 @@ export function RaceView({ sim, onFinish }) {
           ))}
         </div>
       </div>
-      {!cinematic && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {/* v39(A案): レース中の判断カード。表示中は再生が止まり、選ぶと結果に反映される */}
+      {decision && (
+        <div style={{ background: "linear-gradient(180deg,#2a2018,#1c1712)", border: `2px solid ${C.yellow}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>
+          <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 800, color: C.yellow }}>{decision.title}</div>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 2, marginBottom: 10 }}>{decision.sub}{focusEnt ? `　—　${focusEnt.name}` : ""}</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {decision.choices.map((c) => (
+              <button key={c.move} disabled={resimBusy} onClick={() => resolveDecision(c.move)}
+                style={{
+                  textAlign: "left", padding: "9px 12px", borderRadius: 8, cursor: resimBusy ? "default" : "pointer",
+                  background: C.panel2, color: C.text, border: `1px solid ${C.line}`, opacity: resimBusy ? 0.5 : 1,
+                  display: "grid", gap: 2,
+                }}>
+                <span style={{ fontFamily: FONT_D, fontSize: 13.5, fontWeight: 700, color: C.text }}>{c.label}</span>
+                <span style={{ fontSize: 11, color: C.sub }}>{c.desc}</span>
+              </button>
+            ))}
+          </div>
+          {resimBusy && <div style={{ fontSize: 11, color: C.yellow, marginTop: 8 }}>展開を再計算中…</div>}
+        </div>
+      )}
+      {!cinematic && !decision && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {[{ id: "lead", label: "🎥 先頭集団" }, ...playerRoster.map(e => ({ id: e.id, label: `🎥 ${e.name.split(" ")[0]}${e.isAce ? " 👑" : ""}` }))].map(o => (
           <button key={o.id} onClick={() => selectCam(o.id)}
             style={{
@@ -750,7 +855,7 @@ export function RaceView({ sim, onFinish }) {
         </div>
       )}
       <div style={{ display: "flex", gap: 8 }}>
-        {!hud.done && (<>
+        {!hud.done && !decision && (<>
           <Btn small outline color={C.text} onClick={() => { const nx = speedUi >= 8 ? 1 : speedUi * 2; speedRef.current = nx; setSpeedUi(nx); lastRaceSpeed = nx; }}>×{speedUi}</Btn>
           <Btn small outline color={C.text} onClick={() => { skipRef.current = true; if (tickRef.current) tickRef.current(); }}>スキップ</Btn>
         </>)}
