@@ -385,14 +385,21 @@ export function FinalSprintCinematic({ contenders }) {
   // 散らして重なりを解消。もっと手前(vtStart)から長め(t1)に見せて駆け引き（差し/リードアウト/独走）を強調。
   // v39.13: 大人数(nが多い)ほど前後にも散らして塊が潰れて重なる（＝残像に見える）のを防ぐ。
   const COMPRESS = n >= 14 ? 0.62 : 0.45;
-  const vtStart = -3.6;
+  // v39.16(スピード感): 従来は接近フェーズの移動距離が3.6ユニットしかなく、カメラが先頭を追う＝地面が
+  // ほとんど流れずスピード感が皆無だった。開始地点を大きく手前に取り、同じ時間で長距離を走らせる＝
+  // 地面・沿道が高速で流れる。さらに常にease-out（序盤ほど高速→ラインに向けて減速）にして、
+  // 「速い→スロー＆ズーム」の落差でゴール前を引き立てる。
+  const vtStart = -15;
   const vtCross = 0.05;                             // v39.13: 先頭がライン（前輪）を通過する瞬間をスローの底に
-  const exitVt = spanGap * COMPRESS + 5.0;
-  // v39.15: 通過後(t2)を短くして一気に流れる＝スピード感。接近(t1)のスローとの落差で緩急を強調
-  const t1 = close ? 3.6 : 2.8, t2 = 1.7;
+  const exitVt = spanGap * COMPRESS + 6.5;
+  const t1 = close ? 3.6 : 2.9, t2 = 1.7;
   const el = (now - startRef.current) / 1000;
   let vt, approaching;
-  if (el <= t1) { const u = el / t1; vt = vtStart + (vtCross - vtStart) * (close ? easeOutCubic(u) : u); approaching = true; }
+  if (el <= t1) {
+    const u = el / t1;
+    const eased = close ? easeOutCubic(u) : 1 - Math.pow(1 - u, 2.2); // 接戦ほど強く減速して"ゴールの瞬間"を溜める
+    vt = vtStart + (vtCross - vtStart) * eased; approaching = true;
+  }
   else { const u = Math.min(1, (el - t1) / t2); vt = vtCross + (exitVt - vtCross) * u; approaching = false; }
   const fade = Math.max(0, 1 - el * 3.2);
   // 各選手の道沿い位置 w（大＝前方/ゴール通過側）と lane（道幅内の位置）。ゴールは w=0。
@@ -423,9 +430,9 @@ export function FinalSprintCinematic({ contenders }) {
   const camW = camRef.current;
   const S = (w, l) => ({ x: cx0 + (w - camW) * Px + l * Lx, y: cy0 + (w - camW) * Py + l * Ly });
   // 地面タイル（芝＋道）をアイソメの菱形で敷き、カメラで無限スクロールさせる
-  const a0 = Math.floor(camW) - 7;
+  const a0 = Math.floor(camW) - 9;
   const tiles = [];
-  for (let a = a0; a < a0 + 16; a++) for (let b = -4; b <= 4; b++) {
+  for (let a = a0; a < a0 + 20; a++) for (let b = -4; b <= 4; b++) {
     const lc = b * laneStep; const c0 = S(a, lc);
     if (c0.x < -45 || c0.x > W + 45 || c0.y < -45 || c0.y > H + 45) continue;
     tiles.push({ a, b, lc, road: Math.abs(lc) <= roadHL, c0 });
@@ -449,11 +456,12 @@ export function FinalSprintCinematic({ contenders }) {
           const fill = t.road ? (dark ? "#484d56" : "#50555e") : (dark ? "#33473a" : "#3a5040");
           return <polygon key={`t${t.a}_${t.b}`} points={diamond(t.a, t.lc)} fill={fill} stroke="#00000018" strokeWidth="0.5" />;
         })}
-        {/* 沿道の柵（道の両脇・整数wごと） */}
-        {Array.from({ length: 15 }, (_, i) => a0 + i).map(a => {
-          const l = S(a, -(roadHL + 0.28)), r = S(a, roadHL + 0.28);
+        {/* v39.16: 沿道の柵を0.5ユニット間隔に密度アップ＋色を交互に＝流れる速さが目で読み取れる */}
+        {Array.from({ length: 34 }, (_, i) => a0 + i * 0.5).map((a, i) => {
+          const l = S(a, -(roadHL + 0.3)), r = S(a, roadHL + 0.3);
           if (l.y < -20 || l.y > H + 20) return null;
-          return <g key={"fc" + a}><rect x={l.x - 1} y={l.y - 6} width="2" height="6" fill="#5a6f5e" /><rect x={r.x - 1} y={r.y - 6} width="2" height="6" fill="#5a6f5e" /></g>;
+          const col = i % 2 ? "#6d8471" : "#465a4c";
+          return <g key={"fc" + i}><rect x={l.x - 1.1} y={l.y - 7} width="2.2" height="7" fill={col} /><rect x={r.x - 1.1} y={r.y - 7} width="2.2" height="7" fill={col} /></g>;
         })}
         {/* ゴール：路面の市松ライン＋門＋市松バナー */}
         {finLanes.map((l, i) => <polygon key={"fin" + i} points={diamond(0, l)} fill={i % 2 ? "#e9ecef" : "#14171d"} opacity="0.92" />)}
