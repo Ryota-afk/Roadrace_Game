@@ -549,6 +549,19 @@ export function RaceView({ sim, onFinish }) {
 
   // v11: カメラの選手フィーチャー切替（自チーム選手のみ対象、結果ロック後も切替は常に可能）
   const playerRoster = useMemo(() => sim.entrants.filter(e => e.team === "PLAYER"), [sim]);
+  // v39.12(俯瞰マップ強化): コース上の見どころ標識（KOM＝登坂/山岳の頂上、中間スプリント）と、
+  // 沿道の距離ポスト（10%刻み）。fracで固定されカメラに合わせて流れる（＝沿道スクロールの疾走感）。
+  const courseMarkers = useMemo(() => {
+    const m = [];
+    const last = course.segs.length - 1;
+    course.segs.forEach((s, j) => {
+      const endFrac = course.cumFrac[j];
+      if ((s.type === "climb" || s.type === "mtn") && j < last) m.push({ frac: endFrac, icon: "⛰", label: "KOM", color: "#e0824f" });
+      else if (s.type === "sprint" && j < last) m.push({ frac: endFrac, icon: "🏅", label: "中間", color: "#4fb0e0" });
+    });
+    return m;
+  }, [sim]);
+  const distPosts = useMemo(() => Array.from({ length: 9 }, (_, i) => (i + 1) / 10), [sim]);
   const selectCam = (mode) => {
     if (mode === camMode) return;
     camModeRef.current = mode;
@@ -659,7 +672,9 @@ export function RaceView({ sim, onFinish }) {
     // 順位の急変・先頭浮上・遅れを検知して、レースを「自分の物語」として盛り上げる。
     const focusId = focusEnt ? focusEnt.id : null;
     const focusName = focusEnt ? focusEnt.name.split(" ")[0] : null;
-    let prevFocusRank = null, lastFocusSampleAt = 0;
+    let prevFocusRank = null, lastFocusSampleAt = 0, lastBeatAt = -9999;
+    // v39.12(アクションカム): 道中の見せ場（先頭浮上・逃げ拡大）で軽くズーム＋スロー。連発を防ぐクールダウン付き。
+    const actionCam = (focusIdForCam) => { if (now - lastBeatAt > 6500 && !finalSegRef.current) { beatRef.current = { until: now + 1900, slow: 0.6, focusId: focusIdForCam }; lastBeatAt = now; } };
     // v39.3(演出): 実況ラインを複数から回して選ぶ（毎回同じ台詞の単調さを解消）
     let commentPick = 0;
     const pick = (arr) => arr[(commentPick++) % arr.length];
@@ -948,9 +963,9 @@ export function RaceView({ sim, onFinish }) {
             if (prevFocusRank != null && now - lastDynCommentAt > 3500) {
               const up = prevFocusRank - focusRank; // 正＝順位を上げた
               if (soloBreak && (beatRef.current.until <= now)) {
-                liveRef.current = { text: pick([`🚀 ${focusName}、独走態勢だ！後続を突き放しにかかる`, `🚀 ${focusName}が抜け出した！このまま逃げ切れるか`, `🔥 ${focusName}、一人旅！集団は反応できるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+                liveRef.current = { text: pick([`🚀 ${focusName}、独走態勢だ！後続を突き放しにかかる`, `🚀 ${focusName}が抜け出した！このまま逃げ切れるか`, `🔥 ${focusName}、一人旅！集団は反応できるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId);
               } else if (focusRank === 1 && prevFocusRank > 1) {
-                liveRef.current = { text: pick([`📻 ${focusName}が${terr}先頭に立った！`, `📻 ${focusName}、ついに先頭に躍り出た！`, `📻 先頭は${focusName}だ！`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+                liveRef.current = { text: pick([`📻 ${focusName}が${terr}先頭に立った！`, `📻 ${focusName}、ついに先頭に躍り出た！`, `📻 先頭は${focusName}だ！`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId);
               } else if (up >= 4 && focusRank <= 10) {
                 liveRef.current = { text: pick([`📻 ${focusName}が${terr}集団を縫って上がってきた！`, `📻 ${focusName}、ぐんぐん順位を上げる！`, `📻 ${focusName}が${terr}前方へポジションを押し上げる`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
               } else if (up <= -5) {
@@ -968,7 +983,7 @@ export function RaceView({ sim, onFinish }) {
           if (curGapSec < 1.5 && prevGapSec >= 3) {
             liveRef.current = { text: pick(["📻 逃げ吸収！集団は再び一つにまとまった", "📻 メイン集団が逃げを飲み込んだ！振り出しに戻る", "📻 ついに追いついた！集団はひとかたまりに"]), until: now + 2600 }; lastDynCommentAt = now;
           } else if (d >= 4) {
-            liveRef.current = { text: pick(["📻 逃げがリードを広げる！メイン集団は反応できるか", "📻 前を行く逃げがぐんぐんタイム差を稼ぐ！", "📻 逃げ切りが見えてきたか、リードは広がる一方だ"]), until: now + 2600 }; lastDynCommentAt = now;
+            liveRef.current = { text: pick(["📻 逃げがリードを広げる！メイン集団は反応できるか", "📻 前を行く逃げがぐんぐんタイム差を稼ぐ！", "📻 逃げ切りが見えてきたか、リードは広がる一方だ"]), until: now + 2600 }; lastDynCommentAt = now; actionCam(null);
           } else if (d <= -4 && curGapSec > 2) {
             liveRef.current = { text: pick(["📻 メイン集団がペースを上げ、逃げを引き戻しにかかる", "📻 集団が本気だ！タイム差が見る間に縮まる", "📻 追走のペースアップ！逃げグループを射程に捉える"]), until: now + 2600 }; lastDynCommentAt = now;
           }
@@ -982,7 +997,7 @@ export function RaceView({ sim, onFinish }) {
         }
         const isDone = clock >= PLAY_DUR;
         const lap = course.laps > 1 ? course.lapAtFrac(leadFrac) : null;
-        setHud({ top, seg: segLabel, segType: segTypeNow, segSteep, clock: rt, done: isDone, comment, gap: gapText, lap });
+        setHud({ top, seg: segLabel, segType: segTypeNow, segSteep, remain: Math.max(0, Math.round((1 - leadFrac) * 100)), clock: rt, done: isDone, comment, gap: gapText, lap });
         if (isDone && !done) { done = true; if (intervalId) clearInterval(intervalId); return; }
       }
     };
@@ -1010,7 +1025,7 @@ export function RaceView({ sim, onFinish }) {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <div style={{ background: C.panel2, borderLeft: `4px solid ${C.yellow}`, borderRadius: 6, padding: "6px 10px" }}>
           <div style={{ fontFamily: FONT_D, fontSize: 12, color: C.yellow }}>{TERRAIN_ICON[hud.segType] || ""} {hud.seg}{hud.lap ? `（${hud.lap}/${sim.course.laps}周）` : ""}{hud.segSteep ? ` ▲${hud.segSteep}%` : ""}</div>
-          <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.text }}>{fmtTime(hud.clock)}</div>
+          <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.text }}>{fmtTime(hud.clock)}{hud.remain != null ? <span style={{ fontSize: 10.5, color: C.sub, marginLeft: 6 }}>ゴールまで残り{hud.remain}%</span> : null}</div>
           {hud.gap && <div style={{ fontFamily: FONT_M, fontSize: 10.5, color: C.green, marginTop: 2 }}>{hud.gap}</div>}
         </div>
         <div style={{ background: C.panel2, borderRadius: 6, padding: "6px 10px", minWidth: 165 }}>
@@ -1072,6 +1087,55 @@ export function RaceView({ sim, onFinish }) {
               <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="190" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
               <circle cx={mapX(1, cam.start, cam.end)} cy={riderTopY(1, 0)} r="4" fill={C.red} />
+              {/* v39.12: 距離ポスト（10%刻み・沿道スクロール）＋KOM/中間スプリント標識。カメラ範囲内のみ */}
+              {distPosts.map((f, i) => (f < cam.start - 0.02 || f > cam.end + 0.02) ? null : (
+                <g key={"dp" + i}>
+                  <line x1={mapX(f, cam.start, cam.end)} y1={TOP_H * 0.12} x2={mapX(f, cam.start, cam.end)} y2={TOP_H * 0.88} stroke="#ffffff" strokeWidth="1" strokeDasharray="3,7" opacity="0.1" />
+                  <text x={mapX(f, cam.start, cam.end)} y={TOP_H * 0.09} textAnchor="middle" fontSize="7.5" fill="#ffffff" opacity="0.32">残り{100 - Math.round(f * 100)}%</text>
+                </g>
+              ))}
+              {courseMarkers.map((m, i) => (m.frac < cam.start - 0.02 || m.frac > cam.end + 0.02) ? null : (
+                <g key={"cm" + i} transform={`translate(${mapX(m.frac, cam.start, cam.end)},0)`}>
+                  <line x1="0" y1={TOP_H * 0.14} x2="0" y2={TOP_H * 0.86} stroke={m.color} strokeWidth="1.6" strokeDasharray="5,4" opacity="0.5" />
+                  <rect x="-17" y={TOP_H * 0.05} width="34" height="15" rx="3" fill="#14171d" opacity="0.82" />
+                  <text x="0" y={TOP_H * 0.05 + 11} textAnchor="middle" fontSize="9" fill={m.color} fontWeight="700">{m.icon}{m.label}</text>
+                </g>
+              ))}
+              {/* v39.12: グループ間ギャップの可視化（先頭集団の最後尾 ↔ 追走の先頭を結び、秒差を表示） */}
+              {sim.groupMode !== "solo" && (() => {
+                if (ridersUi.length < 2) return null;
+                const leadGid = ridersUi.reduce((a, b) => (b.frac > a.frac ? b : a), ridersUi[0]).gid;
+                const lead = ridersUi.filter(r => r.gid === leadGid);
+                const chase = ridersUi.filter(r => r.gid !== leadGid);
+                if (!lead.length || !chase.length) return null;
+                const leadRear = lead.reduce((a, b) => (b.frac < a.frac ? b : a), lead[0]);
+                const chaseFront = chase.reduce((a, b) => (b.frac > a.frac ? b : a), chase[0]);
+                const gapFrac = leadRear.frac - chaseFront.frac;
+                if (gapFrac <= 0.004) return null;
+                const p1 = packPoint(leadRear), p2 = packPoint(chaseFront);
+                const sec = Math.max(1, Math.round(gapFrac * totalRef.current));
+                const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+                return (
+                  <g>
+                    <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#ffd23f" strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
+                    <rect x={mx - 17} y={my - 8} width="34" height="14" rx="3" fill="#14171d" opacity="0.8" />
+                    <text x={mx} y={my + 2.5} textAnchor="middle" fontSize="9.5" fill="#ffd23f" fontWeight="700">▲{sec}秒</text>
+                  </g>
+                );
+              })()}
+              {/* v39.12: 自チームの隊列（同一集団の自チーム選手を線で結び、チームで動いている様子を可視化） */}
+              {(() => {
+                const team = ridersUi.filter(r => r.isMyTeam).sort((a, b) => a.frac - b.frac);
+                if (team.length < 2) return null;
+                const lines = [];
+                for (let i = 0; i < team.length - 1; i++) {
+                  if (team[i].gid === team[i + 1].gid) {
+                    const p1 = packPoint(team[i]), p2 = packPoint(team[i + 1]);
+                    lines.push(<line key={"tl" + i} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#7db8ff" strokeWidth="1.3" opacity="0.4" />);
+                  }
+                }
+                return <g>{lines}</g>;
+              })()}
               {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
               {playerLeadout && (() => {
                 const p1 = packPoint(playerLeadout), p2 = packPoint(playerAce);
@@ -1105,8 +1169,14 @@ export function RaceView({ sim, onFinish }) {
                         つかないという指摘に対応。自分の印には常に水色の識別リングを重ね、
                         エースかどうかに関わらず一目で自分だとわかるようにする */}
                     {r.isPlayer && <circle r={r.isAce ? 8 : 6.5} fill="none" stroke="#27d3ff" strokeWidth="1.8" />}
-                    <circle r={r.isAce ? 5.5 : 4} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 2 : 0.75} />
-                    {r.isPlayer && <circle r="1.7" fill="#14171d" />}
+                    {/* v39.12: 俯瞰マーカーを真上から見た自転車アイコンに（フレーム＋前後輪＋ジャージ） */}
+                    <g>
+                      <rect x="-5.4" y="-1" width="10.8" height="2" rx="1" fill="#14171d" opacity="0.9" />
+                      <circle cx="-4.4" cy="0" r="1.5" fill="#14171d" />
+                      <circle cx="4.4" cy="0" r="1.5" fill="#14171d" />
+                      <ellipse rx={r.isAce ? 4 : 3.3} ry={r.isAce ? 3 : 2.6} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.6 : 0.6} />
+                      {r.isPlayer && <circle r="1.5" fill="#14171d" />}
+                    </g>
                     {/* v37: 観戦マップの名前ラベル（先頭・自分・ライバル・自チームエースのみ） */}
                     {labelIds.has(r.id) && (
                       <text y={-9} textAnchor="middle" fontSize="9" paintOrder="stroke" stroke="#14171d" strokeWidth="2.4"
