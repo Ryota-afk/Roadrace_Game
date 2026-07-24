@@ -142,7 +142,7 @@ export const MIN_VIEW_FRAC = 0.035;  // 最大ズーム時に見えるコース�
 
 export const MAX_VIEW_FRAC = 0.4;   // 最大ズームアウト時に見えるコース幅（逃げ等で大きく広がった時）
 
-export const VIEW_LEAD_BIAS = 0.42;  // 集団の中心を画面の何%の位置に置くか（0.5=中央、小さいほど前方の余白が広がる）
+export const VIEW_LEAD_BIAS = 0.47;  // 集団の中心を画面の何%の位置に置くか（0.5=中央、小さいほど前方の余白が広がる）
 
 export const SPRINT_MIN_VIEW_FRAC = 0.018; // 最終区間突入後のズーム上限（通常のMIN_VIEW_FRACよりさらに狭い）
 
@@ -267,29 +267,34 @@ export const cycMod = (v, m) => ((v % m) + m) % m;
 
 // v39.9: ヘルメット色のバリエーション（同一チーム色でも見分けが付くように）
 export const CAP_COLORS = ["#e9e2d4", "#d94f4f", "#e0b23c", "#4b7fc1", "#43a047", "#7e57c2", "#eeeeee", "#2b3038"];
-// v39.9: 前傾で自転車に乗ったレーサー（進行方向＝右向き）。接地点(x,y)に描く。アイソメでも拡縮しない。
+// v39.10: ドット絵風の前傾レーサー（進行方向＝右向き）。接地点(x,y)にブロック(rect)で描く。拡縮しない。
+// px(a,b,w,h,fill): 足元(0,0)基準・上向きにbだけ上げた位置へ w×h のピクセルブロックを置く。
 function IsoRider({ x, y, color, cap, isPlayer, isAce, surging }) {
   const s = isAce ? 1.12 : 1;
-  const P = (a, b) => `${(a * s).toFixed(1)},${(b * s).toFixed(1)}`;
+  const u = 1.6 * s;
+  const px = (a, b, w, h, fill) => <rect x={(a * u).toFixed(2)} y={(-(b + h) * u).toFixed(2)} width={(w * u).toFixed(2)} height={(h * u).toFixed(2)} fill={fill} shapeRendering="crispEdges" />;
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-      <ellipse cx="0" cy={1.4 * s} rx={8.6 * s} ry={2.3 * s} fill="#000" opacity="0.22" />
-      {surging && <g><line x1={-9 * s} y1={-6 * s} x2={-18 * s} y2={-6 * s} stroke="#fff" strokeWidth="1.3" opacity="0.32" strokeLinecap="round" /><line x1={-9 * s} y1={-9.5 * s} x2={-15 * s} y2={-9.5 * s} stroke="#fff" strokeWidth="1" opacity="0.2" strokeLinecap="round" /></g>}
-      {/* 車輪 */}
-      <circle cx={-5.4 * s} cy={-3 * s} r={3.1 * s} fill="#15171c" stroke="#4a505a" strokeWidth={1.1 * s} />
-      <circle cx={5.4 * s} cy={-3 * s} r={3.1 * s} fill="#15171c" stroke="#4a505a" strokeWidth={1.1 * s} />
-      {/* フレーム＋ハンドル */}
-      <path d={`M${P(-5.4, -3)} L${P(-0.4, -7.6)} L${P(5.4, -3)} M${P(-0.4, -7.6)} L${P(4.4, -6.4)} L${P(5.4, -3)}`} stroke="#cfd3d9" strokeWidth={1.3 * s} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+      <ellipse cx="0" cy={1 * s} rx={7 * s} ry={2 * s} fill="#000" opacity="0.22" />
+      {surging && <g><rect x={-11 * s} y={-6 * s} width={7 * s} height="1.2" fill="#fff" opacity="0.34" /><rect x={-10 * s} y={-9 * s} width={5 * s} height="1.1" fill="#fff" opacity="0.22" /></g>}
+      {/* 車輪（ドット風の暗いリング） */}
+      <circle cx={-3.6 * s} cy={-1.6 * s} r={2.5 * s} fill="none" stroke="#14171d" strokeWidth={1.5 * s} />
+      <circle cx={3.6 * s} cy={-1.6 * s} r={2.5 * s} fill="none" stroke="#14171d" strokeWidth={1.5 * s} />
+      {/* フレーム */}
+      {px(-2.4, 1.2, 4.8, 0.7, "#cfd3d9")}
+      {px(-0.3, 1.2, 0.8, 1.4, "#b6bbc4")}
       {/* 脚 */}
-      <line x1={-0.6 * s} y1={-7.6 * s} x2={-2 * s} y2={-3.4 * s} stroke="#2a2f38" strokeWidth={1.7 * s} strokeLinecap="round" />
-      {/* 前傾した胴（ジャージ＝識別色） */}
-      <line x1={-1 * s} y1={-8 * s} x2={4.6 * s} y2={-12.2 * s} stroke={color} strokeWidth={5 * s} strokeLinecap="round" />
+      {px(-1.6, 0.9, 1.0, 1.4, "#20242c")}
+      {/* 胴（ジャージ＝識別色）を階段状に前傾 */}
+      {px(-1.2, 2.2, 2.2, 1.6, color)}
+      {px(0.1, 3.6, 2.2, 1.6, color)}
+      {px(1.4, 4.9, 2.0, 1.5, color)}
       {/* 腕→ハンドル */}
-      <line x1={4.6 * s} y1={-12.2 * s} x2={5.4 * s} y2={-6.6 * s} stroke="#20242c" strokeWidth={1.6 * s} strokeLinecap="round" />
+      {px(1.9, 2.4, 1.3, 0.7, "#20242c")}
       {/* 頭＋ヘルメット（色でバリエーション） */}
-      {isPlayer && <circle cx={5.3 * s} cy={-13.6 * s} r={5.6 * s} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
-      <circle cx={5.5 * s} cy={-13.4 * s} r={2.4 * s} fill="#f2d2a8" stroke="#14171d" strokeWidth={0.7 * s} />
-      <path d={`M${P(3.0, -13.7)} a${(2.5 * s).toFixed(1)},${(2.5 * s).toFixed(1)} 0 0 1 ${(5 * s).toFixed(1)},0 Z`} fill={cap || "#e9e2d4"} stroke="#14171d" strokeWidth={0.6 * s} />
+      {isPlayer && <rect x={(1.2 * u).toFixed(2)} y={(-8.6 * u).toFixed(2)} width={(3.8 * u).toFixed(2)} height={(4.2 * u).toFixed(2)} rx={u} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
+      {px(2.6, 5.9, 1.9, 1.7, "#f2d2a8")}
+      {px(2.4, 7.4, 2.3, 0.9, cap || "#e9e2d4")}
     </g>
   );
 }
@@ -311,9 +316,9 @@ export function FinalSprintCinematic({ contenders }) {
   // 立ったキャラ(スプライト)が道を進む。カメラは先頭を画面中央に捉えて地面ごとスクロール（＝速度感）。
   // 各選手の kick で「後方から差す/先行して垂れる/独走」を、laneで集団内の位置取りを見せる。遠近拡縮なし。
   const W = 340, H = 178;
-  const cx0 = W * 0.46, cy0 = H * 0.44;
-  const Px = 23, Py = 11, Lx = 21, Ly = -11;        // アイソメの2軸（進行=右下、レーン=右上）
-  const roadHL = 1.15, laneStep = 0.66;             // 道の半幅（レーン単位）／地面タイル1枚のレーン幅
+  const cx0 = W * 0.44, cy0 = H * 0.42;
+  const Px = 30, Py = 15, Lx = 27, Ly = -14;        // アイソメの2軸（進行=右下、レーン=右上）。大きめ＝画面上の間隔を広げ密集を緩和
+  const roadHL = 1.2, laneStep = 0.6;               // 道の半幅（レーン単位）／地面タイル1枚のレーン幅
   const n = contenders.length;
   const maxGap = Math.max(0.6, ...contenders.map(c => c.gapSec));
   const bunch = n >= 10;
@@ -345,18 +350,26 @@ export function FinalSprintCinematic({ contenders }) {
     return Math.max(-1.05, Math.min(1.05, base * conv + weave + passLat));
   };
   const withW = contenders.map(c => ({ c, w: wOf(c) }));
-  const cand = withW.filter(o => o.w <= 0.12);       // まだゴールを越えていない選手（追走対象の候補）
-  const camWTarget = cand.length ? Math.max(...cand.map(o => o.w)) : Math.max(...withW.map(o => o.w));
+  // v39.10: 勝者(gap最小＝先頭)がゴールを通過するまでは先頭を追走。通過後はゴール(w=0)にカメラを固定し、
+  // 後続が固定ゴールを越えていくのを見せる。
+  const winnerW = withW.reduce((a, b) => (b.c.gapSec < a.c.gapSec ? b : a), withW[0]).w;
+  let camWTarget;
+  if (winnerW < 0.05) {
+    const cand = withW.filter(o => o.w <= 0.12);      // まだゴールを越えていない選手の中で最も前
+    camWTarget = cand.length ? Math.max(...cand.map(o => o.w)) : 0;
+  } else {
+    camWTarget = 0;                                    // 勝者ゴール後はゴール位置に固定
+  }
   if (camRef.current == null) camRef.current = camWTarget;
-  camRef.current += (camWTarget - camRef.current) * 0.14;  // 先頭交代時のカメラ移動を滑らかに
+  camRef.current += (camWTarget - camRef.current) * 0.12;  // カメラ移動を滑らかに
   const camW = camRef.current;
   const S = (w, l) => ({ x: cx0 + (w - camW) * Px + l * Lx, y: cy0 + (w - camW) * Py + l * Ly });
   // 地面タイル（芝＋道）をアイソメの菱形で敷き、カメラで無限スクロールさせる
-  const a0 = Math.floor(camW) - 6;
+  const a0 = Math.floor(camW) - 7;
   const tiles = [];
-  for (let a = a0; a < a0 + 17; a++) for (let b = -3; b <= 3; b++) {
+  for (let a = a0; a < a0 + 16; a++) for (let b = -4; b <= 4; b++) {
     const lc = b * laneStep; const c0 = S(a, lc);
-    if (c0.x < -40 || c0.x > W + 40 || c0.y < -40 || c0.y > H + 40) continue;
+    if (c0.x < -45 || c0.x > W + 45 || c0.y < -45 || c0.y > H + 45) continue;
     tiles.push({ a, b, lc, road: Math.abs(lc) <= roadHL, c0 });
   }
   const diamond = (w, l, hw = 0.5, hl = laneStep / 2) => {
@@ -379,7 +392,7 @@ export function FinalSprintCinematic({ contenders }) {
           return <polygon key={`t${t.a}_${t.b}`} points={diamond(t.a, t.lc)} fill={fill} stroke="#00000018" strokeWidth="0.5" />;
         })}
         {/* 沿道の柵（道の両脇・整数wごと） */}
-        {Array.from({ length: 16 }, (_, i) => a0 + i).map(a => {
+        {Array.from({ length: 15 }, (_, i) => a0 + i).map(a => {
           const l = S(a, -(roadHL + 0.28)), r = S(a, roadHL + 0.28);
           if (l.y < -20 || l.y > H + 20) return null;
           return <g key={"fc" + a}><rect x={l.x - 1} y={l.y - 6} width="2" height="6" fill="#5a6f5e" /><rect x={r.x - 1} y={r.y - 6} width="2" height="6" fill="#5a6f5e" /></g>;
@@ -652,10 +665,13 @@ export function RaceView({ sim, onFinish }) {
       let clock = clockRef.current;
       if (skipRef.current) clock = PLAY_DUR;
       else {
-        // v11: 最終区間突入後はスプリント演出のため進行を追加で減速（スキップ時は対象外）
-        // v39.3(演出): 山場(beat)の間はさらにスロー（決定的瞬間をたっぷり見せる）
+        // v39.10(演出): ズームインとスロー再生をセットに。カメラが寄る（spanが小さい）ほど再生を遅く
+        // する＝ズームインが緩やかに進むにつれてスローも徐々に効き、ゴール前がドラマチックに。山場(beat)も併用。
+        const spanNow = camSmoothRef.current ? (camSmoothRef.current.end - camSmoothRef.current.start) : 0.2;
+        const zoomT = Math.max(0, Math.min(1, (0.14 - spanNow) / (0.14 - SPRINT_MIN_VIEW_FRAC)));
+        const zoomSlow = 1 - 0.62 * zoomT;
         const beatSlow = beatRef.current.until > now ? beatRef.current.slow : 1;
-        const slowFactor = (finalSegRef.current ? SPRINT_SLOWDOWN : 1) * beatSlow;
+        const slowFactor = Math.min(zoomSlow, beatSlow);
         clock = Math.min(PLAY_DUR, clock + dt * speedRef.current * slowFactor);
       }
       clockRef.current = clock;
@@ -764,28 +780,29 @@ export function RaceView({ sim, onFinish }) {
         // 「先頭集団」カメラで追っているはずの選手がキャンバス範囲外（画面右側など）に
         // 押し出されて見えなくなるバグがあった。安全マージンを削ってでも全員が必ず
         // 表示範囲に収まるよう、実際の広がりを下回らない値まで引き上げる
-        span = Math.max(span, spreadF + 0.01);
+        // v39.10: 先頭が右端に張り付かないよう余白を増やす（従来は spread+0.01 でギリギリ＝端寄り）
+        span = Math.max(span, spreadF * 1.4 + 0.02);
         let start = center - span * VIEW_LEAD_BIAS;
         let end = start + span;
         if (start < 0) { start = 0; end = Math.min(1, span); }
-        // v11: 意図的にend>1をクランプしない。MAX_TICKS到達により選手のfracは実際には
-        // ちょうど1.0までは届かない（数%手前で打ち切られる）ため、endを無理に1へスナップさせると
-        // 実際の先頭選手とゴールフラッグの間に不自然な空白ができてしまう。end>1のままにしておけば
-        // フラッグは（実際の先頭選手との距離に応じて）自然に画面の内側寄りに表示される
-        // v39.7: ズーム/パンを毎フレーム目標へ補間して滑らかに（従来は倍率が段階的にカクッと切替わっていた）。
-        // 追従が遅れて選手が枠外に出ないよう、補間後に選手の広がり[minF,maxF]を必ず含むよう補正する。
-        const targetStart = start, targetEnd = end;
+        // v39.10: パン（中心）は機敏に追従、ズーム（span）だけをなめらかに。さらにズームインは緩やか・
+        // ズームアウトは速く戻す非対称補間。これで倍率がだんだん変わり、位置は遅れず右端に寄らない。
+        const targetC = (start + end) / 2, targetSpan = end - start;
         const prev = camSmoothRef.current;
-        let ns, ne;
-        if (!prev) { ns = targetStart; ne = targetEnd; }
+        let nc, nSpan;
+        if (!prev) { nc = targetC; nSpan = targetSpan; }
         else {
-          const k = 0.16; // 補間の速さ（大きいほど機敏／小さいほどなめらか）
-          ns = prev.start + (targetStart - prev.start) * k;
-          ne = prev.end + (targetEnd - prev.end) * k;
-          const margin = (ne - ns) * 0.04;
-          if (minF < ns + margin) ns = minF - margin;
-          if (maxF > ne - margin) ne = maxF + margin;
+          const curC = (prev.start + prev.end) / 2, curSpan = prev.end - prev.start;
+          const kSpan = targetSpan < curSpan ? 0.05 : 0.5; // イン=緩やか / アウト=速い
+          nc = curC + (targetC - curC) * 0.5;               // パンは機敏
+          nSpan = curSpan + (targetSpan - curSpan) * kSpan;
         }
+        let ns = nc - nSpan / 2, ne = nc + nSpan / 2;
+        // 補正：選手が枠からはみ出しそうなら枠を"寄せて"収める（端に張り付かせない）。入り切らない時だけ広げる
+        const margin = nSpan * 0.07;
+        if (maxF > ne - margin) { const d = maxF - (ne - margin); ns += d; ne += d; }
+        if (minF < ns + margin) { const d = (ns + margin) - minF; ns -= d; ne -= d; }
+        if (maxF > ne) ne = maxF + margin;
         camSmoothRef.current = { start: ns, end: ne };
         setCam({ start: ns, end: ne });
         cameraFramingRef.current = framing;
