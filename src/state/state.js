@@ -1127,8 +1127,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // 消耗軽減）で勝負圏に残る、(2)アシスト本人は最終直線で流して勝負を譲る（isAssistingの最終区間
   // ハンドリング）。結果はシミュレーション（＝観戦）そのまま＝アニメと必ず一致する。
   if (assistedAceRef) {
-    // 結果画面用に、献身で押し上げたエースの最終着順（シミュレーション通り）を渡すだけ
-    sim.assistedAce = { name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
+    // 結果画面用に、献身で押し上げたエースを渡す。着順(rank)はレース中の判断カード(resumeSim)で
+    // 再ランクされ得るため、結果画面側で id から最新順位を引き直す（snapshotのrankはフォールバック）。
+    sim.assistedAce = { id: assistedAceRef.id, name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
   }
   return sim;
 }

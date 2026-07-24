@@ -271,40 +271,52 @@ export function FinalSprintCinematic({ contenders }) {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
+  // v39.4(演出刷新): 縦置き・ゴールで停止していた演出を、横位置のロードを「右→左」へ等速で流れる形に。
+  // 先頭からゴールラインを通過し、減速せず画面外（左）へ抜けていく＝実際のスプリントの疾走感に。
+  // 選手は前後（着差）＋上下（道幅内のレーン）に散らばり、大人数でも道幅に収まって団子に見える。
   const t = Math.min(1, (now - startRef.current) / SPRINT_CINEMATIC_MS);
-  const eased = easeOutCubic(t);
-  const maxGap = Math.max(0.5, ...contenders.map(c => c.gapSec));
-  const W = 200, H = 300, topY = 34, bottomY = H - 18;
-  const fadeOpacity = Math.max(0, 1 - t * 5); // 冒頭の暗転からのフェードイン
+  const W = 340, H = 176, roadTop = 30, roadBot = 150;
+  const roadMid = (roadTop + roadBot) / 2, roadH = roadBot - roadTop;
+  const xFin = W * 0.34;                          // ゴールライン（左寄り＝手前で通過を見せ、抜けを長く）
   const n = contenders.length;
-  // v39.2: 集団スプリント（大人数）でも全員をコース幅に収めて"団子"に見せる。人数が増えるほど
-  // 横間隔を詰め、マーカーも少し小さくし、前後に軽くばらけさせて2次元的な塊に見せる。
-  const spacing = Math.min(11, (W - 30) / Math.max(1, n - 1));
-  const rScale = n > 12 ? Math.max(0.62, 12 / n) : 1;
+  const maxGap = Math.max(0.6, ...contenders.map(c => c.gapSec));
   const bunch = n >= 10;
+  const fieldLen = Math.min(150, 44 + n * 7);     // 集団の前後の長さ(px)
+  const xF0 = W * 0.96, xF1 = -W * 0.14;          // 先頭の t=0→1 の画面x（右から入り、左へ抜ける）
+  const frontX = xF0 + (xF1 - xF0) * t;           // 等速（減速なし）
+  const fade = Math.max(0, 1 - t * 6);            // 冒頭の暗転フェードイン
+  // 自分/エースを最前面に描くため、非プレイヤー→プレイヤーの順に並べる
+  const order = [...contenders].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
+  const marker = (c) => {
+    const behindPx = (c.gapSec / maxGap) * fieldLen;
+    const x = frontX + behindPx;                  // 着差が大きいほど後方（右）
+    const lane = (riderHash01(c.id, 3) - 0.5) * roadH * 0.74;
+    const y = roadMid + lane + Math.sin(now / 300 + riderHash01(c.id, 9) * 7) * 2.2;
+    const r = c.isAce ? 6.8 : 5.2;
+    return (
+      <g key={c.id} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
+        <line x1={r + 1} y1="0" x2={r + 11} y2="0" stroke={c.color} strokeWidth="1.4" opacity="0.34" strokeLinecap="round" />
+        {c.isPlayer && <circle r={r + 2.6} fill="none" stroke="#27d3ff" strokeWidth="2" />}
+        <circle r={r} fill={c.color} stroke="#14171d" strokeWidth="1.3" />
+        {c.isPlayer && <circle r="1.8" fill="#14171d" />}
+      </g>
+    );
+  };
   return (
     <div style={{ position: "relative" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 300, background: "linear-gradient(#3f5a3a,#26361f)", borderRadius: 8, display: "block" }}>
-        <line x1={W / 2} y1={topY - 14} x2={W / 2} y2={H} stroke="#8a8f98" strokeWidth="70" strokeLinecap="round" />
-        <line x1={W / 2 - 44} y1={topY} x2={W / 2 + 44} y2={topY} stroke="#fff" strokeWidth="4" strokeDasharray="6,4" />
-        <text x={W / 2} y={topY - 18} textAnchor="middle" fontSize="16">🏁</text>
-        {contenders.map((c, i) => {
-          const finalPos = 1 - Math.min(1, c.gapSec / maxGap) * SPRINT_MAX_SPREAD;
-          // 前後方向の軽い散らばり（着差が僅少な団子ゴールでも一直線に並ばず塊に見せる）。決着に向けて弱める。
-          const jitterY = (riderHash01(c.id, 71) - 0.5) * (bunch ? 15 : 6) * (0.35 + (1 - eased) * 0.65);
-          const y = bottomY - finalPos * eased * (bottomY - topY) + jitterY;
-          const wobble = Math.sin(now / 260 + i * 1.7) * (1 - eased) * 9 * rScale;
-          const x = W / 2 + (i - (n - 1) / 2) * spacing + wobble;
-          return (
-            <g key={c.id} transform={`translate(${x},${y})`}>
-              {c.isPlayer && <circle r={(c.isAce ? 10.5 : 8.5) * rScale} fill="none" stroke="#27d3ff" strokeWidth="2" />}
-              <circle r={(c.isAce ? 8 : 6) * rScale} fill={c.color} stroke="#14171d" strokeWidth="1.5" />
-              {c.isPlayer && <circle r={2.2 * rScale} fill="#14171d" />}
-            </g>
-          );
-        })}
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${W} / ${H}`, background: "#2f3f28", borderRadius: 8, display: "block" }}>
+        {/* 芝生＋ロード帯（横方向） */}
+        <rect x="0" y={roadTop} width={W} height={roadH} fill="#565a61" />
+        <line x1="0" y1={roadTop} x2={W} y2={roadTop} stroke="#3a3d43" strokeWidth="2" />
+        <line x1="0" y1={roadBot} x2={W} y2={roadBot} stroke="#3a3d43" strokeWidth="2" />
+        <line x1="0" y1={roadMid} x2={W} y2={roadMid} stroke="#d3d7dd" strokeWidth="1.4" strokeDasharray="16,13" opacity="0.35" />
+        {/* ゴールライン（縦・市松風）＋旗 */}
+        <rect x={xFin - 3.5} y={roadTop} width="7" height={roadH} fill="#eef0f3" />
+        <line x1={xFin} y1={roadTop} x2={xFin} y2={roadBot} stroke="#14171d" strokeWidth="7" strokeDasharray="9,9" opacity="0.85" />
+        <text x={xFin} y={roadTop - 6} textAnchor="middle" fontSize="15">🏁</text>
+        {order.map(marker)}
       </svg>
-      <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fadeOpacity, borderRadius: 8, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>{n > 1 ? (bunch ? `🏁 大集団のゴールスプリント（${n}名）` : "🏁 ゴールスプリント") : "🏁 単独ゴール"}</div>
     </div>
   );

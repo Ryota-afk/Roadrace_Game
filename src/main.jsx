@@ -1779,7 +1779,11 @@ function App() {
       // v33.8: 献身の走りの成果。支えたエースが上位に入れば名アシストとして評価・人気・報酬が上乗せされる
       let assistOutcome = null, assistPop = 0, assistEval = 0, assistMoney = 0;
       if (sim.assistedAce) {
-        const ar = sim.assistedAce.rank;
+        // v39.4修正: エースの着順は最終ランキング（判断カードの再計算後）から引き直す。
+        // 従来は buildMyLifeSim 時点のsnapshot rankを使っており、レース中の判断で順位が変わると
+        // 「アシストの自分が1位なのにエースも1位」等の食い違いが起きていた。
+        const aceEntrant = sim.ranked.find(e => e.id === sim.assistedAce.id);
+        const ar = aceEntrant ? aceEntrant.rank : sim.assistedAce.rank;
         const success = ar <= 3;
         assistOutcome = { name: sim.assistedAce.name, rank: ar, success };
         if (success) {

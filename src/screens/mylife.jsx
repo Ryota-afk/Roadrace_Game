@@ -1076,7 +1076,7 @@ export function renderMyLifeScreens(ctx) {
           )}
           {assistOutcome && (
             <div style={{ background: assistOutcome.success ? "#16241c" : "#241818", border: `1px solid ${assistOutcome.success ? C.green : C.red}`, borderRadius: 10, padding: "10px 12px" }}>
-              <Eyebrow color={assistOutcome.success ? C.green : C.red}>🤝 献身の走り — {assistOutcome.success ? "エースを勝利に導いた" : "報われず"}</Eyebrow>
+              <Eyebrow color={assistOutcome.success ? C.green : C.red}>🤝 献身の走り — {assistOutcome.success ? (assistOutcome.rank === 1 ? "エースを勝利に導いた" : "エースを表彰台へ導いた") : "報われず"}</Eyebrow>
               <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>
                 {assistOutcome.success
                   ? `あなたの牽引・風除けでエース${assistOutcome.name}が${assistOutcome.rank}位でフィニッシュ。名アシストとして称えられた（人気・監督評価・報酬に上乗せ）。`
