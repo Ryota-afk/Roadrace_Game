@@ -265,22 +265,31 @@ export function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 // v39.6: スクロール背景用の剰余ヘルパー（負値でも0..mに収める）
 export const cycMod = (v, m) => ((v % m) + m) % m;
 
-// v39.8: カイロソフト風のディメトリック(2:1アイソメ)視点で立って見える1選手スプライト。識別色はジャージ。
-// 呼び出し側で足元(接地点)の画面座標(x,y)を渡す。遠近スケールはしない（アイソメ＝どこでも同じ大きさ）。
-function IsoRider({ x, y, color, isPlayer, isAce, surging }) {
+// v39.9: ヘルメット色のバリエーション（同一チーム色でも見分けが付くように）
+export const CAP_COLORS = ["#e9e2d4", "#d94f4f", "#e0b23c", "#4b7fc1", "#43a047", "#7e57c2", "#eeeeee", "#2b3038"];
+// v39.9: 前傾で自転車に乗ったレーサー（進行方向＝右向き）。接地点(x,y)に描く。アイソメでも拡縮しない。
+function IsoRider({ x, y, color, cap, isPlayer, isAce, surging }) {
   const s = isAce ? 1.12 : 1;
+  const P = (a, b) => `${(a * s).toFixed(1)},${(b * s).toFixed(1)}`;
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-      <ellipse cx="0" cy="0" rx={6.4 * s} ry="2.5" fill="#000" opacity="0.24" />
-      {surging && <line x1="8" y1="-5" x2="17" y2="-5" stroke="#fff" strokeWidth="1.3" opacity="0.35" strokeLinecap="round" />}
-      {surging && <line x1="8" y1="-9" x2="15" y2="-9" stroke="#fff" strokeWidth="1.1" opacity="0.22" strokeLinecap="round" />}
-      <ellipse cx="0" cy="-2.2" rx={6.5 * s} ry="2.4" fill="#1b1e24" />
-      <circle cx={-4.6 * s} cy="-2.2" r="2.1" fill="none" stroke="#0e1013" strokeWidth="1.3" />
-      <circle cx={4.6 * s} cy="-2.2" r="2.1" fill="none" stroke="#0e1013" strokeWidth="1.3" />
-      {isPlayer && <rect x={-5.4 * s} y={-15.5 * s} width={10.8 * s} height={13 * s} rx="4.5" fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
-      <rect x={-4.2 * s} y={-14.5 * s} width={8.4 * s} height={11 * s} rx="3.6" fill={color} stroke="#14171d" strokeWidth="1" />
-      <circle cx="0" cy={-16.6 * s} r={3 * s} fill="#f2d2a8" stroke="#14171d" strokeWidth="0.8" />
-      <path d={`M${-3 * s},${-17.4 * s} a${3 * s},${3 * s} 0 0 1 ${6 * s},0`} fill="#d94f4f" stroke="#14171d" strokeWidth="0.7" />
+      <ellipse cx="0" cy={1.4 * s} rx={8.6 * s} ry={2.3 * s} fill="#000" opacity="0.22" />
+      {surging && <g><line x1={-9 * s} y1={-6 * s} x2={-18 * s} y2={-6 * s} stroke="#fff" strokeWidth="1.3" opacity="0.32" strokeLinecap="round" /><line x1={-9 * s} y1={-9.5 * s} x2={-15 * s} y2={-9.5 * s} stroke="#fff" strokeWidth="1" opacity="0.2" strokeLinecap="round" /></g>}
+      {/* 車輪 */}
+      <circle cx={-5.4 * s} cy={-3 * s} r={3.1 * s} fill="#15171c" stroke="#4a505a" strokeWidth={1.1 * s} />
+      <circle cx={5.4 * s} cy={-3 * s} r={3.1 * s} fill="#15171c" stroke="#4a505a" strokeWidth={1.1 * s} />
+      {/* フレーム＋ハンドル */}
+      <path d={`M${P(-5.4, -3)} L${P(-0.4, -7.6)} L${P(5.4, -3)} M${P(-0.4, -7.6)} L${P(4.4, -6.4)} L${P(5.4, -3)}`} stroke="#cfd3d9" strokeWidth={1.3 * s} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+      {/* 脚 */}
+      <line x1={-0.6 * s} y1={-7.6 * s} x2={-2 * s} y2={-3.4 * s} stroke="#2a2f38" strokeWidth={1.7 * s} strokeLinecap="round" />
+      {/* 前傾した胴（ジャージ＝識別色） */}
+      <line x1={-1 * s} y1={-8 * s} x2={4.6 * s} y2={-12.2 * s} stroke={color} strokeWidth={5 * s} strokeLinecap="round" />
+      {/* 腕→ハンドル */}
+      <line x1={4.6 * s} y1={-12.2 * s} x2={5.4 * s} y2={-6.6 * s} stroke="#20242c" strokeWidth={1.6 * s} strokeLinecap="round" />
+      {/* 頭＋ヘルメット（色でバリエーション） */}
+      {isPlayer && <circle cx={5.3 * s} cy={-13.6 * s} r={5.6 * s} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
+      <circle cx={5.5 * s} cy={-13.4 * s} r={2.4 * s} fill="#f2d2a8" stroke="#14171d" strokeWidth={0.7 * s} />
+      <path d={`M${P(3.0, -13.7)} a${(2.5 * s).toFixed(1)},${(2.5 * s).toFixed(1)} 0 0 1 ${(5 * s).toFixed(1)},0 Z`} fill={cap || "#e9e2d4"} stroke="#14171d" strokeWidth={0.6 * s} />
     </g>
   );
 }
@@ -311,23 +320,28 @@ export function FinalSprintCinematic({ contenders }) {
   const close = maxGap <= 3.2;
   const soloWin = n >= 2 && contenders[1].gapSec >= 4;  // 逃げ切り/独走（2位まで4秒以上）
   const spanGap = Math.min(maxGap, 16);
-  const vtStart = -Math.max(1.3, spanGap * 0.5);
-  const vtCross = 0.5;
-  const exitVt = spanGap + 5.5;
-  const t1 = close ? 3.0 : 1.7, t2 = 2.8;
+  // v39.9: 着差(秒)を道沿い距離へ圧縮＝「長い一列」でなく前後に締まった団子に。横（レーン）は道幅いっぱいに
+  // 散らして重なりを解消。もっと手前(vtStart)から長め(t1)に見せて駆け引き（差し/リードアウト/独走）を強調。
+  const COMPRESS = 0.4;
+  const vtStart = -3.4;
+  const vtCross = 0.6;
+  const exitVt = spanGap * COMPRESS + 5.0;
+  const t1 = close ? 3.8 : 3.0, t2 = 3.0;
   const el = (now - startRef.current) / 1000;
   let vt, approaching;
   if (el <= t1) { const u = el / t1; vt = vtStart + (vtCross - vtStart) * (close ? easeOutCubic(u) : u); approaching = true; }
   else { const u = Math.min(1, (el - t1) / t2); vt = vtCross + (exitVt - vtCross) * u; approaching = false; }
   const fade = Math.max(0, 1 - el * 3.2);
-  // 各選手の道沿い位置 w（大＝前方/ゴール通過側）と lane（道幅内の位置）。ゴールは w=0。gap秒に w=0を通過。
-  const wOf = (c) => (vt - c.gapSec) - (c.kick || 0) * 1.0 * sprintBump(c.gapSec - vt, 1.3);
+  // 各選手の道沿い位置 w（大＝前方/ゴール通過側）と lane（道幅内の位置）。ゴールは w=0。
+  const gEff = (c) => c.gapSec * COMPRESS;
+  const wOf = (c) => (vt - gEff(c)) - (c.kick || 0) * 1.5 * sprintBump(gEff(c) - vt, 1.9)
+    + (riderHash01(c.id, 23) - 0.5) * 0.55;         // 微小な前後ズレで同着差の重なりをほぐす
   const laneOf = (c) => {
-    const rem = c.gapSec - vt;
-    const base = (riderHash01(c.id, 3) - 0.5) * 1.7;
-    const conv = 0.55 + 0.45 * Math.max(0, Math.min(1, rem / 2.5));
-    const weave = Math.sin(vt * 2.3 + riderHash01(c.id, 9) * 7) * 0.09;
-    const passLat = Math.sign(c.kick || 0) * sprintBump(rem, 1.4) * 0.30;   // 差し/リードアウトは横へ膨らんで抜く
+    const rem = gEff(c) - vt;
+    const base = (riderHash01(c.id, 3) - 0.5) * 2.0; // 道幅いっぱいに散らばる（＝横並びの団子に）
+    const conv = 0.74 + 0.26 * Math.max(0, Math.min(1, rem / 3.0)); // 収束は控えめ（潰れて一列にしない）
+    const weave = Math.sin(vt * 2.1 + riderHash01(c.id, 9) * 7) * 0.08;
+    const passLat = Math.sign(c.kick || 0) * sprintBump(rem, 2.2) * 0.36; // 差し/リードアウトは横へ膨らんで抜く
     return Math.max(-1.05, Math.min(1.05, base * conv + weave + passLat));
   };
   const withW = contenders.map(c => ({ c, w: wOf(c) }));
@@ -352,7 +366,7 @@ export function FinalSprintCinematic({ contenders }) {
   const finLanes = [-2, -1, 0, 1, 2].map(b => b * laneStep).filter(l => Math.abs(l) <= roadHL + 0.01);
   const gBaseL = S(0, -(roadHL + 0.12)), gBaseR = S(0, roadHL + 0.12);
   const gTopL = { x: gBaseL.x, y: gBaseL.y - 30 }, gTopR = { x: gBaseR.x, y: gBaseR.y - 30 };
-  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), surging: (c.kick || 0) > 0.2 && (c.gapSec - vt) > 0.2 && (c.gapSec - vt) < 2.2 }))
+  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), cap: CAP_COLORS[Math.floor(riderHash01(c.id, 17) * CAP_COLORS.length) % CAP_COLORS.length], surging: (c.kick || 0) > 0.2 && (gEff(c) - vt) > 0.15 && (gEff(c) - vt) < 1.8 }))
     .filter(r => r.x > -30 && r.x < W + 30 && r.y < H + 40 && r.y > -40)
     .sort((a, b) => (a.y - b.y) || (a.c.isPlayer ? 1 : -1)); // 奥(上)→手前(下)、自分は最前面
   return (
@@ -380,7 +394,7 @@ export function FinalSprintCinematic({ contenders }) {
           return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#14171d"} />;
         })}
         {/* 選手（立ったスプライト） */}
-        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging} />)}
+        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging} />)}
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
