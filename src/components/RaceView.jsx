@@ -363,8 +363,14 @@ export function RaceView({ sim, onFinish }) {
   const [launching, setLaunching] = useState(false); // v12（簡易リードアウト演出）：エース発射の光るリング表示フラグ
   const launchingRef = useRef(false);
   const liveRef = useRef({ text: "", until: 0 });
+  // v39.3(演出): ドラマの山場(beat)＝一時的にスロー＋当該選手へズームして「決定的瞬間」を強調する。
+  // until までの間 slow を clock 進行に掛け、focusId があればカメラをその選手の集団へ寄せる。
+  const beatRef = useRef({ until: 0, slow: 1, focusId: null });
+  const flammeRef = useRef(false); // 「残り1km（フラムルージュ）」の一度きり演出フラグ
   const PLAY_DUR = 40;
   const course = sim.course;
+  // v39.3(演出): 実況ラインのバリエーション。区間・展開ごとに複数から決定的/準ランダムに選ぶ。
+  const flammeFrac = (course.cumFrac && course.finalIdx > 0) ? Math.max(0.5, course.cumFrac[course.finalIdx - 1] - 0.045) : 0.9;
 
   // v39(A案): レース中の判断カード。注目選手（マイライフ＝本人／シーズン＝エース）の展開に
   // 割り込んで再生を止め、選択を結果へ反映する。paused中はclockを進めず、選択後に resumeSim で
@@ -392,7 +398,24 @@ export function RaceView({ sim, onFinish }) {
       const rtNow = d.fromTick * TICK_SEC;
       clockRef.current = Math.min(PLAY_DUR, (rtNow / totalRef.current) * PLAY_DUR);
       const chosen = d.choices.find(c => c.move === moveId);
-      liveRef.current = { text: `📻 あなたの判断：「${chosen ? chosen.label.replace(/^[^ぁ-んァ-ヶ一-龠]+/, "").trim() || chosen.label : "—"}」`, until: performance.now() + 3200 };
+      const who = focusEnt ? focusEnt.name.split(" ")[0] : "";
+      const nowP = performance.now();
+      // v39.3(演出): 選択に応じた実況＋「山場」演出。攻めの一手はスロー＆当該選手ズームで見せ場に。
+      const AGGR = { attack: `⚡ ${who}、ここで仕掛けた！単独で飛び出す！`, send: `🔥 ${who}、勝負を賭けた！一気に踏み込む！` };
+      const CALM = {
+        conserve: `🛡 ${who}は脚を溜める。勝負所に賭ける構えだ`,
+        hangOn: `🦴 ${who}、歯を食いしばって食らいつく！`,
+        kick: `⏳ ${who}はギリギリまで待つ。差しにかける狙いだ`,
+        kickBig: `🗡 ${who}、会心の差し脚を狙う！`,
+        sprintWait: `🏁 ${who}は番手をキープ。ゴールスプリントに懸ける`,
+        assistLaunch: `🤝 ${who}がエースを勝負所へ運ぶ！`,
+        hold: `📻 ${who}は無理をせず展開に乗る`,
+      };
+      const line = AGGR[moveId] || CALM[moveId] || `📻 ${who}の判断：「${chosen ? chosen.label : "—"}」`;
+      liveRef.current = { text: line, until: nowP + 3400 };
+      if (moveId === "attack" || moveId === "send") {
+        beatRef.current = { until: nowP + 2600, slow: 0.42, focusId: focusEnt ? focusEnt.id : null };
+      }
       decisionRef.current = null;
       setDecision(null);
       setResimBusy(false);
@@ -512,8 +535,11 @@ export function RaceView({ sim, onFinish }) {
     // v35(UI): 注目選手（マイライフ＝プレイヤー本人／シーズン＝自チームのエース）を名指しで実況する。
     // 順位の急変・先頭浮上・遅れを検知して、レースを「自分の物語」として盛り上げる。
     const focusId = focusEnt ? focusEnt.id : null;
-    const focusName = focusEnt ? focusEnt.name : null;
+    const focusName = focusEnt ? focusEnt.name.split(" ")[0] : null;
     let prevFocusRank = null, lastFocusSampleAt = 0;
+    // v39.3(演出): 実況ラインを複数から回して選ぶ（毎回同じ台詞の単調さを解消）
+    let commentPick = 0;
+    const pick = (arr) => arr[(commentPick++) % arr.length];
 
     clockRef.current = 0;
     firedRef.current = new Set();
@@ -531,7 +557,9 @@ export function RaceView({ sim, onFinish }) {
       if (skipRef.current) clock = PLAY_DUR;
       else {
         // v11: 最終区間突入後はスプリント演出のため進行を追加で減速（スキップ時は対象外）
-        const slowFactor = finalSegRef.current ? SPRINT_SLOWDOWN : 1;
+        // v39.3(演出): 山場(beat)の間はさらにスロー（決定的瞬間をたっぷり見せる）
+        const beatSlow = beatRef.current.until > now ? beatRef.current.slow : 1;
+        const slowFactor = (finalSegRef.current ? SPRINT_SLOWDOWN : 1) * beatSlow;
         clock = Math.min(PLAY_DUR, clock + dt * speedRef.current * slowFactor);
       }
       clockRef.current = clock;
@@ -618,12 +646,23 @@ export function RaceView({ sim, onFinish }) {
           const leadOnly = framing.filter(r => r.gid === leadGid);
           if (leadOnly.length > 0) framing = leadOnly;
         }
+        // v39.3(演出): 山場(beat)の間は当該選手の集団へカメラを寄せる（決定的瞬間のクローズアップ）
+        const beatOn = beatRef.current.until > now;
+        if (beatOn && beatRef.current.focusId != null) {
+          const bf = riders.find(r => r.e.id === beatRef.current.focusId);
+          if (bf && rt < bf.e.finishTime) {
+            const g = riders.filter(r => r.gid === bf.gid && rt < r.e.finishTime);
+            if (g.length > 0) framing = g;
+          }
+        }
         const fracs = framing.map(r => r.frac);
         const maxF = Math.max(...fracs), minF = Math.min(...fracs);
         const spreadF = maxF - minF;
         const center = (maxF + minF) / 2;
         let span = Math.min(MAX_VIEW_FRAC, Math.max(MIN_VIEW_FRAC, spreadF * 1.6));
         if (finalSegRef.current) span = Math.min(span, SPRINT_MIN_VIEW_FRAC);
+        // v39.3(演出): 山場の間はさらに寄せる（クローズアップ感）
+        if (beatOn) span = Math.max(MIN_VIEW_FRAC * 0.8, span * 0.6);
         // v12バグ修正: 逃げとメイン集団の差が開きMAX_VIEW_FRAC（最大ズームアウト幅）を
         // 超えると、上のMath.minでspanが実際に必要な幅より狭く決まってしまい、
         // 「先頭集団」カメラで追っているはずの選手がキャンバス範囲外（画面右側など）に
@@ -639,6 +678,13 @@ export function RaceView({ sim, onFinish }) {
         // フラッグは（実際の先頭選手との距離に応じて）自然に画面の内側寄りに表示される
         setCam({ start, end });
         cameraFramingRef.current = framing;
+      }
+      // v39.3(演出): フラムルージュ（残り1km相当）。最終区間の少し手前で一度だけ、スロー＋
+      // バナーで「勝負が動く直前」の緊張を作る。先頭が flammeFrac を越えた瞬間に発火。
+      if (!flammeRef.current && !finalSegRef.current && leadFrac >= flammeFrac) {
+        flammeRef.current = true;
+        beatRef.current = { until: now + 2200, slow: 0.5, focusId: null };
+        liveRef.current = { text: "🔴 フラムルージュ！残り1km、いよいよ勝負が動く", until: now + 2800 };
       }
       // 最終区間突入判定
       // v12: 位置ベース（最終区間に実際に入ったか）に加えて時間ベースの判定もOR条件で追加。
@@ -737,15 +783,21 @@ export function RaceView({ sim, onFinish }) {
         if (!finalSegRef.current && focusId != null && now - lastFocusSampleAt > 2500) {
           const fr = sorted.findIndex(r => r.e.id === focusId);
           const focusRank = fr >= 0 ? fr + 1 : null;
+          const focusR = riders.find(r => r.e.id === focusId);
+          const segT = focusR ? course.segTypeAt(focusR.frac * course.length).type : "flat";
+          const terr = ["climb", "mtn"].includes(segT) ? "登りで" : segT === "hill" ? "丘で" : segT === "sprint" ? "スプリントで" : "";
+          const soloBreak = focusR && (focusR.mode === "attack" || focusR.mode === "solo") && focusRank === 1;
           if (focusRank != null) {
             if (prevFocusRank != null && now - lastDynCommentAt > 3500) {
               const up = prevFocusRank - focusRank; // 正＝順位を上げた
-              if (focusRank === 1 && prevFocusRank > 1) {
-                liveRef.current = { text: `📻 ${focusName}が先頭に立った！`, until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
-              } else if (up >= 4 && focusRank <= 8) {
-                liveRef.current = { text: `📻 ${focusName}が集団を縫って前へ上がってきた！`, until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+              if (soloBreak && (beatRef.current.until <= now)) {
+                liveRef.current = { text: pick([`🚀 ${focusName}、独走態勢だ！後続を突き放しにかかる`, `🚀 ${focusName}が抜け出した！このまま逃げ切れるか`, `🔥 ${focusName}、一人旅！集団は反応できるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+              } else if (focusRank === 1 && prevFocusRank > 1) {
+                liveRef.current = { text: pick([`📻 ${focusName}が${terr}先頭に立った！`, `📻 ${focusName}、ついに先頭に躍り出た！`, `📻 先頭は${focusName}だ！`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+              } else if (up >= 4 && focusRank <= 10) {
+                liveRef.current = { text: pick([`📻 ${focusName}が${terr}集団を縫って上がってきた！`, `📻 ${focusName}、ぐんぐん順位を上げる！`, `📻 ${focusName}が${terr}前方へポジションを押し上げる`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
               } else if (up <= -5) {
-                liveRef.current = { text: `📻 ${focusName}が遅れ始めた…苦しい展開だ`, until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+                liveRef.current = { text: pick([`📻 ${focusName}が${terr}遅れ始めた…苦しい展開だ`, `📻 ${focusName}、ペースに乗れず後退…`, `📻 ${focusName}が${terr}千切れかけている！粘れるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
               }
             }
             prevFocusRank = focusRank;
@@ -757,11 +809,11 @@ export function RaceView({ sim, onFinish }) {
         if (!focusFired && !finalSegRef.current && curGapSec != null && prevGapSec != null && now - lastDynCommentAt > 4000) {
           const d = curGapSec - prevGapSec;
           if (curGapSec < 1.5 && prevGapSec >= 3) {
-            liveRef.current = { text: "📻 逃げ吸収！集団は再び一つにまとまった", until: now + 2600 }; lastDynCommentAt = now;
+            liveRef.current = { text: pick(["📻 逃げ吸収！集団は再び一つにまとまった", "📻 メイン集団が逃げを飲み込んだ！振り出しに戻る", "📻 ついに追いついた！集団はひとかたまりに"]), until: now + 2600 }; lastDynCommentAt = now;
           } else if (d >= 4) {
-            liveRef.current = { text: "📻 逃げがリードを広げる！メイン集団は反応できるか", until: now + 2600 }; lastDynCommentAt = now;
+            liveRef.current = { text: pick(["📻 逃げがリードを広げる！メイン集団は反応できるか", "📻 前を行く逃げがぐんぐんタイム差を稼ぐ！", "📻 逃げ切りが見えてきたか、リードは広がる一方だ"]), until: now + 2600 }; lastDynCommentAt = now;
           } else if (d <= -4 && curGapSec > 2) {
-            liveRef.current = { text: "📻 メイン集団がペースを上げ、逃げを引き戻しにかかる", until: now + 2600 }; lastDynCommentAt = now;
+            liveRef.current = { text: pick(["📻 メイン集団がペースを上げ、逃げを引き戻しにかかる", "📻 集団が本気だ！タイム差が見る間に縮まる", "📻 追走のペースアップ！逃げグループを射程に捉える"]), until: now + 2600 }; lastDynCommentAt = now;
           }
         }
         if (curGapSec != null) prevGapSec = curGapSec;
