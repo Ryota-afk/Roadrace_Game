@@ -662,6 +662,10 @@ export const RACE_MOVES = {
 // 適用し、fromTick以降の履歴（posHist等）と着順を作り直す。posHist[0..fromTick]はそのまま残るので、
 // 観戦アニメは判断の瞬間から地続きに続く（＝選択が結果を変える）。再開時は進行中の一時的な戦闘状態を
 // 一旦リセットし、fromTickから自然に再展開させる（履歴に残らないattackLeft等の持ち越しを防ぐ）。
+// v39.18(バランス): 難易度で「判断の効き」を変える。上位難易度ほど同じ一手でも決まりにくく、
+// 仕掛けどころの見極め（地形・脚質・脚の残り）がシビアになる＝難易度が判断の駆け引きにも効く。
+export const MOVE_EFF_BY_DIFF = { easy: 1.15, normal: 1.0, hard: 0.82, oni: 0.66 };
+
 export function resumeSim(sim, fromTick, focusId, moveId) {
   const riders = sim.entrants;
   riders.forEach(en => {
@@ -673,7 +677,18 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
     if (en.id !== focusId) { en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; }
   });
   const focus = riders.find(en => en.id === focusId);
-  if (focus && RACE_MOVES[moveId]) RACE_MOVES[moveId](focus, riders);
+  if (focus && RACE_MOVES[moveId]) {
+    RACE_MOVES[moveId](focus, riders);
+    // 難易度に応じて一手の効き（アタック持続・追い込み量・温存量）をスケールする
+    const eff = MOVE_EFF_BY_DIFF[sim.difficulty] ?? 1;
+    if (eff !== 1) {
+      if (focus.attackLeft > 0) focus.attackLeft = Math.max(6, Math.round(focus.attackLeft * eff));
+      if (focus.finaleSend) focus.finaleSend *= eff;
+      if (focus.conserveLeft > 0) focus.conserveLeft = Math.round(focus.conserveLeft * eff);
+      if (focus.holdOn > 0) focus.holdOn = Math.round(focus.holdOn * eff);
+      riders.forEach(en => { if (en !== focus && en.finaleSend) en.finaleSend *= eff; }); // アシストの射出も同様
+    }
+  }
   simulateTicks(sim.course, riders, fromTick, sim.directive || { chaseMode: "normal", aceEarly: false }, sim.groupMode === "solo");
   rankSim(sim);
   return sim;

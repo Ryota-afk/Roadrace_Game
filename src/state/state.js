@@ -1119,6 +1119,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   course.selective = !!(raceMeta.monument || raceMeta.grade >= 4);
   // v39(A案): レース中の判断カードでfromTickから再計算するため、作戦（directive）をsimに保持する
   sim.directive = { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly };
+  sim.difficulty = difficultyId; // v39.18: 難易度で判断カードの一手の効きを変える
   simulateTicks(course, riders, 0, sim.directive, false);
   rankSim(sim);
   // v36修正: レース後にfinishTimeを書き換えると、観戦アニメ（posHist）と着順（finishTime）が

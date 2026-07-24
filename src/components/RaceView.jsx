@@ -1149,17 +1149,31 @@ export function RaceView({ sim, onFinish }) {
               {/* v39.17: 沿道の並木/柵を細かい間隔で置き、カメラが集団を追って進むほど高速に流れる＝
                   俯瞰マップにもスピード感を出す（選手は画面上ほぼ静止するので、速度は背景の流れで見せる）。 */}
               {(() => {
+                // v39.18: 道はカーブしているので、柵は画面と平行ではなく「道の法線方向」に置き、
+                // 道の傾きに合わせて回転させる（＝道に沿って並んで見える）。
                 const step = 0.004;                                   // コース全長の0.4%ごと
                 const a0f = Math.floor(cam.start / step) * step;
                 const items = [];
+                const HALF = 96;                                       // 道の半幅（描画strokeWidth190に対応）
                 for (let f = a0f; f <= cam.end + step; f += step) {
                   if (f < 0 || f > 1) continue;
                   const x = mapX(f, cam.start, cam.end);
-                  if (x < -8 || x > MAP_W + 8) continue;
+                  if (x < -10 || x > MAP_W + 10) continue;
+                  // 画面座標での道の向き（微小前進の差分から求める）
+                  const df = (cam.end - cam.start) * 0.004;
+                  const x2 = mapX(f + df, cam.start, cam.end), y2 = topRoadYAt(f + df);
+                  const y1 = topRoadYAt(f);
+                  const dx = x2 - x, dy = y2 - y1;
+                  const len = Math.hypot(dx, dy) || 1;
+                  const nx = -dy / len, ny = dx / len;                 // 法線（道に直交）
+                  const deg = Math.atan2(dy, dx) * 180 / Math.PI;
                   const k = Math.round(f / step);
-                  const yTop = riderTopY(f, 0) - 96, yBot = riderTopY(f, 0) + 96;
                   const col = k % 2 ? "#6d8471" : "#4e6455";
-                  items.push(<g key={"rp" + k}><rect x={x - 1.2} y={yTop} width="2.4" height="9" fill={col} opacity="0.85" /><rect x={x - 1.2} y={yBot - 9} width="2.4" height="9" fill={col} opacity="0.85" /></g>);
+                  const post = (sign) => {
+                    const px = x + nx * HALF * sign, py = y1 + ny * HALF * sign;
+                    return <rect x={-1.2} y={-4.5} width="2.4" height="9" fill={col} opacity="0.85" transform={`translate(${px.toFixed(1)},${py.toFixed(1)}) rotate(${deg.toFixed(1)})`} />;
+                  };
+                  items.push(<g key={"rp" + k}>{post(1)}{post(-1)}</g>);
                 }
                 return <g>{items}</g>;
               })()}

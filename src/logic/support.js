@@ -1863,6 +1863,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
   // v12: 無線指示の廃止に伴い、作戦（chaseMode/aceEarly）は出走前に決定済みのものをそのまま渡す
   // v39(A案): レース中の判断カードでfromTickから再計算するため、作戦（directive）をsimに保持する
   sim.directive = directive || { chaseMode: "normal", aceEarly: false };
+  sim.difficulty = difficultyId; // v39.18: 難易度で判断カードの一手の効きを変える
   simulateTicks(course, riders, 0, sim.directive, groupMode === "solo");
   rankSim(sim);
   // 逃げ切り判定（表示用）：エントラント中に逃げ役がいて、ゴール時点でメイン集団と別グループのままか
