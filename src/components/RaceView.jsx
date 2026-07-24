@@ -262,70 +262,105 @@ export const SPRINT_MAX_SPREAD = 0.42;       // 最大着差の選手がゴー�
 
 export function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
+// v39.6: スクロール背景用の剰余ヘルパー（負値でも0..mに収める）
+export const cycMod = (v, m) => ((v % m) + m) % m;
+
+// v39.6: 横から見たゴールスプリント演出の1選手（サイドプロフィールの自転車）。識別色はジャージ。
+function SprintCyclist({ x, groundY, color, isPlayer, isAce }) {
+  return (
+    <g transform={`translate(${x.toFixed(1)},${groundY})`}>
+      <circle cx="-6" cy="-4.2" r="4.2" fill="none" stroke="#14171d" strokeWidth="1.6" />
+      <circle cx="6" cy="-4.2" r="4.2" fill="none" stroke="#14171d" strokeWidth="1.6" />
+      <path d="M-6,-4.2 L1,-11 L6,-4.2 M1,-11 L9.5,-9.5" stroke="#14171d" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+      {isPlayer && <circle cx="1.5" cy="-13.4" r={isAce ? 5.6 : 4.9} fill="none" stroke="#27d3ff" strokeWidth="1.8" />}
+      <circle cx="1.5" cy="-13.4" r={isAce ? 4.1 : 3.4} fill={color} stroke="#14171d" strokeWidth="1" />
+      <circle cx="4.4" cy="-17" r="1.9" fill="#f2d2a8" stroke="#14171d" strokeWidth="0.7" />
+    </g>
+  );
+}
+
 export function FinalSprintCinematic({ contenders }) {
   const [now, setNow] = useState(() => performance.now());
   const startRef = useRef(performance.now());
+  const camRef = useRef(null); // v39.6: 追走カメラの平滑化用（先頭交代時のカメラ移動をなめらかに）
   useEffect(() => {
     let raf;
     const loop = () => { setNow(performance.now()); raf = requestAnimationFrame(loop); };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
-  // v39.5(演出刷新): 放送カメラ風の決着演出。左→右へ進み、先頭を画面中央に置いて追走（follow）、
-  // 先頭がゴールラインを通過したらカメラをラインで固定→後続が中央のラインを越えて右へ抜けていく。
-  // 接戦(maxGap小)のときだけ、先頭がラインに迫る"ゴールの瞬間"を減速(スロー)して見せ、通過後は
-  // 通常速度に戻って後続が高速でライン通過。最後の選手が画面外(右)へ抜けるまで再生を続ける。
-  const W = 340, H = 176, roadTop = 30, roadBot = 150;
-  const roadMid = (roadTop + roadBot) / 2, roadH = roadBot - roadTop;
-  const center = W * 0.5;
+  // v39.6(演出刷新): 横から見たゴールスプリント。トップ（＝まだゴールしていない先頭）を常に画面中央に
+  // 捉え続け、背景（路面・沿道のポール・観客・スピード線）を高速でスクロールさせて疾走感を出す。先頭が
+  // 変われば（＝現在の先頭がゴールを通過したら）カメラの追従対象も次の先頭へ移る。左→右へ進行。接戦の
+  // ときだけ先頭がラインに迫る瞬間を減速（スロー）し、通過後は通常速度で後続が高速にラインを越える。
+  const W = 340, H = 168, groundY = 104;
   const n = contenders.length;
   const maxGap = Math.max(0.6, ...contenders.map(c => c.gapSec));
   const bunch = n >= 10;
-  const close = maxGap <= 3.2;                    // 接戦＝ゴール前スロー対象
-  const spanGap = Math.min(maxGap, 16);           // 画面に収める前後幅の基準（極端な着差は打ち切る）
-  const PXPS = (W * 0.5) / Math.max(2.2, spanGap); // 着差1秒あたりのpx
-  // vt＝「先頭がラインに到達した時点を0とする仮想レース時間(秒)」。選手iはvt=gapSecでライン通過。
-  const vtStart = -Math.max(1.2, spanGap * 0.5);  // 先頭がラインの手前から入ってくる
-  const vtCross = 0.45;                            // 先頭がラインを少し過ぎたところ
-  const exitVt = spanGap + (center + 34) / PXPS;   // 最後尾がライン→画面右外へ抜けるまで
-  const t1 = close ? 3.0 : 1.6, t2 = 2.4;          // 接近＋通過(接戦は長め=スロー) / 後続の通過(速い)
+  const close = maxGap <= 3.2;
+  const spanGap = Math.min(maxGap, 16);
+  const PXPS = (W * 0.42) / Math.max(1.8, spanGap); // 着差1秒あたりの画面px
+  const vtStart = -Math.max(1.1, spanGap * 0.45);
+  const vtCross = 0.4;
+  const exitVt = spanGap + (W * 0.6) / PXPS;
+  const t1 = close ? 3.0 : 1.6, t2 = 2.6;
   const el = (now - startRef.current) / 1000;
   let vt, approaching;
   if (el <= t1) { const u = el / t1; vt = vtStart + (vtCross - vtStart) * (close ? easeOutCubic(u) : u); approaching = true; }
   else { const u = Math.min(1, (el - t1) / t2); vt = vtCross + (exitVt - vtCross) * u; approaching = false; }
-  const camX = Math.min(0, vt * PXPS);            // 先頭を中央に→通過後はライン(world0)で固定
-  const lineX = center - camX;                    // ゴールラインの画面x
+  // カメラが追う「現在の先頭」＝まだラインを越えていない中で最も前（gapが小さい）選手。全員通過後は最後尾。
+  const notCrossed = contenders.filter(c => c.gapSec > vt - 0.05);
+  const camGapTarget = notCrossed.length ? Math.min(...notCrossed.map(c => c.gapSec)) : Math.min(spanGap, maxGap);
+  if (camRef.current == null) camRef.current = camGapTarget;
+  camRef.current += (camGapTarget - camRef.current) * 0.16; // 先頭交代時のカメラ移動を滑らかに
+  const camGap = camRef.current;
+  const xCam = W * 0.44;
+  // 選手i画面x：追走中の先頭を中央(xCam)に。ライン(gap=vtの位置)は先頭の少し前（右）に見える。
+  const sxOf = (gap) => xCam - (gap - camGap) * PXPS;
+  const finishX = xCam + (camGap - vt) * PXPS;
+  const scroll = (vt - vtStart) * PXPS;           // 背景スクロール量（単調増加＝速度感）
   const fade = Math.max(0, 1 - el * 3.5);
-  // 自分/エースを最前面に描くため、非プレイヤー→プレイヤーの順に並べる
-  const order = [...contenders].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
+  const skyH = groundY;
+  // 沿道ポール（速い）・観客ドット（遅い）・路面ダッシュ（速い）・スピード線を剰余で無限スクロール
+  const poles = Array.from({ length: 9 }, (_, i) => W - cycMod(scroll * 1.0 - i * 52, 9 * 52) + 52);
+  const dashes = Array.from({ length: 16 }, (_, i) => W - cycMod(scroll * 1.12 - i * 30, 16 * 30) + 30);
+  const crowd = Array.from({ length: 26 }, (_, i) => W - cycMod(scroll * 0.28 - i * 16, 26 * 16) + 16);
+  const streaks = Array.from({ length: 6 }, (_, i) => ({ x: W - cycMod(scroll * 1.7 - i * 70, 6 * 70), y: 22 + (i * 13) % (groundY - 30) }));
+  const order = [...contenders].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0) || (b.gapSec - a.gapSec)); // 後方→前方、自分は必ず最前面
   return (
     <div style={{ position: "relative" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${W} / ${H}`, background: "#2f3f28", borderRadius: 8, display: "block" }}>
-        <rect x="0" y={roadTop} width={W} height={roadH} fill="#565a61" />
-        <line x1="0" y1={roadTop} x2={W} y2={roadTop} stroke="#3a3d43" strokeWidth="2" />
-        <line x1="0" y1={roadBot} x2={W} y2={roadBot} stroke="#3a3d43" strokeWidth="2" />
-        <line x1="0" y1={roadMid} x2={W} y2={roadMid} stroke="#d3d7dd" strokeWidth="1.4" strokeDasharray="16,13" opacity="0.35" />
-        {/* ゴールライン（縦・市松風）＋旗。カメラに追従して動く */}
-        {lineX > -12 && lineX < W + 12 && (
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${W} / ${H}`, borderRadius: 8, display: "block" }}>
+        {/* 空 */}
+        <rect x="0" y="0" width={W} height={skyH} fill="#26313b" />
+        {/* 観客（遠景・ゆっくり） */}
+        {crowd.map((x, i) => <circle key={"c" + i} cx={x} cy={20 + (i % 3) * 5} r="3.2" fill={i % 2 ? "#3c4a57" : "#47535f"} />)}
+        {/* 沿道ポール（速い） */}
+        {poles.map((x, i) => (
+          <g key={"p" + i}>
+            <line x1={x} y1={groundY - 34} x2={x} y2={groundY} stroke="#3a4048" strokeWidth="2.4" />
+            <rect x={x - 7} y={groundY - 38} width="14" height="5" fill={i % 2 ? "#c14b4b" : "#4b7fc1"} opacity="0.85" />
+          </g>
+        ))}
+        {/* 路面 */}
+        <rect x="0" y={groundY} width={W} height={H - groundY} fill="#4a4f57" />
+        <line x1="0" y1={groundY} x2={W} y2={groundY} stroke="#2c3036" strokeWidth="2" />
+        {/* 路面ダッシュ（速い＝疾走感） */}
+        {dashes.map((x, i) => <rect key={"d" + i} x={x} y={groundY + 16} width="15" height="3.4" fill="#d6dae0" opacity="0.5" />)}
+        {/* スピード線 */}
+        {streaks.map((s, i) => <line key={"s" + i} x1={s.x} y1={s.y} x2={s.x + 26} y2={s.y} stroke="#ffffff" strokeWidth="1.4" opacity="0.12" strokeLinecap="round" />)}
+        {/* ゴール（オーバーヘッド市松バナー＋路面ライン）。カメラに追従して動く */}
+        {finishX > -40 && finishX < W + 40 && (
           <g>
-            <rect x={lineX - 3.5} y={roadTop} width="7" height={roadH} fill="#eef0f3" />
-            <line x1={lineX} y1={roadTop} x2={lineX} y2={roadBot} stroke="#14171d" strokeWidth="7" strokeDasharray="9,9" opacity="0.85" />
-            <text x={lineX} y={roadTop - 6} textAnchor="middle" fontSize="15">🏁</text>
+            <line x1={finishX} y1={groundY - 46} x2={finishX} y2={groundY} stroke="#8a8f98" strokeWidth="2.6" />
+            {Array.from({ length: 10 }, (_, i) => <rect key={"f" + i} x={finishX - 24 + i * 5} y={groundY - 52} width="5" height="10" fill={i % 2 ? "#e9ecef" : "#14171d"} />)}
+            {Array.from({ length: 5 }, (_, i) => <rect key={"fg" + i} x={finishX - 3} y={groundY - 2 + i * 6} width="6" height="4" fill={i % 2 ? "#14171d" : "#e9ecef"} />)}
           </g>
         )}
+        {/* 選手（横向きプロフィール） */}
         {order.map(c => {
-          const sx = center + ((vt - c.gapSec) * PXPS - camX);
-          if (sx < -18 || sx > W + 18) return null; // 画面外はカリング
-          const laneY = roadMid + (riderHash01(c.id, 3) - 0.5) * roadH * 0.72 + Math.sin(now / 300 + riderHash01(c.id, 9) * 7) * 2;
-          const r = c.isAce ? 6.8 : 5.2;
-          return (
-            <g key={c.id} transform={`translate(${sx.toFixed(1)},${laneY.toFixed(1)})`}>
-              <line x1={-(r + 1)} y1="0" x2={-(r + 11)} y2="0" stroke={c.color} strokeWidth="1.4" opacity="0.34" strokeLinecap="round" />
-              {c.isPlayer && <circle r={r + 2.6} fill="none" stroke="#27d3ff" strokeWidth="2" />}
-              <circle r={r} fill={c.color} stroke="#14171d" strokeWidth="1.3" />
-              {c.isPlayer && <circle r="1.8" fill="#14171d" />}
-            </g>
-          );
+          const sx = sxOf(c.gapSec);
+          if (sx < -22 || sx > W + 22) return null;
+          return <SprintCyclist key={c.id} x={sx} groundY={groundY} color={c.color} isPlayer={c.isPlayer} isAce={c.isAce} />;
         })}
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />
