@@ -273,9 +273,7 @@ export const SPRINT_CONTENDER_GAP_SEC = 30;  // この秒差以内の選手を�
 
 export const SPRINT_MAX_CONTENDERS = 22;     // 演出に登場させる選手数の上限（集団スプリントを"団子"に見せるため拡大）
 
-export const SPRINT_CINEMATIC_MS = 4200;     // 演出の所要時間（実時間ミリ秒）
 
-export const SPRINT_MAX_SPREAD = 0.42;       // 最大着差の選手がゴールライン手前どこまでで止まるか（0=ライン上、1=スタート地点）
 
 export function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -389,10 +387,12 @@ export function FinalSprintCinematic({ contenders }) {
   // ほとんど流れずスピード感が皆無だった。開始地点を大きく手前に取り、同じ時間で長距離を走らせる＝
   // 地面・沿道が高速で流れる。さらに常にease-out（序盤ほど高速→ラインに向けて減速）にして、
   // 「速い→スロー＆ズーム」の落差でゴール前を引き立てる。
-  const vtStart = -15;
+  // v39.17: ゴール前のやりとり（差し・リードアウト・抜きつ抜かれつ）を見せる時間を確保するため接近を
+  // 長く取り、同時に距離も伸ばしてスピード感を維持する（時間だけ延ばすと遅く見えてしまうため）。
+  const vtStart = -26;
   const vtCross = 0.05;                             // v39.13: 先頭がライン（前輪）を通過する瞬間をスローの底に
   const exitVt = spanGap * COMPRESS + 6.5;
-  const t1 = close ? 3.6 : 2.9, t2 = 1.7;
+  const t1 = close ? 6.2 : 5.2, t2 = 1.9;
   const el = (now - startRef.current) / 1000;
   let vt, approaching;
   if (el <= t1) {
@@ -876,15 +876,21 @@ export function RaceView({ sim, onFinish }) {
         if (!prev) { nc = targetC; nSpan = targetSpan; }
         else {
           const curC = (prev.start + prev.end) / 2, curSpan = prev.end - prev.start;
-          const kSpan = targetSpan < curSpan ? 0.05 : 0.22; // イン=緩やか / アウト=やや速め（どちらも滑らかに）
+          // v39.17: ズームのハンチング（イン↔アウトの往復）対策。集団が伸び縮みするたびに目標spanが
+          // 揺れ、非対称補間と枠寄せ補正が競合して倍率が振動→選手の動きが不自然に見えていた。
+          // 目標との差が小さいうちは倍率を据え置く（デッドバンド）ことで、細かな往復を止める。
+          const relDiff = Math.abs(targetSpan - curSpan) / Math.max(1e-6, curSpan);
+          const kSpan = relDiff < 0.12 ? 0 : (targetSpan < curSpan ? 0.05 : 0.16);
           nc = curC + (targetC - curC) * 0.5;               // パンは機敏
           nSpan = curSpan + (targetSpan - curSpan) * kSpan;
         }
         let ns = nc - nSpan / 2, ne = nc + nSpan / 2;
         // 補正：選手が枠からはみ出しそうなら枠を"寄せて"収める（端に張り付かせない）。入り切らない時だけ広げる
-        const margin = nSpan * 0.07;
-        if (maxF > ne - margin) { const d = maxF - (ne - margin); ns += d; ne += d; }
-        if (minF < ns + margin) { const d = (ns + margin) - minF; ns -= d; ne -= d; }
+        // v39.17: 1フレームあたりの寄せ量を制限し、補正が跳ねて集団がガクつくのを防ぐ
+        const margin = nSpan * 0.07, maxShift = nSpan * 0.05;
+        const clampShift = (d) => Math.max(-maxShift, Math.min(maxShift, d));
+        if (maxF > ne - margin) { const d = clampShift(maxF - (ne - margin)); ns += d; ne += d; }
+        if (minF < ns + margin) { const d = clampShift((ns + margin) - minF); ns -= d; ne -= d; }
         if (maxF > ne) ne = maxF + margin;
         camSmoothRef.current = { start: ns, end: ne };
         setCam({ start: ns, end: ne });
@@ -1140,6 +1146,23 @@ export function RaceView({ sim, onFinish }) {
               <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="190" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
               <circle cx={mapX(1, cam.start, cam.end)} cy={riderTopY(1, 0)} r="4" fill={C.red} />
+              {/* v39.17: 沿道の並木/柵を細かい間隔で置き、カメラが集団を追って進むほど高速に流れる＝
+                  俯瞰マップにもスピード感を出す（選手は画面上ほぼ静止するので、速度は背景の流れで見せる）。 */}
+              {(() => {
+                const step = 0.004;                                   // コース全長の0.4%ごと
+                const a0f = Math.floor(cam.start / step) * step;
+                const items = [];
+                for (let f = a0f; f <= cam.end + step; f += step) {
+                  if (f < 0 || f > 1) continue;
+                  const x = mapX(f, cam.start, cam.end);
+                  if (x < -8 || x > MAP_W + 8) continue;
+                  const k = Math.round(f / step);
+                  const yTop = riderTopY(f, 0) - 96, yBot = riderTopY(f, 0) + 96;
+                  const col = k % 2 ? "#6d8471" : "#4e6455";
+                  items.push(<g key={"rp" + k}><rect x={x - 1.2} y={yTop} width="2.4" height="9" fill={col} opacity="0.85" /><rect x={x - 1.2} y={yBot - 9} width="2.4" height="9" fill={col} opacity="0.85" /></g>);
+                }
+                return <g>{items}</g>;
+              })()}
               {/* v39.12: 距離ポスト（10%刻み・沿道スクロール）＋KOM/中間スプリント標識。カメラ範囲内のみ */}
               {distPosts.map((f, i) => (f < cam.start - 0.02 || f > cam.end + 0.02) ? null : (
                 <g key={"dp" + i}>
