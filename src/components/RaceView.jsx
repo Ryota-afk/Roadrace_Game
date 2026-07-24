@@ -15,11 +15,14 @@ export function buildDecisions(course, focusEnt) {
   const finalStart = (course.cumFrac && course.finalIdx > 0) ? course.cumFrac[course.finalIdx - 1] : 0.85;
   const atFin = Math.min(0.80, Math.max(0.58, finalStart - 0.03));
   const atMid = Math.min(0.5, atFin - 0.15);
+  const atSprint = Math.min(0.95, Math.max(finalStart + 0.02, 0.9)); // 最終直線（ゴール手前）の一枚
   return [
     { id: "mid", at: atMid, kind: "mid" },
     { id: "finale", at: atFin, kind: "finale" },
     // 状況発火：先頭で抜け出している or 脚が売り切れかけの時だけ、専用の一枚を差し込む
     { id: "react", kind: "react", cond: (c) => (c.inBreak && c.frac > 0.5 && c.frac < atFin - 0.02) || (c.energy < 38 && c.frac > 0.45 && c.frac < atFin - 0.02) },
+    // v39.13: 最終スプリントそのものの一手。最終区間内でも発火する（allowFinal）
+    { id: "sprint", at: atSprint, kind: "sprint", allowFinal: true },
   ];
 }
 
@@ -52,6 +55,20 @@ export function composeCard(kind, focus, ctx) {
       { move: "hold", label: "🏳 自分のペースで", desc: "無理をやめて淡々と進む" },
     ];
     return { title, sub, choices };
+  }
+  if (kind === "sprint") {
+    title = "🏁 最終スプリント！";
+    sub = "ゴールが目前——ここで全てを出し切れ";
+    if (A("kicker") || A("finisher") || A("closer"))
+      choices.push({ move: "kickBig", label: "🗡 会心の差し", desc: "満を持して差し切る、豪脚の一撃" });
+    else if (t === "SPR" || A("sprinter_sp"))
+      choices.push({ move: "sprintWait", label: "🏁 番手から爆発", desc: "前の選手を風除けに、最後に弾ける" });
+    else
+      choices.push({ move: "kick", label: "🎯 一気に差す", desc: "残った脚を全部ここで解き放つ" });
+    choices.push({ move: "send", label: "🔥 全開でもがく", desc: "とにかく先頭で踏み倒す（早駆け気味）" });
+    if (isAssist) choices.push({ move: "assistLaunch", label: "🤝 エースを発射", desc: "最後の力でエースを前へ弾き出す" });
+    else choices.push({ move: "hold", label: "🚴 流れで勝負", desc: "無理せず集団の勢いに乗る" });
+    return { title, sub, choices: choices.slice(0, 3) };
   }
   if (kind === "mid") {
     title = "⚡ 中盤の判断";
@@ -303,6 +320,9 @@ function IsoRider({ x, y, color, cap, isPlayer, isAce, surging }) {
       {px(-2.2, 6.6, 2.0, 1.7, color)}
       {px(-0.6, 6.9, 1.9, 1.6, color)}
       {px(1.0, 7.0, 1.8, 1.5, color)}
+      {/* v39.13: 選手ごとに違う色の背中ストライプ＋ショーツ＝同じチーム色でも見分けが付き残像に見えない */}
+      {px(-2.0, 7.45, 4.6, 0.42, cap || "#e9e2d4")}
+      {px(-2.3, 5.7, 1.7, 1.0, cap || "#333")}
       {/* 腕→ドロップ */}
       {ln(2.6, 7.2, 5.8, 4.6, "#242830", 1.1)}
       {/* 頭＋エアロヘルメット（色でバリエーション・後方に尾） */}
@@ -333,7 +353,7 @@ export function FinalSprintCinematic({ contenders }) {
   const W = 340, H = 178;
   const cx0 = W * 0.44, cy0 = H * 0.42;
   const Px = 30, Py = 15, Lx = 27, Ly = -14;        // アイソメの2軸（進行=右下、レーン=右上）。大きめ＝画面上の間隔を広げ密集を緩和
-  const roadHL = 1.2, laneStep = 0.6;               // 道の半幅（レーン単位）／地面タイル1枚のレーン幅
+  const roadHL = 1.35, laneStep = 0.6;              // 道の半幅（レーン単位）／地面タイル1枚のレーン幅
   const n = contenders.length;
   const maxGap = Math.max(0.6, ...contenders.map(c => c.gapSec));
   const bunch = n >= 10;
@@ -342,11 +362,12 @@ export function FinalSprintCinematic({ contenders }) {
   const spanGap = Math.min(maxGap, 16);
   // v39.9: 着差(秒)を道沿い距離へ圧縮＝「長い一列」でなく前後に締まった団子に。横（レーン）は道幅いっぱいに
   // 散らして重なりを解消。もっと手前(vtStart)から長め(t1)に見せて駆け引き（差し/リードアウト/独走）を強調。
-  const COMPRESS = 0.4;
-  const vtStart = -3.4;
-  const vtCross = 0.6;
+  // v39.13: 大人数(nが多い)ほど前後にも散らして塊が潰れて重なる（＝残像に見える）のを防ぐ。
+  const COMPRESS = n >= 14 ? 0.62 : 0.45;
+  const vtStart = -3.6;
+  const vtCross = 0.05;                             // v39.13: 先頭がライン（前輪）を通過する瞬間をスローの底に
   const exitVt = spanGap * COMPRESS + 5.0;
-  const t1 = close ? 3.8 : 3.0, t2 = 3.0;
+  const t1 = close ? 3.6 : 2.8, t2 = 3.0;
   const el = (now - startRef.current) / 1000;
   let vt, approaching;
   if (el <= t1) { const u = el / t1; vt = vtStart + (vtCross - vtStart) * (close ? easeOutCubic(u) : u); approaching = true; }
@@ -355,14 +376,14 @@ export function FinalSprintCinematic({ contenders }) {
   // 各選手の道沿い位置 w（大＝前方/ゴール通過側）と lane（道幅内の位置）。ゴールは w=0。
   const gEff = (c) => c.gapSec * COMPRESS;
   const wOf = (c) => (vt - gEff(c)) - (c.kick || 0) * 1.5 * sprintBump(gEff(c) - vt, 1.9)
-    + (riderHash01(c.id, 23) - 0.5) * 0.55;         // 微小な前後ズレで同着差の重なりをほぐす
+    + (riderHash01(c.id, 23) - 0.5) * 1.05;         // v39.13: 前後ズレを大きめに＝同着差の重なり(残像化)をほぐす
   const laneOf = (c) => {
     const rem = gEff(c) - vt;
-    const base = (riderHash01(c.id, 3) - 0.5) * 2.0; // 道幅いっぱいに散らばる（＝横並びの団子に）
-    const conv = 0.74 + 0.26 * Math.max(0, Math.min(1, rem / 3.0)); // 収束は控えめ（潰れて一列にしない）
+    const base = (riderHash01(c.id, 3) - 0.5) * 2.4; // 道幅いっぱいに散らばる（＝横並びの団子に）
+    const conv = 0.82 + 0.18 * Math.max(0, Math.min(1, rem / 3.0)); // 収束はさらに控えめ（潰れて一列にしない）
     const weave = Math.sin(vt * 2.1 + riderHash01(c.id, 9) * 7) * 0.08;
     const passLat = Math.sign(c.kick || 0) * sprintBump(rem, 2.2) * 0.36; // 差し/リードアウトは横へ膨らんで抜く
-    return Math.max(-1.05, Math.min(1.05, base * conv + weave + passLat));
+    return Math.max(-1.25, Math.min(1.25, base * conv + weave + passLat));
   };
   const withW = contenders.map(c => ({ c, w: wOf(c) }));
   // v39.10: 勝者(gap最小＝先頭)がゴールを通過するまでは先頭を追走。通過後はゴール(w=0)にカメラを固定し、
@@ -674,7 +695,7 @@ export function RaceView({ sim, onFinish }) {
     const focusName = focusEnt ? focusEnt.name.split(" ")[0] : null;
     let prevFocusRank = null, lastFocusSampleAt = 0, lastBeatAt = -9999;
     // v39.12(アクションカム): 道中の見せ場（先頭浮上・逃げ拡大）で軽くズーム＋スロー。連発を防ぐクールダウン付き。
-    const actionCam = (focusIdForCam) => { if (now - lastBeatAt > 6500 && !finalSegRef.current) { beatRef.current = { until: now + 1900, slow: 0.6, focusId: focusIdForCam }; lastBeatAt = now; } };
+    const actionCam = (focusIdForCam, nowT) => { if (nowT - lastBeatAt > 6500 && !finalSegRef.current) { beatRef.current = { until: nowT + 1900, slow: 0.6, focusId: focusIdForCam }; lastBeatAt = nowT; } };
     // v39.3(演出): 実況ラインを複数から回して選ぶ（毎回同じ台詞の単調さを解消）
     let commentPick = 0;
     const pick = (arr) => arr[(commentPick++) % arr.length];
@@ -731,7 +752,8 @@ export function RaceView({ sim, onFinish }) {
       // v39(A案): 判断カードの発火判定。注目選手がまだ走っていて（未ゴール）、最終区間より手前、
       // スキップ中でなく、しきい値frac／状況条件を満たした最初のカードを、その瞬間の状況(ctx)に応じて
       // 組み立てて提示し、再生を止める。
-      if (!pausedRef.current && !skipRef.current && !finalSegRef.current && focusId != null && decisions.length) {
+      // v39.13: allowFinal（最終スプリントの一手）は最終区間でも発火可。それ以外は最終区間より手前のみ。
+      if (!pausedRef.current && !skipRef.current && focusId != null && decisions.length) {
         const focusR = riders.find(r => r.e.id === focusId);
         if (focusR && rt < focusR.e.finishTime) {
           const fromTick = Math.max(1, Math.min(focusR.e.posHist.length - 1, Math.floor(rt / TICK_SEC)));
@@ -743,7 +765,7 @@ export function RaceView({ sim, onFinish }) {
             groupSize: riders.filter(r => r.gid === focusR.gid && rt < r.e.finishTime).length,
             isLeader: riders.every(r => r.e.id === focusR.e.id || r.frac <= focusR.frac + 1e-6),
           };
-          const d = decisions.find(dc => !firedRef.current.has(dc.id) && (dc.at != null ? focusR.frac >= dc.at : (dc.cond && dc.cond(ctx))));
+          const d = decisions.find(dc => !firedRef.current.has(dc.id) && (dc.allowFinal || !finalSegRef.current) && (dc.at != null ? focusR.frac >= dc.at : (dc.cond && dc.cond(ctx))));
           if (d) {
             firedRef.current.add(d.id);
             const card = composeCard(d.kind, focusR.e, ctx);
@@ -823,7 +845,7 @@ export function RaceView({ sim, onFinish }) {
         if (!prev) { nc = targetC; nSpan = targetSpan; }
         else {
           const curC = (prev.start + prev.end) / 2, curSpan = prev.end - prev.start;
-          const kSpan = targetSpan < curSpan ? 0.05 : 0.5; // イン=緩やか / アウト=速い
+          const kSpan = targetSpan < curSpan ? 0.05 : 0.22; // イン=緩やか / アウト=やや速め（どちらも滑らかに）
           nc = curC + (targetC - curC) * 0.5;               // パンは機敏
           nSpan = curSpan + (targetSpan - curSpan) * kSpan;
         }
@@ -963,9 +985,9 @@ export function RaceView({ sim, onFinish }) {
             if (prevFocusRank != null && now - lastDynCommentAt > 3500) {
               const up = prevFocusRank - focusRank; // 正＝順位を上げた
               if (soloBreak && (beatRef.current.until <= now)) {
-                liveRef.current = { text: pick([`🚀 ${focusName}、独走態勢だ！後続を突き放しにかかる`, `🚀 ${focusName}が抜け出した！このまま逃げ切れるか`, `🔥 ${focusName}、一人旅！集団は反応できるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId);
+                liveRef.current = { text: pick([`🚀 ${focusName}、独走態勢だ！後続を突き放しにかかる`, `🚀 ${focusName}が抜け出した！このまま逃げ切れるか`, `🔥 ${focusName}、一人旅！集団は反応できるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId, now);
               } else if (focusRank === 1 && prevFocusRank > 1) {
-                liveRef.current = { text: pick([`📻 ${focusName}が${terr}先頭に立った！`, `📻 ${focusName}、ついに先頭に躍り出た！`, `📻 先頭は${focusName}だ！`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId);
+                liveRef.current = { text: pick([`📻 ${focusName}が${terr}先頭に立った！`, `📻 ${focusName}、ついに先頭に躍り出た！`, `📻 先頭は${focusName}だ！`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId, now);
               } else if (up >= 4 && focusRank <= 10) {
                 liveRef.current = { text: pick([`📻 ${focusName}が${terr}集団を縫って上がってきた！`, `📻 ${focusName}、ぐんぐん順位を上げる！`, `📻 ${focusName}が${terr}前方へポジションを押し上げる`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
               } else if (up <= -5) {
@@ -983,7 +1005,7 @@ export function RaceView({ sim, onFinish }) {
           if (curGapSec < 1.5 && prevGapSec >= 3) {
             liveRef.current = { text: pick(["📻 逃げ吸収！集団は再び一つにまとまった", "📻 メイン集団が逃げを飲み込んだ！振り出しに戻る", "📻 ついに追いついた！集団はひとかたまりに"]), until: now + 2600 }; lastDynCommentAt = now;
           } else if (d >= 4) {
-            liveRef.current = { text: pick(["📻 逃げがリードを広げる！メイン集団は反応できるか", "📻 前を行く逃げがぐんぐんタイム差を稼ぐ！", "📻 逃げ切りが見えてきたか、リードは広がる一方だ"]), until: now + 2600 }; lastDynCommentAt = now; actionCam(null);
+            liveRef.current = { text: pick(["📻 逃げがリードを広げる！メイン集団は反応できるか", "📻 前を行く逃げがぐんぐんタイム差を稼ぐ！", "📻 逃げ切りが見えてきたか、リードは広がる一方だ"]), until: now + 2600 }; lastDynCommentAt = now; actionCam(null, now);
           } else if (d <= -4 && curGapSec > 2) {
             liveRef.current = { text: pick(["📻 メイン集団がペースを上げ、逃げを引き戻しにかかる", "📻 集団が本気だ！タイム差が見る間に縮まる", "📻 追走のペースアップ！逃げグループを射程に捉える"]), until: now + 2600 }; lastDynCommentAt = now;
           }
@@ -1189,6 +1211,26 @@ export function RaceView({ sim, onFinish }) {
                 );
               })}
             </svg>
+            {/* v39.13: コース全体の進捗バー＝縮尺の基準。全長0→100%に対し、今マップが映している範囲(黄枠)と
+                先頭/自分/追走の位置を示す。ズームで倍率が変わっても全体のどこを見ているか一目で分かる。 */}
+            {(() => {
+              const BW = MAP_W, BH = 22, pad = MAP_PAD, w = BW - pad * 2;
+              const fx = (f) => pad + Math.max(0, Math.min(1, f)) * w;
+              const leadF = ridersUi.length ? Math.max(...ridersUi.map(r => r.frac)) : 0;
+              const meR = ridersUi.find(r => r.isPlayer);
+              const viewA = fx(cam.start), viewB = fx(Math.min(1, cam.end));
+              return (
+                <svg viewBox={`0 0 ${BW} ${BH}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${BW} / ${BH}`, display: "block", marginTop: 3 }}>
+                  <rect x={pad} y={BH / 2 - 3} width={w} height="6" rx="3" fill="#2b2f36" />
+                  {courseMarkers.map((m, i) => <rect key={"pm" + i} x={fx(m.frac) - 1} y={BH / 2 - 5} width="2" height="10" fill={m.color} opacity="0.8" />)}
+                  <rect x={viewA} y="1" width={Math.max(3, viewB - viewA)} height={BH - 2} rx="2" fill="none" stroke={C.yellow} strokeWidth="1.2" opacity="0.85" />
+                  <circle cx={fx(0)} cy={BH / 2} r="2.4" fill="#8a8f98" />
+                  <text x={fx(1)} y={BH / 2 + 3.5} textAnchor="end" fontSize="9">🏁</text>
+                  <circle cx={fx(leadF)} cy={BH / 2} r="3" fill="#ff6b6b" />
+                  {meR && <circle cx={fx(meR.frac)} cy={BH / 2} r="3" fill="#27d3ff" stroke="#14171d" strokeWidth="0.8" />}
+                </svg>
+              );
+            })()}
           </div>
           <div>
             <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
