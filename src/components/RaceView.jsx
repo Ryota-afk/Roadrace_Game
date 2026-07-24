@@ -298,6 +298,7 @@ function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple }) {
     return (
       <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
         <ellipse cx="0" cy={0.9 * s} rx={7.5 * s} ry={1.8 * s} fill="#000" opacity="0.22" />
+        {surging && <rect x={-14 * s} y={-7 * s} width={8 * s} height={1.2 * s} fill="#fff" opacity="0.3" />}
         <circle cx={X(-5.4)} cy={Y(2.4)} r={2.7 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
         <circle cx={X(5.4)} cy={Y(2.4)} r={2.7 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
         {ln(-5.4, 2.4, 5.4, 4.6, FR, 0.9)}
@@ -387,7 +388,8 @@ export function FinalSprintCinematic({ contenders }) {
   const vtStart = -3.6;
   const vtCross = 0.05;                             // v39.13: 先頭がライン（前輪）を通過する瞬間をスローの底に
   const exitVt = spanGap * COMPRESS + 5.0;
-  const t1 = close ? 3.6 : 2.8, t2 = 3.0;
+  // v39.15: 通過後(t2)を短くして一気に流れる＝スピード感。接近(t1)のスローとの落差で緩急を強調
+  const t1 = close ? 3.6 : 2.8, t2 = 1.7;
   const el = (now - startRef.current) / 1000;
   let vt, approaching;
   if (el <= t1) { const u = el / t1; vt = vtStart + (vtCross - vtStart) * (close ? easeOutCubic(u) : u); approaching = true; }
@@ -463,7 +465,7 @@ export function FinalSprintCinematic({ contenders }) {
           return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#14171d"} />;
         })}
         {/* 選手（立ったスプライト） */}
-        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging} simple={n > 10 && !r.c.isPlayer && !r.c.isAce} />)}
+        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging || !approaching} simple={n > 10 && !r.c.isPlayer && !r.c.isAce} />)}
       </svg>
       {fade > 0.01 && <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />}
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
@@ -578,7 +580,7 @@ export function RaceView({ sim, onFinish }) {
       const line = AGGR[moveId] || CALM[moveId] || `📻 ${who}の判断：「${chosen ? chosen.label : "—"}」`;
       liveRef.current = { text: line, until: nowP + 3400 };
       if (moveId === "attack" || moveId === "send") {
-        beatRef.current = { until: nowP + 2600, slow: 0.42, focusId: focusEnt ? focusEnt.id : null };
+        beatRef.current = { until: nowP + 3200, slow: 0.30, focusId: focusEnt ? focusEnt.id : null };
       }
       decisionRef.current = null;
       setDecision(null);
@@ -715,7 +717,7 @@ export function RaceView({ sim, onFinish }) {
     const focusName = focusEnt ? focusEnt.name.split(" ")[0] : null;
     let prevFocusRank = null, lastFocusSampleAt = 0, lastBeatAt = -9999;
     // v39.12(アクションカム): 道中の見せ場（先頭浮上・逃げ拡大）で軽くズーム＋スロー。連発を防ぐクールダウン付き。
-    const actionCam = (focusIdForCam, nowT) => { if (nowT - lastBeatAt > 6500 && !finalSegRef.current) { beatRef.current = { until: nowT + 1900, slow: 0.6, focusId: focusIdForCam }; lastBeatAt = nowT; } };
+    const actionCam = (focusIdForCam, nowT) => { if (nowT - lastBeatAt > 6500 && !finalSegRef.current) { beatRef.current = { until: nowT + 2500, slow: 0.42, focusId: focusIdForCam }; lastBeatAt = nowT; } };
     // v39.3(演出): 実況ラインを複数から回して選ぶ（毎回同じ台詞の単調さを解消）
     let commentPick = 0;
     const pick = (arr) => arr[(commentPick++) % arr.length];
@@ -739,8 +741,9 @@ export function RaceView({ sim, onFinish }) {
         // v39.10(演出): ズームインとスロー再生をセットに。カメラが寄る（spanが小さい）ほど再生を遅く
         // する＝ズームインが緩やかに進むにつれてスローも徐々に効き、ゴール前がドラマチックに。山場(beat)も併用。
         const spanNow = camSmoothRef.current ? (camSmoothRef.current.end - camSmoothRef.current.start) : 0.2;
-        const zoomT = Math.max(0, Math.min(1, (0.14 - spanNow) / (0.14 - SPRINT_MIN_VIEW_FRAC)));
-        const zoomSlow = 1 - 0.62 * zoomT;
+        // v39.15: ズーム連動スローをさらに強く＋効き始めを早く（寄り始めた時点から体感できるように）
+        const zoomT = Math.max(0, Math.min(1, (0.20 - spanNow) / (0.20 - SPRINT_MIN_VIEW_FRAC)));
+        const zoomSlow = 1 - 0.76 * zoomT;
         const beatSlow = beatRef.current.until > now ? beatRef.current.slow : 1;
         const slowFactor = Math.min(zoomSlow, beatSlow);
         clock = Math.min(PLAY_DUR, clock + dt * speedRef.current * slowFactor);
@@ -846,7 +849,7 @@ export function RaceView({ sim, onFinish }) {
         let span = Math.min(MAX_VIEW_FRAC, Math.max(MIN_VIEW_FRAC, spreadF * 1.6));
         if (finalSegRef.current) span = Math.min(span, SPRINT_MIN_VIEW_FRAC);
         // v39.3(演出): 山場の間はさらに寄せる（クローズアップ感）
-        if (beatOn) span = Math.max(MIN_VIEW_FRAC * 0.8, span * 0.6);
+        if (beatOn) span = Math.max(MIN_VIEW_FRAC * 0.62, span * 0.44);
         // v12バグ修正: 逃げとメイン集団の差が開きMAX_VIEW_FRAC（最大ズームアウト幅）を
         // 超えると、上のMath.minでspanが実際に必要な幅より狭く決まってしまい、
         // 「先頭集団」カメラで追っているはずの選手がキャンバス範囲外（画面右側など）に
@@ -883,7 +886,7 @@ export function RaceView({ sim, onFinish }) {
       // バナーで「勝負が動く直前」の緊張を作る。先頭が flammeFrac を越えた瞬間に発火。
       if (!flammeRef.current && !finalSegRef.current && leadFrac >= flammeFrac) {
         flammeRef.current = true;
-        beatRef.current = { until: now + 2200, slow: 0.5, focusId: null };
+        beatRef.current = { until: now + 2800, slow: 0.38, focusId: null };
         liveRef.current = { text: "🔴 フラムルージュ！残り1km、いよいよ勝負が動く", until: now + 2800 };
       }
       // 最終区間突入判定
