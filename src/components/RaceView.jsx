@@ -250,9 +250,11 @@ export function riderWander(id, salt, tSec, baseFreq) {
        + 0.35 * Math.sin(tSec * f2 * Math.PI * 2 + h2 * Math.PI * 2);
 }
 
-export const SPRINT_CONTENDER_GAP_SEC = 12;  // この秒差以内の選手をスプリント演出の対象にする
+export const SPRINT_CONTENDER_GAP_SEC = 30;  // この秒差以内の選手をスプリント演出の対象にする（v39.2: 拡大。
+// 演出の母集団は「直前までカメラが映していた先頭集団(cameraFramingRef)」なので、その集団を厳しく着差で
+// 削らず丸ごと見せることで、俯瞰マップで見えていた団子がそのまま最終直線に雪崩れ込む＝集団スプリント感を出す）
 
-export const SPRINT_MAX_CONTENDERS = 8;      // 演出に登場させる選手数の上限
+export const SPRINT_MAX_CONTENDERS = 22;     // 演出に登場させる選手数の上限（集団スプリントを"団子"に見せるため拡大）
 
 export const SPRINT_CINEMATIC_MS = 4200;     // 演出の所要時間（実時間ミリ秒）
 
@@ -274,6 +276,12 @@ export function FinalSprintCinematic({ contenders }) {
   const maxGap = Math.max(0.5, ...contenders.map(c => c.gapSec));
   const W = 200, H = 300, topY = 34, bottomY = H - 18;
   const fadeOpacity = Math.max(0, 1 - t * 5); // 冒頭の暗転からのフェードイン
+  const n = contenders.length;
+  // v39.2: 集団スプリント（大人数）でも全員をコース幅に収めて"団子"に見せる。人数が増えるほど
+  // 横間隔を詰め、マーカーも少し小さくし、前後に軽くばらけさせて2次元的な塊に見せる。
+  const spacing = Math.min(11, (W - 30) / Math.max(1, n - 1));
+  const rScale = n > 12 ? Math.max(0.62, 12 / n) : 1;
+  const bunch = n >= 10;
   return (
     <div style={{ position: "relative" }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 300, background: "linear-gradient(#3f5a3a,#26361f)", borderRadius: 8, display: "block" }}>
@@ -282,20 +290,22 @@ export function FinalSprintCinematic({ contenders }) {
         <text x={W / 2} y={topY - 18} textAnchor="middle" fontSize="16">🏁</text>
         {contenders.map((c, i) => {
           const finalPos = 1 - Math.min(1, c.gapSec / maxGap) * SPRINT_MAX_SPREAD;
-          const y = bottomY - finalPos * eased * (bottomY - topY);
-          const wobble = Math.sin(now / 260 + i * 1.7) * (1 - eased) * 9;
-          const x = W / 2 + (i - (contenders.length - 1) / 2) * 11 + wobble;
+          // 前後方向の軽い散らばり（着差が僅少な団子ゴールでも一直線に並ばず塊に見せる）。決着に向けて弱める。
+          const jitterY = (riderHash01(c.id, 71) - 0.5) * (bunch ? 15 : 6) * (0.35 + (1 - eased) * 0.65);
+          const y = bottomY - finalPos * eased * (bottomY - topY) + jitterY;
+          const wobble = Math.sin(now / 260 + i * 1.7) * (1 - eased) * 9 * rScale;
+          const x = W / 2 + (i - (n - 1) / 2) * spacing + wobble;
           return (
             <g key={c.id} transform={`translate(${x},${y})`}>
-              {c.isPlayer && <circle r={c.isAce ? 10.5 : 8.5} fill="none" stroke="#27d3ff" strokeWidth="2" />}
-              <circle r={c.isAce ? 8 : 6} fill={c.color} stroke="#14171d" strokeWidth="1.5" />
-              {c.isPlayer && <circle r="2.2" fill="#14171d" />}
+              {c.isPlayer && <circle r={(c.isAce ? 10.5 : 8.5) * rScale} fill="none" stroke="#27d3ff" strokeWidth="2" />}
+              <circle r={(c.isAce ? 8 : 6) * rScale} fill={c.color} stroke="#14171d" strokeWidth="1.5" />
+              {c.isPlayer && <circle r={2.2 * rScale} fill="#14171d" />}
             </g>
           );
         })}
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fadeOpacity, borderRadius: 8, pointerEvents: "none" }} />
-      <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>{contenders.length > 1 ? "🏁 ゴールスプリント" : "🏁 単独ゴール"}</div>
+      <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>{n > 1 ? (bunch ? `🏁 大集団のゴールスプリント（${n}名）` : "🏁 ゴールスプリント") : "🏁 単独ゴール"}</div>
     </div>
   );
 }
@@ -664,10 +674,19 @@ export function RaceView({ sim, onFinish }) {
           // v12: 最終直線シネマティック演出用に、結果が既に確定済みの着順・着差をスナップショットする
           // （実際のfinishTimeから逆算するだけで、シミュレーション自体には一切手を加えない）
           // v14.13: 対象選手は全選手からタイム差で選び直すのではなく、直前まで俯瞰マップの
-          // カメラが実際に映していた集団（cameraFramingRef）に限定する。これにより、
-          // 先頭集団を追っていればその先頭集団のまま、選手フィーチャー中ならその選手の
-          // 集団のまま、演出に切り替わっても顔ぶれが変わらなくなる
-          const pool = (cameraFramingRef.current && cameraFramingRef.current.length > 0) ? cameraFramingRef.current : riders;
+          // カメラが実際に映していた集団（cameraFramingRef）を母集団にする（先頭集団を追っていれば
+          // その集団、選手フィーチャー中ならその選手の集団＝演出に切り替わっても顔ぶれが変わらない）。
+          // v39.2: 「集団スプリントなのに数人しか映らない」違和感の解消。従来はこの母集団を着差12秒・
+          // 上限8名で厳しく削っていたため、団子で雪崩れ込んでも最終直線が急にスカスカになっていた。
+          // カメラが映していた集団を厳しく削らず（着差フィルタ緩め・上限22名）そのまま最終直線に流す。
+          // さらに、最終区間でカメラが先頭gidのみに絞られていても、そのすぐ後ろで一緒に雪崩れ込む
+          // 僅差(位置がごく近い)の選手は集団の一部として母集団に加える（gidの分かれ目に依存しない）。
+          const camGroup = (cameraFramingRef.current && cameraFramingRef.current.length > 0) ? cameraFramingRef.current : riders;
+          const camIds = new Set(camGroup.map(r => r.e.id));
+          const camMaxFrac = Math.max(...camGroup.map(r => r.frac));
+          const camMinFrac = Math.min(...camGroup.map(r => r.frac));
+          const nearBunch = riders.filter(r => !camIds.has(r.e.id) && r.frac <= camMaxFrac && r.frac >= camMinFrac - 0.02);
+          const pool = [...camGroup, ...nearBunch];
           const sortedByFinish = [...pool].sort((a, b) => a.e.finishTime - b.e.finishTime);
           const winnerTime = sortedByFinish[0].e.finishTime;
           const contenders = sortedByFinish
@@ -821,7 +840,7 @@ export function RaceView({ sim, onFinish }) {
       </div>}
       {cinematic ? (
         <div>
-          <Eyebrow color={C.red}>{cinematic.contenders.length > 1 ? "🏁 ゴールスプリント — 最終直線" : "🏁 単独ゴール — 最終直線"}</Eyebrow>
+          <Eyebrow color={C.red}>{cinematic.contenders.length > 1 ? (cinematic.contenders.length >= 10 ? "🏁 大集団のゴールスプリント — 最終直線" : "🏁 ゴールスプリント — 最終直線") : "🏁 単独ゴール — 最終直線"}</Eyebrow>
           <FinalSprintCinematic contenders={cinematic.contenders} />
         </div>
       ) : (
