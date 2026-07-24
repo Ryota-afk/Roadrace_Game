@@ -271,53 +271,67 @@ export function FinalSprintCinematic({ contenders }) {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
-  // v39.4(演出刷新): 縦置き・ゴールで停止していた演出を、横位置のロードを「右→左」へ等速で流れる形に。
-  // 先頭からゴールラインを通過し、減速せず画面外（左）へ抜けていく＝実際のスプリントの疾走感に。
-  // 選手は前後（着差）＋上下（道幅内のレーン）に散らばり、大人数でも道幅に収まって団子に見える。
-  const t = Math.min(1, (now - startRef.current) / SPRINT_CINEMATIC_MS);
+  // v39.5(演出刷新): 放送カメラ風の決着演出。左→右へ進み、先頭を画面中央に置いて追走（follow）、
+  // 先頭がゴールラインを通過したらカメラをラインで固定→後続が中央のラインを越えて右へ抜けていく。
+  // 接戦(maxGap小)のときだけ、先頭がラインに迫る"ゴールの瞬間"を減速(スロー)して見せ、通過後は
+  // 通常速度に戻って後続が高速でライン通過。最後の選手が画面外(右)へ抜けるまで再生を続ける。
   const W = 340, H = 176, roadTop = 30, roadBot = 150;
   const roadMid = (roadTop + roadBot) / 2, roadH = roadBot - roadTop;
-  const xFin = W * 0.34;                          // ゴールライン（左寄り＝手前で通過を見せ、抜けを長く）
+  const center = W * 0.5;
   const n = contenders.length;
   const maxGap = Math.max(0.6, ...contenders.map(c => c.gapSec));
   const bunch = n >= 10;
-  const fieldLen = Math.min(150, 44 + n * 7);     // 集団の前後の長さ(px)
-  const xF0 = W * 0.96, xF1 = -W * 0.14;          // 先頭の t=0→1 の画面x（右から入り、左へ抜ける）
-  const frontX = xF0 + (xF1 - xF0) * t;           // 等速（減速なし）
-  const fade = Math.max(0, 1 - t * 6);            // 冒頭の暗転フェードイン
+  const close = maxGap <= 3.2;                    // 接戦＝ゴール前スロー対象
+  const spanGap = Math.min(maxGap, 16);           // 画面に収める前後幅の基準（極端な着差は打ち切る）
+  const PXPS = (W * 0.5) / Math.max(2.2, spanGap); // 着差1秒あたりのpx
+  // vt＝「先頭がラインに到達した時点を0とする仮想レース時間(秒)」。選手iはvt=gapSecでライン通過。
+  const vtStart = -Math.max(1.2, spanGap * 0.5);  // 先頭がラインの手前から入ってくる
+  const vtCross = 0.45;                            // 先頭がラインを少し過ぎたところ
+  const exitVt = spanGap + (center + 34) / PXPS;   // 最後尾がライン→画面右外へ抜けるまで
+  const t1 = close ? 3.0 : 1.6, t2 = 2.4;          // 接近＋通過(接戦は長め=スロー) / 後続の通過(速い)
+  const el = (now - startRef.current) / 1000;
+  let vt, approaching;
+  if (el <= t1) { const u = el / t1; vt = vtStart + (vtCross - vtStart) * (close ? easeOutCubic(u) : u); approaching = true; }
+  else { const u = Math.min(1, (el - t1) / t2); vt = vtCross + (exitVt - vtCross) * u; approaching = false; }
+  const camX = Math.min(0, vt * PXPS);            // 先頭を中央に→通過後はライン(world0)で固定
+  const lineX = center - camX;                    // ゴールラインの画面x
+  const fade = Math.max(0, 1 - el * 3.5);
   // 自分/エースを最前面に描くため、非プレイヤー→プレイヤーの順に並べる
   const order = [...contenders].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
-  const marker = (c) => {
-    const behindPx = (c.gapSec / maxGap) * fieldLen;
-    const x = frontX + behindPx;                  // 着差が大きいほど後方（右）
-    const lane = (riderHash01(c.id, 3) - 0.5) * roadH * 0.74;
-    const y = roadMid + lane + Math.sin(now / 300 + riderHash01(c.id, 9) * 7) * 2.2;
-    const r = c.isAce ? 6.8 : 5.2;
-    return (
-      <g key={c.id} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-        <line x1={r + 1} y1="0" x2={r + 11} y2="0" stroke={c.color} strokeWidth="1.4" opacity="0.34" strokeLinecap="round" />
-        {c.isPlayer && <circle r={r + 2.6} fill="none" stroke="#27d3ff" strokeWidth="2" />}
-        <circle r={r} fill={c.color} stroke="#14171d" strokeWidth="1.3" />
-        {c.isPlayer && <circle r="1.8" fill="#14171d" />}
-      </g>
-    );
-  };
   return (
     <div style={{ position: "relative" }}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${W} / ${H}`, background: "#2f3f28", borderRadius: 8, display: "block" }}>
-        {/* 芝生＋ロード帯（横方向） */}
         <rect x="0" y={roadTop} width={W} height={roadH} fill="#565a61" />
         <line x1="0" y1={roadTop} x2={W} y2={roadTop} stroke="#3a3d43" strokeWidth="2" />
         <line x1="0" y1={roadBot} x2={W} y2={roadBot} stroke="#3a3d43" strokeWidth="2" />
         <line x1="0" y1={roadMid} x2={W} y2={roadMid} stroke="#d3d7dd" strokeWidth="1.4" strokeDasharray="16,13" opacity="0.35" />
-        {/* ゴールライン（縦・市松風）＋旗 */}
-        <rect x={xFin - 3.5} y={roadTop} width="7" height={roadH} fill="#eef0f3" />
-        <line x1={xFin} y1={roadTop} x2={xFin} y2={roadBot} stroke="#14171d" strokeWidth="7" strokeDasharray="9,9" opacity="0.85" />
-        <text x={xFin} y={roadTop - 6} textAnchor="middle" fontSize="15">🏁</text>
-        {order.map(marker)}
+        {/* ゴールライン（縦・市松風）＋旗。カメラに追従して動く */}
+        {lineX > -12 && lineX < W + 12 && (
+          <g>
+            <rect x={lineX - 3.5} y={roadTop} width="7" height={roadH} fill="#eef0f3" />
+            <line x1={lineX} y1={roadTop} x2={lineX} y2={roadBot} stroke="#14171d" strokeWidth="7" strokeDasharray="9,9" opacity="0.85" />
+            <text x={lineX} y={roadTop - 6} textAnchor="middle" fontSize="15">🏁</text>
+          </g>
+        )}
+        {order.map(c => {
+          const sx = center + ((vt - c.gapSec) * PXPS - camX);
+          if (sx < -18 || sx > W + 18) return null; // 画面外はカリング
+          const laneY = roadMid + (riderHash01(c.id, 3) - 0.5) * roadH * 0.72 + Math.sin(now / 300 + riderHash01(c.id, 9) * 7) * 2;
+          const r = c.isAce ? 6.8 : 5.2;
+          return (
+            <g key={c.id} transform={`translate(${sx.toFixed(1)},${laneY.toFixed(1)})`}>
+              <line x1={-(r + 1)} y1="0" x2={-(r + 11)} y2="0" stroke={c.color} strokeWidth="1.4" opacity="0.34" strokeLinecap="round" />
+              {c.isPlayer && <circle r={r + 2.6} fill="none" stroke="#27d3ff" strokeWidth="2" />}
+              <circle r={r} fill={c.color} stroke="#14171d" strokeWidth="1.3" />
+              {c.isPlayer && <circle r="1.8" fill="#14171d" />}
+            </g>
+          );
+        })}
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />
-      <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>{n > 1 ? (bunch ? `🏁 大集団のゴールスプリント（${n}名）` : "🏁 ゴールスプリント") : "🏁 単独ゴール"}</div>
+      <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
+        {n > 1 ? (bunch ? `🏁 大集団のゴールスプリント（${n}名）` : "🏁 ゴールスプリント") : "🏁 単独ゴール"}{close && approaching ? " — スロー再生" : ""}
+      </div>
     </div>
   );
 }
