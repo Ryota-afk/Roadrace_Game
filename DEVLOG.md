@@ -38,7 +38,8 @@
   - `src/domain/` … 2026-07(§Step5)新設。純粋なドメインロジック（生成器・計算関数、JSX無し）。
     `season/transfer.js`(移籍市場)・`season/roster.js`(ロースター/スカウト生成)・`season/sponsor.js`(スポンサー契約/中期目標)・
     `season/standings.js`(順位計算)・`shared/forecast.js`(下馬評)
-  - `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … Phase 1〜3で分割済み
+  - `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … Phase 1〜3で分割済み。
+    2026-07(§Step6)で `state.js⇄breeding.js` の循環importを解消（`state.js`→`breeding.js`の一方向に整理）
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
     data/view/domain層への移送で2574行→1615行に縮小。移送分は互換シム（`import`＋`export {}`）で再エクスポートして
     おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§9）
@@ -419,7 +420,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜5実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜6実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -481,8 +482,23 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   「データ/ロジックの区別」は一度で完璧に判定できるとは限らず、**ビルドエラーが出たら虚心に戻す**姿勢が安全。
   検証は同じ手順（build→brace確認→重複確認→Node41ケース→Playwright全画面）を各グループごとに実施、全PASS。
 
-**未着手（Step 6〜8・今後の候補）**：`controllers/`（`main.jsx`のApp()内ハンドラを`advanceMonth`/`finishRace`/
+- **Step 6**：`state.js⇄breeding.js`の循環依存を解消。原因は`breeding.js`の`mlLegendSnapshot`（引退時の
+  殿堂スナップショット生成）が`ML_ACHIEVEMENTS`／`computeAchievements`／`mlCareerArchetype`／
+  `riderCareerSummary`／`riderNickname`の5つを`state.js`から借りていたこと。調べると、この5つは
+  **`state.js`固有の依存を一切持たない完全に自己完結した純関数・純データ**で、`breeding.js`の
+  `mlLegendSnapshot`だけが唯一の利用者だった（`state.js`内の他の場所からは一度も呼ばれていない）。
+  そこで5つ（＋`riderNickname`の内部ヘルパー`hasEarnedNickname`）をまるごと`breeding.js`へ移し、
+  `breeding.js`から`state.js`へのimportを完全に撤廃。残るのは`state.js`が`breeding.js`の`loadMlLegends`
+  （殿堂リストの読み込み）を使う一方向だけになった。`state.js`側は同じ互換シムで5つを再エクスポートし、
+  main.jsxの既存import文は無変更。state.js 931行、breeding.js 290→408行。
+  **検証**：build→brace確認→重複確認に加え、`state.js`経由と`breeding.js`直接importで**同一関数参照
+  （`===`で一致）**であることを確認するテストを追加（シムが正しく機能している証拠）。`mlLegendSnapshot`／
+  `mlRecordLegend`（循環解消の核心となった関数）を直接呼び出す16ケースの単体テストを新規作成し全PASS
+  （殿堂スナップショットの内容・実績判定・キャリア生き様・localStorageへの記録まで実地検証）。既存の
+  Node41ケース・Playwright全画面回帰（シーズン：選手/トロフィー画面、マイライフ：起動）も実エラー0。
+
+**未着手（Step 7〜8・今後の候補）**：`controllers/`（`main.jsx`のApp()内ハンドラを`advanceMonth`/`finishRace`/
 `poachRetain`等ドメインごとに分離し`useSeasonGame`フックで束ねる。`ctx`81メンバー手組みの解消）・
-`screens/season|mylife/`のサブ画面分割・`state↔breeding`循環依存の解消は未実施。手を付けるなら
+`screens/season|mylife/`のサブ画面分割は未実施。手を付けるなら
 **新機能追加のたび1ドメインずつ**が安全。新機能は必ず「data / domain / controller / screen」の4箇所に配る
 （1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

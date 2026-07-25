@@ -3,6 +3,10 @@
 // makePoachOffer/genFaPool/genTradeOffers）と RIVAL_TEAMS/MYLIFE_TEAMS は domain/season/transfer.js・
 // data/teams.js へ移送済み。ここでは import して内部利用（initGame等）しつつ再エクスポートし、
 // main.jsx/screens/*.jsx 側の既存import文（"./state/state.js"）を変更せずに済むようにしている。
+// v41(§Step6): 選手の異名・キャリア総括・実績判定（ML_ACHIEVEMENTS/computeAchievements/
+// mlCareerArchetype/riderCareerSummary/riderNickname）は breeding.js（mlLegendSnapshotの
+// 唯一の呼び出し元）へ移送。従来 state.js⇄breeding.js が循環importだったのを、これで
+// state.js→breeding.js の一方向に整理した（loadMlLegendsのみ引き続き必要）。
 import { AB_KEYS, TYPES } from "../data/abilities.js";
 import { TYPE_ABKEYS } from "../data/breeding.js";
 import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, UNLOCK_TEMPLATES, VENUES } from "../data/course.js";
@@ -11,12 +15,12 @@ import { RIVAL_TEAMS, MYLIFE_TEAMS } from "../data/teams.js";
 import { C } from "../data/theme.js";
 import { SUB_STAT_KEYS, hasAbility, hasGoldAbility, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
-import { loadMlLegends } from "../breeding/breeding.js";
+import { loadMlLegends, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname } from "../breeding/breeding.js";
 import { legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers } from "../domain/season/transfer.js";
 import { initRoster, genScouts } from "../domain/season/roster.js";
 import { genSponsors } from "../domain/season/sponsor.js";
 
-export { RIVAL_TEAMS, MYLIFE_TEAMS, legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers, initRoster, genScouts, genSponsors };
+export { RIVAL_TEAMS, MYLIFE_TEAMS, legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers, initRoster, genScouts, genSponsors, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname };
 
 export function totalTitleCount() {
   const t = loadTitles();
@@ -41,78 +45,8 @@ export function unlockedTemplates() {
 }
 
 
-export function hasEarnedNickname(r) {
-  const log = r.raceLog || [];
-  const wins = log.filter(e => e.rank === 1).length;
-  const podiums = log.filter(e => e.rank <= 3).length;
-  return wins >= 1 || podiums >= 2 || log.length >= 5 || !!r.prodigy;
-}
 
-export function riderNickname(r) {
-  if (!hasEarnedNickname(r)) return null;
-  const log = r.raceLog || [];
-  const wins = log.filter(e => e.rank === 1).length;
-  const podiums = log.filter(e => e.rank <= 3).length;
-  const races = log.length;
-  const supR = log.filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
-  const aceR = log.filter(e => ["ace", "lead"].includes(e.role)).length;
-  const abs = { flat: r.flat || 0, climb: r.climb || 0, sprint: r.sprint || 0, stamina: r.stamina || 0, solo: r.solo || 0 };
-  // v38(#8): 能力が均等に極まると Object.entries の順序（flat が先頭）で必ず flat が選ばれ、
-  // 殿堂の二つ名が全員「平坦の帝王」になっていた。脚質(type)を最優先のタイブレークにする＝
-  // 首位と僅差(3以内)に脚質相応の能力があればそれを採用。これで脚質どおりの多彩な称号になる。
-  const typeAbil = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[r.type];
-  const sortedAbs = Object.entries(abs).sort((a, b) => b[1] - a[1]);
-  const topVal = sortedAbs[0][1];
-  const tiedKeys = sortedAbs.filter(([, v]) => topVal - v <= 3).map(([k]) => k);
-  const top = (typeAbil && tiedKeys.includes(typeAbil)) ? typeAbil : sortedAbs[0][0];
-  // v31.4: 「勝ち星が多い＝みんな伝説の勝ち師」で没個性化していたため、勝利数上位は
-  // 脚質を冠した称号にし、役割（献身のアシスト）や取りこぼし（悲運）も拾って多様化する
-  // v38(#8): PUN（パンチャー）専用の帝王称号を追加し、脚質ごとに必ず別称号になるようにした。
-  const punKing = r.type === "PUN" ? "起伏の覇王" : null;
-  const byTypeKing = { flat: "平坦の帝王", climb: "山岳の覇者", sprint: "豪脚のゴールハンター", stamina: "無尽蔵の機関車", solo: "独走の求道者" };
-  const byType = { flat: "巡航の職人", climb: "山岳の申し子", sprint: "スプリンター", stamina: "鉄の脚", solo: "独走屋" };
-  // v37: 特能・性格に紐づく特別な異名（一定の実績を満たしたら優先して冠する）
-  const abils = r.abilities || [];
-  if (wins >= 2 && abils.includes("kicker")) return "剛脚のフィニッシャー";
-  if (wins >= 2 && abils.includes("climbengine")) return "山の吸血鬼";
-  if (podiums >= 3 && abils.includes("grinder")) return "不屈のねばり脚";
-  if ((wins >= 2 || podiums >= 4) && r.personality === "maverick") return "孤高の一匹狼";
-  if (wins >= 3 && r.personality === "showman") return "魅せる勝負師";
-  if (wins >= 3 && r.personality === "tactician") return "レースの支配者";
-  if (supR >= 10 && supR >= aceR * 1.5 && wins <= 4) return "献身のアシスト";
-  if (podiums >= 10 && wins <= 2) return "悲運の名脇役";
-  if (wins >= 8) return punKing || byTypeKing[top] || "常勝の帝王";
-  if (wins >= 5) return "常勝の帝王";
-  if (wins >= 3) return "勝利の申し子";
-  if (podiums >= 12) return "表彰台の主";
-  if (podiums >= 6) return "表彰台の常連";
-  if (races >= 12 && podiums === 0) return "苦労人";
-  if (r.prodigy) return "将来を嘱望された逸材";
-  return byType[top] || "無名の挑戦者";
-}
 
-export function riderCareerSummary(r) {
-  const log = r.raceLog || [];
-  const wins = log.filter(e => e.rank === 1).length;
-  const podiums = log.filter(e => e.rank <= 3).length;
-  const races = log.length;
-  const firstYear = races > 0 ? Math.min(...log.map(e => e.year)) : null;
-  const lastYear = r.farewellYear;
-  const spanText = firstYear != null && lastYear != null
-    ? `${firstYear}年目から${lastYear}年目までの${Math.max(1, lastYear - firstYear + 1)}年間、`
-    : "";
-  const originText = r.prodigy ? "鳴り物入りの逸材として加入し、" : "";
-  let recordText;
-  if (races === 0) recordText = "出走機会には恵まれなかったが、";
-  else if (wins > 0) recordText = `通算${races}戦${wins}勝・表彰台${podiums}回という実績を残し、`;
-  else if (podiums > 0) recordText = `通算${races}戦、表彰台${podiums}回まで食い込みながらも勝利には届かず、`;
-  else recordText = `通算${races}戦を走り抜いたが目立った結果は残せず、`;
-  let farewellText;
-  if (r.farewellReason === "rival_retired") farewellText = `解雇後は${r.signedTeam}に活躍の場を移し、${r.age}歳でそこで現役を退いた。`;
-  else if (r.farewellReason === "released") farewellText = `${r.age}歳でチームを去った。`;
-  else farewellText = `${r.age}歳で現役を引退した。`;
-  return `${originText}${spanText}${recordText}${farewellText}`;
-}
 
 
 // v37: 永続ワールドロースター。従来はAI相手を毎レース使い捨てで生成していたため、
@@ -245,40 +179,7 @@ export function sharedWorldRosters(teams = MYLIFE_TEAMS) {
   return sub;
 }
 
-export const ML_ACHIEVEMENTS = [
-  { id: "first_win", icon: "🥇", label: "初勝利", desc: "レースで初めて優勝する", reward: { money: 30 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.rank === 1) },
-  { id: "first_podium", icon: "🏅", label: "初表彰台", desc: "レースで初めて表彰台に上がる", reward: { money: 20 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.rank <= 3) },
-  { id: "class_a", icon: "⬆️", label: "Aクラス昇格", desc: "Aクラスに昇格する", reward: { money: 50, cp: 1 },
-    check: (ml) => ml.classIdx >= 1 },
-  { id: "class_pro", icon: "👑", label: "PROクラス到達", desc: "PROクラスに昇格する", reward: { money: 100, cp: 2 },
-    check: (ml) => ml.classIdx >= 2 },
-  { id: "worlds_podium", icon: "🌍", label: "世界選手権メダリスト", desc: "世界選手権で表彰台に上がる", reward: { money: 80, cp: 2 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank <= 3) },
-  { id: "worlds_win", icon: "🌍", label: "世界選手権制覇", desc: "世界選手権で優勝する", reward: { money: 150, cp: 4 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("世界選手権") && e.rank === 1) },
-  { id: "olympics_podium", icon: "🥇", label: "オリンピックメダリスト", desc: "オリンピックで表彰台に上がる", reward: { money: 100, cp: 3 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank <= 3) },
-  { id: "olympics_win", icon: "🥇", label: "オリンピック制覇", desc: "オリンピックで金メダルを獲得する", reward: { money: 200, cp: 5 },
-    check: (ml) => (ml.player?.raceLog || []).some(e => e.name.includes("オリンピック") && e.rank === 1) },
-  { id: "rival_5wins", icon: "🔥", label: "宿命のライバル", desc: "ライバルに5勝する", reward: { money: 60 },
-    check: (ml) => (ml.rivalRecord?.wins || 0) >= 5 },
-  { id: "veteran_50", icon: "🚴", label: "百戦錬磨", desc: "通算50戦に出走する", reward: { money: 60 },
-    check: (ml) => (ml.player?.raceLog || []).length >= 50 },
-  { id: "married", icon: "💍", label: "家庭を持つ", desc: "結婚する", reward: { money: 30 },
-    check: (ml) => !!ml.flags?.married },
-  { id: "injury_comeback", icon: "🩹", label: "苦難を乗り越えて", desc: "大きな怪我から復帰する", reward: { money: 30 },
-    check: (ml) => !!ml.flags?.injuryResolved },
-  { id: "has_child", icon: "👶", label: "親になる", desc: "第一子を授かる", reward: { money: 30 },
-    check: (ml) => !!ml.flags?.hasChild },
-  { id: "mentor", icon: "🎖", label: "チームの精神的支柱に", desc: "後輩選手のメンターになる", reward: { money: 40 },
-    check: (ml) => !!ml.flags?.mentor },
-];
 
-export function computeAchievements(ml) {
-  return ML_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(ml) }));
-}
 
 
 
@@ -591,43 +492,6 @@ export function mlAmbitionCleared(ml, amb) {
   return amb.metric === "rankAtMost" ? v <= amb.target : v >= amb.target;
 }
 
-export function mlCareerArchetype(s) {
-  const r = s.player || {};
-  const log = r.raceLog || [];
-  const races = log.length;
-  const wins = (s.careerWins != null) ? s.careerWins : log.filter(e => e.rank === 1).length;
-  const podiums = (s.careerPodiums != null) ? s.careerPodiums : log.filter(e => e.rank <= 3).length;
-  const titles = s.careerTitles || 0;
-  const worldBest = s.worldRankBest;
-  const years = s.year || 1;
-  const age = r.age || 30;
-  const aceR = log.filter(e => ["ace", "lead"].includes(e.role)).length;
-  const supR = log.filter(e => ["support", "sub", "experience", "domestique"].includes(e.role)).length;
-  const type = r.type;
-  const SPEC = {
-    SPR: { t: "豪脚のスプリント王", d: "ゴール前の爆発力で数々の集団スプリントを制した、生粋のフィニッシャー。" },
-    CLM: { t: "山岳の魔術師", d: "峠という峠で栄光を掴んだ、天性のクライマー。" },
-    RUL: { t: "平坦の絶対王者", d: "風を切り裂くパワーで平坦路を支配した、鉄壁のルーラー。" },
-    PUN: { t: "丘陵の変幻自在", d: "起伏あるコースを知性と脚で攻略し続けた、したたかなパンチャー。" },
-    TT:  { t: "孤高のタイムトライアリスト", d: "時計と戦い、独走で幾多の勝利を刻んだ孤高の求道者。" },
-  };
-  if (worldBest === 1) return { key: "world1", title: "世界の頂に立った者", desc: "世界ランキングの頂点を極め、一時代を築いた絶対王者。", color: C.yellow };
-  if (titles >= 2) return { key: "heroMulti", title: "大舞台の英雄", desc: "世界選手権・五輪の大舞台で幾度も頂点に立った、記憶に刻まれる英雄。", color: C.yellow };
-  if (titles >= 1) return { key: "hero", title: "大一番の勝負師", desc: "ここぞの大舞台で栄冠をつかんだ、勝負強さの人。", color: "#e8a13c" };
-  // v33.11: モニュメント（クラシック）制覇に特化したキャリア
-  if ((s.careerClassics || 0) >= 3) return { key: "classicKing", title: "クラシックの覇者", desc: "格式高いモニュメントを幾度も制した、古典レースの申し子。", color: "#e8a13c" };
-  if ((s.careerClassics || 0) >= 1 && wins < 8) return { key: "classicHunter", title: "石畳の古豪", desc: "消耗の激しい一発勝負の古典で栄冠をつかんだ、タフネスの体現者。", color: C.green };
-  if (wins >= 25) return { key: "emperor", title: "常勝の帝王", desc: "数えきれない勝利を積み上げた、記録に残る絶対的エース。", color: C.yellow };
-  if (wins >= 8) { const sp = SPEC[type] || { t: "勝利の職人", d: "堅実に勝ちを積み上げた実力者。" }; return { key: "specialist_" + type, title: sp.t, desc: sp.d, color: C.green }; }
-  if (supR >= 12 && supR >= aceR * 1.5 && wins <= 4) return { key: "domestique", title: "不屈のアシスト職人", desc: "自らの勝利より仲間の勝利を優先し、チームを陰で支え続けた名脇役。", color: C.blue };
-  if (podiums >= 12 && wins <= 3) return { key: "nearly", title: "悲運の名脇役", desc: "幾度も表彰台に立ちながら、最高の一段には手が届かなかった、愛されるべき選手。", color: C.purple };
-  if (years >= 12 || age >= 36) return { key: "ironman", title: "鉄人", desc: "長きにわたり第一線で走り続けた、稀有なる持久力の持ち主。", color: "#6fa8dc" };
-  if ((r.growth === "late" || r.growth === "super_late") && wins >= 2) return { key: "latebloom", title: "遅咲きの雑草魂", desc: "長い下積みを経て、キャリア後半に花開いた苦労人。", color: C.green };
-  if (wins >= 3) return { key: "winner", title: "勝利を知る者", desc: "確かな勝ち星を残した、記憶に残るレーサー。", color: C.green };
-  if (podiums >= 6) return { key: "podium", title: "表彰台の常連", desc: "安定して上位に絡み続けた、堅実な実力者。", color: C.sub };
-  if (races >= 15) return { key: "journeyman", title: "生涯一レーサー", desc: "派手さはなくとも、最後までペダルを回し続けた職人。", color: C.sub };
-  return { key: "challenger", title: "名もなき挑戦者", desc: "短くも自分の走りを貫いた、一人の挑戦者。", color: C.sub };
-}
 
 export function initMyLife() {
   return {
