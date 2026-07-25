@@ -425,6 +425,11 @@ export function FinalSprintCinematic({ contenders }) {
   } else {
     camWTarget = 0;                                    // 勝者ゴール後はゴール位置に固定
   }
+  // v39.19(演出): 導入。最初はゴール手前の路面を映しておき、集団が画面奥（左上）から入ってくるのを
+  // 見せてから先頭にフォーカスを移す＝「いきなり選手が現れる」違和感を解消する。
+  const introT = 1.5;
+  const introBlend = Math.max(0, Math.min(1, el / introT));
+  camWTarget = camWTarget + (1 - introBlend) * 6.0;        // 開始時はカメラが先頭の6ユニット前方＝選手は画面外
   if (camRef.current == null) camRef.current = camWTarget;
   camRef.current += (camWTarget - camRef.current) * 0.12;  // カメラ移動を滑らかに
   const camW = camRef.current;
@@ -1191,6 +1196,43 @@ export function RaceView({ sim, onFinish }) {
                   <text x="0" y={TOP_H * 0.05 + 11} textAnchor="middle" fontSize="9" fill={m.color} fontWeight="700">{m.icon}{m.label}</text>
                 </g>
               ))}
+              {/* v39.19: 集団の役割ラベル（逃げ集団／追走集団／ペロトン／遅れ）。ロードレースの
+                  展開用語で「今どういう構図か」を読み取れるようにする。最大人数の塊＝ペロトン。 */}
+              {(() => {
+                if (ridersUi.length < 2) return null;
+                const byG = {};
+                ridersUi.forEach(r => { (byG[r.gid] = byG[r.gid] || []).push(r); });
+                const groups = Object.values(byG).map(m => ({
+                  m, n: m.length,
+                  front: Math.max(...m.map(r => r.frac)),
+                  cx: m.reduce((s, r) => s + r.frac, 0) / m.length,
+                }));
+                if (groups.length < 2) return null;
+                groups.sort((a, b) => b.front - a.front);
+                const pelotonN = Math.max(...groups.map(g => g.n));
+                const labelOf = (g, i) => {
+                  if (g.n === pelotonN && g.n >= 5) return { t: "ペロトン", c: "#cfd6e4" };
+                  if (i === 0) return { t: g.n === 1 ? "独走" : "逃げ集団", c: "#ffd23f" };
+                  if (g.front < groups[0].front && g.n >= 1 && i < groups.length - 1) return { t: "追走集団", c: "#7fd6a0" };
+                  return { t: "遅れた集団", c: "#9aa3b5" };
+                };
+                return (
+                  <g>
+                    {groups.slice(0, 4).map((g, i) => {
+                      if (g.cx < cam.start - 0.01 || g.cx > cam.end + 0.01) return null;
+                      const lab = labelOf(g, i);
+                      const x = mapX(g.cx, cam.start, cam.end), y = riderTopY(g.cx, 0) - 30;
+                      const w = lab.t.length * 9 + 20;
+                      return (
+                        <g key={"gl" + i}>
+                          <rect x={x - w / 2} y={y - 11} width={w} height="15" rx="7" fill="#14171d" opacity="0.72" />
+                          <text x={x} y={y} textAnchor="middle" fontSize="9.5" fill={lab.c} fontWeight="700">{lab.t} {g.n}名</text>
+                        </g>
+                      );
+                    })}
+                  </g>
+                );
+              })()}
               {/* v39.12: グループ間ギャップの可視化（先頭集団の最後尾 ↔ 追走の先頭を結び、秒差を表示） */}
               {sim.groupMode !== "solo" && (() => {
                 if (ridersUi.length < 2) return null;
@@ -1267,6 +1309,21 @@ export function RaceView({ sim, onFinish }) {
                       <ellipse rx={r.isAce ? 4 : 3.3} ry={r.isAce ? 3 : 2.6} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.6 : 0.6} />
                       {r.isPlayer && <circle r="1.5" fill="#14171d" />}
                     </g>
+                    {/* v39.19: 役割バッジ。牽引（先頭交代の当番）／リードアウト／前待ち を用語で明示 */}
+                    {(() => {
+                      const isLead = playerLeadout && playerLeadout.id === r.id;
+                      const badge = isLead ? { t: "リードアウト", c: "#ffd23f" }
+                        : r.mode === "pull" ? { t: "牽引", c: "#ffffff" }
+                          : (r.slot === 1 && r.mode === "draft") ? { t: "次に牽引", c: "#ffd23f" }
+                            : null;
+                      if (!badge || (!r.isMyTeam && !r.isPlayer && r.mode !== "pull")) return null;
+                      return (
+                        <g>
+                          <rect x={-badge.t.length * 4.5 - 3} y={7} width={badge.t.length * 9 + 6} height="11" rx="5" fill="#14171d" opacity="0.7" />
+                          <text y={15.5} textAnchor="middle" fontSize="8" fill={badge.c} fontWeight="700">{badge.t}</text>
+                        </g>
+                      );
+                    })()}
                     {/* v37: 観戦マップの名前ラベル（先頭・自分・ライバル・自チームエースのみ） */}
                     {labelIds.has(r.id) && (
                       <text y={-9} textAnchor="middle" fontSize="9" paintOrder="stroke" stroke="#14171d" strokeWidth="2.4"
