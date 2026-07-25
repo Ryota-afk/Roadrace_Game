@@ -29,16 +29,19 @@
 - **`src/`** … 唯一の編集対象・真実の源
   - `src/main.jsx` … 本体（`App()`の状態・ハンドラ＋画面ディスパッチの薄い配線。2026-07に死コメント477行を除去）
   - `src/index.html` … Viteの入口HTMLテンプレート（薄い雛形）
-  - `src/data/` … 静的データ定数のみ（ロジック禁止）。`abilities/breeding/course/items/progression/theme` に加え、
+  - `src/data/` … 静的データ定数のみ（ロジック禁止・JSX/domain import禁止）。`abilities/breeding/course/items/progression/theme` に加え、
     2026-07(§Step3)で `economy.js`(経済・スタッフ・天候)/`events.js`(選択肢イベント)/`directives.js`(監督指示・中期目標)/
     `gear.js`(マイライフ装備)を新設し、`support.js`から純データを移送。`progression.js`にも分類テーブル（種目/成長順/
-    チーム関連）を追加
+    チーム関連）を追加。2026-07(§Step5)で `teams.js`（`RIVAL_TEAMS`/`MYLIFE_TEAMS`）も新設（循環import回避のため）
   - `src/view/` … 2026-07(§Step4)新設。文字列生成の純関数（JSX無し）。`flavor.js`(選手フレーバーテキスト)、
     `news.js`(ライバル動向・世界ニュース・優勝号外)
+  - `src/domain/` … 2026-07(§Step5)新設。純粋なドメインロジック（生成器・計算関数、JSX無し）。
+    `season/transfer.js`(移籍市場)・`season/roster.js`(ロースター/スカウト生成)・`season/sponsor.js`(スポンサー契約/中期目標)・
+    `season/standings.js`(順位計算)・`shared/forecast.js`(下馬評)
   - `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … Phase 1〜3で分割済み
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
-    data/view層への移送で2574行→1776行に縮小。data/view移送分は互換シム（`import`＋`export {}`）で再エクスポートして
-    おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§7末尾）
+    data/view/domain層への移送で2574行→1615行に縮小。移送分は互換シム（`import`＋`export {}`）で再エクスポートして
+    おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§9）
 - **`index.html`（リポジトリ直下）** … `npm run build` が生成する**自己完結の単一HTML成果物**（デプロイ用）。React/JSXはビルド時に変換・バンドル済みで**CDNもBabelも不要**。手で編集しない
 - `package.json` / `vite.config.js` / `package-lock.json` … ビルド定義
 - `dist/`, `node_modules/` … gitignore（追跡しない）
@@ -416,7 +419,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜4実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜5実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -459,9 +462,27 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
 「data → domain」という逆依存が発生するため、**意図的に`support.js`に残した**。新規のデータテーブルを追加する際は、
 「`match`/`check`が自分の引数だけを参照するか、外部関数を呼ぶか」で置き場所を判断すること。
 
-**未着手（Step 5〜8・今後の候補）**：Opusの元設計図が定義する`domain/`（機能ごとの純ロジック。例＝
-`domain/season/transfer.js`に`genPoachTargets`等を集約）・`controllers/`（`main.jsx`のApp()内ハンドラを
-`advanceMonth`/`finishRace`/`poachRetain`等ドメインごとに分離し`useSeasonGame`フックで束ねる。`ctx`81メンバー
-手組みの解消）・`screens/season|mylife/`のサブ画面分割は未実施。手を付けるなら**新機能追加のたび1ドメインずつ**
-（移籍→ショップ→レース→月送りの順）が安全。新機能は必ず「data / domain / controller / screen」の4箇所に配る
+- **Step 5**：純粋なドメインロジック（生成器・計算関数）を`domain/`へ集約。まず`data/teams.js`を新設し
+  `RIVAL_TEAMS`／`MYLIFE_TEAMS`（純データ・関数を含まない）を`state.js`から移送——これが無いと
+  `domain/season/*`が`RIVAL_TEAMS`を参照するのに`state.js`へ逆import、かつ`state.js`は`initGame()`用に
+  生成器を呼び返す必要があり**循環importになる**ため、必須の前提整理だった。続けて5ファイルを新設：
+  `domain/season/transfer.js`（`legendToSeasonRider`／`worldRiderToRosterRider`／`genPoachTargets`／
+  `makePoachOffer`／`genFaPool`／`genTradeOffers`／`computePickupChance`）、`domain/season/roster.js`
+  （`initRoster`／`genScouts`＋内部ヘルパー`scoutSpecs`）、`domain/season/sponsor.js`（`genSponsors`＋
+  中期目標一式＝`genSeasonObjective`/`raceObjectiveEvent`/`advanceObjective`/`expireObjective`/
+  `objectiveStatusText`）、`domain/season/standings.js`（`computeStandings`／`seasonRank`／
+  `seasonTitleRace`／`standingsRankReward`／`champPromoteCut`）、`domain/shared/forecast.js`
+  （`raceForecast`）。`state.js`/`support.js`は同じ互換シムで再エクスポート。未使用になった import
+  （`CLASSES`/`MONTHS`/`overall`等）も併せて除去。state.js 1257→1071行、support.js 1776→1615行。
+  **判明した知見（Step3の教訓を再確認）**：`unlockedTemplates`／`genMonthRaces`は`loadMeta()`
+  （localStorage読み取り）に依存するため**domain抽出を見送り**state.js に残した。`SEASON_ACHIEVEMENTS`
+  の`chemistry_max`判定が`teamChemistryTier`（support.js）を呼ぶため、`computeSeasonAchievements`も
+  同様に**support.js に残した**（一度`domain/season/standings.js`へ移してビルドエラーで発覚→即座に差し戻し）。
+  「データ/ロジックの区別」は一度で完璧に判定できるとは限らず、**ビルドエラーが出たら虚心に戻す**姿勢が安全。
+  検証は同じ手順（build→brace確認→重複確認→Node41ケース→Playwright全画面）を各グループごとに実施、全PASS。
+
+**未着手（Step 6〜8・今後の候補）**：`controllers/`（`main.jsx`のApp()内ハンドラを`advanceMonth`/`finishRace`/
+`poachRetain`等ドメインごとに分離し`useSeasonGame`フックで束ねる。`ctx`81メンバー手組みの解消）・
+`screens/season|mylife/`のサブ画面分割・`state↔breeding`循環依存の解消は未実施。手を付けるなら
+**新機能追加のたび1ドメインずつ**が安全。新機能は必ず「data / domain / controller / screen」の4箇所に配る
 （1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

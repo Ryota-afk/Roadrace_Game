@@ -8,20 +8,24 @@ import { legendBloodId, loadMlLegends, saveMlLegends, loadBloodlines, mlBloodlin
 import { ASSIST_ROLES, GOLD_CONDITIONS, countRoleUses, countWins, hasAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "../core/core.js";
 import { ABILITIES, AB_KEYS, GROWTH, PERSONALITIES, TYPES } from "../data/abilities.js";
 import { BREED_NICKS } from "../data/breeding.js";
-import { MONTHS, VENUE_REGION, UNLOCK_TEMPLATES } from "../data/course.js";
+import { VENUE_REGION, UNLOCK_TEMPLATES } from "../data/course.js";
 import { EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_META, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER } from "../data/economy.js";
 import { EVENTS, ML_BACKGROUNDS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_SPONSOR_GIGS } from "../data/events.js";
 import { MANAGER_DIRECTIVES, SEASON_OBJECTIVES } from "../data/directives.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS } from "../data/gear.js";
-import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASSES, CLASS_TIER_COLOR, DIFFICULTIES, DISCIPLINES, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL } from "../data/progression.js";
+import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_COLOR, DIFFICULTIES, DISCIPLINES, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL } from "../data/progression.js";
 import { C } from "../data/theme.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "../sim/race.js";
 import { ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, mlAmbitionMetricValue } from "../state/state.js";
 import { mlWorldStarsForYear } from "../world/world.js";
 import { riderFlavorText } from "../view/flavor.js";
 import { mlNewspaper, mlWorldNews, rivalNews } from "../view/news.js";
+import { computePickupChance } from "../domain/season/transfer.js";
+import { genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText } from "../domain/season/sponsor.js";
+import { computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut } from "../domain/season/standings.js";
+import { raceForecast } from "../domain/shared/forecast.js";
 
-// data/* ・ view/* へ移送した定数・関数の再エクスポート（呼び出し側の import 文を変更しないための互換シム）
+// data/* ・ view/* ・ domain/* へ移送した定数・関数の再エクスポート（呼び出し側の import 文を変更しないための互換シム）
 export {
   EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS,
   SCOUT_POLICIES, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_META, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER,
@@ -31,6 +35,10 @@ export {
   ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_COLOR, DISCIPLINES, DISCIPLINE_KEYS,
   FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL,
   riderFlavorText, mlNewspaper, mlWorldNews, rivalNews,
+  computePickupChance,
+  genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText,
+  computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut,
+  raceForecast,
 };
 
 export function upgradeGoldAbilities(r) {
@@ -540,19 +548,6 @@ export function isHallOfFameWorthy(r) {
   return log.length >= 8 || wins >= 1 || podiums >= 3 || overall(r) >= 70 || !!r.prodigy;
 }
 
-export function computePickupChance(r) {
-  const ovr = overall(r);
-  let chance = 0.05;
-  if (ovr >= 75) chance += 0.5;
-  else if (ovr >= 65) chance += 0.25;
-  else if (ovr >= 55) chance += 0.1;
-  if (r.growthPow === "S") chance += 0.3;
-  else if (r.growthPow === "A") chance += 0.15;
-  if (r.prodigy) chance += 0.2;
-  return Math.min(0.9, chance);
-}
-
-
 export function mlTeamTier(teamName) { const t = MYLIFE_TEAMS.find(t => t.name === teamName); return t ? t.tier : 0; }
 
 
@@ -889,6 +884,8 @@ export const SEASON_ACHIEVEMENTS = [
     check: (g) => { const j = g.jerseyWinCounts; return !!j && (j.points > 0 || j.mountains > 0 || j.youth > 0); } },
 ];
 
+// v41(§Step5): SEASON_ACHIEVEMENTSのchemistry_max判定がteamChemistryTier（本ファイル内）を呼ぶため、
+// domain/season/standings.js（data/*のみに依存する層）へは移送せずここに残す（循環import回避）。
 export function computeSeasonAchievements(g) {
   return SEASON_ACHIEVEMENTS.map(a => ({ ...a, achieved: a.check(g) }));
 }
@@ -954,30 +951,6 @@ export function mlPrivateCampCost(s) {
 export function disciplineScore(r, key) { return Math.round(DISCIPLINES[key].calc(r)); }
 
 
-// v34(UI): 出走表の「下馬評」予想。コースの得意分野に沿った地力（＝出走時点の実効能力）で
-// 出走選手を格付けし、本命◎/対抗○/注目▲ を付ける。競輪・競馬の予想印のイメージ。
-// 能力データを持たないエントラント（シーズンの簡易出走表など）や favors 未指定なら空を返す（＝予想なし）。
-// 返り値：Map(entrant -> { rank, mark|null })。mark = { icon, label, color }。
-export function raceForecast(entrants, favors) {
-  const map = new Map();
-  if (!favors || !entrants || entrants.length < 3) return map;
-  const key = FAVORS_TO_DISCIPLINE[favors] || "flat";
-  const calc = DISCIPLINES[key].calc;
-  const scored = [];
-  for (const e of entrants) {
-    if (typeof e.flat !== "number" || typeof e.climb !== "number") return map; // 能力データ無し→予想しない
-    scored.push({ e, s: calc(e) });
-  }
-  scored.sort((a, b) => b.s - a.s);
-  scored.forEach(({ e }, i) => {
-    let mark = null;
-    if (i === 0) mark = { icon: "◎", label: "本命", color: "#ffd23f" };
-    else if (i <= 2) mark = { icon: "○", label: "対抗", color: "#4f8fe8" };
-    else if (i <= 4) mark = { icon: "▲", label: "注目", color: "#35c07e" };
-    map.set(e, { rank: i + 1, mark });
-  });
-  return map;
-}
 
 
 export function buildDesc(build) { return build >= 66 ? "パワー型" : build >= 45 ? "標準" : "軽量型"; }
@@ -994,145 +967,11 @@ export function pickMandateMonths(n, seed) {
 }
 
 
-// 目標テンプレの候補（need／期限月index／報酬の素値）。deadline は MONTHS のindex（その月まで達成可）。
-const OBJECTIVE_POOL = [
-  { id: "wins", need: 4, deadline: 9, budget: 300, points: 20, penalty: 140 },
-  { id: "climb", need: 2, deadline: 8, budget: 260, points: 16, penalty: 120 },
-  { id: "sprint", need: 3, deadline: 8, budget: 240, points: 16, penalty: 110 },
-  { id: "bigstage", need: 1, deadline: 10, budget: 340, points: 22, penalty: 150 },
-  { id: "youth", need: 1, deadline: 8, budget: 220, points: 18, penalty: 90 },
-];
 
-// スポンサーの提案する中期目標を生成（シードで決定論的＝スポンサー画面と契約時で一致）。
-// classIdx で報酬・違約金をスケール（上位クラスほど見返りも罰も大きい）。
-export function genSeasonObjective(seed, classIdx) {
-  const rng = mulberry(seed);
-  const base = OBJECTIVE_POOL[Math.floor(rng() * OBJECTIVE_POOL.length)];
-  const scale = 1 + classIdx * 0.6;
-  return {
-    id: base.id, need: base.need, deadline: base.deadline,
-    progress: 0, status: "active",
-    budget: Math.round(base.budget * scale),
-    points: base.points,
-    penalty: Math.round(base.penalty * scale),
-  };
-}
 
-// レース結果から中期目標の進捗イベントを組む（bestRank＝自チーム最上位着順、aceAge＝そのエースの年齢）
-export function raceObjectiveEvent(race, bestRank, aceAge) {
-  const tmpl = race.tmpl || {};
-  return {
-    won: bestRank === 1, podium: bestRank <= 3, grade: race.grade || 1, favors: tmpl.favors,
-    championship: !!race.championship, grandTour: !!race.grandTour, aceAge: aceAge == null ? null : aceAge,
-  };
-}
 
-// アクティブな目標にイベントを適用。達成した瞬間に報酬（呼び出し側が budget/points へ加算する）。
-// 返り値：{ objective, budgetDelta, pointsDelta, log|null, justDone }
-export function advanceObjective(obj, ev, monthLabel) {
-  const none = { objective: obj, budgetDelta: 0, pointsDelta: 0, log: null, justDone: false };
-  if (!obj || obj.status !== "active") return none;
-  const meta = SEASON_OBJECTIVES[obj.id];
-  if (!meta || !meta.match(ev)) return none;
-  const progress = obj.progress + 1;
-  if (progress >= obj.need) {
-    return {
-      objective: { ...obj, progress: obj.need, status: "done" },
-      budgetDelta: obj.budget, pointsDelta: obj.points, justDone: true,
-      log: `【${monthLabel}】🎉 中期目標「${meta.label}」達成！ ボーナス+${obj.budget}万円・ノルマ+${obj.points}pt`,
-    };
-  }
-  return {
-    objective: { ...obj, progress }, budgetDelta: 0, pointsDelta: 0, justDone: false,
-    log: `【${monthLabel}】中期目標「${meta.label}」進捗 ${progress}/${obj.need}`,
-  };
-}
-
-// 期限切れ判定（月を送る advanceMonth で呼ぶ）。期限月を過ぎて未達なら失敗＝違約金。
-// 返り値：{ objective, penalty, log|null }
-export function expireObjective(obj, curMonth, monthLabel) {
-  if (!obj || obj.status !== "active" || curMonth < obj.deadline) return { objective: obj, penalty: 0, log: null };
-  const meta = SEASON_OBJECTIVES[obj.id];
-  return {
-    objective: { ...obj, status: "failed" }, penalty: obj.penalty,
-    log: `【${monthLabel}】中期目標「${meta ? meta.label : ""}」は期限内に達成できず…違約金-${obj.penalty}万円`,
-  };
-}
-
-// 表示用に目標の要約を返す（アイコン／名称／説明／期限月／進捗テール／状態）
-export function objectiveStatusText(obj) {
-  if (!obj) return null;
-  const meta = SEASON_OBJECTIVES[obj.id];
-  if (!meta) return null;
-  const tail = obj.status === "done" ? "達成" : obj.status === "failed" ? "未達" : `${obj.progress}/${obj.need}`;
-  return { icon: meta.icon, label: meta.label, narr: meta.narr, desc: meta.desc(obj.need), deadline: obj.deadline, tail, status: obj.status };
-}
-
-export function computeStandings(g) {
-  const monthProg = Math.max(0.08, (g.month + 1) / 12);
-  const need = CLASSES[g.classIdx].need;
-  const diffMul = (DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).aiMul;
-  const dynastyMul = 1 + Math.min(0.4, (g.dynastyLevel || 0) * 0.1);
-  const rows = RIVAL_TEAMS.map(t => {
-    const rng = mulberry(strHash(t.name) + g.year * 101 + g.classIdx * 7);
-    const strength = (0.6 + rng() * 0.85) * diffMul * dynastyMul;
-    const seasonTotal = Math.round(need * strength * 1.35);
-    return { name: t.name, color: t.color, spec: t.spec, trait: t.trait, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
-  });
-  rows.push({ name: g.teamName || "あなたのチーム", color: C.yellow, pts: g.points, isPlayer: true });
-  rows.sort((a, b) => b.pts - a.pts);
-  return rows;
-}
-
-// v34（バランス）：シーズン順位を実効化する。現在の順位表での自チームの順位を返す。
-export function seasonRank(g) {
-  const rows = computeStandings(g);
-  const idx = rows.findIndex(r => r.isPlayer);
-  return { rank: idx + 1, total: rows.length };
-}
-// v35(シーズン深掘り): タイトル争い。順位表から「今の位置・すぐ上の相手・すぐ下の相手・首位との差」を
-// 読み取り、シーズンを通した優勝争いの物語を返す。純関数。ホームに常時カードで出して緊張感を生む。
-export function seasonTitleRace(g) {
-  const rows = computeStandings(g);
-  const idx = rows.findIndex(r => r.isPlayer);
-  if (idx < 0) return null;
-  const me = rows[idx], rank = idx + 1, total = rows.length;
-  const leader = rows[0];
-  const ahead = idx > 0 ? rows[idx - 1] : null;   // すぐ上（追う相手）
-  const behind = idx < rows.length - 1 ? rows[idx + 1] : null; // すぐ下（追われる相手）
-  const gapToLeader = Math.max(0, leader.pts - me.pts);
-  const gapAhead = ahead ? Math.max(0, ahead.pts - me.pts) : 0;
-  const gapBehind = behind ? Math.max(0, me.pts - behind.pts) : 0;
-  const late = (g.month || 0) >= 8; // 終盤ほど言い回しを煽る
-  let line;
-  if (rank === 1) {
-    line = behind
-      ? `首位を快走。2位・${behind.name}を${gapBehind}pt引き離している。${late ? "このまま逃げ切れるか。" : "リードを守り抜けるか。"}`
-      : "首位。独走態勢だ。";
-  } else if (rank <= 3) {
-    line = `表彰台圏の${rank}位。首位・${leader.name}まで${gapToLeader}pt、目前の${ahead.name}（+${gapAhead}pt）を捉えれば順位が上がる。${late ? "終盤、勝負どころだ。" : ""}`;
-  } else {
-    line = `${rank}位／${total}チーム。上位進出へ、まずは一つ上の${ahead.name}（+${gapAhead}pt）を追う。${late ? "残り少ない、追い上げを。" : "走り込んで差を詰めよう。"}`;
-  }
-  return {
-    rank, total, isLeader: rank === 1,
-    leaderName: leader.name, gapToLeader,
-    ahead: ahead ? { name: ahead.name, gap: gapAhead, trait: ahead.trait } : null,
-    behind: behind ? { name: behind.name, gap: gapBehind, trait: behind.trait } : null,
-    line,
-  };
-}
-
-// 年度末のシーズン順位ボーナス（賞金・万円）。上位ほど厚く、クラスで増額。走り込んで順位を上げる意味を作る。
-export function standingsRankReward(rank, classIdx) {
-  const base = rank === 1 ? 150 : rank === 2 ? 90 : rank === 3 ? 40 : 0;
-  return Math.round(base * (1 + classIdx * 0.6));
-}
 // シーズン順位に応じてチャンピオンシップの昇格ボーダー（必要着順）を緩和する。
 // 1位＝本番5位以内で昇格／2位＝4位以内／3位以下＝従来通り3位以内。年間を通した強さを本番に還元。
-export function champPromoteCut(rank) {
-  return rank === 1 ? 5 : rank === 2 ? 4 : 3;
-}
 
 export function bumpCareerStats(cs, rank, prize) {
   return {
