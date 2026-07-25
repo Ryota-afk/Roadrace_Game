@@ -134,6 +134,14 @@ export function groupAt(en, rt) {
   return idx >= 0 ? en.groupHist[idx] : en.id;
 }
 
+// v39.20: 展開タグ（train/leadout/launch/front/peel）を再生時刻から引く
+export function tagAt(en, rt) {
+  const h = en.tagHist;
+  if (!h || !h.length) return null;
+  const idx = Math.min(h.length - 1, Math.floor(rt / TICK_SEC));
+  return idx >= 0 ? h[idx] : null;
+}
+
 export function slotAt(en, rt) {
   const idx = Math.min((en.slotHist || []).length - 1, Math.floor(rt / TICK_SEC));
   return idx >= 0 ? (en.slotHist[idx] || 0) : 0;
@@ -770,6 +778,7 @@ export function RaceView({ sim, onFinish }) {
         r.gid = groupAt(r.e, rt);
         r.mode = modeAt(r.e, rt);
         r.slot = slotAt(r.e, rt);
+        r.tag = tagAt(r.e, rt);
         // v12: 前後バイアス（誰が前寄りか）はslot/modeから決まる目標値へ毎フレーム緩やかに
         // 追従させる（瞬間移動を避けるため）。実際に集団の中を漂う揺らぎは描画時に加える
         const targetBiasX = r.mode === "pull" ? 0.85 : Math.max(-0.85, 0.7 - r.slot * 0.4);
@@ -976,7 +985,7 @@ export function RaceView({ sim, onFinish }) {
       }
       setRidersUi(riders.map(r => ({
         id: r.e.id, frac: r.frac, mode: r.mode, color: r.color, isAce: r.e.isAce, isPlayer: isAvatar(r.e),
-        gid: r.gid, slot: r.slot, dropStreak: r.dropStreak, attackStreak: r.attackStreak, biasX: r.biasX,
+        gid: r.gid, slot: r.slot, tag: r.tag, dropStreak: r.dropStreak, attackStreak: r.attackStreak, biasX: r.biasX,
         elong: r.elong, tilt: r.tilt,
         // v37: 観戦マップに名前ラベルを出すため、選手名と識別フラグを持たせる
         name: r.e.name, isRival: !!(r.e.isRival || r.e.isRival2), isMyTeam: r.e.team === "PLAYER",
@@ -1311,11 +1320,17 @@ export function RaceView({ sim, onFinish }) {
                     </g>
                     {/* v39.19: 役割バッジ。牽引（先頭交代の当番）／リードアウト／前待ち を用語で明示 */}
                     {(() => {
-                      const isLead = playerLeadout && playerLeadout.id === r.id;
-                      const badge = isLead ? { t: "リードアウト", c: "#ffd23f" }
-                        : r.mode === "pull" ? { t: "牽引", c: "#ffffff" }
-                          : (r.slot === 1 && r.mode === "draft") ? { t: "次に牽引", c: "#ffd23f" }
-                            : null;
+                      // v39.20: sim側の展開タグを優先（トレイン/発射/前待ち/リードアウト/ピールオフ）
+                      const TAG = {
+                        train: { t: "トレイン", c: "#7db8ff" },
+                        leadout: { t: "リードアウト", c: "#ffd23f" },
+                        launch: { t: "発射！", c: "#ff8a3d" },
+                        front: { t: "前待ち", c: "#7fd6a0" },
+                        peel: { t: "力尽き後退", c: "#9aa3b5" },
+                      };
+                      const badge = TAG[r.tag]
+                        || (r.mode === "pull" ? { t: "牽引", c: "#ffffff" }
+                          : (r.slot === 1 && r.mode === "draft") ? { t: "次に牽引", c: "#ffd23f" } : null);
                       if (!badge || (!r.isMyTeam && !r.isPlayer && r.mode !== "pull")) return null;
                       return (
                         <g>

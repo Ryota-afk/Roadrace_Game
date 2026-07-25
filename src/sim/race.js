@@ -352,7 +352,8 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // 選抜地形（登坂・丘）では集団が組織的に追えず（登りでは集団のドラフト優位も縮む）、
       // ギャップ維持の消耗が軽くなる（committedBreak）。平坦・スプリントでは恩恵ゼロ＝吸収される。
       en.committedBreak = !!(directive.aceEarly && en.isAce);
-      en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = [];
+      en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = []; en.tagHist = [];
+      en.tag = null; en.trainOrder = null; en.launchLeft = 0;
       en.leadoutFor = null; en.isLeadingOut = false;
       // v39(A案): レース中の「判断カード」でプレイヤーが選ぶ動きの状態。conserveLeft>0の間は
       // 脚を溜める（牽引しない＋消耗軽減）、finaleSend（数値）は最終区間の追い込みの上乗せ、
@@ -379,6 +380,8 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       en.posHist = en.posHist.slice(0, fromTick); en.energyHist = en.energyHist.slice(0, fromTick);
       en.modeHist = en.modeHist.slice(0, fromTick); en.groupHist = en.groupHist.slice(0, fromTick);
       en.slotHist = en.slotHist.slice(0, fromTick);
+      en.tagHist = (en.tagHist || []).slice(0, fromTick);
+      en.tag = null; en.trainOrder = null; en.launchLeft = 0;
       // v39(A案 bugfix): 完走済みの状態が持ち越されると active が空になり再開ループが即break（=再計算されない）。
       // fromTick時点でまだゴールしていない選手（pos<コース長）はレース続行として finished を解除する。
       if (en.pos < course.length) { en.finished = false; en.finishTime = null; }
@@ -503,10 +506,50 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       const slingshotAceIds = new Set();
       if (finalSegNow) {
         members.forEach(en => {
-          const active = en.leadoutFor != null && en.energy > 30 && members.some(a => a.id === en.leadoutFor && !a.finished);
+          const ace = en.leadoutFor != null ? members.find(a => a.id === en.leadoutFor && !a.finished) : null;
+          const active = !!ace && en.energy > 30;
+          // v39.20: 発射（launch）＝リードアウトが脚を使い切って役目を終えた瞬間。エースはここから独りで踏む。
+          // エースが一時的に別集団になっただけの時に誤発火しないよう、「エースが同集団にいるのに脚が尽きた」
+          // ケースに限定する。
+          if (en.isLeadingOut && !active && ace) {
+            ace.launchLeft = 12;
+            en.tag = "peel";                       // 力尽きて後方へ下がる（ピールオフ）
+          }
           en.isLeadingOut = active;
-          if (active) slingshotAceIds.add(en.leadoutFor);
+          if (active) { slingshotAceIds.add(en.leadoutFor); en.tag = "leadout"; }
         });
+      }
+      // v39.20(展開のリアリティ): トレイン＝終盤、同じ集団にいる自チームの面々がエースの前に縦一列で並び、
+      // 順に牽いてエースを勝負所へ運ぶ。前待ち＝勝負所の手前で集団前方に位置取りする動き。どちらも
+      // 「slot（前後の位置取り）」に反映されるため、俯瞰マップ上でも隊列として目に見える。
+      {
+        const progNow = members[0].pos / course.length;
+        const trainZone = finalSegNow || progNow > 0.86;   // 終盤＝トレインを組む
+        const frontZone = !trainZone && progNow > 0.72;    // 勝負所の手前＝前待ち
+        if (trainZone || frontZone) {
+          const byTeam = {};
+          members.forEach(en => { (byTeam[en.team] = byTeam[en.team] || []).push(en); });
+          Object.values(byTeam).forEach(mates => {
+            if (mates.length < 2) return;
+            const ace = mates.find(e => e.isAce);
+            if (!ace) return;
+            const helpers = mates.filter(e => !e.isAce && e.energy > 22 && e.attackLeft <= 0)
+              .sort((a, b) => b.energy - a.energy);      // 脚が残る順に前へ（＝先に使い切る順に並ぶ）
+            if (!helpers.length) return;
+            if (trainZone) {
+              helpers.forEach((e, i) => { e.slot = i; e.trainOrder = i + 1; if (!e.tag) e.tag = "train"; });
+              ace.slot = helpers.length;                  // エースは列車の直後（風除けの中）
+              ace.trainOrder = 0;
+              if (!ace.tag) ace.tag = "train";
+            } else {
+              // 前待ち：エースと先頭のヘルパーだけ集団前方へ上げる（脚は使わない位置取り）
+              ace.slot = Math.min(ace.slot ?? 3, 2);
+              helpers[0].slot = Math.min(helpers[0].slot ?? 3, 1);
+              if (!ace.tag) ace.tag = "front";
+              if (!helpers[0].tag) helpers[0].tag = "front";
+            }
+          });
+        }
       }
       members.filter(en => en.mode === "draft").forEach(en => {
         const segInfo = course.segTypeAt(en.pos);
@@ -613,6 +656,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       if (en.holdOn > 0) en.holdOn--;             // v39(A案): 食らいつく残りtickを消化
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
       en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
+      // v39.20: 展開タグ（トレイン/リードアウト/発射/前待ち/ピールオフ）を履歴に記録し、観戦で可視化する
+      if (en.launchLeft > 0) { en.tag = "launch"; en.launchLeft--; }
+      en.tagHist[tick] = en.tag || null;
+      en.tag = null;
       if (en.pos >= course.length && !en.finished) { en.finished = true; en.finishTime = tick * TICK_SEC; }
     });
     tick++;
