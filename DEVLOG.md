@@ -27,13 +27,22 @@
 **2026-07 に単一HTMLからモジュール分割＋Viteビルドへ移行した（経緯は §8）。真実の源は `src/` に移り、`roadrace_v12.html`/`.jsx` は廃止。**
 
 - **`src/`** … 唯一の編集対象・真実の源
-  - `src/main.jsx` … 本体（移行直後は旧scriptを丸ごと保持。Phase 1以降でモジュールへ分割していく）
+  - `src/main.jsx` … 本体（`App()`の状態・ハンドラ＋画面ディスパッチの薄い配線。2026-07に死コメント477行を除去）
   - `src/index.html` … Viteの入口HTMLテンプレート（薄い雛形）
-  - `src/data/` `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … 分割後の配置（Phase 1〜3）
+  - `src/data/` … 静的データ定数のみ（ロジック禁止）。`abilities/breeding/course/items/progression/theme` に加え、
+    2026-07(§Step3)で `economy.js`(経済・スタッフ・天候)/`events.js`(選択肢イベント)/`directives.js`(監督指示・中期目標)/
+    `gear.js`(マイライフ装備)を新設し、`support.js`から純データを移送。`progression.js`にも分類テーブル（種目/成長順/
+    チーム関連）を追加
+  - `src/view/` … 2026-07(§Step4)新設。文字列生成の純関数（JSX無し）。`flavor.js`(選手フレーバーテキスト)、
+    `news.js`(ライバル動向・世界ニュース・優勝号外)
+  - `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … Phase 1〜3で分割済み
+  - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
+    data/view層への移送で2574行→1776行に縮小。data/view移送分は互換シム（`import`＋`export {}`）で再エクスポートして
+    おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§7末尾）
 - **`index.html`（リポジトリ直下）** … `npm run build` が生成する**自己完結の単一HTML成果物**（デプロイ用）。React/JSXはビルド時に変換・バンドル済みで**CDNもBabelも不要**。手で編集しない
 - `package.json` / `vite.config.js` / `package-lock.json` … ビルド定義
 - `dist/`, `node_modules/` … gitignore（追跡しない）
-- `roadrace_v5〜v11.*` … 過去バージョンのアーカイブ（触らない）
+- `archive/` … 過去バージョンのアーカイブ（`roadrace_v5〜v11.*`＝分割前の単一ファイル版、`archive/design/`＝旧設計メモ）。src/から未参照・触らない
 - `roadrace_v12_test.html` … （旧）検証ハーネス。**もう不要**（§2参照）。gitignore済み
 
 ### 編集→ビルド→コミット→push の手順
@@ -489,3 +498,55 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   画面ごと・ドメインごとにさらに細分割すればトークン効率は上がる（機構は確立済み、あとは分割粒度の判断）。
 - `ctx` は81メンバーの手組みオブジェクト。React Context 化や、ハンドラを別モジュール化する余地あり。
 - GitHub Actions でビルドしてコミットレス化する案（初手は生成 `index.html` をコミットする方式で最小リスク）。
+
+---
+
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜4実施）
+
+**背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
+ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
+「理想的なファイル・モジュールの細分化設計図」を作成し、リスクの低い Step 1〜4 を実施した（Step 5〜8＝
+`domain/`・`controllers/`層への本格分離は未着手、下記参照）。
+
+**設計原則（新規追加は必ずこれに従う）**：
+1. 依存は下向き一方通行：`data → core/sim → domain/state/view → controllers → screens → app`
+2. `data/`・`view/`は JSX を import しない（＝常にNodeで単体テスト可能に保つ）
+3. データ（`export const`）とロジック（外部関数呼び出しを含む`apply`/`effects`）を混同しない。
+   `check:`/`match:`のような**自己完結の小さな述語関数**（引数のみ参照）はデータとして扱ってよいが、
+   `bumpRosterAbAll(s, 8)`のように**外部の状態変更関数を呼ぶクロージャ**は論理（domain）であり、
+   `data/`へ移送しない（`CP_MILESTONES`・`ML_CROSSROADS`・`ML_OFFSEASON_CHOICES`・`SEASON_ACHIEVEMENTS`が該当し、
+   `support.js`に意図して残している）
+
+### 実施内容
+- **Step 1**：`main.jsx`の死コメント477行を削除（55〜506行目＝分割前の単一ファイル時代の見出しのみで実コード0行、
+  ＋v11→v12変更履歴ヘッダ23行＝DEVLOGと重複）。3041行→2564行。
+- **Step 2**：`roadrace_v5〜v11.*`(1.7MB)・`roadrace_design_v2〜v12.md`(120KB)を`archive/`へ`git mv`（履歴保存）。
+  `.gitignore`にallowlist追加。DEVLOG §1のファイル構成記述も更新。
+- **Step 3**：`support.js`の静的データ定数のうち、**外部関数呼び出しを含まない純データ**41ブロック(457行)を
+  `data/economy.js`(経済・スタッフ・天候等)・`data/events.js`(選択肢イベント)・`data/directives.js`(監督指示・
+  中期目標)・`data/gear.js`(マイライフ装備)・`data/progression.js`(種目/成長順/チーム関連の分類テーブル)へ移送。
+  `support.js`は`import`＋`export {}`で再エクスポートする**互換シム**を追加し、main.jsx/screens/*.jsxの
+  既存import文（100箇所超）は無変更のまま動作。2574行→2137行。
+- **Step 4**：文字列生成の純関数群を`view/`へ新設。`view/flavor.js`（`riderFlavorText`＋FLAVOR_*表＋
+  内部ヘルパー6個、選手の戦績から語り口を選ぶ）、`view/news.js`（`rivalNews`／`mlWorldNews`／`mlNewspaper`＋
+  `RIVAL_NEWS_TEMPLATES`）。同じく互換シムで再エクスポート。2137行→1776行（**support.js合計 -31%**）。
+
+**検証**（全Stepで実施・push前に必ず通す）：
+- `npm run build` 毎ステップ後に実行（構文エラー・未解決import・重複識別子はesbuildが検出＝ビルド成功が強い証拠）
+- 波括弧/角括弧の対応数を機械チェック（削除境界の欠落検出）
+- 既存Node単体テスト（v40中期目標22ケース・v41移籍市場19ケース）を毎ステップ後に再実行→全PASS
+- Playwrightで両モードの主要画面（シーズン：契約→主画面→選手→ショップ→引き抜き市場→記録→ヘルプ→レース実施→
+  月送り、マイライフ：経歴選択画面）を実機で遷移確認→実エラー0
+
+**Step 3で判明した重要な知見**：`CP_MILESTONES`・`ML_CROSSROADS`・`ML_OFFSEASON_CHOICES`・`SEASON_ACHIEVEMENTS`は
+一見データテーブルだが、`apply`/`check`フィールドが`bumpRosterAbAll`等の外部domain関数や`hasAbility`等の
+core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮を被っている）。これらを`data/`へ移送すると
+「data → domain」という逆依存が発生するため、**意図的に`support.js`に残した**。新規のデータテーブルを追加する際は、
+「`match`/`check`が自分の引数だけを参照するか、外部関数を呼ぶか」で置き場所を判断すること。
+
+**未着手（Step 5〜8・今後の候補）**：Opusの元設計図が定義する`domain/`（機能ごとの純ロジック。例＝
+`domain/season/transfer.js`に`genPoachTargets`等を集約）・`controllers/`（`main.jsx`のApp()内ハンドラを
+`advanceMonth`/`finishRace`/`poachRetain`等ドメインごとに分離し`useSeasonGame`フックで束ねる。`ctx`81メンバー
+手組みの解消）・`screens/season|mylife/`のサブ画面分割は未実施。手を付けるなら**新機能追加のたび1ドメインずつ**
+（移籍→ショップ→レース→月送りの順）が安全。新機能は必ず「data / domain / controller / screen」の4箇所に配る
+（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

@@ -1,0 +1,46 @@
+// マイライフの装備・住居・車の静的データ（Phase 4-1後の support.js から分離）。
+
+export const ML_HOUSES = [
+  { label: "賃貸アパート", price: 80, fatigueBonus: 5, desc: "毎月の疲労回復+5（恒常）" },
+  { label: "分譲マンション", price: 220, fatigueBonus: 12, desc: "毎月の疲労回復+12（恒常）" },
+  { label: "郊外の一戸建て", price: 480, fatigueBonus: 22, desc: "毎月の疲労回復+22。私生活が安定し監督評価もやや上がりやすくなる" },
+  // v20: 稼いだ資金の使い道が尽きて余りがちだったため、終盤向けの最上位グレードを追加
+  { label: "都心の高級タワーマンション", price: 900, fatigueBonus: 30, desc: "毎月の疲労回復+30。この上ない生活環境で、監督評価もさらに上がりやすくなる" },
+];
+
+export const ML_CARS = [
+  { label: "中古の軽自動車", price: 60, raceFatigueCut: 0.10, desc: "レース参加による疲労蓄積-10%" },
+  { label: "国産セダン", price: 160, raceFatigueCut: 0.20, desc: "レース参加による疲労蓄積-20%" },
+  { label: "輸入スポーツカー", price: 400, raceFatigueCut: 0.30, desc: "レース参加による疲労蓄積-30%" },
+  { label: "オーダーメイドの高級SUV", price: 750, raceFatigueCut: 0.38, desc: "レース参加による疲労蓄積-38%" },
+];
+
+export const ML_AB_COACH_KEY = { flat: "flatCoach", climb: "climbCoach", sprint: "sprintCoach", stamina: "staminaCoach", solo: "soloCoach" };
+
+export const ML_GEAR = {
+  roller: { label: "自主トレ用スマートローラー", price: 90, desc: "練習の成長効果+15%（恒常）" },
+  monitor: { label: "パワーメーター一式", price: 70, desc: "狙った能力の伸びがさらに+10%（恒常）" },
+  chef: { label: "専属コンディショニングシェフ", price: 150, desc: "レース参加による疲労蓄積が10%軽減される（恒常）" },
+  flatCoach:    { label: "平坦専門コーチ", price: 100, desc: "平坦の練習効果+25%（恒常）" },
+  climbCoach:   { label: "登坂専門コーチ", price: 100, desc: "登坂の練習効果+25%（恒常）" },
+  sprintCoach:  { label: "スプリント専門コーチ", price: 100, desc: "スプリントの練習効果+25%（恒常）" },
+  staminaCoach: { label: "スタミナ専門コーチ", price: 100, desc: "スタミナの練習効果+25%（恒常）" },
+  soloCoach:    { label: "独走専門コーチ", price: 100, desc: "独走の練習効果+25%（恒常）" },
+};
+
+export const ML_STOCK_ITEMS = {
+  drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
+  supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },
+  tune:  { label: "フォーム調整剤", desc: "フォームを+12（レース前の仕上げに）", price: 20, formDelta: 12 },
+  // v15フェーズ2: 成長力・成長タイプを底上げする消耗品
+  growthPowUp: { label: "才能開花プログラム", desc: "成長力を1段階アップ（C→B→A→S）", price: 180, growthPowUp: true },
+  growthShift: { label: "晩成型トレーニング理論", desc: "成長タイプを1段階「晩成」寄りに変更（早熟→普通→晩成→超晩成）", price: 150, growthShiftUp: true },
+};
+
+export const ML_SPECIAL_TRAINING = {
+  altitude: { label: "🏔 高地合宿", keys: ["stamina", "solo"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "スタミナ・独走を集中的に鍛える（疲労大）" },
+  sprintcamp: { label: "⚡ スプリント特訓", keys: ["sprint", "flat"], gainMul: 1.7, fatigue: 20, cond: 0, desc: "スプリント・平坦＋加速力を集中的に鍛える" },
+  climbcamp: { label: "⛰ クライム合宿", keys: ["climb", "stamina"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "登坂・スタミナを集中的に鍛える（疲労大）" },
+  mental: { label: "🧘 メンタル強化", keys: [], gainMul: 0.4, fatigue: 6, cond: 1, desc: "メンタルを重点強化＋全能力わずか底上げ・フォーム+8（疲労小）" },
+};
+

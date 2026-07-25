@@ -1,4 +1,5 @@
 // 静的データ（Phase 1で src/main.jsx から分離）。純粋な定数のみ。
+import { C } from "./theme.js";
 
 export const CLASSES = [
   { id: "B1", label: "クラス B1", prizeMul: 1.0, need: 45, scout: 58 },
@@ -25,3 +26,41 @@ export const TITLE_DEFS = [
   { key: "worlds", label: "世界選手権優勝", icon: "🌐" },
   { key: "olympics", label: "オリンピック優勝", icon: "🥇" },
 ];
+
+// ── 種目・成長・チーム関連の分類テーブル（Phase 4-1後の support.js から分離）──
+
+export const CLASS_TIER_COLOR = [C.sub, C.blue, C.yellow];
+
+export const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
+
+export const GROWTH_ORDER = ["early", "normal", "late", "super_late"];
+
+export const DISCIPLINES = {
+  flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
+  climb:  { label: "山岳",      calc: r => r.climb * 0.7 + r.stamina * 0.3 },
+  sprint: { label: "スプリント", calc: r => r.sprint * 0.7 + r.flat * 0.2 + r.stamina * 0.1 },
+  solo:   { label: "独走(TT)",  calc: r => r.solo * 0.7 + r.stamina * 0.3 },
+  hill:   { label: "丘陵",      calc: r => r.climb * 0.4 + r.sprint * 0.4 + r.stamina * 0.2 },
+};
+
+export const DISCIPLINE_KEYS = Object.keys(DISCIPLINES);
+
+export const FAVORS_TO_DISCIPLINE = { SPR: "sprint", CLM: "climb", PUN: "hill", TT: "solo" };
+
+export const SUB_STAT_LABEL = { accel: "加速力", build: "体格", mental: "メンタル" };
+
+export const CHEMISTRY_TIERS = [
+  { min: 30, label: "鉄壁の絆", mul: 0.92 },
+  { min: 15, label: "円熟したチーム", mul: 0.95 },
+  { min: 6,  label: "定着期", mul: 0.98 },
+  { min: 0,  label: "新体制", mul: 1 },
+];
+
+export const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長"];
+
+export const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world", "ironman", "stardom"];
+
+export const APT_GRADE_COLOR = { S: "#ffd23f", A: "#ff8a5c", B: "#e8734a", C: "#6fbf73", D: "#4f8fe8", E: "#8a93a6", F: "#8a93a6", G: "#5a6274" };
+
+export const GROWTH_POW_LADDER = ["C", "B", "A", "S"];
+
