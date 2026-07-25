@@ -1682,6 +1682,117 @@ export function pickMandateMonths(n, seed) {
   return out.sort((a, b) => a - b);
 }
 
+// ── シーズン中期目標（スポンサーの約束）─────────────────────────────
+// v40 第1候補②：単月の「指定レース」（見せ場ボーナス）や年間ノルマ（総pt）とは別に、シーズンの
+// 複数レースにまたがる「中期目標」をスポンサーが提示する。達成すれば臨時ボーナス（資金＋ノルマ加算pt）、
+// 期限月までに未達なら違約金。監督指示カードと同様、関数（match/desc）はセーブに載らないため id で引き直す。
+export const SEASON_OBJECTIVES = {
+  wins: {
+    icon: "🏆", label: "常勝軍団",
+    narr: "とにかく勝ち星を積み上げ、チームの名を轟かせてほしい。",
+    desc: n => `種目を問わず通算${n}勝を挙げる`,
+    match: ev => ev.won,
+  },
+  climb: {
+    icon: "⛰", label: "山岳の覇者",
+    narr: "険しい山でこそ、我が社の名を刻んでほしい。",
+    desc: n => `登坂系レース（山岳ロード／ヒルクライム等）で通算${n}勝`,
+    match: ev => ev.won && ev.favors === "CLM",
+  },
+  sprint: {
+    icon: "🚀", label: "平坦の常勝",
+    narr: "華やかなスプリント決着で観客を沸かせてほしい。",
+    desc: n => `平坦系レース（クリテリウム等）で通算${n}回の表彰台`,
+    match: ev => ev.podium && ev.favors === "SPR",
+  },
+  bigstage: {
+    icon: "👑", label: "大舞台の栄光",
+    narr: "格の高い大レースでの結果こそ、我が社の看板になる。",
+    desc: n => `★★★グレードの大レースで通算${n}回の表彰台`,
+    match: ev => ev.podium && ev.grade >= 3,
+  },
+  youth: {
+    icon: "🌱", label: "新星の証明",
+    narr: "若きスターを勝たせる姿勢を、世に示してほしい。",
+    desc: n => `25歳以下の選手をエースに通算${n}勝`,
+    match: ev => ev.won && ev.aceAge != null && ev.aceAge <= 25,
+  },
+};
+
+// 目標テンプレの候補（need／期限月index／報酬の素値）。deadline は MONTHS のindex（その月まで達成可）。
+const OBJECTIVE_POOL = [
+  { id: "wins", need: 4, deadline: 9, budget: 300, points: 20, penalty: 140 },
+  { id: "climb", need: 2, deadline: 8, budget: 260, points: 16, penalty: 120 },
+  { id: "sprint", need: 3, deadline: 8, budget: 240, points: 16, penalty: 110 },
+  { id: "bigstage", need: 1, deadline: 10, budget: 340, points: 22, penalty: 150 },
+  { id: "youth", need: 1, deadline: 8, budget: 220, points: 18, penalty: 90 },
+];
+
+// スポンサーの提案する中期目標を生成（シードで決定論的＝スポンサー画面と契約時で一致）。
+// classIdx で報酬・違約金をスケール（上位クラスほど見返りも罰も大きい）。
+export function genSeasonObjective(seed, classIdx) {
+  const rng = mulberry(seed);
+  const base = OBJECTIVE_POOL[Math.floor(rng() * OBJECTIVE_POOL.length)];
+  const scale = 1 + classIdx * 0.6;
+  return {
+    id: base.id, need: base.need, deadline: base.deadline,
+    progress: 0, status: "active",
+    budget: Math.round(base.budget * scale),
+    points: base.points,
+    penalty: Math.round(base.penalty * scale),
+  };
+}
+
+// レース結果から中期目標の進捗イベントを組む（bestRank＝自チーム最上位着順、aceAge＝そのエースの年齢）
+export function raceObjectiveEvent(race, bestRank, aceAge) {
+  const tmpl = race.tmpl || {};
+  return {
+    won: bestRank === 1, podium: bestRank <= 3, grade: race.grade || 1, favors: tmpl.favors,
+    championship: !!race.championship, grandTour: !!race.grandTour, aceAge: aceAge == null ? null : aceAge,
+  };
+}
+
+// アクティブな目標にイベントを適用。達成した瞬間に報酬（呼び出し側が budget/points へ加算する）。
+// 返り値：{ objective, budgetDelta, pointsDelta, log|null, justDone }
+export function advanceObjective(obj, ev, monthLabel) {
+  const none = { objective: obj, budgetDelta: 0, pointsDelta: 0, log: null, justDone: false };
+  if (!obj || obj.status !== "active") return none;
+  const meta = SEASON_OBJECTIVES[obj.id];
+  if (!meta || !meta.match(ev)) return none;
+  const progress = obj.progress + 1;
+  if (progress >= obj.need) {
+    return {
+      objective: { ...obj, progress: obj.need, status: "done" },
+      budgetDelta: obj.budget, pointsDelta: obj.points, justDone: true,
+      log: `【${monthLabel}】🎉 中期目標「${meta.label}」達成！ ボーナス+${obj.budget}万円・ノルマ+${obj.points}pt`,
+    };
+  }
+  return {
+    objective: { ...obj, progress }, budgetDelta: 0, pointsDelta: 0, justDone: false,
+    log: `【${monthLabel}】中期目標「${meta.label}」進捗 ${progress}/${obj.need}`,
+  };
+}
+
+// 期限切れ判定（月を送る advanceMonth で呼ぶ）。期限月を過ぎて未達なら失敗＝違約金。
+// 返り値：{ objective, penalty, log|null }
+export function expireObjective(obj, curMonth, monthLabel) {
+  if (!obj || obj.status !== "active" || curMonth < obj.deadline) return { objective: obj, penalty: 0, log: null };
+  const meta = SEASON_OBJECTIVES[obj.id];
+  return {
+    objective: { ...obj, status: "failed" }, penalty: obj.penalty,
+    log: `【${monthLabel}】中期目標「${meta ? meta.label : ""}」は期限内に達成できず…違約金-${obj.penalty}万円`,
+  };
+}
+
+// 表示用に目標の要約を返す（アイコン／名称／説明／期限月／進捗テール／状態）
+export function objectiveStatusText(obj) {
+  if (!obj) return null;
+  const meta = SEASON_OBJECTIVES[obj.id];
+  if (!meta) return null;
+  const tail = obj.status === "done" ? "達成" : obj.status === "failed" ? "未達" : `${obj.progress}/${obj.need}`;
+  return { icon: meta.icon, label: meta.label, narr: meta.narr, desc: meta.desc(obj.need), deadline: obj.deadline, tail, status: obj.status };
+}
+
 export function computeStandings(g) {
   const monthProg = Math.max(0.08, (g.month + 1) / 12);
   const need = CLASSES[g.classIdx].need;

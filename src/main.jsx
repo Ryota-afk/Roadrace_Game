@@ -22,7 +22,7 @@ import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEA
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
-import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlNewspaper, mlPrivateCampCost, ML_PROTEGE_EVENTS, mlUpdateRiderStats, mlWorldRaceLite, mlFactorCollection, mlLineageForest, protegeMilestoneNews, protegeState, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalDialogue, rivalScene, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonPersonalityEvent, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
+import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, GROWTH_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, TYPE_COACH_ABILITY, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computePickupChance, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlNewspaper, mlPrivateCampCost, ML_PROTEGE_EVENTS, mlUpdateRiderStats, mlWorldRaceLite, mlFactorCollection, mlLineageForest, protegeMilestoneNews, protegeState, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, advanceObjective, expireObjective, raceObjectiveEvent, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalDialogue, rivalScene, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonPersonalityEvent, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
 // ---- 画面ディスパッチ（Phase 4-2）----
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -776,6 +776,12 @@ function App() {
         sponsor = { ...sponsor, mandatesMissed: sponsor.mandatesMissed + 1 };
         log.push(`【${MONTHS[s.month]}】${sponsor.name}の指定レースを見送った（違約金が加算されます）`);
       }
+      // v40（第1候補②）：中期目標の期限切れ判定。期限月を過ぎて未達なら失敗＝違約金をその場で計上する
+      let objectivePenalty = 0;
+      if (sponsor && sponsor.objective) {
+        const exp = expireObjective(sponsor.objective, s.month, MONTHS[s.month]);
+        if (exp.log) { sponsor = { ...sponsor, objective: exp.objective }; objectivePenalty = exp.penalty; log.push(exp.log); }
+      }
       if (s.month === 11) {
         let classIdx = s.classIdx;
         // v34（バランス）：シーズン順位を実効化。年間の順位で本番の昇格ボーダーが緩み、順位で賞金も出る。
@@ -797,6 +803,7 @@ function App() {
           info.sponsorResult = {
             name: sponsor.name, achieved, bonus: sponsor.bonus, penalty: sponsor.penalty, norma: sponsor.norma, pts: s.points,
             mandatesMet: sponsor.mandatesMet, mandatesMissed: sponsor.mandatesMissed, mandatePenalty,
+            objective: sponsor.objective || null,
           };
         }
         const survivors = [];
@@ -852,7 +859,7 @@ function App() {
         ];
         return {
           ...s, roster: survivors, classIdx, points: 0, year, month: 0,
-          budget: s.budget + income + delta + standingsMoney - upkeep - staffSalary,
+          budget: s.budget + income + delta + standingsMoney - upkeep - staffSalary - objectivePenalty,
           sponsor: null, sponsorOffers: nextOffers,
           scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name), s.staff?.scout || 0),
           faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
@@ -874,7 +881,7 @@ function App() {
       const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
       const base = {
         ...s, roster, month, camp: false,
-        budget: s.budget + income - upkeep - staffSalary,
+        budget: s.budget + income - upkeep - staffSalary - objectivePenalty,
         sponsor,
         faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7, roster.map(r => r.name)),
         tradeOffers: genTradeOffers(s.classIdx, s.year * 1231 + month * 59 + 17, roster),
@@ -1051,13 +1058,18 @@ function App() {
       const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
         ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: alumniRoleById[r.id] }] }
         : r);
+      // v40（第1候補②）：シーズン中期目標の進捗。達成した瞬間に資金＋ノルマptを付与する
+      let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
+      const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, best.rank, best.age), MONTHS[s.month]);
+      if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
       return {
-        ...s, roster, rivalAlumni, budget: s.budget + prize,
-        points: race.championship ? s.points : s.points + pts,
+        ...s, roster, rivalAlumni, sponsor,
+        log: objRes.log ? [...s.log, objRes.log] : s.log,
+        budget: s.budget + prize + objRes.budgetDelta,
+        points: race.championship ? s.points : s.points + pts + objRes.pointsDelta,
         champBest: race.championship ? best.rank : s.champBest,
-        sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
         careerStats: bumpCareerStats(s.careerStats, best.rank, prize),
-        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak, courseRecord },
+        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak, courseRecord, objectiveResult: objRes.log ? objRes.objective : null, objectiveDone: objRes.justDone },
         screen: "result",
       };
     });
@@ -1080,12 +1092,17 @@ function App() {
       const roster = s.roster.map(r => starterIds.has(r.id)
         ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] }
         : r);
+      // v40（第1候補②）：チームTTでも中期目標の進捗を判定（チーム着順を最上位着順とみなす。エース年齢は無し）
+      let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
+      const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, teamRank, null), MONTHS[s.month]);
+      if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
       return {
-        ...s, roster, budget: s.budget + prize,
-        points: race.championship ? s.points : s.points + pts,
-        sponsor: (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor,
+        ...s, roster, sponsor,
+        log: objRes.log ? [...s.log, objRes.log] : s.log,
+        budget: s.budget + prize + objRes.budgetDelta,
+        points: race.championship ? s.points : s.points + pts + objRes.pointsDelta,
         careerStats: bumpCareerStats(s.careerStats, teamRank, prize),
-        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, teamTT: teams, teamRank, totalTeams, mandateHit },
+        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, teamTT: teams, teamRank, totalTeams, mandateHit, objectiveResult: objRes.log ? objRes.objective : null, objectiveDone: objRes.justDone },
         screen: "result",
       };
     });
@@ -1184,10 +1201,18 @@ function App() {
         if (jerseyInfo?.pointsLeaderIsPlayer) jerseyWinCounts.points += 1;
         if (jerseyInfo?.komLeaderIsPlayer) jerseyWinCounts.mountains += 1;
         if (jerseyInfo?.youthLeaderIsPlayer) jerseyWinCounts.youth += 1;
+        // v40（第1候補②）：ステージレース（グランツール等）でも中期目標の進捗を判定
+        const bestEntry = playerRanks.find(o => o.rank === bestRank);
+        const aceAge = bestEntry ? (idToEntrant[bestEntry.id]?.age ?? null) : null;
+        let sponsor = s.sponsor;
+        const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, bestRank, aceAge), MONTHS[s.month]);
+        if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
         return {
-          ...s, roster, rivalAlumni, budget: s.budget + prize + jerseyBonus, points: race.championship ? s.points : s.points + pts, champBest: bestRank,
+          ...s, roster, rivalAlumni, sponsor, budget: s.budget + prize + jerseyBonus + objRes.budgetDelta,
+          points: race.championship ? s.points : s.points + pts + objRes.pointsDelta, champBest: bestRank,
+          log: objRes.log ? [...s.log, objRes.log] : s.log,
           careerStats: bumpCareerStats(s.careerStats, bestRank, prize + jerseyBonus),
-          gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize: prize + jerseyBonus, pts, jerseyInfo, jerseyBonus },
+          gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize: prize + jerseyBonus, pts, jerseyInfo, jerseyBonus, objectiveResult: objRes.log ? objRes.objective : null, objectiveDone: objRes.justDone },
           gtWins, jerseyWinCounts,
           screen: "gc_final",
         };

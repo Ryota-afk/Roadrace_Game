@@ -10,7 +10,7 @@ import { CHASE_MODES, HOME_ABILITY_BONUS, MONTHS, ROLES, SEG_AB, SEG_COLOR, UNLO
 import { EQUIPS, EQUIP_COST, ITEMS } from "../data/items.js";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../data/theme.js";
-import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, addProdigyRookie, bumpEquipLv, bumpRosterAbAll, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, STAFF_META, staffEffectText, staffMemberName, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
+import { CHEMISTRY_TIERS, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GRADE_MUL, OB_COACH_SALARY, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER, applyCpMilestones, addProdigyRookie, bumpEquipLv, bumpRosterAbAll, buildSim, clearSaveGame, computeClearPoints, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growthPhase, hasSaveGame, loadAbilityFile, mlGradeColor, pickMandateMonths, genSeasonObjective, objectiveStatusText, potentialHint, raceIsHome, riderFlavorText, rivalNews, seasonTitleRace, STAFF_META, staffEffectText, staffMemberName, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier } from "../logic/support.js";
 import { PARTS, PART_SLOTS, effAbilities, generateCourse } from "../sim/race.js";
 import { computePrestige, cpShopSeasonPerks, genMonthRaces, genScouts, initGame, legendToSeasonRider, loadGame, loadMeta, riderCareerSummary, riderNickname, saveGame, saveGameInfo, saveMeta } from "../state/state.js";
 
@@ -215,7 +215,12 @@ export function renderSeasonScreens(ctx) {
         <Eyebrow color={C.green}>SPONSOR — 今季のメインスポンサーを選択</Eyebrow>
         <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>毎月の契約金＋ノルマ達成で年度末ボーナス。<span style={{ color: C.red }}>未達なら違約金</span>、<span style={{ color: C.red }}>指定レースを見送るとさらに違約金</span>が加算されます。</div>
       </div>
-      {g.sponsorOffers.map((sp, i) => (
+      {g.sponsorOffers.map((sp, i) => {
+        // v40（第1候補②）：各スポンサーが複数レースにまたがる「中期目標」を提示（画面表示と契約時で同じシード）
+        const objSeed = g.year * 7919 + i * 313 + g.classIdx * 17;
+        const proposed = genSeasonObjective(objSeed, g.classIdx);
+        const om = objectiveStatusText(proposed);
+        return (
         <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.line}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{sp.name}</div>
@@ -228,13 +233,27 @@ export function renderSeasonScreens(ctx) {
             ／未達 <span style={{ color: C.red, fontFamily: FONT_M }}>-{sp.penalty}万</span><br />
             年間指定レース <span style={{ color: C.text, fontFamily: FONT_M }}>{sp.mandates}回</span>（出場でpt+30%ボーナス／見送ると-15万ずつ加算）
           </div>
+          {om && (
+            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "7px 10px", margin: "0 0 9px", borderLeft: `3px solid ${C.purple}` }}>
+              <div style={{ fontSize: 11.5, color: C.purple, fontWeight: 700 }}>🎯 中期目標「{om.icon} {om.label}」<span style={{ color: C.sub, fontWeight: 400 }}>（〜{MONTHS[om.deadline]}）</span></div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 2, lineHeight: 1.5 }}>{om.desc}</div>
+              <div style={{ fontSize: 11.5, marginTop: 3 }}>
+                <span style={{ color: C.green }}>達成 +{proposed.budget}万・ノルマ+{proposed.points}pt</span>
+                <span style={{ color: C.sub }}> ／ </span>
+                <span style={{ color: C.red }}>未達 -{proposed.penalty}万</span>
+              </div>
+            </div>
+          )}
           <Btn small color={C.green} onClick={() => setG(s => {
             const months = pickMandateMonths(sp.mandates, s.year * 555 + i * 91 + s.classIdx * 13);
-            const sponsor = { ...sp, mandateMonths: months, mandatesMet: 0, mandatesMissed: 0 };
-            return { ...s, sponsor, screen: "main", log: [...s.log, `【${MONTHS[s.month]}】${sp.name}と契約（ノルマ${sp.norma}pt／違約金${sp.penalty}万／指定レース${months.length}回）`] };
+            const objective = genSeasonObjective(s.year * 7919 + i * 313 + s.classIdx * 17, s.classIdx);
+            const sponsor = { ...sp, mandateMonths: months, mandatesMet: 0, mandatesMissed: 0, objective };
+            const om2 = objectiveStatusText(objective);
+            return { ...s, sponsor, screen: "main", log: [...s.log, `【${MONTHS[s.month]}】${sp.name}と契約（ノルマ${sp.norma}pt／違約金${sp.penalty}万／指定レース${months.length}回／中期目標「${om2.label}」）`] };
           })}>この契約を結ぶ</Btn>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 
@@ -250,6 +269,30 @@ export function renderSeasonScreens(ctx) {
               🎯 今月はスポンサー指定月間です。下の🎯マーク付きレースに出場するとポイント+30%、見送ると違約金-15万が年度末に加算されます。
             </div>
           )}
+          {/* v40（第1候補②）：シーズン中期目標。複数レースにまたがるスポンサーの約束と進捗を常時表示 */}
+          {(() => {
+            const om = objectiveStatusText(g.sponsor && g.sponsor.objective);
+            if (!om) return null;
+            const obj = g.sponsor.objective;
+            const col = om.status === "done" ? C.green : om.status === "failed" ? C.red : C.purple;
+            const remain = om.status === "active" ? Math.max(0, om.deadline - g.month) : null;
+            return (
+              <div style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.03), transparent)", borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, borderLeft: `3px solid ${col}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <Eyebrow color={col}>🎯 中期目標 — {om.icon} {om.label}</Eyebrow>
+                  <span style={{ fontFamily: FONT_M, fontSize: 12, color: col, fontWeight: 700 }}>
+                    {om.status === "done" ? "達成✓" : om.status === "failed" ? "未達" : `${obj.progress} / ${obj.need}`}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.5 }}>{om.desc}</div>
+                {om.status === "active" && (
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 3 }}>
+                    期限：{MONTHS[om.deadline]}まで（残り{remain}ヶ月）／達成報酬 <span style={{ color: C.green }}>+{obj.budget}万・ノルマ+{obj.points}pt</span> ／未達 <span style={{ color: C.red }}>-{obj.penalty}万</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {g.month === 11 && (
             <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "10px 12px" }}>
               <div style={{ fontSize: 13, color: C.purple, fontWeight: 700 }}>3月 — チャンピオンシップ月間／来季スカウト方針の決定</div>
@@ -1084,6 +1127,9 @@ export function renderSeasonScreens(ctx) {
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
                 スタッフは月給制：<span style={{ color: C.text }}>監督</span>（スポンサー契約が有利に）・<span style={{ color: C.text }}>トレーナー</span>（練習効果が恒常アップ）・<span style={{ color: C.text }}>ドクター</span>（故障率と離脱期間を軽減）。雇用できるレベル上限はクラスが上がるほど増えます。
               </div>
+              <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
+                <span style={{ color: C.purple }}>🎯 中期目標</span>：スポンサー契約時に、複数レースにまたがる約束（例「山岳系で通算2勝」「大レースで表彰台」）が1つ提示されます。年間ノルマ（総pt）や単月の指定レースとは別枠で、<span style={{ color: C.text }}>期限月までに達成すれば臨時ボーナス（資金＋ノルマpt）、未達なら違約金</span>。どのレースにエースを送り込むか、シーズンを通した計画性が問われます。進捗は主画面のパネルで常時確認できます。
+              </div>
             </div>
           </div>
 
@@ -1515,6 +1561,15 @@ export function renderSeasonScreens(ctx) {
           </div>
           <div style={{ fontSize: 13.5, color: C.text }}>自チーム：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{teamRank}位</span> / {totalTeams}チーム</div>
           <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{race.championship ? "" : ` ／ ポイント +${pts}pt${mandateHit ? "（指定レースボーナス込）" : ""}`}</div>
+          {(() => {
+            const om = objectiveStatusText(g.prizeInfo.objectiveResult);
+            if (!om) return null;
+            return (
+              <div style={{ marginTop: 4, fontSize: 12.5, color: g.prizeInfo.objectiveDone ? C.green : C.purple, fontWeight: g.prizeInfo.objectiveDone ? 700 : 400 }}>
+                {g.prizeInfo.objectiveDone ? `🎉 中期目標「${om.icon} ${om.label}」達成！` : `🎯 中期目標「${om.icon} ${om.label}」進捗 ${om.tail}`}
+              </div>
+            );
+          })()}
           <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと連携（ケミストリー）が効きます。</div>
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px" }}>
@@ -1563,6 +1618,15 @@ export function renderSeasonScreens(ctx) {
               {g.classIdx === 2 && best.rank === 1 ? "グランファイナル制覇！！" : best.rank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
             </div>
           )}
+          {(() => {
+            const om = objectiveStatusText(g.prizeInfo.objectiveResult);
+            if (!om) return null;
+            return (
+              <div style={{ marginTop: 6, fontSize: 13, color: g.prizeInfo.objectiveDone ? C.green : C.purple, fontWeight: g.prizeInfo.objectiveDone ? 700 : 400 }}>
+                {g.prizeInfo.objectiveDone ? `🎉 中期目標「${om.icon} ${om.label}」達成！` : `🎯 中期目標「${om.icon} ${om.label}」進捗 ${om.tail}`}
+              </div>
+            );
+          })()}
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
           {res.ranked.map(e => (
@@ -1758,6 +1822,15 @@ export function renderSeasonScreens(ctx) {
             )}
           </div>
           <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{!g.gc.race.championship ? ` ／ ポイント +${pts || 0}pt` : ""}</div>
+          {(() => {
+            const om = objectiveStatusText(g.gc.objectiveResult);
+            if (!om) return null;
+            return (
+              <div style={{ marginTop: 6, fontSize: 13, color: g.gc.objectiveDone ? C.green : C.purple, fontWeight: g.gc.objectiveDone ? 700 : 400 }}>
+                {g.gc.objectiveDone ? `🎉 中期目標「${om.icon} ${om.label}」達成！` : `🎯 中期目標「${om.icon} ${om.label}」進捗 ${om.tail}`}
+              </div>
+            );
+          })()}
           <div style={{ marginTop: 6, fontSize: 13, color: bestRank <= 3 ? C.yellow : C.red }}>
             {bestRank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
           </div>
@@ -1822,6 +1895,16 @@ export function renderSeasonScreens(ctx) {
               {info.sponsorResult.mandatesMet > 0 && ` ／ 指定レース達成${info.sponsorResult.mandatesMet}回`}
             </div>
           )}
+          {(() => {
+            const om = objectiveStatusText(info.sponsorResult && info.sponsorResult.objective);
+            if (!om) return null;
+            const obj = info.sponsorResult.objective;
+            return (
+              <div style={{ marginTop: 5, fontSize: 12.5, color: om.status === "done" ? C.green : C.red }}>
+                中期目標「{om.icon} {om.label}」：{om.status === "done" ? `達成（ボーナス+${obj.budget}万・ノルマ+${obj.points}pt）` : `未達（違約金-${obj.penalty}万）`}
+              </div>
+            );
+          })()}
           {info.retired.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <Eyebrow color={C.sub}>引退セレモニー</Eyebrow>
