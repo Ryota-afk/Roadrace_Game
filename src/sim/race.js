@@ -682,7 +682,10 @@ export const RACE_MOVES = {
   // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣
   // 得意地形・逃げ屋のアタックは、脚質・特性による能力ブースト（escape/地形適性）がsim側で乗るため、
   // 同じ attack でも「その選手ならでは」の伸びになる（専用ムーブを増やさず必勝ボタン化を避ける）。
-  attack: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; },
+  // v39.21(バランス): 全開の一手には「脚を使う」代償を課す。従来は無コストだったため、終盤に
+  // 踏み倒すだけ（send）が全脚質・全地形で最適解になっていた（丘陵クライマーで勝率0%→54%等）。
+  // 出力を上げれば脚は減る＝脚が残っている時にだけ決まる、という当たり前の駆け引きに戻す。
+  attack: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; r.energy -= 9; },
   // 🛡 脚を溜める：集団後方で牽かず消耗を抑える。勝負所に脚を残す堅実策
   conserve: (r) => { r.conserveLeft = 80; r.attackLeft = 0; r.committedBreak = false; r.holdOn = 0; },
   // 🦴 食らいついて粘る：歯を食いしばって集団に残る（千切れにくい）。食らいつく脚と好相性
@@ -690,7 +693,9 @@ export const RACE_MOVES = {
   // 🚴 流れに任せる：特別な動きはせず展開に乗る（基準の挙動）
   hold: (r) => { r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; r.holdOn = 0; },
   // 🔥 早駆け：ここから一気に踏んで抜け出し、そのままゴールまで踏み切る
-  send: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.finaleSend = 0.06; r.conserveLeft = 0; },
+  // 早駆けは"ゴール前の全開"であって長距離逃げではない。持続を短くし、committedBreakの
+  // 地形割引も付けない（＝終盤に踏み倒すだけで勝てる状態を解消）。代償として脚を大きく使う。
+  send: (r) => { r.attackLeft = 18; r.committedBreak = false; r.finaleSend = 0.06; r.conserveLeft = 0; r.energy -= 17; },
   // ⏳ 差しにかける：最終直線まで脚を溜め、そこで鋭く伸びる（最終区間の追い込みを上乗せ）
   kick: (r) => { r.finaleSend = 0.09; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // 🗡 会心の差し脚：差し脚・豪脚型が最終直線で最大の切れ味を出す（追い込み最大）
