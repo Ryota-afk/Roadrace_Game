@@ -31,6 +31,31 @@ export function buildDecisions(course, focusEnt) {
 // 自分の物語にする。move は RACE_MOVES のキーに対応。選択肢は最大4つに抑える。
 export function composeCard(kind, focus, ctx) {
   const A = (id) => hasAbility(focus, id);
+  // v39.22(シーズン): 監督視点＝プレイヤーはアバターではなくチームを率いる立場。文言を「指示」にし、
+  // 僚友を動かすチーム指示（守る/総動員で追う）を選択肢に加える＝運営側にも駆け引きを作る。
+  if (ctx.manager) {
+    const who = focus.name ? focus.name.split(" ")[0] : "エース";
+    const mateN = ctx.mates || 0;
+    const base = kind === "sprint" ? { t: "🏁 最終スプリント — 監督指示", s: `${who}に最後の指示を出す` }
+      : kind === "finale" ? { t: "🔥 勝負所 — 監督指示", s: `無線で${who}へ。ここが仕掛けどころだ` }
+        : kind === "react" ? { t: "📻 状況が動いた — 監督指示", s: `${who}をどう動かす？` }
+          : { t: "⚡ 中盤 — 監督指示", s: `隊列が動いた。${who}への指示は？` };
+    const ch = [];
+    if (kind === "sprint" || kind === "finale") {
+      ch.push({ move: "send", label: "🔥 仕掛けさせる", desc: `${who}に全開で踏ませる（脚を大きく使う）` });
+      ch.push({ move: "kick", label: "⏳ 待たせて差す", desc: "ギリギリまで温存させ、最後に伸ばす" });
+    } else {
+      ch.push({ move: "attack", label: "⚡ 攻めさせる", desc: `${who}を飛び出させる（決まれば独走）` });
+      ch.push({ move: "conserve", label: "🛡 脚を溜めさせる", desc: "集団後方で温存させ勝負所に備える" });
+    }
+    if (mateN >= 1) {
+      ch.push({ move: "teamShelter", label: "🛡 エースを守れ", desc: "僚友が風除け・位置取りを担い、エースの脚を守る" });
+      if (kind !== "sprint") ch.push({ move: "teamChase", label: "🔥 総動員で追え", desc: "僚友を放って前を追わせる（チーム全体が消耗）" });
+    } else {
+      ch.push({ move: "hold", label: "🚴 選手に任せる", desc: "指示を出さず選手の判断に委ねる" });
+    }
+    return { title: base.t, sub: base.s, choices: ch.slice(0, 4) };
+  }
   const t = focus.type;
   const onClimb = ["climb", "mtn"].includes(ctx.segType);
   const onHill = ctx.segType === "hill";
@@ -809,6 +834,9 @@ export function RaceView({ sim, onFinish }) {
             inBreak: focusR.mode === "solo" || focusR.mode === "attack",
             groupSize: riders.filter(r => r.gid === focusR.gid && rt < r.e.finishTime).length,
             isLeader: riders.every(r => r.e.id === focusR.e.id || r.frac <= focusR.frac + 1e-6),
+            // v39.22: シーズン（操作アバター不在＝監督視点）では指示カードに切り替える
+            manager: !hasAvatar,
+            mates: riders.filter(r => r.e.team === "PLAYER" && r.e.id !== focusR.e.id && rt < r.e.finishTime).length,
           };
           const d = decisions.find(dc => !firedRef.current.has(dc.id) && (dc.allowFinal || !finalSegRef.current) && (dc.at != null ? focusR.frac >= dc.at : (dc.cond && dc.cond(ctx))));
           if (d) {

@@ -702,6 +702,17 @@ export const RACE_MOVES = {
   kickBig: (r) => { r.finaleSend = 0.15; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // 🏁 スプリント勝負：集団のゴールスプリントに合わせ、番手をキープして最後に爆発させる
   sprintWait: (r) => { r.finaleSend = 0.11; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  // v39.22(シーズン): 監督指示＝チーム全体を動かす一手。focusはエース、riders経由で僚友を働かせる。
+  // 🛡 エースを守れ：僚友が風除け・位置取りを担い、エースは脚を温存できる（僚友は脚を使う）
+  teamShelter: (r, riders) => {
+    r.conserveLeft = 140; r.attackLeft = 0; r.committedBreak = false; r.holdOn = 0;
+    if (riders) riders.forEach(o => { if (o !== r && o.team === r.team && !o.isAce) { o.energy -= 7; o.conserveLeft = 0; } });
+  },
+  // 🔥 総動員で追え：僚友が飛び出して前を追い、集団のペースを引き上げる（消耗は大きい）
+  teamChase: (r, riders) => {
+    r.conserveLeft = 90; r.attackLeft = 0; r.committedBreak = false;
+    if (riders) riders.forEach(o => { if (o !== r && o.team === r.team && !o.isAce && o.energy > 30) { o.attackLeft = 22; o.committedBreak = true; o.energy -= 12; } });
+  },
   // 🤝 エースを射出：アシストが自分の脚を使ってエースの最終スプリントを援護する（自分の順位は二の次）
   assistLaunch: (r, riders) => {
     r.conserveLeft = 25; r.attackLeft = 0; r.committedBreak = false; r.finaleSend = 0; r.holdOn = 0;
