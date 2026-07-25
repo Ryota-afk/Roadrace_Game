@@ -40,6 +40,9 @@
     `season/standings.js`(順位計算)・`shared/forecast.js`(下馬評)
   - `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … Phase 1〜3で分割済み。
     2026-07(§Step6)で `state.js⇄breeding.js` の循環importを解消（`state.js`→`breeding.js`の一方向に整理）
+  - `src/controllers/` … 2026-07(§Step7)新設。`main.jsx` App() のハンドラのうち、状態遷移が
+    `(state, ...args) => newState` の形（setGへの薄い接続だけApp()に残す）のものを純関数として抽出。
+    `season/transfer.js`(移籍・トレード：着手済み、他ドメインは未着手)
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
     data/view/domain層への移送で2574行→1615行に縮小。移送分は互換シム（`import`＋`export {}`）で再エクスポートして
     おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§9）
@@ -420,7 +423,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜6実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜7[移籍ドメインのみ]実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -497,8 +500,27 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   （殿堂スナップショットの内容・実績判定・キャリア生き様・localStorageへの記録まで実地検証）。既存の
   Node41ケース・Playwright全画面回帰（シーズン：選手/トロフィー画面、マイライフ：起動）も実エラー0。
 
-**未着手（Step 7〜8・今後の候補）**：`controllers/`（`main.jsx`のApp()内ハンドラを`advanceMonth`/`finishRace`/
-`poachRetain`等ドメインごとに分離し`useSeasonGame`フックで束ねる。`ctx`81メンバー手組みの解消）・
-`screens/season|mylife/`のサブ画面分割は未実施。手を付けるなら
-**新機能追加のたび1ドメインずつ**が安全。新機能は必ず「data / domain / controller / screen」の4箇所に配る
-（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
+- **Step 7（着手・移籍ドメインのみ完了）**：`main.jsx`のApp()内ハンドラを`controllers/`へ分離する着手。
+  Step1〜6が全て「純粋な関数・データの再配置」だったのに対し、Step7はApp()の生きたReact状態
+  （`setG`/`setMl`のクロージャ、89メンバーの`ctx`）に触れるため質的にリスクが高い。**最初の一歩として
+  最小の移籍ドメインだけを切り出した**（`retainRider`／`grantTransferRequest`／`poachRetain`／
+  `poachAccept`／`poachSign`／`acceptTrade`／`declineTrade`の7ハンドラ）。
+  **パターン**：これらは元々すべて`setG(s => {...新state...})`という形だった＝実質
+  **`(state, ...args) => newState`という純粋なreducer関数**。`controllers/season/transfer.js`に
+  その形のまま抽出し（JSX/React非依存）、`main.jsx`側は`const retainRider = () => setG(tfRetainRider);`
+  のような**1行の薄いラッパー**に置き換えた。この「reducer関数を`controllers/`へ・`setG`接続はApp()に残す」
+  パターンは、React特有の再レンダリング・クロージャの罠を避けつつcontroller抽出の恩恵（Node単体テスト化・
+  App()の縮小）を得られる型として、以後のcontroller抽出でも踏襲する。main.jsx 2564→2474行。
+  **検証**：抽出したreducer関数を直接呼ぶ25ケースの単体テストを新規作成（引き止め・移籍金授受・
+  ロースター上限・年内1回制限・トレード成立/見送りの分岐を実地検証）し全PASS。既存Node57ケース
+  （v40/v41/Step6）と合わせ計82ケース全PASS。Playwrightで引き抜き市場からの落札・トレードの見送り・
+  月送りループを実機確認、実エラー0。
+
+**未着手（Step 7残り・Step 8・今後の候補）**：残る82メンバーのハンドラ
+（`advanceMonth`/`finishRace`/`buyPart`/`hireStaff`等の季節ハンドラ、`mlXxx`のマイライフハンドラ）は
+まだApp()内。同じ「reducer関数をcontrollers/へ・setG接続だけApp()に残す」パターンで、
+**新機能追加のたび／次に触るドメインから1つずつ**移すのが安全（一気に全部は着手しない）。
+`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`フック化）は、ハンドラの分離が
+ある程度進んでからの方が土台が整う。`screens/season|mylife/`のサブ画面分割（Step8）も未着手。
+新機能は必ず「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ
+"にじむ"のを禁止）。
