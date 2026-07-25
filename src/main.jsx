@@ -18,7 +18,7 @@ import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins,
 import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, rankSim, riderHash01, rollWeather, simulateTicks } from "./sim/race.js";
 import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, genPoachTargets, makePoachOffer, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
@@ -873,6 +873,9 @@ function App() {
           youthUsed: false,
           yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame, rivalAlumni: survivingAlumni,
           rivalRosters: agedRivals.worldRosters,
+          // v41: 引き抜き市場を来季の（年を取った）ライバル主力で更新し、年1回の引き抜き枠をリセット
+          poachTargets: genPoachTargets(classIdx, year, year * 331 + 47, agedRivals.worldRosters),
+          poachDoneThisYear: false,
           screen: info.cleared ? "clear" : "yearend", tab: "home",
         };
       }
@@ -890,6 +893,12 @@ function App() {
         gc: null,
         screen: "main", log,
       };
+      // v41: 被引き抜き。ライバルが自チームの主力を引き抜きに来る（主将以外・健康・OVR66以上の最上位）。
+      // 引き止める（費用を払って残留）か、放出して移籍金を得るか＝チーム運営の駆け引き。移籍志願より優先。
+      if (month !== 0 && Math.random() < 0.16) {
+        const offer = makePoachOffer({ roster, captainId: s.captainId, classIdx: s.classIdx }, Math.random);
+        if (offer) return { ...base, poachOffer: offer, screen: "poachOffer" };
+      }
       // v28: 選手の移籍志願。長期間ベンチに置かれた実力者（能力55以上）が不満を募らせ、
       // 退団を申し出ることがある。主将は対象外。慰留か放出かをプレイヤーが選ぶ
       const requester = roster.find(r => r.injury === 0 && (r.benchMonths || 0) >= 4 && overall(r) >= 55 && r.id !== s.captainId);
@@ -939,6 +948,57 @@ function App() {
       }
       const hallOfFame = isHallOfFameWorthy(r) ? [...s.hallOfFame, { ...r, farewellYear: s.year, farewellReason: "released" }] : s.hallOfFame;
       return { ...s, roster, captainId, hallOfFame, transferRequest: null, screen: "main", log: [...s.log, `【${MONTHS[s.month]}】${r.name}の移籍志願を受け入れ、円満に送り出した`] };
+    });
+  };
+  // v41: 被引き抜きへの対応。引き止める＝費用を払い残留（本人は奮起＝調子+1）。
+  const poachRetain = () => {
+    setG(s => {
+      const o = s.poachOffer;
+      if (!o) return { ...s, poachOffer: null, screen: "main" };
+      if (s.budget < o.retainCost) return s; // 資金不足なら操作無効（ボタン側でも抑止）
+      return {
+        ...s, budget: s.budget - o.retainCost, poachOffer: null, screen: "main",
+        roster: s.roster.map(r => r.id === o.riderId ? { ...r, cond: Math.min(5, r.cond + 1) } : r),
+        log: [...s.log, `【${MONTHS[s.month]}】${o.team}による${o.name}の引き抜きを退けた（引き止め費用-${o.retainCost}万・本人は奮起して調子+1）`],
+      };
+    });
+  };
+  // v41: 被引き抜きの受諾。移籍金を受け取り主力を放出。相手チームの一員として走り続ける（rivalAlumni）。
+  const poachAccept = () => {
+    setG(s => {
+      const o = s.poachOffer;
+      if (!o) return { ...s, poachOffer: null, screen: "main" };
+      const r = s.roster.find(x => x.id === o.riderId);
+      if (!r) return { ...s, poachOffer: null, screen: "main" };
+      const roster = s.roster.filter(x => x.id !== o.riderId);
+      const captainId = s.captainId === o.riderId ? null : s.captainId;
+      return {
+        ...s, roster, captainId, budget: s.budget + o.fee, poachOffer: null, screen: "main",
+        rivalAlumni: [...(s.rivalAlumni || []), { ...r, signedTeam: o.team, signedYear: s.year }],
+        log: [...s.log, `【${MONTHS[s.month]}】${o.name}を${o.team}へ放出（移籍金+${o.fee}万）。今後は${o.team}の一員として自チームの前に立ちはだかる`],
+      };
+    });
+  };
+  // v41: 引き抜き（こちらが他チームの主力を獲得）。年1回まで・資金と枠が必要。成立すると相手の
+  // ロースターから外れ（世界に反映）、自チームへ加入。移籍金は candidate の実効OVRで算定済み。
+  const poachSign = (targetId) => {
+    setG(s => {
+      const t = (s.poachTargets || []).find(x => x.id === targetId);
+      if (!t) return s;
+      if (s.poachDoneThisYear) return s;
+      if (s.budget < t.fee) return s;
+      if (s.roster.length >= rosterMax) return s;
+      // 相手ロースターから引き抜いた選手を外す（世界に反映＝以後その相手として出走しない）
+      const rivalRosters = { ...(s.rivalRosters || {}) };
+      if (rivalRosters[t.team]) rivalRosters[t.team] = rivalRosters[t.team].filter(wr => wr.id !== t.wrId);
+      const recruit = { ...t.candidate, poachedFrom: t.team };
+      return {
+        ...s, budget: s.budget - t.fee, roster: [...s.roster, recruit],
+        rivalRosters, poachDoneThisYear: true,
+        poachTargets: (s.poachTargets || []).filter(x => x.id !== targetId),
+        screen: "main",
+        log: [...s.log, `【${MONTHS[s.month]}】${t.team}の主力 ${t.candidate.name}（OVR${overall(t.candidate)}）を引き抜き獲得！ 移籍金-${t.fee}万`],
+      };
     });
   };
 
@@ -2968,7 +3028,7 @@ function App() {
   }
 
   // ================= v14: マイライフモード 画面群 =================
-  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
+  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, poachRetain, poachAccept, poachSign, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
 
   if (superMode === "mylife") return renderMyLifeScreens(ctx);
 

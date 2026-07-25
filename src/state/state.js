@@ -317,6 +317,72 @@ export function legendToSeasonRider(leg) {
   return r;
 }
 
+// ── v41 移籍市場の駆け引き（引き抜き）─────────────────────────────
+// 世界ロースターの選手は baseline 方式（実能力を持たない）。buildSim の相手生成と同じ電力式
+// （power = 52 + classIdx*9 + baseline）で newRider を回して実能力へ実体化する。identity（名前・脚質・
+// 特性）は元選手のものを維持。引き抜き成功時にプレイヤーのロースターへ加える1名を作る。
+export function worldRiderToRosterRider(wr, classIdx, seed) {
+  const rng = mulberry((seed >>> 0) || 1);
+  const power = 52 + classIdx * 9 + (wr.baseline || 0);
+  const r = newRider(power, rng, { type: wr.type, age: wr.age });
+  r.name = wr.name; r.type = wr.type;
+  r.personality = wr.personality || r.personality;
+  if (wr.abilities) r.abilities = [...wr.abilities];
+  r.goldAbilities = [...(wr.goldAbilities || [])];
+  r.growthPow = wr.growthPow || r.growthPow;
+  if (wr.age != null) r.age = wr.age;
+  r.favorite = false; r.tenure = 0; r.fatigue = 20; r.cond = 3;
+  r.joinOvr = overall(r);
+  return r;
+}
+
+// 引き抜き先候補の意欲（＝引き抜き料の係数）。決定論的にラベルと倍率を返す。
+const POACH_WILLINGNESS = [
+  { key: "eager", label: "移籍に前向き", mul: 0.8 },
+  { key: "neutral", label: "標準", mul: 1.0 },
+  { key: "banner", label: "チームの看板", mul: 1.45 },
+];
+
+// v41: 各ライバルチームの主力（baseline最上位）を引き抜き市場の候補として生成する。
+// 年に一度（初期化・年度末）だけ更新して顔ぶれを固定＝「今年狙う相手」を腰を据えて選べる。
+// 返り値：[{ id, wrId, team, teamColor, willLabel, candidate(実体化済み選手), fee }]
+export function genPoachTargets(classIdx, year, seed, rivalRosters, teams = RIVAL_TEAMS) {
+  if (!rivalRosters) return [];
+  const rng = mulberry((seed >>> 0) || 7);
+  const out = [];
+  teams.forEach((d, ti) => {
+    const roster = rivalRosters[d.name];
+    if (!roster || roster.length === 0) return;
+    // チームの主力（baseline最上位＝エース）を候補に
+    const wr = [...roster].sort((a, b) => (b.baseline || 0) - (a.baseline || 0))[0];
+    if (!wr) return;
+    const will = POACH_WILLINGNESS[Math.floor(rng() * POACH_WILLINGNESS.length)];
+    const candidate = worldRiderToRosterRider(wr, classIdx, (wr.id * 2654435761) ^ (year * 40503));
+    const ovr = overall(candidate);
+    // 引き抜き料：概算OVRに比例＋意欲係数。FA（overall*1.6）より高い＝主力強奪はコスト大。
+    const fee = Math.max(60, Math.round(ovr * 3.4 * will.mul * CLASSES[classIdx].prizeMul));
+    out.push({ id: `poach-${wr.id}-${year}`, wrId: wr.id, team: d.name, teamColor: d.color, willLabel: will.label, candidate, fee });
+  });
+  out.sort((a, b) => overall(b.candidate) - overall(a.candidate));
+  return out;
+}
+
+// v41: 被引き抜き（ライバルが自チームの主力を引き抜きに来る）オファーを1件組む。
+// 対象＝キャプテン以外・健康・OVR最上位の主力。移籍金（受け取れる額）と引き止め費用を返す。
+// 返り値：null（対象なし）or { riderId, name, ovr, team, teamColor, fee, retainCost }
+export function makePoachOffer(g, rng) {
+  const eligible = (g.roster || []).filter(r => r.injury === 0 && r.id !== g.captainId);
+  if (eligible.length < 2) return null; // ロースターが薄い時は来ない（放出で崩壊させない）
+  const star = eligible.sort((a, b) => overall(b) - overall(a))[0];
+  const ovr = overall(star);
+  if (ovr < 66) return null; // 主力級のみが引き抜き対象
+  const team = RIVAL_TEAMS[Math.floor(rng() * RIVAL_TEAMS.length)];
+  // 移籍金＝主力を手放す見返り（FA購入相当＋強奪プレミアム）。引き止め費用はその約4割。
+  const fee = Math.max(80, Math.round(ovr * 3.0 * CLASSES[g.classIdx].prizeMul));
+  const retainCost = Math.max(30, Math.round(fee * 0.4));
+  return { riderId: star.id, name: star.name, ovr, team: team.name, teamColor: team.color, fee, retainCost };
+}
+
 export function initRoster() {
   // v12バグ修正: 初期メンバー6名の名前が完全固定されており、新しくゲームを始めても
   // 毎回同じ名前になってしまうと気になるとのフィードバックを受け、能力値・年齢・役割の
@@ -505,6 +571,8 @@ export function initGame() {
   ridState.value = 100;
   const roster = initRoster();
   const rosterNames = roster.map(r => r.name);
+  // v41: 引き抜き市場は rivalRosters と id を共有する必要があるため、先に一度だけ生成して使い回す
+  const rivalRosters = sharedWorldRosters(RIVAL_TEAMS);
   return {
     screen: "intro", tab: "home",
     // v28: 自チーム名（プレイヤーが命名できる。未設定なら既定名）
@@ -515,7 +583,7 @@ export function initGame() {
     // 毎レース別人が出走していた（宿敵が育たず相手の成績も追えない）。開始時に固定の選手団を持つ。
     // v38(#9 A-3): 共有ワールドから取得＝新しいシーズンでも前回・マイライフと同じ顔ぶれの相手が
     // （年を取った状態で）出走する。世界が1つに繋がる。
-    rivalRosters: sharedWorldRosters(RIVAL_TEAMS),
+    rivalRosters,
     equip: { frame: 0, wheels: 0, facility: 0 },
     staff: { manager: 0, trainer: 0, doctor: 0, scout: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
@@ -566,6 +634,10 @@ export function initGame() {
     youthUsed: false,
     // v27: 引退選手のスタッフ登用（OBコーチ）。殿堂入りOBを月給制で1名まで雇える
     obCoach: null,
+    // v41: 移籍市場の駆け引き（引き抜き）。他チームの主力を引き抜く候補（年1更新）と、
+    // 引き抜きは年1回までの制限フラグ（年度末にリセット）
+    poachTargets: genPoachTargets(0, 1, 777 + 13, rivalRosters),
+    poachDoneThisYear: false,
   };
 }
 
@@ -576,7 +648,7 @@ const SAVE_FIELDS = [
   "camp", "sponsor", "sponsorOffers", "scoutPolicy", "scouts", "faMarket", "races",
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
   "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed", "obCoach", "homeRegion", "teamName",
-  "rivalRosters", "rivalStats",
+  "rivalRosters", "rivalStats", "poachTargets", "poachDoneThisYear",
 ];
 
 export function serializeState(g) {
@@ -597,6 +669,8 @@ export function resyncRid(state) {
   (state.roster || []).forEach(r => { if (r.id >= max) max = r.id + 1; });
   (state.scouts || []).forEach(sc => { if (sc.rider.id >= max) max = sc.rider.id + 1; });
   (state.faMarket || []).forEach(fa => { if (fa.rider.id >= max) max = fa.rider.id + 1; });
+  // v41: 引き抜き候補（実体化済み選手）の id も採番に含める（ロード後の id 衝突を防ぐ）
+  (state.poachTargets || []).forEach(pt => { if (pt.candidate && pt.candidate.id >= max) max = pt.candidate.id + 1; });
   ridState.value = max;
 }
 
