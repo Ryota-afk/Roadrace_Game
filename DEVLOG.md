@@ -46,6 +46,10 @@
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
     data/view/domain層への移送で2574行→1615行に縮小。移送分は互換シム（`import`＋`export {}`）で再エクスポートして
     おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§9）
+  - `src/screens/season/` … 2026-07(§Step8)新設。`screens/season.jsx`（旧2038行の巨大ディスパッチャ）を
+    用途クラスタ単位で分割：`intro.jsx`/`hub.jsx`(mainの5タブ)/`transferEvents.jsx`/`scheduleBoard.jsx`/
+    `race.jsx`/`yearend.jsx`。`screens/season.jsx`自体は委譲だけの27行dispatcherとして残存。
+    `screens/mylife.jsx`（1980行）は同種の分割の対象として未着手
 - **`index.html`（リポジトリ直下）** … `npm run build` が生成する**自己完結の単一HTML成果物**（デプロイ用）。React/JSXはビルド時に変換・バンドル済みで**CDNもBabelも不要**。手で編集しない
 - `package.json` / `vite.config.js` / `package-lock.json` … ビルド定義
 - `dist/`, `node_modules/` … gitignore（追跡しない）
@@ -423,7 +427,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜7[移籍ドメインのみ]実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8[season.jsxのみ]実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -516,11 +520,32 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   （v40/v41/Step6）と合わせ計82ケース全PASS。Playwrightで引き抜き市場からの落札・トレードの見送り・
   月送りループを実機確認、実エラー0。
 
-**未着手（Step 7残り・Step 8・今後の候補）**：残る82メンバーのハンドラ
-（`advanceMonth`/`finishRace`/`buyPart`/`hireStaff`等の季節ハンドラ、`mlXxx`のマイライフハンドラ）は
-まだApp()内。同じ「reducer関数をcontrollers/へ・setG接続だけApp()に残す」パターンで、
-**新機能追加のたび／次に触るドメインから1つずつ**移すのが安全（一気に全部は着手しない）。
-`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`フック化）は、ハンドラの分離が
-ある程度進んでからの方が土台が整う。`screens/season|mylife/`のサブ画面分割（Step8）も未着手。
+- **Step 8（着手・season.jsxのみ完了）**：`screens/season.jsx`（2038行・22種の`g.screen`分岐を1関数に
+  収めたディスパッチャ）を、用途クラスタ単位で`screens/season/*.jsx`へ分割。ユーザーとの合意により
+  「season.jsxのみ先行・mylife.jsxは次回以降」「画面ごとに全部バラす（22ファイル）のではなく中粒度
+  （6ファイル程度）」の2点を確認してから着手。
+  **分割**：`intro.jsx`(オンボーディング：intro/newgame_setup/scoutpolicy_initial/sponsor)・
+  `hub.jsx`(mainのhome/riders/shop/career/help 5タブ・949行)・
+  `transferEvents.jsx`(event/transferRequest/poachOffer/poachMarket/event_result)・
+  `scheduleBoard.jsx`(program/standings/trophy)・`race.jsx`(startlist/lineup/race/result/gc系)・
+  `yearend.jsx`(yearend/clear)。各ファイルは`ctx`のうちその画面群が実際に使うメンバーだけを
+  destructureする（機械的に使用識別子を洗い出して決定・全メンバーを毎回丸ごと渡す方式は踏襲しない）。
+  `screens/season.jsx`自体は`g.screen`の値を見てどのサブファイルへ委譲するかだけを決める27行の
+  薄いdispatcherとして残す（`renderSeasonScreens(ctx)`という関数名・シグネチャは不変＝main.jsx側は
+  無変更）。
+  **手法・検証の質的な違い**：Step7は状態遷移の「純粋なreducer関数」の抽出だったのでNode単体テストで
+  機械的に正しさを検証できたが、Step8はJSXレンダリング関数の「置き場所を移すだけ・中身は1文字も変えない」
+  作業。そのため「元テキストの当該行範囲が新ファイルの内容にbyte-for-byte含まれているか」をPythonスクリプトで
+  機械照合し、6ブロック全て完全一致を確認（コピペミスの混入をゼロにする一次検証）。その上でPlaywrightで
+  season系の全主要画面（intro→newgame_setup→scoutpolicy→sponsor→main5タブ→引き抜き市場→順位表→
+  トロフィールーム→lineup→レース結果）を実機で辿り、実行時エラー0を確認。ビルド成功、既存Node82ケース
+  全PASS（機能面はStep7までと不変のため新規テストは追加せず）。season.jsx 2038→27行
+  （分割後6ファイル合計2107行、import重複による若干増はあるが機能変更なし）。
+
+**未着手（Step 8残り・今後の候補）**：`screens/mylife.jsx`（1980行・30画面）は未分割。season.jsxで
+確立した「用途クラスタ単位・byte-for-byte照合・中粒度」の型をそのまま踏襲すれば同様に安全に進められる
+見込み。残る82メンバーのハンドラ（`advanceMonth`/`finishRace`/`buyPart`/`hireStaff`等の季節ハンドラ、
+`mlXxx`のマイライフハンドラ）もまだApp()内（Step7参照）。`ctx`89メンバーの手組み自体の解消
+（`useSeasonGame`/`useMyLifeGame`フック化）は、ハンドラの分離がある程度進んでからの方が土台が整う。
 新機能は必ず「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ
 "にじむ"のを禁止）。
