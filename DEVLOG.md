@@ -41,8 +41,10 @@
   - `src/sim/` `src/breeding/` `src/world/` `src/state/` `src/components/` … Phase 1〜3で分割済み。
     2026-07(§Step6)で `state.js⇄breeding.js` の循環importを解消（`state.js`→`breeding.js`の一方向に整理）
   - `src/controllers/` … 2026-07(§Step7)新設。`main.jsx` App() のハンドラのうち、状態遷移が
-    `(state, ...args) => newState` の形（setGへの薄い接続だけApp()に残す）のものを純関数として抽出。
-    `season/transfer.js`(移籍・トレード：着手済み、他ドメインは未着手)
+    `(state, ...args) => newState` の形（setG/setMlへの薄い接続だけApp()に残す）のものを純関数として抽出。
+    `season/transfer.js`(移籍・トレード)・`season/shop.js`(ショップ/スタッフ経済)・
+    `season/roster.js`(日常のロースター運用)・`mylife/shop.js`(マイライフのショップ・アイテム・私生活)。
+    レース・月進行系（useRef/setTimeout依存で単純なreducerに収まらない分類B）は未着手
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
     data/view/domain層への移送で2574行→1615行に縮小。移送分は互換シム（`import`＋`export {}`）で再エクスポートして
     おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§9）
@@ -428,7 +430,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2弾[分類Aのみ]実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -563,9 +565,37 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   マイライフの主要画面（キャラ作成の脚質/経歴/難易度選択→デビュー→素質確認→main→ヘルプ→ショップ→
   出走表→ライブレース観戦→ゴールまで）を実機で辿り、実行時エラー0を確認。mylife.jsx 1980→27行。
 
-**未着手（今後の候補）**：残る82メンバーのハンドラ（`advanceMonth`/`finishRace`/`buyPart`/`hireStaff`等の
-季節ハンドラ、`mlXxx`のマイライフハンドラ）もまだApp()内（Step7参照）。`ctx`89メンバーの手組み自体の解消
-（`useSeasonGame`/`useMyLifeGame`フック化）は、ハンドラの分離がある程度進んでからの方が土台が整う。
-`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる細分化の余地は
-あるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
-「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
+- **Step7第2弾（分類Aのみ実施）**：main.jsx App() に残る約40個のハンドラを調査した結果、性質が
+  はっきり2種類に分かれることが判明した。**分類A**＝`setG`/`setMl`だけで完結する単純なshop/roster系
+  reducer（約27個）。**分類B**＝`advanceMonth`/`finishRace`/`startRace`/`mlAdvanceMonth`等のレース・月進行
+  ハンドラで、`useRef`によるロック（連打防止）・`setTimeout`・「クロージャのstale値問題を過去に踏んだ」
+  という修正コメントが複数残っており、単純な`(state)=>newState`には収まらない。ユーザーと相談の上、
+  **今回は分類Aのみ実施し、分類Bは別途慎重な設計をしてから対応する方針**で合意し着手。
+  **分割**：`controllers/season/shop.js`（buyItem/buyPart/setPart/buyEquip/hireStaff/hireObCoach/
+  dismissObCoach の7個・ショップ/スタッフ経済）・`controllers/season/roster.js`（signScout/signFa/
+  useSupp/useTune/setFocus/useCamp/toggleFavorite/setCaptain/releaseRider/signYouthProspect/
+  signBredYouth の11個・日常のロースター運用）・`controllers/mylife/shop.js`（mlBuyPart/mlSetPart/
+  mlBuyGear/mlBuyStock/mlUseStock/mlPrivateCamp/mlBuyCar/mlBuyHouse/mlSetFocus の9個）。
+  `mlUseStockConfirm`は`askConfirm`によるUI確認ダイアログの分岐制御を持つため純粋なreducerではなく、
+  main.jsxに残して抽出後の`mlUseStock`を呼ぶ薄い呼び出し元とした（controller化の対象外に据え置いた
+  唯一の例）。`signBredYouth`は`setG`以外に`setBreedYouthSel(null)`という別の副作用も持つため、
+  reducer本体はcontrollers/へ、その副作用呼び出しはmain.jsxのラッパー内に残した。
+  **正規化**：元コードには「render時点の`g`/`ml`（＝直前の描画で確定した状態のスナップショット）」を
+  setG呼び出しの外側でガード条件に使っている箇所が複数あった（例：`buyPart`は`if (g.budget < ...) return;`
+  を`setG`の外で判定してから呼んでいた）。Step7（poachSign）の前例に倣い、全てのガード条件を
+  `setG(s => ...)`のupdater内・すなわち更新時点の最新状態`s`を見る形に統一した（`equipMax`/`staffMax`も
+  `s.classIdx`から都度算出）。動作は同一で、より安全な方向への整理（挙動を変えたのではなく、
+  常に最新の状態を見るという既存の慣習に合わせた）。
+  **検証**：抽出した27関数を直接呼ぶ53ケースの単体テストを新規作成（各ハンドラの成功パス・
+  ガード条件によるno-op分岐の両方を実地検証）し全PASS。既存Node82ケースと合わせ計135ケース全PASS。
+  Playwrightでseason側ショップ/選手・練習タブ、mylife側ショップの全3タブ（パーツ・消耗品/合宿・
+  恒久投資）を実機確認、実行時エラー0。main.jsx 2474→2262行。
+
+**未着手（今後の候補）**：分類B（`advanceMonth`/`finishRace`/`startRace`/`mlAdvanceMonth`等のレース・
+月進行ハンドラ、useRef・setTimeout依存）は今回あえて手を付けていない。着手する場合は、連打防止ロックや
+stale closure対策として過去に修正された経緯（コード中のコメント参照）を先に読み解き、それを崩さない
+設計を個別に検討してから進めること。`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`
+フック化）は、分類Bの分離も進んでからの方が土台が整う。`hub.jsx`（season側949行・mylife側557行）は
+依然として大きく、タブ／画面単位でのさらなる細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと
+比べ突出はしていない）。新機能は必ず「data / domain / controller / screen」の4箇所に配る
+（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
