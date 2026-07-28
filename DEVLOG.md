@@ -435,7 +435,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2弾/第3弾実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜4弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -642,13 +642,33 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   既存Node135ケースと合わせ計181ケース全PASS。Playwrightでseason/mylife双方の月送りループ・レース出走
   〜結果確定（finishRace/mlRaceFinish双方を実地で通過）を実機確認、実行時エラー0。main.jsx 2262→1241行。
 
+- **Step7第4弾（低リスク2件・recordCourseResultの非冪等性解消／dead import 124個の削除）**：前回
+  「今後の候補」に残した2件のうち、リスクの低い方から着手（B-3の抽出・`ctx`フック化は引き続き未着手）。
+  1. **`recordCourseResult`の分割**：「判定（読み取り）」と「更新（書き込み）」を1関数に同居させていたのを、
+     `peekCourseRecord`（`loadCourseRecords()`を読むだけ・書き込みなし・reducerがUI表示用に同期的に呼ぶ）と
+     `persistCourseRecord`（実際の書き込み・App()側のuseEffectから呼ぶ）に分離した。第3弾で確立した
+     パターンと同じ形：`finishRace`/`mlRaceFinish`の返り値（`prizeInfo.courseRecord`/
+     `resultInfo.courseRecord`）に`isNew`等の判定結果を持たせ、"result"/"mylife_result"画面への遷移を
+     検知する新規ref+useEffect（`courseRecordRef`/`mlCourseRecordRef`）が`isNew`を見て1回だけ
+     `persistCourseRecord`を呼ぶ。これで5箇所すべての非冪等なlocalStorage書き込み
+     （recordTitle×2種／advanceWorldYear×2モード／mlRecordLegend／recordCourseResult）が
+     reducerの外（App()側の画面遷移駆動useEffect）に統一された。
+  2. **dead import 124個の削除**：Step8（screens分割）でJSXレンダリングをscreens/へ委譲して以降、
+     main.jsx本体では一度も使われないまま残っていた古いimport（`AbilityGrid`/`CondFc`等の
+     panels.jsxコンポーネント・`SEG_COLOR`/`WEATHER`/`hasSaveGame`等）を機械的に検出し削除した。
+     削除前に該当識別子が本当にmain.jsx内で参照されていないか個別にgrepで再確認してから実施。
+  **検証**：`peekCourseRecord`/`persistCourseRecord`を直接呼ぶ8ケースの単体テストを新規作成
+  （複数回呼んでも判定が食い違わないこと＝旧`recordCourseResult`の非冪等バグが再現しないことを
+  中心に検証、Node環境向けの簡易localStorageモックを使用）し全PASS。既存Node181ケースと合わせ計189
+  ケース全PASS。ビルド成功、Playwrightでseason/mylife双方の主要画面・タブ・レース出走〜結果確定を
+  実機確認、実行時エラー0。main.jsx 1241→1257行（import整理で行数はほぼ横ばいだが、内容が実際に
+  使われる識別子だけになった）。
+
 **未着手（今後の候補）**：分類B-3（`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`・
 合計約89行）は今回もあえて手を付けていない。着手する場合は、連打防止ロックとstale closure対策として
 過去に修正された経緯（コード中のv12バグ修正コメント参照）を先に読み解き、それを崩さない設計を個別に
-検討してから進めること。`recordCourseResult`の非冪等性（戻り値がUI表示に直結するため後段のuseEffectに
-切り離せない）も未対応のまま。`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`
-フック化）は、分類B-3の分離も進んでからの方が土台が整う。main.jsxに残る124個の古いdead import
-（Step8以降の積み残し）も次にmain.jsxのimportを触る際に合わせて整理する価値がある。`hub.jsx`
-（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる細分化の余地はあるが、
-現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
+検討してから進めること（設計はOpus推奨・過去に実際にバグを踏んだ箇所の作り直しのため）。`ctx`89メンバーの
+手組み自体の解消（`useSeasonGame`/`useMyLifeGame`フック化）は、分類B-3の分離が終わってからの方が
+土台が整う。`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
+細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
 「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

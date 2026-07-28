@@ -1,13 +1,14 @@
 // レース結果確定（通常/チームTT/ステージ）の状態遷移（純粋なreducer関数）。Step7第3弾。
 // v41(§Step7第3弾): finishStage内のrecordTitle("grandTour")はここで呼ばず、返り値の
 // gc.justWonGrandTour フラグを見たApp()側のuseEffectに一本化した（詳細はDEVLOG §9参照）。
-// recordCourseResult（コースレコード更新）は戻り値が同じ呼び出しでUI表示に使われるため、
-// このパスでは従来どおり同期的に呼ぶ（非冪等性への対応は見送り。詳細はDEVLOG §9参照）。
+// v41(§Step7第4弾): recordCourseResultも同様の理由（非冪等な書き込みをupdater内に置かない）で
+// peekCourseRecord（読み取り専用の判定）に差し替えた。実際の書き込みはApp()側のuseEffectが
+// courseRecord.isNewを見てpersistCourseRecordを1回だけ呼ぶ（詳細はDEVLOG §9参照）。
 import { CLASSES } from "../../data/progression.js";
 import { MONTHS } from "../../data/course.js";
 import { rankSim } from "../../sim/race.js";
 import {
-  GRADE_MUL, PRIZES, PTS, advanceObjective, bumpCareerStats, raceObjectiveEvent, recordCourseResult,
+  GRADE_MUL, PRIZES, PTS, advanceObjective, bumpCareerStats, peekCourseRecord, raceObjectiveEvent,
 } from "../../logic/support.js";
 
 export function finishRace(s, sim, race, stageOverride) {
@@ -19,7 +20,7 @@ export function finishRace(s, sim, race, stageOverride) {
   const best = playerRs[0];
   // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
   const winner = sim.ranked[0];
-  const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, winner.team === "PLAYER", s.year);
+  const courseRecord = peekCourseRecord(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, winner.team === "PLAYER");
   const mul = CLASSES[s.classIdx].prizeMul * GRADE_MUL[race.grade];
   const prize = Math.round(playerRs.reduce((s2, e) => s2 + (PRIZES[e.rank - 1] || 1), 0) * mul);
   const mandateHit = !race.championship && !!race.sponsorMandate;

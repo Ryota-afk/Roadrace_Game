@@ -3,13 +3,14 @@
 // resultInfo.milestoneWin フラグを見たApp()側のuseEffectに一本化した。mlLastRaceFinish内の
 // mlRecordLegend(finalState)も同様に、既存のmlClearAwardedRefイディオム（"mylife_retired"画面への
 // 遷移を検知するuseEffect）へ移した（詳細はDEVLOG §9参照）。
-// recordCourseResult（コースレコード更新）は戻り値が同じ呼び出しでUI表示に使われるため、
-// このパスでは従来どおり同期的に呼ぶ（非冪等性への対応は見送り。詳細はDEVLOG §9参照）。
+// v41(§Step7第4弾): recordCourseResultも同様の理由（非冪等な書き込みをupdater内に置かない）で
+// peekCourseRecord（読み取り専用の判定）に差し替えた。実際の書き込みはApp()側のuseEffectが
+// resultInfo.courseRecord.isNewを見てpersistCourseRecordを1回だけ呼ぶ（詳細はDEVLOG §9参照）。
 import { MONTHS } from "../../data/course.js";
 import { ML_TACTICS, buildMyLifeSim, mlAmbitionCleared } from "../../state/state.js";
 import {
   GRADE_MUL, MANAGER_DIRECTIVES, POP_MILESTONES, PRIZES, PTS, applyAmbitionReward, computeWorldRank,
-  mlCurrentAmbition, mlNewspaper, mlUpdateRiderStats, raceForecast, recordCourseResult, rivalDialogue,
+  mlCurrentAmbition, mlNewspaper, mlUpdateRiderStats, peekCourseRecord, raceForecast, rivalDialogue,
   rivalDrama, rivalMeetingHeat, rivalScene, worldPointsForFinish,
 } from "../../logic/support.js";
 
@@ -34,7 +35,7 @@ export function mlRaceFinish(s) {
   const rival2Entrant = sim.ranked.find(e => e.isRival2);
   // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
   const winner = sim.ranked[0];
-  const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, !!winner.isPlayerChar, s.year);
+  const courseRecord = peekCourseRecord(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, !!winner.isPlayerChar);
   // v37: レース結果に「全順位表」を添える（着順・選手名・チーム名・トップとの秒差）。
   // これで自分以外の選手も識別でき、観戦→結果の一貫した見え方になる。
   const winTime = winner.finishTime;

@@ -3,26 +3,22 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 
 // ---- 静的データ（src/data/*）----
 import { C, FONT_D, FONT_B, FONT_M } from "./data/theme.js";
-import { TYPES, TYPE_ROLE_FIT, AB_KEYS, AB_LABEL, AB_COLOR, GROWTH, ABILITIES, PERSONALITIES, COND_ARROW, COND_COLOR, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL } from "./data/abilities.js";
-import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "./data/progression.js";
-import { TYPE_ABKEYS, TEACH_KEYS, PROTEGE_TEACHINGS, ARCH_BREED, ML_SPECIAL_MATINGS, BREED_NICKS } from "./data/breeding.js";
-import { MONTHS, ROSTER_MAX_BY_CLASS, SCOUT_COUNT_BY_CLASS, PRODIGY_CHANCE_BY_CLASS, UPKEEP_PER_RIDER, ROLES, CHASE_MODES, SEG_COMMENTARY, FINISH_COMMENTARY, TEMPLATES, UNLOCK_TEMPLATES, REGIONS, VENUE_REGION, HOME_ABILITY_BONUS, OVERSEAS_VENUES, GRAND_TOURS, SEG_LABEL, SEG_COLOR } from "./data/course.js";
-import { ITEMS, EQUIPS, EQUIP_COST } from "./data/items.js";
+import { TYPES, AB_KEYS, AB_LABEL, ABILITIES } from "./data/abilities.js";
+import { CLASSES, DIFFICULTIES } from "./data/progression.js";
+import { MONTHS, ROSTER_MAX_BY_CLASS, UPKEEP_PER_RIDER, TEMPLATES, HOME_ABILITY_BONUS } from "./data/course.js";
 
 // ---- コンポーネント（Phase 3）----
 import { Btn, Eyebrow } from "./components/ui.jsx";
-import { RaceView, RaceErrorBoundary } from "./components/RaceView.jsx";
 
 // ---- 純ロジック（src/core, sim, breeding, world, state）----
-import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins, fmtGap, fmtTime, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "./core/core.js";
-import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, riderHash01, simulateTicks } from "./sim/race.js";
-import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
+import { SUB_STAT_KEYS, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities } from "./core/core.js";
+import { PART_SLOTS } from "./sim/race.js";
+import { legendAncestorSet, legendBloodId, loadMlLegends, mlBloodlineBonus, mlBreedBonus, mlRecordLegend, protegeInherit } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount } from "./state/state.js";
+import { MYLIFE_TEAMS, buildMyLifeSim, computeAchievements, computePrestige, initGame, initMyLife, loadMeta, mlGenTeammates, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, saveGame, saveMeta, saveMyLife } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
-import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
-import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, MANAGER_DIRECTIVES, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_OFFSEASON_CHOICES, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, WEATHER, addAb, applyCpMilestones, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpGrowthPow, clearMyLifeSave, clearSaveGame, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growSub, hasMyLifeSave, hasSaveGame, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlFactorCollection, mlLineageForest, protegeState, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, rivalHeatTier, seasonRank, staffSalaryTotal, t_label, worldRankTier } from "./logic/support.js";
+import { GROWTHPOW_ORDER, MANAGER_DIRECTIVES, ML_BACKGROUNDS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_OFFSEASON_CHOICES, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, STAFF_MAX_BY_CLASS, addAb, buildSim, bumpGrowthPow, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computeSeasonAchievements, growSub, mlCreateRival, mlGenDirective, mlGrowthCap, mlLivingCost, mlFactorCollection, mlLineageForest, protegeState, mlRollCrossroads, noteAbilityDiscovery, persistCourseRecord, raceIsHome, seasonRank, staffSalaryTotal } from "./logic/support.js";
 // ---- 画面ディスパッチ（Phase 4-2）----
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -211,6 +207,26 @@ function App() {
       if (ml.resultInfo && ml.resultInfo.milestoneWin) recordTitle(ml.resultInfo.milestoneWin);
     }
     if (ml.screen !== "mylife_result") mlMilestoneTitleRef.current = false;
+  }, [ml.screen]);
+  // v41(§Step7第4弾): コースレコードの実書き込み（persistCourseRecord）。以前はfinishRace/
+  // mlRaceFinishのreducer内でrecordCourseResultが読み取りと書き込みを同時に行っていた。
+  // reducerはpeekCourseRecord（読み取りのみ）に差し替え済みなので、"result"/"mylife_result"
+  // 画面への遷移を検知し、courseRecord.isNewが立っている時だけ1回書き込む。
+  const courseRecordRef = useRef(false);
+  useEffect(() => {
+    if (g.screen === "result" && !courseRecordRef.current) {
+      courseRecordRef.current = true;
+      if (g.prizeInfo && g.prizeInfo.courseRecord) persistCourseRecord(g.prizeInfo.courseRecord, g.year);
+    }
+    if (g.screen !== "result") courseRecordRef.current = false;
+  }, [g.screen]);
+  const mlCourseRecordRef = useRef(false);
+  useEffect(() => {
+    if (ml.screen === "mylife_result" && !mlCourseRecordRef.current) {
+      mlCourseRecordRef.current = true;
+      if (ml.resultInfo && ml.resultInfo.courseRecord) persistCourseRecord(ml.resultInfo.courseRecord, ml.year);
+    }
+    if (ml.screen !== "mylife_result") mlCourseRecordRef.current = false;
   }, [ml.screen]);
 
   const equippedCount = (pid) => g.roster.reduce((s, r) => s + (PART_SLOTS.reduce((n, sl) => n + (r.parts[sl] === pid ? 1 : 0), 0)), 0);

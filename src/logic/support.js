@@ -251,14 +251,25 @@ export function saveCourseRecords(recs) {
   try { localStorage.setItem(COURSE_REC_KEY, JSON.stringify(recs)); } catch (e) { /* noop */ }
 }
 
-export function recordCourseResult(kind, length, winnerTime, holder, isPlayer, year) {
+// v41(§Step7第4弾): recordCourseResultは「判定（読み取り）」と「更新（書き込み）」を1関数に
+// 同居させていたため、setG/setMlのupdater内で呼ぶと非冪等（updaterが複数回呼ばれるとprevが
+// 既に更新済みになりisNewの値が呼び出しごとに変わる）だった。判定はreducerがUI表示用に同期的に
+// 必要とするためpeekCourseRecordとして残し、書き込みはApp()側のuseEffectへ分離した
+// （persistCourseRecord・詳細はDEVLOG §9参照）。
+export function peekCourseRecord(kind, length, winnerTime, holder, isPlayer) {
   if (!kind || !winnerTime || winnerTime <= 0 || !length) return null;
   const speed = Math.round((length / winnerTime) * 100);
   const recs = loadCourseRecords();
   const prev = recs[kind] || null;
   const isNew = !prev || speed > prev.speed;
-  if (isNew) { recs[kind] = { speed, holder: holder || "—", isPlayer: !!isPlayer, year: year || 1 }; saveCourseRecords(recs); }
   return { kind, speed, isNew, prev, holder: holder || "—", isPlayer: !!isPlayer };
+}
+
+export function persistCourseRecord(courseRecord, year) {
+  if (!courseRecord || !courseRecord.isNew) return;
+  const recs = loadCourseRecords();
+  recs[courseRecord.kind] = { speed: courseRecord.speed, holder: courseRecord.holder, isPlayer: courseRecord.isPlayer, year: year || 1 };
+  saveCourseRecords(recs);
 }
 
 export function mlGradeColor(g) {
