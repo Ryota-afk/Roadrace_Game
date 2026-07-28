@@ -43,8 +43,13 @@
   - `src/controllers/` … 2026-07(§Step7)新設。`main.jsx` App() のハンドラのうち、状態遷移が
     `(state, ...args) => newState` の形（setG/setMlへの薄い接続だけApp()に残す）のものを純関数として抽出。
     `season/transfer.js`(移籍・トレード)・`season/shop.js`(ショップ/スタッフ経済)・
-    `season/roster.js`(日常のロースター運用)・`mylife/shop.js`(マイライフのショップ・アイテム・私生活)。
-    レース・月進行系（useRef/setTimeout依存で単純なreducerに収まらない分類B）は未着手
+    `season/roster.js`(日常のロースター運用)・`season/month.js`(月次更新・年度末処理)・
+    `season/event.js`(選択肢イベント応答)・`season/result.js`(レース結果確定)・
+    `mylife/shop.js`(マイライフのショップ・アイテム・私生活)・`mylife/month.js`(マイライフの月次アクション・
+    年度末処理)・`mylife/result.js`(マイライフのレース結果確定)。`startRace`等のレース開始系
+    （useRef連打防止ロック・setTimeout依存で単純なreducerに収まらない一群・約89行）のみ未着手のまま残る
+  - `src/domain/mylife/` … 2026-07(§Step7第3弾)新設。`race.js`(mlGenRace＝マイライフの月次レース生成。
+    複数箇所から参照される純粋なジェネレータのため`controllers/`ではなく`domain/`に配置)
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
     data/view/domain層への移送で2574行→1615行に縮小。移送分は互換シム（`import`＋`export {}`）で再エクスポートして
     おり、main.jsx/screens/*.jsxの既存import文は変更不要（詳細は§9）
@@ -430,7 +435,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2弾[分類Aのみ]実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2弾/第3弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -591,11 +596,59 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   Playwrightでseason側ショップ/選手・練習タブ、mylife側ショップの全3タブ（パーツ・消耗品/合宿・
   恒久投資）を実機確認、実行時エラー0。main.jsx 2474→2262行。
 
-**未着手（今後の候補）**：分類B（`advanceMonth`/`finishRace`/`startRace`/`mlAdvanceMonth`等のレース・
-月進行ハンドラ、useRef・setTimeout依存）は今回あえて手を付けていない。着手する場合は、連打防止ロックや
-stale closure対策として過去に修正された経緯（コード中のコメント参照）を先に読み解き、それを崩さない
-設計を個別に検討してから進めること。`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`
-フック化）は、分類Bの分離も進んでからの方が土台が整う。`hub.jsx`（season側949行・mylife側557行）は
-依然として大きく、タブ／画面単位でのさらなる細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと
-比べ突出はしていない）。新機能は必ず「data / domain / controller / screen」の4箇所に配る
-（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
+- **Step7第3弾（分類Bの再分類・約1,070行をcontrollersへ・休眠地雷の解消）**：Opusで設計、Sonnetで実装。
+  「分類B」は前回ひとくくりにしていたが、精読（closure読み・`useRef`・`setTimeout`・localStorage副作用を
+  機械的に洗い出す）の結果、実際は3層に分かれることが判明した。
+  - **B-1（完全に純粋）**：`resolveEvent`／`monthlyUpdate`／`mlApplyMonthEffect`。closure読みゼロ。
+  - **B-2（reducer形＋副作用埋め込み）**：`advanceMonth`／`mlAdvanceMonth`／`finishRace`／`finishTeamTT`／
+    `finishStage`／`mlRaceFinish`／`mlFinishTeamTT`／`mlLastRaceFinish`。closure読みはあるが`setG(s=>...)`の
+    外側で`g`/`ml`を読んでいるだけで、`s`ベースに正規化すれば純関数化できる。
+  - **B-3（真の危険地帯・今回も未着手）**：`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`
+    のみ。合計約89行。`stage2LockRef`/`mlRaceLockRef`という連打防止ロックと`setTimeout`を持ち、
+    v12で実際に踏んだstale closureバグの修正コメントが残る。抽出したいテスト対象ロジック
+    （月次成長・年度末処理・報酬計算）は合計約1,070行あり、危険地帯はごく小さい部分に限られると分かった。
+  **休眠地雷**：`setG`/`setMl`のupdater内側で、`recordTitle`/`advanceWorldYear`/`mlRecordLegend`という
+  非冪等なlocalStorage書き込みが直接呼ばれていた（Reactのupdater契約は「純粋であるべき・複数回呼ばれ得る」
+  ため、本来はバグの種）。現状`<StrictMode>`未使用のため実害は出ていないが、既存の`clearAwardedRef`／
+  `mlClearAwardedRef`イディオム（画面遷移をrefガード付きで検知し、副作用を1回だけ実行するuseEffect）に
+  合流させて解消した。副作用の呼び出し元を4パターンに整理：
+  1. `recordTitle("grandFinal")`→ 既存の`clearAwardedRef`（"clear"画面遷移）に合流
+  2. `mlRecordLegend`→ 既存の`mlClearAwardedRef`（"mylife_retired"画面遷移）に合流。抽出作業中に
+     **`mlLastRaceFinish`以外にもう1箇所**（`mlRetireAdviceAccept`、当初の抽出対象リストに無かった
+     小さな関数）で同じ非冪等呼び出しをしていたことを発見し、合わせて修正した
+  3. `advanceWorldYear`（season/mylife）→ `g.year`/`ml.year`の変化を検知する新規ref+useEffect（各モード
+     独立、season側とmylife側で同じ共有ワールド関数を呼ぶため）
+  4. `recordTitle("grandTour")`（finishStage）・`recordTitle(race.milestone)`（mlRaceFinish）→
+     reducerの返り値に`gc.justWonGrandTour`／`resultInfo.milestoneWin`という記述的フラグを持たせ、
+     "gc_final"/"mylife_result"画面遷移を検知する新規ref+useEffectがそのフラグを見て1回だけ記録する
+  なお`recordCourseResult`（コースレコード更新）は同じ非冪等書き込みを持つが、戻り値（`isNew`等）が
+  同じ呼び出しでUI表示に使われるため、後段のuseEffectへ切り離せない。今回は意図的に対応を見送った
+  （StrictMode下での表示バグの可能性はあるが、データ破損はしない軽微な既知の残課題として明記）。
+  **分割**：`controllers/season/month.js`（monthlyUpdate・advanceMonth）・`controllers/season/event.js`
+  （resolveEvent）・`controllers/season/result.js`（finishRace・finishTeamTT・finishStage）・
+  `controllers/mylife/month.js`（mlApplyMonthEffect・mlAdvanceMonth）・`controllers/mylife/result.js`
+  （mlRaceFinish・mlFinishTeamTT・mlLastRaceFinish）・`domain/mylife/race.js`（mlGenRace＝複数箇所から
+  参照される純粋なジェネレータのため`controllers/`ではなく`domain/`に配置）。`monthlyUpdate`の戻り値は
+  `state._injured`への書き込み（out-param方式）から`{roster, notices}`（引数を壊さない普通の戻り値）に
+  正規化した。
+  **副次的なimport整理**：抽出により新たに不要となった61個のimport識別子をmain.jsxから削除。同時に、
+  Step8（screens分割）以降ずっと未使用のまま残っていた**124個の古いimport**（`AbilityGrid`/`CondFc`等の
+  panels.jsxコンポーネント・`SEG_COLOR`/`WEATHER`等、screens/へ委譲済みで元々main.jsx本体では使われて
+  いなかったもの）も検出したが、これは今回の変更範囲外（Step8時点からの積み残し）と判断しあえて残した。
+  次にmain.jsxのimportを触る際は、この124個の削除も合わせて提案する価値がある。
+  **検証**：抽出11関数を直接呼ぶ46ケースの単体テストを新規作成（月次成長・3連闘故障・年度末の昇格/降格/
+  クリア判定・グランツール優勝時のjustWonGrandTourフラグ・世界選手権優勝時のmilestoneWinフラグ・
+  マイライフの年度末オフシーズン遷移等を実地検証、`Math.random`を固定して決定論的に確認）し全PASS。
+  既存Node135ケースと合わせ計181ケース全PASS。Playwrightでseason/mylife双方の月送りループ・レース出走
+  〜結果確定（finishRace/mlRaceFinish双方を実地で通過）を実機確認、実行時エラー0。main.jsx 2262→1241行。
+
+**未着手（今後の候補）**：分類B-3（`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`・
+合計約89行）は今回もあえて手を付けていない。着手する場合は、連打防止ロックとstale closure対策として
+過去に修正された経緯（コード中のv12バグ修正コメント参照）を先に読み解き、それを崩さない設計を個別に
+検討してから進めること。`recordCourseResult`の非冪等性（戻り値がUI表示に直結するため後段のuseEffectに
+切り離せない）も未対応のまま。`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`
+フック化）は、分類B-3の分離も進んでからの方が土台が整う。main.jsxに残る124個の古いdead import
+（Step8以降の積み残し）も次にmain.jsxのimportを触る際に合わせて整理する価値がある。`hub.jsx`
+（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる細分化の余地はあるが、
+現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
+「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

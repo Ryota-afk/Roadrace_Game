@@ -3,10 +3,10 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 
 // ---- 静的データ（src/data/*）----
 import { C, FONT_D, FONT_B, FONT_M } from "./data/theme.js";
-import { TYPES, TYPE_ROLE_FIT, AB_KEYS, AB_LABEL, AB_COLOR, GROWTH, POW, ABILITIES, PERSONALITIES, COND_ARROW, COND_COLOR, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL } from "./data/abilities.js";
+import { TYPES, TYPE_ROLE_FIT, AB_KEYS, AB_LABEL, AB_COLOR, GROWTH, ABILITIES, PERSONALITIES, COND_ARROW, COND_COLOR, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL } from "./data/abilities.js";
 import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "./data/progression.js";
 import { TYPE_ABKEYS, TEACH_KEYS, PROTEGE_TEACHINGS, ARCH_BREED, ML_SPECIAL_MATINGS, BREED_NICKS } from "./data/breeding.js";
-import { MONTHS, RELEGATE_LINE, ROSTER_MAX_BY_CLASS, SCOUT_COUNT_BY_CLASS, PRODIGY_CHANCE_BY_CLASS, UPKEEP_PER_RIDER, ROLES, CHASE_MODES, SEG_COMMENTARY, FINISH_COMMENTARY, TEMPLATES, UNLOCK_TEMPLATES, ML_MONUMENTS, VENUES, REGIONS, VENUE_REGION, HOME_ABILITY_BONUS, OVERSEAS_VENUES, GRAND_TOURS, SEG_LABEL, SEG_COLOR, SEG_AB } from "./data/course.js";
+import { MONTHS, ROSTER_MAX_BY_CLASS, SCOUT_COUNT_BY_CLASS, PRODIGY_CHANCE_BY_CLASS, UPKEEP_PER_RIDER, ROLES, CHASE_MODES, SEG_COMMENTARY, FINISH_COMMENTARY, TEMPLATES, UNLOCK_TEMPLATES, REGIONS, VENUE_REGION, HOME_ABILITY_BONUS, OVERSEAS_VENUES, GRAND_TOURS, SEG_LABEL, SEG_COLOR } from "./data/course.js";
 import { ITEMS, EQUIPS, EQUIP_COST } from "./data/items.js";
 
 // ---- コンポーネント（Phase 3）----
@@ -14,15 +14,15 @@ import { Btn, Eyebrow } from "./components/ui.jsx";
 import { RaceView, RaceErrorBoundary } from "./components/RaceView.jsx";
 
 // ---- 純ロジック（src/core, sim, breeding, world, state）----
-import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins, fmtGap, fmtTime, hasAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "./core/core.js";
-import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, rankSim, riderHash01, rollWeather, simulateTicks } from "./sim/race.js";
+import { ASSIST_ROLES, GOLD_CONDITIONS, SUB_STAT_KEYS, countRoleUses, countWins, fmtGap, fmtTime, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "./core/core.js";
+import { AI_STYLES, PARTS, PART_SLOTS, TICK_SEC, assignAIRoles, effAbilities, generateCourse, riderHash01, simulateTicks } from "./sim/race.js";
 import { legendAncestorSet, legendBloodId, loadBloodlines, loadMlLegends, mlBloodlineBonus, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, mlRecordLegend, protegeInherit, saveMlLegends } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
-import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, ML_TACTICS, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, genFaPool, genMonthRaces, genScouts, genSponsors, genTradeOffers, genPoachTargets, makePoachOffer, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionCleared, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, ageWorldRosters, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount, unlockedTemplates } from "./state/state.js";
+import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, SAVE_KEY, buildMyLifeSim, computeAchievements, computePrestige, initGame, initMyLife, loadGame, loadMeta, loadMyLifeGame, loadTitles, mlAmbitionMetricValue, mlCareerArchetype, mlFirstUnmetRung, mlGenTeammates, genWorldRosters, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, riderCareerSummary, riderNickname, saveGame, saveMeta, saveMyLife, totalTitleCount } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
 import { AbilityFileList, AbilityGrid, BlurGrid, CondFc, CourseRecordsPanel, DisciplineGrid, ElevationChart, FatigueBar, MultiStageCourseView, PersonaLine, StartListPanel, SubStatLine, TitlesPanel, TraitLine } from "./components/panels.jsx";
-import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, EVENTS, EVENT_CHANCE, FAVORS_TO_DISCIPLINE, GRADE_MUL, GROWTHPOW_ORDER, MANAGER_DIRECTIVES, ML_AB_COACH_KEY, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CARS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_SPECIAL_TRAINING, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, WEATHER, acquireNewAbility, addAb, applyAmbitionReward, applyCpMilestones, applyEventEffects, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpCareerStats, bumpGrowthPow, champPromoteCut, clearMyLifeSave, clearSaveGame, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computeSeasonAchievements, computeStandings, computeWorldRank, disciplineScore, formatAchievementReward, groupModeFor, growSub, growthPhase, hasMyLifeSave, hasSaveGame, isHallOfFameWorthy, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlCurrentAmbition, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlNewspaper, ML_PROTEGE_EVENTS, mlUpdateRiderStats, mlWorldRaceLite, mlFactorCollection, mlLineageForest, protegeMilestoneNews, protegeState, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlTeamTier, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, persMul, pickMandateMonths, advanceObjective, expireObjective, raceObjectiveEvent, potentialHint, raceForecast, raceIsHome, recordCourseResult, riderFlavorText, rivalNews, rivalDrama, rivalDialogue, rivalScene, rivalMeetingHeat, rivalHeatTier, rollCondDir, seasonPersonalityEvent, seasonRank, staffSalaryTotal, standingsRankReward, t_label, teamChemistryTier, upgradeGoldAbilities, worldPointsForFinish, worldRankTier } from "./logic/support.js";
+import { CLASS_TIER_COLOR, CP_MILESTONES, DISCIPLINES, FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, MANAGER_DIRECTIVES, ML_AMBITION_PATH_KEYS, ML_BACKGROUNDS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_OFFSEASON_CHOICES, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, SCOUT_POLICIES, SEASON_ACHIEVEMENTS, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_ROLES, STAFF_SALARY_PER_LV, SUB_STAT_LABEL, WEATHER, addAb, applyCpMilestones, bloodIdToName, breedNickTableRows, buildBloodMap, buildSim, bumpGrowthPow, clearMyLifeSave, clearSaveGame, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computeSeasonAchievements, computeStandings, disciplineScore, formatAchievementReward, groupModeFor, growSub, hasMyLifeSave, hasSaveGame, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlAutobiographyOptions, mlCreateRival, mlEpilogueAway, mlEpilogueDirector, mlGenDirective, mlGradeColor, mlGrowthCap, mlLivingCost, mlFactorCollection, mlLineageForest, protegeState, mlRollCrossroads, mlSetAutobiography, mlSetEpilogue, mlWorldBoard, mlWorldNews, noteAbilityDiscovery, pickMandateMonths, potentialHint, raceIsHome, riderFlavorText, rivalNews, rivalHeatTier, seasonRank, staffSalaryTotal, t_label, worldRankTier } from "./logic/support.js";
 // ---- 画面ディスパッチ（Phase 4-2）----
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -47,6 +47,12 @@ import {
   mlUseStock as mshUseStock, mlPrivateCamp as mshPrivateCamp, mlBuyCar as mshBuyCar, mlBuyHouse as mshBuyHouse,
   mlSetFocus as mshSetFocus,
 } from "./controllers/mylife/shop.js";
+import { resolveEvent as seResolveEvent } from "./controllers/season/event.js";
+import { advanceMonth as smAdvanceMonth } from "./controllers/season/month.js";
+import { finishRace as srFinishRace, finishTeamTT as srFinishTeamTT, finishStage as srFinishStage } from "./controllers/season/result.js";
+import { mlAdvanceMonth as mmAdvanceMonth } from "./controllers/mylife/month.js";
+import { mlRaceFinish as mrRaceFinish, mlLastRaceFinish as mrLastRaceFinish } from "./controllers/mylife/result.js";
+import { mlGenRace } from "./domain/mylife/race.js";
 
 // ---------- メインアプリ ----------
 function App() {
@@ -136,17 +142,26 @@ function App() {
   // v13: グランファイナル制覇でクリアポイントを付与（周回プレイの起点）。
   // 通常のセーブデータとは別のlocalStorageキーに保存し、「最初から」でリセットしても
   // 消えない永続的な進行度にする。re-render時に重複加算しないようrefでガードする
+  // v41(§Step7第3弾): 以前はadvanceMonthのreducer内でrecordTitle("grandFinal")を直接呼んでいたが、
+  // setGのupdaterは（StrictMode等で）複数回呼ばれ得る契約のため、非冪等なlocalStorage書き込みを
+  // updater内に置くのは休眠中のバグだった（現状StrictMode未使用のため実害は出ていない）。
+  // このuseEffectは元々"clear"画面への遷移をrefガード付きで検知しており、
+  // まさに同じ条件（info.cleared→screen:"clear"）を見ているため、ここに合流させた。
   useEffect(() => {
     if (g.screen === "clear" && !clearAwardedRef.current) {
       clearAwardedRef.current = true;
       const earned = computeClearPoints(g.year, g.difficulty);
       const meta = loadMeta();
       saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + earned });
+      recordTitle("grandFinal");
     }
     if (g.screen !== "clear") clearAwardedRef.current = false;
   }, [g.screen]);
   // v37: マイライフのキャリア終了（引退）でも生涯CPを付与する（メタ進行の統合）。
   // 引退画面に入った瞬間に一度だけ計算・加算し、獲得内訳を表示用に保持する。
+  // v41(§Step7第3弾): mlRecordLegend（殿堂記録）も同じ理由でここに合流させた。mlLastRaceFinish・
+  // mlRetireAdviceAcceptのどちらの経路でも"mylife_retired"に遷移するため、遷移元を問わず
+  // 一度だけ記録される。効果発火時点でmlは既に最終raceLogを含む確定済みstate。
   const mlClearAwardedRef = useRef(false);
   useEffect(() => {
     if (ml.screen === "mylife_retired" && !mlClearAwardedRef.current) {
@@ -154,311 +169,57 @@ function App() {
       const res = computeMyLifeClearPoints(ml);
       if (res.total > 0) { const meta = loadMeta(); saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + res.total }); }
       setMl(s => ({ ...s, awardedCP: res }));
+      mlRecordLegend(ml);
     }
     if (ml.screen !== "mylife_retired") mlClearAwardedRef.current = false;
+  }, [ml.screen]);
+  // v41(§Step7第3弾): 年度末のadvanceWorldYear()（共有ワールドの年を進める・非冪等）も、
+  // 以前はadvanceMonth/mlAdvanceMonthのreducer内で直接呼んでいた休眠中の地雷だった。
+  // g.year/ml.yearの変化を検知し、実際に年が進んだ時だけ1回呼ぶ（season/mylifeは独立のref）。
+  const seasonWorldYearRef = useRef(g.year);
+  useEffect(() => {
+    if (g.year !== seasonWorldYearRef.current) {
+      seasonWorldYearRef.current = g.year;
+      advanceWorldYear();
+    }
+  }, [g.year]);
+  const mlWorldYearRef = useRef(ml.year);
+  useEffect(() => {
+    if (ml.year !== mlWorldYearRef.current) {
+      mlWorldYearRef.current = ml.year;
+      advanceWorldYear();
+    }
+  }, [ml.year]);
+  // v41(§Step7第3弾): グランツール総合優勝のrecordTitle("grandTour")。以前はfinishStageの
+  // reducer内で直接呼んでいた。"gc_final"画面への遷移を検知し、返り値のgc.justWonGrandTour
+  // フラグが立っている時だけ1回記録する。
+  const gtTitleRef = useRef(false);
+  useEffect(() => {
+    if (g.screen === "gc_final" && !gtTitleRef.current) {
+      gtTitleRef.current = true;
+      if (g.gc && g.gc.justWonGrandTour) recordTitle("grandTour");
+    }
+    if (g.screen !== "gc_final") gtTitleRef.current = false;
+  }, [g.screen]);
+  // v41(§Step7第3弾): 世界選手権・オリンピック優勝のrecordTitle(race.milestone)。以前は
+  // mlRaceFinishのreducer内で直接呼んでいた。"mylife_result"画面への遷移を検知し、
+  // 返り値のresultInfo.milestoneWinフラグが立っている時だけ1回記録する。
+  const mlMilestoneTitleRef = useRef(false);
+  useEffect(() => {
+    if (ml.screen === "mylife_result" && !mlMilestoneTitleRef.current) {
+      mlMilestoneTitleRef.current = true;
+      if (ml.resultInfo && ml.resultInfo.milestoneWin) recordTitle(ml.resultInfo.milestoneWin);
+    }
+    if (ml.screen !== "mylife_result") mlMilestoneTitleRef.current = false;
   }, [ml.screen]);
 
   const equippedCount = (pid) => g.roster.reduce((s, r) => s + (PART_SLOTS.reduce((n, sl) => n + (r.parts[sl] === pid ? 1 : 0), 0)), 0);
   const availParts = (pid) => (g.partsInv[pid] || 0) - equippedCount(pid);
 
-  // ---- 月次更新 ----
-  function monthlyUpdate(state, raceInfo) {
-    const starterIds = raceInfo ? raceInfo.starters : null;
-    // v14.7: グランツールは複数日にわたって走り切る大会のため、ワンデーレースと
-    // 同じ疲労蓄積では実態に合わない。ただしステージレースは中日ごとに-20の回復が
-    // 別途入る（startNextStage）ため、素朴に係数を掛けただけだとその回復分で
-    // ほぼ相殺されてしまう。かといって係数を上げすぎると、疲労は0未満に下がらない
-    // （中日回復は0で頭打ち）ため、開幕直後の疲労が低い選手でも常に上限100に
-    // 張り付いてしまい「グランツール＝常に即MAX」という芸のない結果になる。
-    // 3日間なら中日回復-40を踏まえてもワンデーレースよりはっきり多く疲労が残りつつ、
-    // 低疲労状態からのスタートなら100に張り付かない程度の係数に留める
-    const stageFatigueMul = (raceInfo && raceInfo.grandTour) ? 1 + ((raceInfo.stageCount || 3) - 1) / 3 : 1;
-    // v13: 難易度別の成長ソフトキャップ閾値（易しいほど高い閾値まで伸びる）
-    const growthCap = (DIFFICULTIES.find(d => d.id === state.difficulty) || DIFFICULTIES[0]).growthCap;
-    // v17: キャプテン制度。主将より2歳以上若い選手は、主将の指導を受けて練習効果+10%になる。
-    // v18バランス調整: 指導に時間を割く分、主将自身の練習効果はわずかに落ちる（-5%）ようにし、
-    // 「誰でも無条件に任命した方が得」にならないよう小さなトレードオフを持たせた
-    const captain = state.roster.find(r => r.id === state.captainId);
-    const captainMentorMul = (n) => {
-      if (!captain) return 1;
-      if (n.id === captain.id) return 0.95;
-      return n.age < captain.age - 2 ? 1.1 : 1;
-    };
-    const roster = state.roster.map(r => {
-      const n = { ...r, parts: { ...r.parts } };
-      // v17: チームケミストリー用に、在籍月数を毎月加算する
-      n.tenure = (n.tenure || 0) + 1;
-      const injMul = hasAbility(n, "glass") ? 2 : hasAbility(n, "tough") ? 0.5 : 1;
-      const injExtra = hasAbility(n, "glass") ? 1 : 0;
-      if (n.injury > 0) {
-        n.injury -= 1;
-        n.fatigue = Math.max(0, n.fatigue - 30);
-        n.streak = 0;
-      } else {
-        if (n.focus === "rest") {
-          n.fatigue = Math.max(0, n.fatigue - 15);
-        } else {
-          const ph = growthPhase(n);
-          const winter = state.month === 8 || state.month === 9;
-          // v9: 基礎成長量をさらに引き下げ（2.2→1.5）。「将来性一択」問題への対処
-          const gain = 1.5 * ph.gain * POW[n.growthPow].mul
-            * (winter ? 1.3 : 1) * (state.camp ? 2 : 1)
-            * (1 + state.equip.facility * 0.15)
-            * (1 + (state.staff?.trainer || 0) * 0.12)
-            * (hasAbility(n, "trainer") ? 1.2 : hasAbility(n, "lazy_sp") ? 0.8 : 1)
-            * (hasAbility(n, "lateblow_sp") && n.age >= 28 ? 1.15 : 1)
-            * captainMentorMul(n);
-          // v27: OBコーチが在籍していれば、その担当能力の練習効果を全選手+25%する
-          const obAb = state.obCoach ? state.obCoach.ab : null;
-          const obMul = (k) => (obAb && k === obAb ? 1.25 : 1);
-          // 指定能力の成長にトレードオフ（×0.9）。指定外はさらに絞って14%
-          addAb(n, n.focus, gain * 0.9 * persMul(n, n.focus) * obMul(n.focus), growthCap);
-          AB_KEYS.filter(k => k !== n.focus).forEach(k => addAb(n, k, gain * 0.14 * persMul(n, k) * obMul(k), growthCap));
-          // v29: シーズンでも練習で加速力・メンタルがわずかに伸びる（focusがsprint/flatなら加速に厚め）
-          const subG = 0.24 * ph.gain * POW[n.growthPow].mul;
-          growSub(n, "accel", subG * (n.focus === "sprint" || n.focus === "flat" ? 1.3 : 0.7));
-          growSub(n, "mental", subG * 0.6);
-          n.fatigue = Math.min(100, n.fatigue + 6);
-        }
-        const ph2 = growthPhase(n);
-        if (ph2.dec > 0) AB_KEYS.forEach(k => { n[k] = Math.max(20, n[k] - ph2.dec); });
-      }
-      if (starterIds && starterIds.includes(n.id)) {
-        // v28: 出走した選手はベンチ月数（起用されない不満の蓄積）をリセットする
-        n.benchMonths = 0;
-        // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす（悪天候巧者による軽減はなし＝純粋な体力勝負）
-        const heatMul = raceInfo.weather === "heat" ? 1.15 : 1;
-        n.fatigue = Math.min(100, n.fatigue + (hasAbility(n, "iron") ? 32 : 45) * stageFatigueMul * heatMul);
-        n.streak += 1;
-        const ph = growthPhase(n);
-        // v25: 出走経験による成長が練習に比べて弱く、レースに出る意味が薄いという指摘を受け強化。
-        // 基礎係数を引き上げた上、格上のレース（グレードが高い）ほど得るものが大きくなるようにした
-        const raceGradeMul = GRADE_MUL[raceInfo.grade] || 1;
-        raceInfo.expKeys.forEach(k => addAb(n, k, 1.0 * raceGradeMul * Math.max(0.2, ph.gain) * POW[n.growthPow].mul * persMul(n, k), growthCap));
-        // v29: メンタルは大舞台の経験で育つ（格上ほど大きく）
-        growSub(n, "mental", 0.3 * raceGradeMul * Math.max(0.25, ph.gain));
-        // v11: ドクター（staff.doctor）は故障の発生率を下げ、発生した場合も期間を短縮する
-        // v29バグ修正: 効果が体感しづらいという指摘を受け、発生率減・期間短縮ともに強化
-        const doctorLv = state.staff?.doctor || 0;
-        const injCut = Math.round(doctorLv * 0.8); // 故障期間の短縮量（Lv3で3ヶ月短縮）
-        if (n.streak >= 3) {
-          n.injury = Math.max(1, 1 + (Math.random() < 0.5 ? 1 : 0) + injExtra - injCut);
-          n.streak = 0;
-          state._injured.push(`${n.name} が3連闘の無理がたたり故障（${n.injury}ヶ月離脱）`);
-        } else if (n.fatigue > 90) {
-          const p = (0.3 + (n.fatigue - 90) * 0.04) * injMul * Math.max(0.1, 1 - doctorLv * 0.22);
-          if (Math.random() < p) {
-            n.injury = Math.max(1, 1 + (Math.random() < 0.4 ? 1 : 0) + injExtra - injCut);
-            n.streak = 0;
-            state._injured.push(`${n.name} が疲労の蓄積で故障（${n.injury}ヶ月離脱）`);
-          }
-        } else if (raceInfo.weather === "rain" && Math.random() < (hasAbility(n, "rain_sp") ? 0.02 : 0.06) * Math.max(0.1, 1 - doctorLv * 0.22)) {
-          // v25: 雨天レースは悪天候巧者を持たない選手に一定確率で落車リスクを上乗せする
-          n.injury = Math.max(1, 1 + (Math.random() < 0.3 ? 1 : 0) + injExtra - injCut);
-          n.streak = 0;
-          state._injured.push(`${n.name} が雨天のレースで落車、負傷離脱（${n.injury}ヶ月）`);
-        }
-      } else if (n.injury === 0) {
-        n.fatigue = Math.max(0, n.fatigue - (starterIds ? 30 : 50));
-        n.streak = 0;
-        // v28: レースが行われた月に起用されなかった選手は「ベンチ月数」が積み上がる（移籍志願の判定に使う）
-        if (starterIds) n.benchMonths = (n.benchMonths || 0) + 1;
-      }
-      if (hasAbility(n, "recover")) n.fatigue = Math.max(0, n.fatigue - 15);
-      if (hasAbility(n, "recover2")) n.fatigue = Math.max(0, n.fatigue - 25); // v37(第2弾): 超回復
-      // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
-      const swing = hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1;
-      const dir = (n.condForecast != null) ? n.condForecast : rollCondDir();
-      n.cond = Math.max(1, Math.min(5, n.cond + dir * swing));
-      n.condForecast = rollCondDir();
-      // v15フェーズ2: 金特化の判定（勝利数・役割出走数の条件を満たしたら毎月チェック）
-      let updated = n;
-      const upgraded = upgradeGoldAbilities(updated);
-      if (upgraded !== updated) {
-        upgraded.goldAbilities.filter(id => !(updated.goldAbilities || []).includes(id))
-          .forEach(id => state._injured.push(`${n.name}の特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
-        updated = upgraded;
-      }
-      // v17: 特殊能力の後天的獲得判定
-      const acquired = acquireNewAbility(updated);
-      if (acquired !== updated) {
-        const newId = acquired.abilities[acquired.abilities.length - 1];
-        state._injured.push(`${n.name}が新たな特殊能力「${ABILITIES[newId].label}」を身につけた！`);
-        updated = acquired;
-      }
-      return updated;
-    });
-    return roster;
-  }
-
-  function advanceMonth(raceInfo) {
-    setG(s => {
-      const st = { ...s, _injured: [] };
-      const roster = monthlyUpdate(st, raceInfo);
-      const income = s.sponsor ? s.sponsor.monthly : 0;
-      const log = [...s.log, ...st._injured.map(t => `【${MONTHS[s.month]}】${t}`)];
-      // v35(シーズン深掘り): チームケミストリーが上のティアへ上がった瞬間を「絆」の節目としてログに刻む
-      const prevChem = teamChemistryTier(s.roster), newChem = teamChemistryTier(roster);
-      if (newChem.min > prevChem.min && newChem.min > 0) {
-        log.push(`【${MONTHS[s.month]}】🤝 長く共に走った絆が実り、チームは「${newChem.label}」に到達（レース中のドラフト消耗 -${Math.round((1 - newChem.mul) * 100)}%）`);
-      }
-      // v35(シーズン深掘り): 育成の手応え。練習・出走の成長でOVRの節目(70/80/90)を越えた選手を祝う
-      roster.forEach(nr => {
-        const old = s.roster.find(r => r.id === nr.id);
-        if (!old) return;
-        const oOld = overall(old), oNew = overall(nr);
-        [70, 80, 90].forEach(th => {
-          if (oOld < th && oNew >= th) {
-            const young = (nr.age || 25) <= 23;
-            log.push(`【${MONTHS[s.month]}】📈 ${nr.name} がOVR${th}の壁を突破！${young ? "若き才能が確かに開花しつつある。" : "円熟の走りにさらなる凄みが増した。"}`);
-          }
-        });
-      });
-      let sponsor = s.sponsor;
-      const mandateRace = s.races.find(r => r.sponsorMandate);
-      if (sponsor && mandateRace && !(raceInfo && raceInfo.raceId === mandateRace.id)) {
-        sponsor = { ...sponsor, mandatesMissed: sponsor.mandatesMissed + 1 };
-        log.push(`【${MONTHS[s.month]}】${sponsor.name}の指定レースを見送った（違約金が加算されます）`);
-      }
-      // v40（第1候補②）：中期目標の期限切れ判定。期限月を過ぎて未達なら失敗＝違約金をその場で計上する
-      let objectivePenalty = 0;
-      if (sponsor && sponsor.objective) {
-        const exp = expireObjective(sponsor.objective, s.month, MONTHS[s.month]);
-        if (exp.log) { sponsor = { ...sponsor, objective: exp.objective }; objectivePenalty = exp.penalty; log.push(exp.log); }
-      }
-      if (s.month === 11) {
-        let classIdx = s.classIdx;
-        // v34（バランス）：シーズン順位を実効化。年間の順位で本番の昇格ボーダーが緩み、順位で賞金も出る。
-        const sr = seasonRank(s);
-        const promoteCut = s.classIdx < 2 ? champPromoteCut(sr.rank) : 3;
-        const standingsMoney = standingsRankReward(sr.rank, s.classIdx);
-        const info = { promoted: false, relegated: false, retired: [], retiredRiders: [], cleared: false, champBest: s.champBest, sponsorResult: null, standingsRank: sr.rank, standingsTotal: sr.total, promoteCut, standingsMoney };
-        if (s.champBest !== null && s.champBest <= promoteCut) {
-          if (s.classIdx === 2 && s.champBest === 1) { info.cleared = true; recordTitle("grandFinal"); }
-          else { classIdx = Math.min(2, s.classIdx + 1); info.promoted = true; }
-        } else if (s.points < RELEGATE_LINE && s.classIdx > 0) {
-          classIdx = s.classIdx - 1; info.relegated = true;
-        }
-        let delta = 0;
-        if (sponsor) {
-          const achieved = s.points >= sponsor.norma;
-          const mandatePenalty = sponsor.mandatesMissed * 15;
-          delta = (achieved ? sponsor.bonus : -sponsor.penalty) - mandatePenalty;
-          info.sponsorResult = {
-            name: sponsor.name, achieved, bonus: sponsor.bonus, penalty: sponsor.penalty, norma: sponsor.norma, pts: s.points,
-            mandatesMet: sponsor.mandatesMet, mandatesMissed: sponsor.mandatesMissed, mandatePenalty,
-            objective: sponsor.objective || null,
-          };
-        }
-        const survivors = [];
-        roster.forEach(r => {
-          const n = { ...r, age: r.age + 1 };
-          const retire = n.age >= 36 || (n.age >= 33 && overall(n) < n.joinOvr * 0.8);
-          if (retire) { info.retired.push(`${n.name}（${n.age}歳）が引退`); info.retiredRiders.push(n); }
-          else survivors.push(n);
-        });
-        const year = s.year + 1;
-        // v38: ライバルチームも年次で世代交代（加齢→成長/衰え→引退→新人補充）。
-        // これで周回の相手が固定強度で止まらず、若手台頭とベテラン引退の流れが生まれる。
-        const agedRivals = ageWorldRosters(s.rivalRosters, mulberry((year * 2246822519) >>> 0), year, RIVAL_TEAMS);
-        advanceWorldYear(); // v38(#9 A-3): 共有ワールドも1年進める（世界が周回・両モードをまたいで年を取る）
-        agedRivals.retired.slice(0, 3).forEach(r => {
-          const debut = agedRivals.debuted.find(d => d.team === r.team);
-          log.push(`【${s.year}年目 世代交代】🌍 ${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : ""}`);
-        });
-        const upkeep = survivors.length * UPKEEP_PER_RIDER;
-        const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
-        const managerLv = s.staff?.manager || 0;
-        const nextOffers = genSponsors(classIdx, year).map(o => ({
-          ...o,
-          // v29バグ修正: 監督スタッフの効果が体感しづらいという指摘を受け、契約条件への
-          // 反映を強化（月収・成功報酬UP／ノルマ・失敗ペナルティ減）
-          monthly: Math.round(o.monthly * (1 + managerLv * 0.12)),
-          norma: Math.max(5, Math.round(o.norma * (1 - managerLv * 0.08))),
-          bonus: Math.round((o.bonus || 0) * (1 + managerLv * 0.10)),
-          penalty: Math.max(0, Math.round((o.penalty || 0) * (1 - managerLv * 0.10))),
-        }));
-        // v13: 年度の総括を歴史記録として1件積む（クラス・最終ポイント・昇格/降格・
-        // チャンピオンシップ最高位）
-        const careerHistory = [...s.careerHistory, {
-          year: s.year, classLabel: CLASSES[s.classIdx].label, points: s.points,
-          promoted: info.promoted, relegated: info.relegated, champBest: s.champBest,
-        }];
-        // v13.1: ライバルチームに拾われた元選手も年齢を重ね、同じ引退条件を満たせば
-        // 殿堂入り判定（実績かお気に入りがあれば記録に残る）を経て名鑑へ、
-        // 満たさなければ静かに記録から外れる。生き残った選手はrivalAlumniに残り続ける
-        const survivingAlumni = [];
-        const retiredAlumniHof = [];
-        (s.rivalAlumni || []).forEach(r => {
-          const n = { ...r, age: r.age + 1 };
-          const retire = n.age >= 36 || (n.age >= 33 && overall(n) < n.joinOvr * 0.8);
-          if (retire) { if (isHallOfFameWorthy(n)) retiredAlumniHof.push({ ...n, farewellYear: year, farewellReason: "rival_retired" }); }
-          else survivingAlumni.push(n);
-        });
-        // v13.1: 引退した選手は、殿堂入り条件（実績かお気に入り）を満たした場合のみ記録に残す
-        const hallOfFame = [
-          ...s.hallOfFame,
-          ...info.retiredRiders.filter(isHallOfFameWorthy).map(n => ({ ...n, farewellYear: s.year, farewellReason: "retired" })),
-          ...retiredAlumniHof,
-        ];
-        return {
-          ...s, roster: survivors, classIdx, points: 0, year, month: 0,
-          budget: s.budget + income + delta + standingsMoney - upkeep - staffSalary - objectivePenalty,
-          sponsor: null, sponsorOffers: nextOffers,
-          scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name), s.staff?.scout || 0),
-          faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
-          tradeOffers: genTradeOffers(classIdx, year * 1471 + 37, survivors),
-          races: genMonthRaces(year, 0, classIdx, 0, null, []),
-          camp: false, champBest: null, gc: null,
-          sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
-          // v14.8: 年が変わるのでグランツール制覇状況もリセットする
-          gtWins: [],
-          // v25: ユース育成枠も年度が変わるたびにリセットする
-          youthUsed: false,
-          yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame, rivalAlumni: survivingAlumni,
-          rivalRosters: agedRivals.worldRosters,
-          // v41: 引き抜き市場を来季の（年を取った）ライバル主力で更新し、年1回の引き抜き枠をリセット
-          poachTargets: genPoachTargets(classIdx, year, year * 331 + 47, agedRivals.worldRosters),
-          poachDoneThisYear: false,
-          screen: info.cleared ? "clear" : "yearend", tab: "home",
-        };
-      }
-      const month = s.month + 1;
-      const upkeep = roster.length * UPKEEP_PER_RIDER;
-      const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
-      const base = {
-        ...s, roster, month, camp: false,
-        budget: s.budget + income - upkeep - staffSalary - objectivePenalty,
-        sponsor,
-        faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7, roster.map(r => r.name)),
-        tradeOffers: genTradeOffers(s.classIdx, s.year * 1231 + month * 59 + 17, roster),
-        races: genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins),
-        sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
-        gc: null,
-        screen: "main", log,
-      };
-      // v41: 被引き抜き。ライバルが自チームの主力を引き抜きに来る（主将以外・健康・OVR66以上の最上位）。
-      // 引き止める（費用を払って残留）か、放出して移籍金を得るか＝チーム運営の駆け引き。移籍志願より優先。
-      if (month !== 0 && Math.random() < 0.16) {
-        const offer = makePoachOffer({ roster, captainId: s.captainId, classIdx: s.classIdx }, Math.random);
-        if (offer) return { ...base, poachOffer: offer, screen: "poachOffer" };
-      }
-      // v28: 選手の移籍志願。長期間ベンチに置かれた実力者（能力55以上）が不満を募らせ、
-      // 退団を申し出ることがある。主将は対象外。慰留か放出かをプレイヤーが選ぶ
-      const requester = roster.find(r => r.injury === 0 && (r.benchMonths || 0) >= 4 && overall(r) >= 55 && r.id !== s.captainId);
-      if (month !== 0 && requester && roster.length > 1 && Math.random() < 0.25) {
-        return { ...base, transferRequest: { riderId: requester.id, name: requester.name }, screen: "transferRequest" };
-      }
-      // v8: 月替わりでランダムに選択肢付きイベントが発生（春先の解禁月は除く）
-      // v36(#9): 半々で「性格ベースのチームイベント」（ロースターの誰かの個性にスポットを当てる）を差し込む
-      if (month !== 0 && Math.random() < EVENT_CHANCE) {
-        const pe = Math.random() < 0.5 ? seasonPersonalityEvent(roster) : null;
-        const ev = pe || EVENTS[Math.floor(Math.random() * EVENTS.length)];
-        return { ...base, pendingEvent: ev, screen: "event" };
-      }
-      return base;
-    });
-  }
+  // v41(§Step7第3弾): 月次更新・年度末処理は controllers/season/month.js の純関数に集約。
+  // 非冪等なlocalStorage書き込み（recordTitle/advanceWorldYear）は呼ばず、g.yearの変化・
+  // "clear"画面への遷移を検知するuseEffectへ移した（下記・詳細はDEVLOG §9参照）。
+  const advanceMonth = (raceInfo) => setG(s => smAdvanceMonth(s, raceInfo));
   // v41(§Step7): 移籍・トレードの状態遷移は controllers/season/transfer.js の純関数（tf*）に集約。
   // ここでは setG に接続する薄いラッパーのみを持つ（ハンドラの実体はNode単体テスト可能）。
   const retainRider = () => setG(tfRetainRider);
@@ -467,19 +228,7 @@ function App() {
   const poachAccept = () => setG(tfPoachAccept);
   const poachSign = (targetId) => setG(s => tfPoachSign(s, targetId));
 
-  function resolveEvent(choiceIdx) {
-    setG(s => {
-      const ev = s.pendingEvent;
-      if (!ev) return s;
-      const choice = ev.choices[choiceIdx];
-      const applied = applyEventEffects(s, choice.effects);
-      // v12: 個人targetの効果は誰が対象だったかを__eventNoteに乗せて返してくるので、
-      // 結果テキストの末尾に添えてから消す（保存対象にも含まれない一時フィールド）
-      const { __eventNote, ...rest } = applied;
-      const text = __eventNote ? `${choice.result}\n\n${__eventNote}` : choice.result;
-      return { ...rest, pendingEvent: null, eventResult: { title: ev.title, text }, screen: "event_result" };
-    });
-  }
+  const resolveEvent = (choiceIdx) => setG(s => seResolveEvent(s, choiceIdx));
 
   // ---- レース ----
   function startRace(watch) {
@@ -550,200 +299,16 @@ function App() {
 
   // stageOverride: skip経路（結果だけ見る）はステージ番号を明示で渡し、
   // setG後にgが更新前のまま参照される（stale closure）事故を避ける
-  function finishRace(sim, race, stageOverride) {
-    rankSim(sim);
-    // v35(チームTT): チーム単位の合算タイム。チーム順位で得点・賞金を確定する
-    if (sim.teamTT) { finishTeamTT(sim, race); return; }
-    if (race.stageRace) {
-      finishStage(sim, race, stageOverride);
-      return;
-    }
-    const playerRs = sim.ranked.filter(e => e.team === "PLAYER");
-    const best = playerRs[0];
-    // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
-    const winner = sim.ranked[0];
-    const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, winner.team === "PLAYER", g.year);
-    const mul = CLASSES[g.classIdx].prizeMul * GRADE_MUL[race.grade];
-    const prize = Math.round(playerRs.reduce((s2, e) => s2 + (PRIZES[e.rank - 1] || 1), 0) * mul);
-    const mandateHit = !race.championship && !!race.sponsorMandate;
-    let pts = Math.round((PTS[best.rank - 1] || 0) * GRADE_MUL[race.grade]);
-    if (mandateHit) pts = Math.round(pts * 1.3);
-    // v13: 選手名鑑用に、出走した自チーム選手それぞれの着順を各選手のraceLogへ記録する
-    const rankById = {}; playerRs.forEach(e => { rankById[e.id] = e.rank; });
-    // v14.6: フレーバーテキストで「そのレースでどんな役割だったか」を語れるよう、
-    // 着順と一緒に役割（エースならace、それ以外はROLESのキー）も記録する
-    const roleById = {}; playerRs.forEach(e => { roleById[e.id] = e.isAce ? "ace" : e.role; });
-    // v13.1: ライバルチームに拾われた元選手が出走していれば、そちらのraceLogも伸ばす
-    const alumniRankById = {}; sim.ranked.filter(e => e.isAlumnus).forEach(e => { alumniRankById[e.id] = e.rank; });
-    const alumniRoleById = {}; sim.ranked.filter(e => e.isAlumnus).forEach(e => { alumniRoleById[e.id] = e.isAce ? "ace" : e.role; });
-    setG(s => {
-      const roster = s.roster.map(r => rankById[r.id] != null
-        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleById[r.id] }] }
-        : r);
-      const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
-        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: alumniRoleById[r.id] }] }
-        : r);
-      // v40（第1候補②）：シーズン中期目標の進捗。達成した瞬間に資金＋ノルマptを付与する
-      let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
-      const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, best.rank, best.age), MONTHS[s.month]);
-      if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
-      return {
-        ...s, roster, rivalAlumni, sponsor,
-        log: objRes.log ? [...s.log, objRes.log] : s.log,
-        budget: s.budget + prize + objRes.budgetDelta,
-        points: race.championship ? s.points : s.points + pts + objRes.pointsDelta,
-        champBest: race.championship ? best.rank : s.champBest,
-        careerStats: bumpCareerStats(s.careerStats, best.rank, prize),
-        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, best, mandateHit, breakSurvived: sim.breakSurvived, hadBreak: sim.hadBreak, courseRecord, objectiveResult: objRes.log ? objRes.objective : null, objectiveDone: objRes.justDone },
-        screen: "result",
-      };
-    });
-  }
-
-  // v35(チームTT): チームTTの結果確定。チーム順位で得点・賞金を付与し、出走選手にチーム着順を記録
-  function finishTeamTT(sim, race) {
-    const teams = sim.teamTT;
-    const playerTeam = teams.find(t => t.isPlayer);
-    const teamRank = playerTeam ? playerTeam.rank : teams.length;
-    const totalTeams = teams.length;
-    const mul = CLASSES[g.classIdx].prizeMul * GRADE_MUL[race.grade];
-    // チーム1つの結果なので、個人レースの複数入賞相当に賞金を厚めに換算
-    const prize = Math.round((PRIZES[teamRank - 1] || 1) * mul * 2.4);
-    const mandateHit = !race.championship && !!race.sponsorMandate;
-    let pts = Math.round((PTS[teamRank - 1] || 0) * GRADE_MUL[race.grade]);
-    if (mandateHit) pts = Math.round(pts * 1.3);
-    const starterIds = new Set((playerTeam ? playerTeam.riders : []).map(r => r.id));
-    setG(s => {
-      const roster = s.roster.map(r => starterIds.has(r.id)
-        ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] }
-        : r);
-      // v40（第1候補②）：チームTTでも中期目標の進捗を判定（チーム着順を最上位着順とみなす。エース年齢は無し）
-      let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
-      const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, teamRank, null), MONTHS[s.month]);
-      if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
-      return {
-        ...s, roster, sponsor,
-        log: objRes.log ? [...s.log, objRes.log] : s.log,
-        budget: s.budget + prize + objRes.budgetDelta,
-        points: race.championship ? s.points : s.points + pts + objRes.pointsDelta,
-        careerStats: bumpCareerStats(s.careerStats, teamRank, prize),
-        prizeInfo: { race, prize, pts: race.championship ? 0 : pts, teamTT: teams, teamRank, totalTeams, mandateHit, objectiveResult: objRes.log ? objRes.objective : null, objectiveDone: objRes.justDone },
-        screen: "result",
-      };
-    });
-  }
-
-  function finishStage(sim, race, stageOverride) {
-    const times = {}; sim.entrants.forEach(en => { times[en.id] = en.finishTime; });
-    const stage = stageOverride || (g.gc ? g.gc.stage : 1);
-    const totalStages = race.stageCount || 2;
-    // v14.8: ステージごとに役割を変更できるようになったため、フレーバーテキスト用に
-    // 「その日単独の着順・役割」もdayLogとして日ごとに記録しておく（GC総合成績とは別枠）
-    const dayOrder = [...sim.entrants].sort((a, b) => a.finishTime - b.finishTime);
-    const dayRankById = {}; dayOrder.forEach((en, i) => { dayRankById[en.id] = i + 1; });
-    const dayRoleById = {}; sim.entrants.forEach(en => { dayRoleById[en.id] = en.isAce ? "ace" : en.role; });
-    const dayLog = { day: stage, rankById: dayRankById, roleById: dayRoleById };
-    if (stage < totalStages) {
-      stage2LockRef.current = false;
-      setG(s => ({ ...s, gc: { ...s.gc, stageTimes: { ...s.gc.stageTimes, [stage]: times }, dayLogs: [...(s.gc.dayLogs || []), dayLog] }, screen: "gc_stage" }));
-    } else {
-      setG(s => {
-        const dayLogs = [...(s.gc.dayLogs || []), dayLog];
-        const allStageTimes = { ...s.gc.stageTimes, [stage]: times };
-        const gcTimes = {};
-        Object.keys(times).forEach(id => {
-          gcTimes[id] = Object.values(allStageTimes).reduce((sum2, st) => sum2 + (st[id] || 0), 0);
-        });
-        const order = Object.entries(gcTimes).sort((a, b) => a[1] - b[1]);
-        const idToEntrant = {}; sim.entrants.forEach(en => { idToEntrant[en.id] = en; });
-        const playerRanks = order.map(([id], i) => ({ id, rank: i + 1 })).filter(o => idToEntrant[o.id]?.team === "PLAYER");
-        const bestRank = playerRanks.length ? Math.min(...playerRanks.map(o => o.rank)) : order.length;
-        const prize = Math.round((PRIZES[bestRank - 1] || 1) * CLASSES[s.classIdx].prizeMul * 2.2);
-        // v13: 昇格戦（championship）は年度末に近くポイントがどのみちリセットされるため対象外。
-        // グランツールなど通常カレンダー上のステージレースは、複数日にわたる大会である
-        // ことを踏まえ通常レースよりポイント倍率を優遇する
-        const pts = race.championship ? 0 : Math.round((PTS[bestRank - 1] || 0) * GRADE_MUL[race.grade] * 1.3);
-        // v13: 選手名鑑用に、ステージレース全体の総合着順を各選手のraceLogへ記録する
-        // （各日のステージ結果ではなく、最終確定した総合成績のみを1件記録する）
-        const rankById = {}; playerRanks.forEach(o => { rankById[o.id] = o.rank; });
-        // v14.6: フレーバーテキストでの役割参照用（最終日時点の役割を代表値として使う）
-        const roleOf = (id) => { const en = idToEntrant[id]; return en ? (en.isAce ? "ace" : en.role) : undefined; };
-        // v14.8: ステージレースなら日ごとの内訳（役割・その日の着順）もraceLogに添えて記録する
-        const stageBreakdownFor = (id) => race.stageRace
-          ? dayLogs.map(dl => ({ day: dl.day, role: dl.roleById[id], rank: dl.rankById[id] })).filter(d => d.rank != null)
-          : undefined;
-        const roster = s.roster.map(r => rankById[r.id] != null
-          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id) }] }
-          : r);
-        // v13.1: ライバルチームに拾われた元選手のGC総合成績もraceLogへ記録する
-        const alumniRanks = order.map(([id], i) => ({ id, rank: i + 1 })).filter(o => idToEntrant[o.id]?.isAlumnus);
-        const alumniRankById = {}; alumniRanks.forEach(o => { alumniRankById[o.id] = o.rank; });
-        const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
-          ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id) }] }
-          : r);
-        // v14.8: グランツールで自チーム総合優勝ならそのgtIndexを勝利記録に加える（重複防止）
-        const gtNewWin = race.grandTour && bestRank === 1 && race.gtIndex != null && !(s.gtWins || []).includes(race.gtIndex);
-        const gtWins = gtNewWin ? [...(s.gtWins || []), race.gtIndex] : (s.gtWins || []);
-        // v28: 通算タイトル記録（グランツール総合優勝）
-        if (gtNewWin) recordTitle("grandTour");
-        // v18: グランツールの副次クラシフィケーション（ポイント賞・山岳賞・新人賞）。
-        // 実際のGCタイムとは別に、各ステージの着順を日ごとの地形（favors）で重み付けして
-        // 集計する。新人賞は26歳未満の選手の中でのGC最高位。自チームの選手が獲得すれば
-        // ボーナス賞金を上乗せする
-        const STAGE_JERSEY_POINTS = [20, 17, 15, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-        let jerseyBonus = 0;
-        let jerseyInfo = null;
-        if (race.grandTour) {
-          const pointsScore = {}, komScore = {};
-          dayLogs.forEach(dl => {
-            const dayTmpl = race.stageTmpls ? race.stageTmpls[dl.day - 1] : race.tmpl;
-            const favors = dayTmpl ? dayTmpl.favors : race.tmpl.favors;
-            const pointsMul = favors === "SPR" ? 1.5 : favors === "PUN" ? 1.0 : favors === "CLM" ? 0.6 : 1.0;
-            const komMul = favors === "CLM" ? 1.5 : favors === "PUN" ? 0.6 : 0.2;
-            Object.entries(dl.rankById).forEach(([id, rank]) => {
-              const base = STAGE_JERSEY_POINTS[rank - 1] || 0;
-              pointsScore[id] = (pointsScore[id] || 0) + base * pointsMul;
-              komScore[id] = (komScore[id] || 0) + base * komMul;
-            });
-          });
-          const byScoreDesc = (score) => Object.keys(score).sort((a, b) => score[b] - score[a]);
-          const pointsLeaderId = byScoreDesc(pointsScore)[0] || null;
-          const komLeaderId = byScoreDesc(komScore)[0] || null;
-          const youthOrder = order.filter(([id]) => idToEntrant[id] && idToEntrant[id].age <= 25);
-          const youthLeaderId = youthOrder.length ? youthOrder[0][0] : null;
-          const isPlayer = (id) => id != null && idToEntrant[id]?.team === "PLAYER";
-          const pointsLeaderIsPlayer = isPlayer(pointsLeaderId);
-          const komLeaderIsPlayer = isPlayer(komLeaderId);
-          const youthLeaderIsPlayer = isPlayer(youthLeaderId);
-          jerseyBonus = (pointsLeaderIsPlayer ? 50 : 0) + (komLeaderIsPlayer ? 50 : 0) + (youthLeaderIsPlayer ? 30 : 0);
-          jerseyInfo = {
-            pointsLeaderId, pointsLeaderName: pointsLeaderId ? idToEntrant[pointsLeaderId].name : null, pointsLeaderIsPlayer,
-            komLeaderId, komLeaderName: komLeaderId ? idToEntrant[komLeaderId].name : null, komLeaderIsPlayer,
-            youthLeaderId, youthLeaderName: youthLeaderId ? idToEntrant[youthLeaderId].name : null, youthLeaderIsPlayer,
-          };
-        }
-        const jerseyWinCounts = { ...(s.jerseyWinCounts || { points: 0, mountains: 0, youth: 0 }) };
-        if (jerseyInfo?.pointsLeaderIsPlayer) jerseyWinCounts.points += 1;
-        if (jerseyInfo?.komLeaderIsPlayer) jerseyWinCounts.mountains += 1;
-        if (jerseyInfo?.youthLeaderIsPlayer) jerseyWinCounts.youth += 1;
-        // v40（第1候補②）：ステージレース（グランツール等）でも中期目標の進捗を判定
-        const bestEntry = playerRanks.find(o => o.rank === bestRank);
-        const aceAge = bestEntry ? (idToEntrant[bestEntry.id]?.age ?? null) : null;
-        let sponsor = s.sponsor;
-        const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, bestRank, aceAge), MONTHS[s.month]);
-        if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
-        return {
-          ...s, roster, rivalAlumni, sponsor, budget: s.budget + prize + jerseyBonus + objRes.budgetDelta,
-          points: race.championship ? s.points : s.points + pts + objRes.pointsDelta, champBest: bestRank,
-          log: objRes.log ? [...s.log, objRes.log] : s.log,
-          careerStats: bumpCareerStats(s.careerStats, bestRank, prize + jerseyBonus),
-          gc: { ...s.gc, gcOrder: order, idToEntrant, bestRank, prize: prize + jerseyBonus, pts, jerseyInfo, jerseyBonus, objectiveResult: objRes.log ? objRes.objective : null, objectiveDone: objRes.justDone },
-          gtWins, jerseyWinCounts,
-          screen: "gc_final",
-        };
-      });
-    }
-  }
+  // v41(§Step7第3弾): レース結果確定は controllers/season/result.js の純関数に集約。
+  // finishStage内のrecordTitle("grandTour")は呼ばず、返り値gc.justWonGrandTourフラグを見た
+  // useEffectへ移した（下記・詳細はDEVLOG §9参照）。stage2LockRef のリセットは、最終ステージか
+  // 否かに関わらずここで行っても実害はない（startRace自身が次回開始時に必ず再リセットするため）。
+  const finishRace = (sim, race, stageOverride) => setG(s => srFinishRace(s, sim, race, stageOverride));
+  const finishTeamTT = (sim, race) => setG(s => srFinishTeamTT(s, sim, race));
+  const finishStage = (sim, race, stageOverride) => {
+    stage2LockRef.current = false;
+    setG(s => srFinishStage(s, sim, race, stageOverride));
+  };
 
   const raceFinishHandler = () => {
     if (g.gc && g.gc.race.stageRace) finishStage(g.result, g.gc.race, g.gc.stage);
@@ -751,35 +316,8 @@ function App() {
   };
 
   // ==== v14: マイライフモード専用ハンドラ ====
-  // v15: 節目の大会。通常の月次カレンダーとは別枠で、特定の月・クラス到達時にのみ登場する
-  // 最高格付け（グレード4）の一発勝負。世界選手権は毎年9月・クラスA以上で選出、
-  // オリンピックは4年に一度7月・PROクラスでのみ選出される。ライバルも代表入りし、
-  // 大舞台での因縁の対決になる
-  function mlGenRace(year, month, classIdx) {
-    if (month === 5 && classIdx >= 1) {
-      const wrng = mulberry(year * 401 + month * 7 + 501);
-      return { id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) };
-    }
-    if (month === 3 && classIdx >= 2 && (year - 1) % 4 === 0) {
-      const wrng = mulberry(year * 401 + month * 7 + 502);
-      return { id: `ml-olympics-${year}`, name: `${year}年目 オリンピック ロードレース`, tmpl: TEMPLATES[3], grade: 4, cls: classIdx, milestone: "olympics", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) };
-    }
-    // v33.11: モニュメント（クラシック）。特定の月は格式高いワンデー古典が開催される
-    const mon = ML_MONUMENTS.find(m => m.month === month);
-    if (mon) {
-      const mrng = mulberry(year * 401 + month * 7 + 613);
-      return { id: `ml-mon-${mon.id}-${year}`, name: `${year}年目 ${mon.name}`, tmpl: mon.tmpl, grade: mon.grade, cls: classIdx, monument: mon.id, monumentName: mon.name, rivalPresent: true, rival2Present: mrng() < 0.5, weather: rollWeather(mrng) };
-    }
-    const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
-    const pool = unlockedTemplates();
-    const t = pool[Math.floor(rng() * pool.length)];
-    const grade = month === 11 ? 3 : 1 + Math.floor(rng() * 3);
-    // v15: 約45%の確率でその月のレースにライバルが出走してくる（rival自体はキャラ作成時に固定生成済み）
-    const rivalPresent = rng() < 0.45;
-    // v26: 2人目のライバル（好敵手）も独立した確率で出走してくる
-    const rival2Present = rng() < 0.45;
-    return { id: `ml-${year}-${month}`, name: `${VENUES[Math.floor(rng() * VENUES.length)]}${t.kind}`, tmpl: t, grade, cls: classIdx, rivalPresent, rival2Present, weather: rollWeather(rng) };
-  }
+  // v41(§Step7第3弾): mlGenRace（月次レース生成）は domain/mylife/race.js へ移動（複数箇所から
+  // 参照される純粋なジェネレータのため controllers/ ではなく domain/ に置いた）。
   const ML_MILESTONE_LABEL = { worlds: { eyebrow: "🌍 世界選手権", color: C.blue }, olympics: { eyebrow: "🥇 オリンピック", color: C.yellow } };
   function mlCreateChar(type, background, master, partner) {
     mlCreateArgsRef.current = { type, background, master, partner }; // v36(#5): 引き直し用に保持
@@ -1133,582 +671,22 @@ function App() {
     const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", undefined, ml.worldRosters, protegeForRace);
     setMl(s => ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
   }
-  function mlLastRaceFinish() {
+  // v41(§Step7第3弾): マイライフのレース結果確定は controllers/mylife/result.js の純関数に集約。
+  // mlLastRaceFinish内のmlRecordLegend、mlRaceFinish内のrecordTitle(race.milestone)は呼ばず、
+  // 各々のuseEffectへ移した（下記・詳細はDEVLOG §9参照）。mlRaceLockRef のリセットは元の位置
+  // （setMl呼び出し前）を保つ。
+  const mlLastRaceFinish = () => {
     mlRaceLockRef.current = false;
-    const sim = ml.result;
-    const me = sim.ranked.find(e => e.isPlayerChar);
-    const rank = me ? me.rank : sim.ranked.length;
-    const total = sim.ranked.length;
-    const flavor = rank === 1 ? "最後のレースを、なんと勝利で締めくくった！最高の花道だ。"
-      : rank <= 3 ? "最後のレースで堂々の表彰台。見事な有終の美を飾った。"
-      : rank <= 10 ? "最後まで集団に食らいつき、力を出し切って走り抜けた。"
-      : "結果は振るわなかったが、最後まで自分の走りを貫いた。悔いはない。";
-    setMl(s => {
-      // ラストレースの戦績も通算記録に含めてから殿堂入りさせる
-      const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: sim.raceMeta.name, rank, role: "ace" }] };
-      const finalState = { ...s, player };
-      mlRecordLegend(finalState);
-      return {
-        ...finalState, inLastRace: false, result: null,
-        lastRaceResult: { rank, total, flavor, name: sim.raceMeta.name },
-        screen: "mylife_retired",
-        log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】ラストレースで${rank}位。${player.age}歳で現役を退いた`],
-      };
-    });
-  }
-  // v37: マイライフのチームTTは「チームの順位」で結果を出す（個人simへ落とさない）。
-  function mlFinishTeamTT(sim, race) {
-    const teams = sim.teamTT;
-    const playerTeam = teams.find(t => t.isPlayer);
-    const teamRank = playerTeam ? playerTeam.rank : teams.length;
-    const totalTeams = teams.length;
-    const pts = Math.round((PTS[teamRank - 1] || 0) * GRADE_MUL[race.grade]);
-    const prize = Math.round((PRIZES[teamRank - 1] || 1) * (0.4 + ml.classIdx * 0.25) * 2.4);
-    const baseTime = teams[0].time;
-    const teamStandings = teams.map(t => ({
-      rank: t.rank, name: t.teamName || t.team, isPlayer: !!t.isPlayer,
-      time: t.time, gap: t.time - baseTime,
-      riders: (t.riders || []).map(r => r.name),
-    }));
-    setMl(s => {
-      const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] };
-      const wpGain = worldPointsForFinish(teamRank, race.grade);
-      const worldPoints = (s.worldPoints || 0) + wpGain;
-      const worldRank = computeWorldRank(worldPoints, s.year);
-      const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
-      const careerPodiums = (s.careerPodiums || 0) + (teamRank <= 3 ? 1 : 0);
-      return {
-        ...s, player, points: s.points + pts, money: s.money + prize,
-        worldPoints, worldRank, worldRankBest, careerPodiums,
-        resultInfo: { race, teamTT: true, teamRank, totalTeams, pts, prize, teamStandings, wpGain, worldRank, worldRankPrev: s.worldRank },
-        screen: "mylife_result",
-      };
-    });
-  }
-  function mlRaceFinish() {
+    setMl(mrLastRaceFinish);
+  };
+  const mlRaceFinish = () => {
     mlRaceLockRef.current = false;
-    const sim = ml.result;
-    const race = ml.races[0];
-    if (sim.teamTT) { mlFinishTeamTT(sim, race); return; }
-    const me = sim.ranked.find(e => e.isPlayerChar);
-    const pts = Math.round((PTS[me.rank - 1] || 0) * GRADE_MUL[race.grade]);
-    // v14.3: 監督指示を全うできたかどうかで監督評価が増減する。賞金はクラス倍率に応じて即時支給
-    // v33.5: セーブから復元した監督指示はJSONでcheck関数が失われているため、キーで正規テーブルから引き直す
-    const directive = ml.directive ? (MANAGER_DIRECTIVES[ml.directive.key] || ml.directive) : null;
-    // v33.6: 「アシストに徹する」を選んだ場合は監督指示ではなく献身の走りとして評価する。
-    // 献身は自らの着順を犠牲にする行為なので、監督評価は下げず（むしろ小幅加点）運ゲーにしない
-    const assistChosen = !!(ML_TACTICS[ml.tactic] && ML_TACTICS[ml.tactic].playerAssist);
-    const fulfilled = assistChosen ? true : ((directive && typeof directive.check === "function") ? directive.check(me.rank, sim.ranked.length) : false);
-    const evalDelta = assistChosen ? 3 : (directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0);
-    const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + ml.classIdx * 0.25));
-    // v15: このレースにライバルが出走していれば、着順を比較して通算のライバル戦績を更新する
-    const rivalEntrant = sim.ranked.find(e => e.isRival);
-    // v26: 複数ライバル制。2人目の好敵手も同様に戦績を追跡する
-    const rival2Entrant = sim.ranked.find(e => e.isRival2);
-    // v27: コースレコード。勝者のフィニッシュタイムからコース種別ごとの最速記録を更新する
-    const winner = sim.ranked[0];
-    const courseRecord = recordCourseResult(race.tmpl.kind, sim.course.length, winner.finishTime, winner.name, !!winner.isPlayerChar, ml.year);
-    // v37: レース結果に「全順位表」を添える（着順・選手名・チーム名・トップとの秒差）。
-    // これで自分以外の選手も識別でき、観戦→結果の一貫した見え方になる。
-    const winTime = winner.finishTime;
-    const standings = sim.ranked.map(e => ({
-      rank: e.rank, name: e.name,
-      team: e.teamName || (e.team === "PLAYER" ? ml.team : e.team) || "—",
-      gap: Number.isFinite(e.finishTime) && Number.isFinite(winTime) ? e.finishTime - winTime : null,
-      isPlayer: !!e.isPlayerChar, isMyTeam: e.team === "PLAYER",
-      isRival: !!(e.isRival || e.isRival2), isAce: !!e.isAce,
-      worldRank: e.worldRank || null,
-    }));
-    // v28: 通算タイトル記録（世界選手権・オリンピックで優勝したら）
-    if (me.rank === 1 && race.milestone) recordTitle(race.milestone);
-    // v28: 代表チームでの立場。世界選手権・オリンピックには代表監督から役割（エース/アシスト）が
-    // 与えられる。役割を全うすると名声（人気度）が大きく上がる
-    const natRole = race.nationalRole || null;
-    const natFulfilled = natRole ? (natRole === "ace" ? me.rank <= 3 : me.rank <= 10) : false;
-    const natPopBonus = natRole ? (natFulfilled ? (natRole === "ace" ? 8 : 5) : 0) : 0;
-    setMl(s => {
-      // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
-      // v33.6: ただし「アシストに徹する」を選んだ場合は監督指示に関わらず献身役として記録し、
-      // 献身の道（アンビション）へ確実にカウントされるようにする（監督指示待ちの運ゲーを解消）
-      const role = assistChosen ? "support" : (directive ? directive.key : (me.isAce ? "ace" : "support"));
-      // v25: 個人スポンサー・メディア人気度。着順が良いほど、また規模の大きいレースほど伸びる
-      // v28: 代表の役割を全うすれば名声（人気度）が上乗せされる
-      const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade] + natPopBonus;
-      const popMilestones = s.player.popMilestones || [];
-      const newPopularity = Math.max(0, Math.min(100, (s.player.popularity || 0) + popGain));
-      let popBonus = 0;
-      const newlyHit = [];
-      POP_MILESTONES.forEach(m => {
-        if (newPopularity >= m.th && !popMilestones.includes(m.th)) { popBonus += m.bonus; newlyHit.push(m.th); }
-      });
-      const player = {
-        ...s.player,
-        raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role, monument: race.monument || undefined }],
-        popularity: newPopularity,
-        popMilestones: [...popMilestones, ...newlyHit],
-      };
-      let rivalRecord = s.rivalRecord;
-      let rivalOutcome = null;
-      if (rivalEntrant) {
-        const beat = me.rank < rivalEntrant.rank;
-        // v35(D 物語): 因縁が育つライバル。接戦ほど因縁度が燃え、決定的瞬間の一文を生成する
-        const gapSec = Math.abs((me.finishTime || 0) - (rivalEntrant.finishTime || 0));
-        const heatBefore = rivalRecord?.heat ?? rivalRecord?.meetings ?? 0;
-        const heatAfter = heatBefore + rivalMeetingHeat(gapSec);
-        rivalRecord = {
-          meetings: (rivalRecord?.meetings || 0) + 1,
-          wins: (rivalRecord?.wins || 0) + (beat ? 1 : 0),
-          losses: (rivalRecord?.losses || 0) + (beat ? 0 : 1),
-          heat: heatAfter,
-        };
-        const drama = rivalDrama({ beat, gapSec, rivalName: rivalEntrant.name, rivalRank: rivalEntrant.rank, myRank: me.rank, heatBefore, heatAfter });
-        // v36(#6): 性格ベースの会話ドラマ（紙芝居/VN風）。ライバルの性格で掛け合いを生成
-        const dialogue = rivalDialogue({ rival: s.rival, beat, gapSec, heatAfter, playerName: s.player.name, seed: s.year * 137 + s.month * 7 + me.rank });
-        // v36修正: 接戦（8秒未満）か因縁が深まった時（heat≥4）だけ、返答を選べる双方向の対話シーンを用意。
-        // 毎戦だと冗長なので"見せ場"に限定する。
-        const sceneWorthy = Math.abs(gapSec) < 8 || heatAfter >= 4;
-        const scene = sceneWorthy ? rivalScene({ rival: s.rival, beat, gapSec, heatAfter, playerName: s.player.name, seed: s.year * 137 + s.month * 7 + me.rank, record: s.rivalRecord, big: !!(race.milestone || race.monument || race.grade >= 4) }) : null;
-        rivalOutcome = { name: rivalEntrant.name, rank: rivalEntrant.rank, beat, line: drama.line, promoted: drama.promoted, tierLabel: drama.tier.label, tierColor: drama.tier.color, dialogue, scene };
-      }
-      // v26: 複数ライバル制。2人目の好敵手は初対戦時だけ「新たな好敵手が現れた」という
-      // 紹介フレーバーを付ける
-      let rivalRecord2 = s.rivalRecord2;
-      let rivalOutcome2 = null;
-      let rival2Intro = false;
-      if (rival2Entrant) {
-        const isFirstMeeting = (rivalRecord2?.meetings || 0) === 0;
-        const beat2 = me.rank < rival2Entrant.rank;
-        const gap2 = Math.abs((me.finishTime || 0) - (rival2Entrant.finishTime || 0));
-        const heat2Before = rivalRecord2?.heat ?? rivalRecord2?.meetings ?? 0;
-        const heat2After = heat2Before + rivalMeetingHeat(gap2);
-        rivalRecord2 = {
-          meetings: (rivalRecord2?.meetings || 0) + 1,
-          wins: (rivalRecord2?.wins || 0) + (beat2 ? 1 : 0),
-          losses: (rivalRecord2?.losses || 0) + (beat2 ? 0 : 1),
-          heat: heat2After,
-        };
-        const drama2 = rivalDrama({ beat: beat2, gapSec: gap2, rivalName: rival2Entrant.name, rivalRank: rival2Entrant.rank, myRank: me.rank, heatBefore: heat2Before, heatAfter: heat2After });
-        const dialogue2 = rivalDialogue({ rival: s.rival2, beat: beat2, gapSec: gap2, heatAfter: heat2After, playerName: s.player.name, seed: s.year * 149 + s.month * 11 + me.rank });
-        rivalOutcome2 = { name: rival2Entrant.name, rank: rival2Entrant.rank, beat: beat2, line: drama2.line, promoted: isFirstMeeting ? null : drama2.promoted, tierLabel: drama2.tier.label, tierColor: drama2.tier.color, dialogue: dialogue2 };
-        rival2Intro = isFirstMeeting;
-      }
-      let log = newlyHit.length > 0
-        ? [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】人気度が${newlyHit.join("・")}に到達し、個人スポンサー契約で+${popBonus}万円`]
-        : s.log;
-      if (rival2Intro) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rival2Entrant.teamName}の${rival2Entrant.name}と初めて同じレースで相まみえた。新たな好敵手になりそうだ`];
-      // v35(D 物語): 因縁度が上がった瞬間はログにも刻む（決定的な一戦の記録）
-      if (rivalOutcome && rivalOutcome.promoted) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rivalOutcome.promoted.replace(/^——/, "")}`];
-      if (rivalOutcome2 && rivalOutcome2.promoted) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rivalOutcome2.promoted.replace(/^——/, "")}`];
-      // v30: 世界ランキング更新＆キャリア・アンビション判定
-      const wpGain = worldPointsForFinish(me.rank, race.grade);
-      const worldPoints = (s.worldPoints || 0) + wpGain;
-      const worldRank = computeWorldRank(worldPoints, s.year);
-      const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
-      const careerWins = (s.careerWins || 0) + (me.rank === 1 ? 1 : 0);
-      const careerPodiums = (s.careerPodiums || 0) + (me.rank <= 3 ? 1 : 0);
-      const careerBigWins = (s.careerBigWins || 0) + (me.rank === 1 && race.grade >= 3 ? 1 : 0);
-      const careerTitles = (s.careerTitles || 0) + (me.rank === 1 && race.milestone ? 1 : 0);
-      const careerClassics = (s.careerClassics || 0) + (me.rank === 1 && race.monument ? 1 : 0); // v33.11: モニュメント制覇数
-      let ambitionIdx = s.ambitionIdx || 0;
-      let ambitionDone = s.ambitionDone || [];
-      let ambitionCleared = null;
-      let ambMoney = 0;
-      // 判定は更新後の到達値で行う（順位・通算勝利・アシスト出走数等を反映した一時ビュー）
-      const progressedMl = { ...s, player, worldRank, careerWins, careerPodiums, careerBigWins, careerTitles };
-      const curAmb = mlCurrentAmbition(progressedMl); // 現在の路線・段の目標
-      if (curAmb && mlAmbitionCleared(progressedMl, curAmb)) {
-        const rw = applyAmbitionReward(curAmb.reward, player, 0);
-        ambMoney = rw.money;
-        ambitionCleared = { label: curAmb.label, rewardText: rw.text };
-        ambitionIdx = ambitionIdx + 1;
-        ambitionDone = [...ambitionDone, curAmb.key];
-        log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🎯アンビション「${curAmb.label}」を達成！（${rw.text}）`];
-      }
-      // v33.8: 献身の走りの成果。支えたエースが上位に入れば名アシストとして評価・人気・報酬が上乗せされる
-      let assistOutcome = null, assistPop = 0, assistEval = 0, assistMoney = 0;
-      if (sim.assistedAce) {
-        // v39.4修正: エースの着順は最終ランキング（判断カードの再計算後）から引き直す。
-        // 従来は buildMyLifeSim 時点のsnapshot rankを使っており、レース中の判断で順位が変わると
-        // 「アシストの自分が1位なのにエースも1位」等の食い違いが起きていた。
-        const aceEntrant = sim.ranked.find(e => e.id === sim.assistedAce.id);
-        const ar = aceEntrant ? aceEntrant.rank : sim.assistedAce.rank;
-        const success = ar <= 3;
-        assistOutcome = { name: sim.assistedAce.name, rank: ar, success };
-        if (success) {
-          assistPop = ar === 1 ? 2.5 : 1.5; assistEval = ar === 1 ? 4 : 2; assistMoney = ar === 1 ? 30 : 15;
-          log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 あなたの献身の牽引でエース${sim.assistedAce.name}が${ar}位！名アシストとして称えられた（人気+${assistPop}・評価+${assistEval}・+${assistMoney}万円）`];
-        } else {
-          log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 エース${sim.assistedAce.name}を最後まで牽引したが${ar}位。報われない走りになった`];
-        }
-      }
-      if (assistPop) player.popularity = Math.max(0, Math.min(100, player.popularity + assistPop));
-      // v36(#7): 大勝・連勝を「号外」として演出（値するときだけnon-null）
-      const newspaper = mlNewspaper({ player, race, rank: me.rank, careerWins, worldRank, year: s.year, month: s.month });
-      return {
-        ...s, player, points: s.points + pts, log,
-        managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta + assistEval)),
-        money: s.money + prize + popBonus + ambMoney + assistMoney, rivalRecord, rivalRecord2,
-        worldPoints, worldRank, worldRankBest, careerWins, careerPodiums, careerBigWins, careerTitles, careerClassics,
-        ambitionIdx, ambitionDone,
-        // v37: 永続キャラ（ライバル／チームメイト）の成績台帳を更新
-        riderStats: mlUpdateRiderStats(s.riderStats, sim.ranked, new Set([...(s.teammates || []).map(t => t.id), ...(s.protege ? [s.protege.id] : [])]), s.year),
-        resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared, assistOutcome,
-          // v34(UI): レース後サマリーの整理。フィニッシュタイム・トップとの差・下馬評の答え合わせ。
-          finishTime: me.finishTime, gapSec: me.rank === 1 ? 0 : (me.finishTime - winner.finishTime),
-          forecast: (() => { const fc = raceForecast(sim.entrants, race.tmpl?.favors); const my = fc.get(me); return my ? { rank: my.rank, mark: my.mark ? my.mark.label : "無印", markColor: my.mark ? my.mark.color : "#9aa3b5" } : null; })(),
-          newspaper, standings },
-        screen: "mylife_result",
-      };
-    });
-  }
-  // v14.2: 月次アクションを「レース／練習」の2択から拡張。練習・休養・イベントで
-  // 選手への効果を出し分ける（順位・ポイント・賞金は既にmlRaceFinish側で反映済みのため
-  // ここでは疲労・出走経験による能力成長を扱う）。
-  // v14.3: 永続トレーニング用品（ローラー台・パワーメーター）と車（レース疲労軽減）の
-  // 恒常効果もここで反映する
-  function mlApplyMonthEffect(player0, mode, ctx) {
-    const player = { ...player0 };
-    // v38(#9 B-2): 活力（バイタリティ）。疲労が短期の"その月の重さ"なのに対し、活力は長期の
-    // "伸びしろの芯・鮮度"。走り込むほど（特に格上レース）少しずつ減り、完全休養やオフで回復する。
-    // 活力が高いほど成長が満額に近く、低いと伸びが鈍る＝「休ませて育てる」戦略性が生まれる。
-    if (player.vitality == null) player.vitality = 100;
-    const vitMul = 0.55 + 0.45 * Math.min(1, Math.max(0, player.vitality) / 70); // 活力70+で満額、低いほど鈍化
-    const gear = (ctx && ctx.gear) || {};
-    const carLv = ctx ? ctx.carLv : -1;
-    const houseLv = ctx ? ctx.houseLv : -1;
-    const flags = (ctx && ctx.flags) || {};
-    // v39.14(バランス): 難易度で成長上限を変える。従来は難易度がAIの強さにしか効かず、どの難易度でも
-    // 2年ほどでカンストして「成長の楽しみ」が消えていた。上位難易度ほど天井が低く、伸ばし切るには
-    // 長いキャリアと良い育成（活力・コーチ・特能）が要る＝難易度が育成そのものの手応えに直結する。
-    const diffCapAdj = ({ easy: 4, normal: 0, hard: -5, oni: -10 })[(ctx && ctx.difficulty) || "easy"] ?? 0;
-    const growthCap = mlGrowthCap(ctx && ctx.year, player) + diffCapAdj;
-    // v35(バランス): マイライフには選手本人の故障システムが無く、「ガラスの体」（危険度＝濃い配合の代償）が
-    // 完全に無効化されていた（＝インブリードがノーリスクで爆発力を得られる抜け穴）。故障システムを新設せず、
-    // 脆い体を「疲労が溜まりやすく抜けにくい」形で表現し、健康管理（休養の頻度）に実コストを課す。
-    const glassBody = hasAbility(player, "glass");
-    if (mode === "race") {
-      const carCut = carLv >= 0 ? (1 - ML_CARS[carLv].raceFatigueCut) : 1;
-      const chefCut = gear.chef ? 0.9 : 1;
-      // v15: 「鉄人」を持つ選手は出走疲労が軽減される（シーズンモードの45→32と同じ比率）
-      const ironCut = hasAbility(player, "iron") ? 32 / 45 : 1;
-      // v35: ガラスの体は逆に出走疲労が増える（脆く、消耗しやすい）
-      const glassMul = glassBody ? 1.35 : 1;
-      // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす
-      const raceWeather = ctx && ctx.raceWeather;
-      const heatMul = raceWeather === "heat" ? 1.15 : 1;
-      // v28: 役割を縮小して現役続行を選んだベテランは、レース負荷が軽くなり疲労蓄積が減る
-      const roleCut = flags.reducedRole ? 0.85 : 1;
-      player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut * glassMul * heatMul * roleCut);
-      player.streak = (player.streak || 0) + 1;
-      // v25: シーズンモード同様、出走した種目に応じた能力成長（出走経験）を追加。
-      // 格上のレース（グレードが高い）ほど得るものが大きい
-      const raceExpKeys = (ctx && ctx.raceExpKeys) || [];
-      const raceGradeMul = (ctx && ctx.raceGrade) ? (GRADE_MUL[ctx.raceGrade] || 1) : 1;
-      // v25: 新人時代に恩師の指導を受けている間は、出走経験の伸びにもボーナスがかかる
-      // v28: 「天才肌」は25歳以下の伸びが+15%
-      const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
-        * (hasAbility(player, "sponge") ? 1.25 : 1) // v37: 吸収の天才＝出走経験の伸び+25%
-        * vitMul; // v38(#9 B-2): 活力が低いと出走経験の伸びも鈍る
-      const ph = growthPhase(player);
-      raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
-      // v38(#9 B-2): レースで活力を消耗（格上ほど大きい）。走らせすぎると伸びの芯が細る
-      player.vitality = Math.max(0, player.vitality - (5 + (ctx && ctx.raceGrade ? ctx.raceGrade : 1) * 2));
-      // v29: メンタルは「大舞台の経験」で育つ。格上のレースほど大きく伸びる
-      growSub(player, "mental", 0.35 * raceGradeMul * Math.max(0.25, ph.gain));
-      // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
-      if (raceWeather === "rain" && Math.random() < (hasAbility(player, "rain_sp") ? 0.02 : 0.06)) {
-        player.fatigue = Math.min(100, player.fatigue + 15);
-        AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - 2); });
-        player.__weatherCrash = true;
-      }
-    } else if (mode === "train") {
-      const ph = growthPhase(player);
-      // v15: 「練習の虫」「練習嫌い」「遅咲き」の特殊能力を練習効果に反映
-      // v17: 育児をパートナーに任せて競技優先を選んだ場合、練習効果がわずかに上乗せされる
-      const abMul = (hasAbility(player, "trainer") ? 1.2 : hasAbility(player, "lazy_sp") ? 0.8 : 1)
-        * (hasAbility(player, "lateblow_sp") && player.age >= 28 ? 1.15 : 1)
-        // v28: 「天才肌」は25歳以下の練習効果+15%（遅咲きの逆で若手向け）
-        * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
-        * (flags.childFocusedCareer ? 1.05 : 1)
-        // v25: 新人時代に恩師の指導を受けている間は練習効果+15%
-        * (flags.mentorActive ? 1.15 : 1)
-        * vitMul; // v38(#9 B-2): 活力が低いと練習効果も鈍る
-      const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
-      const focusMul = gear.monitor ? 1.10 : 1;
-      // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
-      const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
-      addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), growthCap);
-      AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), growthCap));
-      const ph2 = growthPhase(player);
-      if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
-      // v29: 通常練習でも加速力・メンタルがわずかに伸びる（focusがsprint/flatなら加速に厚め）
-      const subG = 0.28 * ph.gain * POW[player.growthPow].mul;
-      growSub(player, "accel", subG * (player.focus === "sprint" || player.focus === "flat" ? 1.3 : 0.7));
-      growSub(player, "mental", subG * 0.6);
-      player.fatigue = Math.max(0, player.fatigue - 15 * (glassBody ? 0.75 : 1));
-      player.vitality = Math.max(0, player.vitality - 3); // v38(#9 B-2): 練習でも活力を少し使う
-      player.streak = 0;
-    } else if (mode === "rest") {
-      // v35: ガラスの体は回復も鈍い（休んでも抜けきらない＝より頻繁な休養を強いる）
-      player.fatigue = Math.max(0, player.fatigue - 35 * (glassBody ? 0.78 : 1));
-      // v36(#8): 完全休養を「疲労を抜くだけ」から意味のある回復へ。休むと心も整い（メンタル微増）、
-      // フォームに上向きの偏り（フレッシュな脚＝後段のフォーム計算でrest分岐が下振れを消す）が付く。
-      growSub(player, "mental", 0.5);
-      player.vitality = Math.min(100, player.vitality + 22); // v38(#9 B-2): 完全休養で活力を大きく回復
-      player.streak = 0;
-    } else if (mode === "event") {
-      player.fatigue = Math.max(0, player.fatigue - 5);
-    } else if (mode === "peak") {
-      // v29: ピーキング。レースに向けたコンディション調整。フォームを高め疲労も少し抜ける
-      // （能力の成長は無く、あくまで「仕上げ」）
-      player.fatigue = Math.max(0, player.fatigue - 12);
-      player.streak = 0;
-    } else if (ML_SPECIAL_TRAINING[mode]) {
-      // v28: 専門トレーニング。対象2能力を強めに伸ばし、疲労を大きく消費する。
-      // メンタル強化（対象能力なし）は全能力をわずかに底上げしつつ調子を整える枠
-      const spec = ML_SPECIAL_TRAINING[mode];
-      const ph = growthPhase(player);
-      const abMul = (hasAbility(player, "trainer") ? 1.2 : hasAbility(player, "lazy_sp") ? 0.8 : 1)
-        * (flags.mentorActive ? 1.15 : 1);
-      const base = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul * spec.gainMul;
-      const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
-      if (spec.keys.length > 0) {
-        spec.keys.forEach(k => addAb(player, k, base * 0.65 * persMul(player, k) * coachMul(k), growthCap));
-        AB_KEYS.filter(k => !spec.keys.includes(k)).forEach(k => addAb(player, k, base * 0.08 * persMul(player, k) * coachMul(k), growthCap));
-      } else {
-        AB_KEYS.forEach(k => addAb(player, k, base * 0.18 * persMul(player, k) * coachMul(k), growthCap));
-      }
-      // v29: 専門トレの副ステータス育成。スプリント特訓＝加速力、メンタル強化＝メンタルを重点的に鍛える
-      const subBase = ph.gain * POW[player.growthPow].mul;
-      if (mode === "sprintcamp") growSub(player, "accel", 1.6 * subBase);
-      if (mode === "mental") growSub(player, "mental", 1.8 * subBase);
-      const ph2 = growthPhase(player);
-      if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
-      player.fatigue = Math.min(100, player.fatigue + spec.fatigue);
-      if (spec.cond) player.form = Math.min(100, (player.form ?? 50) + spec.cond * 8); // v31.3: 調子→フォームに統合
-      player.streak = 0;
-    }
-    if (houseLv >= 0) player.fatigue = Math.max(0, player.fatigue - ML_HOUSES[houseLv].fatigueBonus);
-    // v15: 「回復力」を持つ選手は毎月さらに疲労-15（シーズンモードと同じ効果）
-    if (hasAbility(player, "recover")) player.fatigue = Math.max(0, player.fatigue - 15);
-    if (hasAbility(player, "recover2")) player.fatigue = Math.max(0, player.fatigue - 25); // v37(第2弾): 超回復
-    // v15: 人生の岐路イベントで得た恒常効果（結婚による生活の安定／無理な怪我復帰の後遺症）
-    if (flags.married) player.fatigue = Math.max(0, player.fatigue - 4);
-    if (flags.rushedInjuryComeback) player.fatigue = Math.min(100, player.fatigue + 3);
-    // v17: 育児に積極的に関わる道を選んだ場合、家庭のサポートでさらに疲労が抜けやすくなる
-    if (flags.hasChild && !flags.childFocusedCareer) player.fatigue = Math.max(0, player.fatigue - 3);
-    // v18: 若手のメンターになると、後進を気にかける充実感から疲労がわずかに抜けやすくなる
-    if (flags.mentor) player.fatigue = Math.max(0, player.fatigue - 3);
-    // v31.3: 「調子(cond)」と「フォーム(form)」は、どちらも当日の能力を上下させる二重の指標で
-    // 分かりづらいという指摘を受け、マイライフではフォーム(0-100)に一本化した。調子は中立(3)に
-    // 固定して能力への二重補正を止め、月々の好不調の波・予報・ピーキングをすべてフォームに集約する。
-    player.cond = 3;
-    const mentalSteady = Math.max(0.6, Math.min(1.4, 1 - ((player.mental ?? 50) - 50) / 250));
-    // 毎月の波の大きさ（moodyは激しく、精密機械/steady_spは小さく、メンタルが高いほど安定）
-    const swingMag = (hasAbility(player, "moody") ? 10 : hasAbility(player, "steady_sp") ? 3 : 6) * mentalSteady;
-    const dir = (player.formForecast != null) ? player.formForecast : rollCondDir();
-    const curForm = player.form ?? 50;
-    // ピーキング調整の月はフォームが大きく上がる。それ以外は基準値(48)へ戻りつつ月々の波が乗る
-    // ＝ピークは維持し続けられず、大レースに合わせて仕上げる駆け引きになる
-    const nextForm = mode === "peak"
-      ? curForm + 24
-      // v36(#8): 完全休養はフレッシュな脚。基準を少し上（52）に引き上げ、月々の下振れを消して
-      // 小さな上げ底（+4）を付ける＝大レース前に「休んで整える」戦術的価値を持たせる。
-      : mode === "rest"
-        ? curForm + (52 - curForm) * 0.35 + Math.abs(dir) * swingMag * 0.5 + 4
-        : curForm + (48 - curForm) * 0.30 + dir * swingMag;
-    player.form = Math.max(0, Math.min(100, Math.round(nextForm)));
-    player.formForecast = rollCondDir(); // 翌月の波の向きを予報
-    return player;
-  }
-  function mlAdvanceMonth(mode) {
-    setMl(s => {
-      // v25: シーズンモードと同様、マイライフでも出走した種目に応じた「出走経験」で能力が伸びるようにする
-      // （従来は出走しても疲労とストリークが変化するだけで能力は一切伸びなかった）
-      const raceExpKeys = (mode === "race" && s.result && s.result.course)
-        ? [...new Set(s.result.course.segs.map(seg => SEG_AB[seg.type]))] : [];
-      const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
-      const raceWeather = (mode === "race" && s.resultInfo) ? s.resultInfo.race.weather : null;
-      const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather };
-      // v38(改善:育成の手応え): 月次アクション前の能力・OVR・活力を控えておき、後で「今月の成長」を可視化する
-      const _preAb = {}; AB_KEYS.forEach(k => { _preAb[k] = s.player[k] || 0; });
-      const _preSub = { accel: s.player.accel || 0, mental: s.player.mental || 0 };
-      const _preOvr = overall(s.player);
-      const _preVit = s.player.vitality == null ? 100 : s.player.vitality;
-      let player = mlApplyMonthEffect(s.player, mode, ctx);
-      const log = [...s.log];
-      if (ML_SPECIAL_TRAINING[mode]) log.push(`【${s.year}年目 ${MONTHS[s.month]}】${ML_SPECIAL_TRAINING[mode].label}を実施した`);
-      if (player.__weatherCrash) {
-        log.push(`【${s.year}年目 ${MONTHS[s.month]}】雨天のレースで危うく転倒しかけ、ヒヤッとした…`);
-        player = { ...player, __weatherCrash: undefined };
-      }
-      // v15フェーズ2: 金特化の判定
-      const upgradedPlayer = upgradeGoldAbilities(player);
-      if (upgradedPlayer !== player) {
-        upgradedPlayer.goldAbilities.filter(id => !(player.goldAbilities || []).includes(id))
-          .forEach(id => log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
-        player = upgradedPlayer;
-      }
-      // v17: 特殊能力の後天的獲得判定
-      const acquiredPlayer = acquireNewAbility(player);
-      if (acquiredPlayer !== player) {
-        const newId = acquiredPlayer.abilities[acquiredPlayer.abilities.length - 1];
-        log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[newId].label}」を新たに身につけた！`);
-        player = acquiredPlayer;
-      }
-      // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
-      // 年俸は毎月1/12ずつ資金として振り込まれる
-      const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0) + (s.houseLv >= 3 ? 0.2 : 0) + (s.flags?.mentor ? 0.3 : 0);
-      const managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
-      // v25: 個人スポンサー収入。人気度10ごとに月+2万円の継続収入が入る（チーム年俸とは別枠）
-      const popIncome = Math.floor((s.player.popularity || 0) / 10) * 2;
-      // v27: 生活費・税負担。年俸が上がるほど生活水準・税負担も増し、手元に残る額は
-      // 頭打ちになる。高級車・住居のグレードにも維持費がかかる。これによりキャリア後半に
-      // 資金がダブついて緊張感が失われる（＝ヌルゲー化）のを抑える
-      const livingCost = mlLivingCost(s);
-      const money = Math.max(0, s.money + Math.round(s.salary / 12) + popIncome - livingCost);
-      if (s.month === 11) {
-        player.age += 1;
-        // v38(#9 B-2): オフシーズンで活力が回復（走り込んだ体もひと冬でリフレッシュ）。若いほど戻りが良い。
-        player.vitality = Math.min(100, (player.vitality == null ? 100 : player.vitality) + (player.age <= 27 ? 40 : player.age <= 32 ? 30 : 20));
-        // v38: ワールド選手の世代交代。年度替わりに全チームの選手を1歳加齢させ、
-        // ピーク前は成長・ピーク後は衰えを反映。高齢者は引退して新人ルーキーに置き換わる。
-        // これで「同じ顔ぶれが永遠に同じ強さ」ではなく、若手台頭とベテラン引退の流れが生まれる。
-        const agerng = mulberry(((s.year + 1) * 2246822519) >>> 0);
-        const aged = ageWorldRosters(s.worldRosters, agerng, s.year + 1);
-        advanceWorldYear(); // v38(#9 A-3): 共有ワールドも1年進める（世界が周回・両モードをまたいで年を取る）
-        aged.retired.slice(0, 3).forEach(r => {
-          const debut = aged.debuted.find(d => d.team === r.team);
-          log.push(`【${s.year}年目 3月】🌍 世代交代：${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : "後継者の台頭が待たれる"}`);
-        });
-        // v36(弟子深化): 弟子がこの年度替わりでOVRの節目(70/80/90)を越えたら祝いのニュースを記録
-        if (s.protege) {
-          const news = protegeMilestoneNews(s.protege, s.year, s.year + 1);
-          if (news) log.push(`【${s.year}年目 3月】${news}`);
-        }
-        // v35: 強制引退を廃止。何の前触れもなく引退させられる不満を解消し、ベテランは毎年3月の
-        // 契約更改で「現役続行／役割縮小／引退」を必ず自分で選べる。衰え期で戦力が落ちていれば
-        // 「引退勧告」トーン、まだ戦えるなら「契約更改」トーンで提示する（判定はadviceInfo.declining）。
-        const phase = growthPhase(player).tag;
-        const declining = phase === "衰え期" && overall(player) < player.joinOvr;
-        const retireChoice = player.age >= 33 || (player.age >= 31 && declining);
-        // v17: 引退以外でキャリアが続く年は、必ずオフシーズンの過ごし方を選ばせる。
-        // 人生の岐路イベントの判定はオフシーズンの選択を終えたあと（mlContinueAfterOffseason）で行う
-        const finalizeYearEnd = (nextState) => {
-          // v30: 世界ランキングの持ち点は年ごとに一部減衰し、翌年の（強くなった）基準で
-          // 順位を引き直す。休むと順位が落ちるため、上位維持には走り続ける必要がある
-          const decayedWP = Math.round((s.worldPoints || 0) * 0.72);
-          // v32（キャリアグラフ）：この年の到達値を年次記録に積む（OVR・世界ランク・通算成績の推移）
-          const histEntry = { year: s.year, ovr: overall(player), worldRank: s.worldRank, worldBest: s.worldRankBest, wins: s.careerWins || 0, podiums: s.careerPodiums || 0 };
-          nextState = { ...nextState, worldPoints: decayedWP, worldRank: computeWorldRank(decayedWP, nextState.year), careerHistory: [...(s.careerHistory || []), histEntry] };
-          const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState };
-          if (retireChoice) {
-            return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval,
-              adviceInfo: { age: player.age, ovr: overall(player), joinOvr: player.joinOvr, declining, reducedRole: !!s.flags?.reducedRole }, log };
-          }
-          return offseasonState;
-        };
-        const qualified = s.points >= CLASSES[s.classIdx].need;
-        // v38: 降格を実装（従来は昇格のみで「クラスの上下」が形骸化していた）。年間ポイントが
-        // クラス維持ラインを大きく下回ると1つ降格する（B1は最下位なので降格なし）。これにより
-        // 昇格の価値が生まれ、上位クラスで結果を出し続けるプレッシャーが働く。
-        const mlRelegateLine = Math.round(CLASSES[s.classIdx].need * 0.4);
-        let classIdx = s.classIdx;
-        if (qualified) classIdx = Math.min(2, s.classIdx + 1);
-        else if (s.classIdx > 0 && s.points < mlRelegateLine) classIdx = s.classIdx - 1;
-        if (classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
-        else if (classIdx < s.classIdx) log.push(`【${s.year}年目 3月】不振により${CLASSES[classIdx].label}へ降格…雪辱を期す`);
-        // v14.3: 年俸改定。その年のポイント・勝利・表彰台に応じて年俸が上がる
-        const yearRaces = (player.raceLog || []).filter(e => e.year === s.year);
-        const yearWins = yearRaces.filter(e => e.rank === 1).length;
-        const yearPodiums = yearRaces.filter(e => e.rank <= 3).length;
-        const salaryGain = Math.round(s.points * 2.2 + yearWins * 18 + yearPodiums * 7);
-        const salary = s.salary + salaryGain;
-        if (salaryGain > 0) log.push(`【${s.year}年目 3月】戦績が評価され年俸+${salaryGain}万円（年俸${salary}万円に）`);
-        // v14: 好成績を残すと移籍オファーが来る（簡易な移籍システム）
-        // v15: オファーはチーム名だけでなく、年俸倍率・契約金・エース確約の有無が
-        // チームごとに異なる。残留オファーは条件を上乗せしない基準線として提示し、
-        // 移籍オファーはそれより魅力的な条件を出すことで「引き抜き」らしさを出す
-        // v16: オファーには移籍先チームのtier（B1/A/PRO）を持たせ、契約するとその
-        // tierがそのままプレイヤーの新classIdxになる。一度の移籍で飛び級しすぎない
-        // よう、現在のclassIdxから±1tierの範囲のチームだけを候補にする
-        const interest = s.points / Math.max(1, CLASSES[s.classIdx].need);
-        if (interest >= 0.8 && Math.random() < 0.6) {
-          const others = MYLIFE_TEAMS.filter(t => t.name !== s.team);
-          const nearTier = others.filter(t => Math.abs(t.tier - classIdx) <= 1);
-          const pool = nearTier.length >= 2 ? nearTier : others;
-          // v27: 移籍時の争奪戦。昇格ラインを大きく超える好成績（interest>=1.2）を残した年は、
-          // 複数チームが競って条件を吊り上げる。オファー数が増え、年俸倍率・契約金・エース確約が
-          // 通常より豪華になり、契約画面に「争奪戦」の演出が表示される
-          const biddingWar = interest >= 1.2;
-          const offerN = biddingWar ? Math.min(3, pool.length) : 2;
-          const offerTeams = [...pool].sort(() => Math.random() - 0.5).slice(0, offerN).map(t => ({
-            team: t.name,
-            tier: t.tier,
-            salaryMul: Math.round(((biddingWar ? 1.2 : 1.05) + Math.random() * (biddingWar ? 0.4 : 0.25)) * 100) / 100,
-            bonus: Math.round((biddingWar ? 60 : 20) + Math.random() * (biddingWar ? 140 : 80)),
-            aceGuarantee: Math.random() < (biddingWar ? 0.7 : 0.4),
-          }));
-          const stayOffer = { team: s.team, tier: mlTeamTier(s.team), salaryMul: biddingWar ? 1.1 : 1, bonus: biddingWar ? 40 : 0, aceGuarantee: false };
-          return finalizeYearEnd({
-            ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
-            races: [mlGenRace(s.year + 1, 0, classIdx)],
-            directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-            contractOffers: [stayOffer, ...offerTeams], biddingWar,
-            salary, money, managerEval, worldRosters: aged.worldRosters,
-            screen: "mylife_contract", log,
-          });
-        }
-        return finalizeYearEnd({
-          ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
-          races: [mlGenRace(s.year + 1, 0, classIdx)],
-          directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-          salary, money, managerEval, worldRosters: aged.worldRosters,
-          screen: "mylife_main", log,
-        });
-      }
-      const month = s.month + 1;
-      // v37: 自分が出走しなかった月（練習・休養・イベント等）は、その月のレースをワールドの選手だけで
-      // 軽量に決着させ、成績台帳に積む（自分が出ていないレースの成績も溜まる）。
-      let riderStats = s.riderStats;
-      if (mode !== "race" && s.worldRosters && Object.keys(s.worldRosters).length) {
-        const worldLite = mlWorldRaceLite(s, s.year * 1000 + s.month * 17 + 3);
-        riderStats = mlUpdateRiderStats(s.riderStats, worldLite, new Set(), s.year);
-      }
-      // v38(改善:育成の手応え): 「今月の成長」レポート。伸びた能力（丸め後で+1以上、または生の伸びが
-      // 大きいもの）とOVR・活力の増減をまとめ、主画面に出す。毎月の積み上げを目に見える手応えにする。
-      const growthDeltas = AB_KEYS.map(k => {
-        const beforeR = Math.round(_preAb[k]); const afterR = Math.round(player[k] || 0);
-        return { key: k, label: AB_LABEL[k], before: beforeR, after: afterR, raw: (player[k] || 0) - _preAb[k], up: afterR - beforeR };
-      }).filter(d => d.up > 0).sort((a, b) => b.up - a.up || b.raw - a.raw);
-      const subDeltas = [];
-      { const a = Math.round(player.accel || 0) - Math.round(_preSub.accel); if (a > 0) subDeltas.push({ label: "加速力", up: a }); }
-      { const m = Math.round(player.mental || 0) - Math.round(_preSub.mental); if (m > 0) subDeltas.push({ label: "メンタル", up: m }); }
-      const ovrAfter = overall(player);
-      // OVRが10の節目（60/70/80/90…）を越えたら祝う＝成長のピークを演出
-      const ovrMilestone = (ovrAfter >= 50 && Math.floor(ovrAfter / 10) > Math.floor(_preOvr / 10)) ? Math.floor(ovrAfter / 10) * 10 : null;
-      if (ovrMilestone) log.push(`【${s.year}年目 ${MONTHS[s.month]}】📈 総合力（OVR）が${ovrMilestone}に到達した！`);
-      const growthReport = {
-        mode, deltas: growthDeltas, subDeltas, ovrMilestone,
-        ovrBefore: _preOvr, ovrAfter, ovrUp: ovrAfter - _preOvr,
-        vitBefore: Math.round(_preVit), vitAfter: Math.round(player.vitality == null ? 100 : player.vitality),
-        month: s.month, year: s.year,
-      };
-      const base = {
-        ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)],
-        directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
-        money, managerEval, riderStats, growthReport,
-        screen: "mylife_main", log,
-      };
-      // v36(弟子深化): 弟子がいる間は、毎月ごく稀に指導イベントが発生する。関わり方で
-      // 弟子の伸びや個性が変わり、"年1回数字が変わるだけ"だった弟子育成に手触りを与える。
-      if (s.protege && Math.random() < 0.2) {
-        const ev = ML_PROTEGE_EVENTS[Math.floor(Math.random() * ML_PROTEGE_EVENTS.length)];
-        return { ...base, pendingProtegeEvent: ev, screen: "mylife_protege_event" };
-      }
-      return base;
-    });
-  }
+    setMl(mrRaceFinish);
+  };
+  // v41(§Step7第3弾): マイライフの月次アクション・年度末処理は controllers/mylife/month.js の
+  // 純関数に集約。非冪等なlocalStorage書き込み（advanceWorldYear）は呼ばず、ml.yearの変化を
+  // 検知するuseEffectへ移した（下記・詳細はDEVLOG §9参照）。
+  const mlAdvanceMonth = (mode) => setMl(s => mmAdvanceMonth(s, mode));
   // v28: 引退勧告への応答。pendingAdviceに次年度以降の続行state（オフシーズン画面）が
   // 既に格納済みなので、選択に応じてそこへ進む／役割縮小フラグを注入する／引退する
   function mlRetireAdviceContinue() {
@@ -1726,10 +704,11 @@ function App() {
         log: [...(cont.log || s.log), `【${s.year}年目 3月】役割を縮小してもう一年。レース負荷を抑えて現役を続ける`] };
     });
   }
+  // v41(§Step7第3弾): mlRecordLegend（殿堂記録）はここで呼ばず、mlLastRaceFinishと同じく
+  // "mylife_retired"画面への遷移を検知するuseEffect（mlClearAwardedRef）に一本化した。
   function mlRetireAdviceAccept() {
     setMl(s => {
       const retiredState = { ...s, pendingAdvice: null, adviceInfo: null };
-      mlRecordLegend(retiredState);
       return { ...retiredState, screen: "mylife_retired",
         log: [...s.log, `【${s.year}年目 3月】チームの勧告を受け入れ、${s.player.age}歳で現役を退いた`] };
     });
