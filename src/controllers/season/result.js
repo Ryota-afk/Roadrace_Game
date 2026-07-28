@@ -4,15 +4,19 @@
 // v41(§Step7第4弾): recordCourseResultも同様の理由（非冪等な書き込みをupdater内に置かない）で
 // peekCourseRecord（読み取り専用の判定）に差し替えた。実際の書き込みはApp()側のuseEffectが
 // courseRecord.isNewを見てpersistCourseRecordを1回だけ呼ぶ（詳細はDEVLOG §9参照）。
+// v41(§Step7第5弾・退行修正): 第3弾でfinishRaceをreducer化した際、rankSim(sim)がこのupdater内へ
+// 移動してしまっていた。rankSimはsimを破壊的に変更し、内部のresolveFinishClustersがMath.random()で
+// ジッターを掛けるため、updaterが複数回呼ばれると着順が変わり得る（第3弾・第4弾で潰していた
+// 「非冪等な処理をupdaterに置かない」原則の違反を、同じ作業中に1つ作り込んでいた）。
+// rankSimはApp()側のfinishRaceラッパーがsetGを呼ぶ前に1回だけ実行する。この関数は
+// 「simは既にランク済み」を前提とする（詳細はDEVLOG §9参照）。
 import { CLASSES } from "../../data/progression.js";
 import { MONTHS } from "../../data/course.js";
-import { rankSim } from "../../sim/race.js";
 import {
   GRADE_MUL, PRIZES, PTS, advanceObjective, bumpCareerStats, peekCourseRecord, raceObjectiveEvent,
 } from "../../logic/support.js";
 
 export function finishRace(s, sim, race, stageOverride) {
-  rankSim(sim);
   // v35(チームTT): チーム単位の合算タイム。チーム順位で得点・賞金を確定する
   if (sim.teamTT) return finishTeamTT(s, sim, race);
   if (race.stageRace) return finishStage(s, sim, race, stageOverride);

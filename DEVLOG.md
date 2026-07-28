@@ -46,8 +46,11 @@
     `season/roster.js`(日常のロースター運用)・`season/month.js`(月次更新・年度末処理)・
     `season/event.js`(選択肢イベント応答)・`season/result.js`(レース結果確定)・
     `mylife/shop.js`(マイライフのショップ・アイテム・私生活)・`mylife/month.js`(マイライフの月次アクション・
-    年度末処理)・`mylife/result.js`(マイライフのレース結果確定)。`startRace`等のレース開始系
-    （useRef連打防止ロック・setTimeout依存で単純なreducerに収まらない一群・約89行）のみ未着手のまま残る
+    年度末処理)・`mylife/result.js`(マイライフのレース結果確定)・`season/raceStart.js`(レース開始時の
+    入力組み立て：ホームアドバンテージ・aceId解決・ステージ中日のsquad再構成)・`mylife/raceStart.js`
+    (代表役割の判定・ラストレースmeta構築)。`startRace`等のuseRef連打防止ロック・setTimeout・
+    updater内の変数密輸・updater内buildSim自体（v12でstale closureバグを実際に踏んだ箇所）は
+    意図的に未着手のまま残す（詳細は§9 Step7第5弾参照）
   - `src/domain/mylife/` … 2026-07(§Step7第3弾)新設。`race.js`(mlGenRace＝マイライフの月次レース生成。
     複数箇所から参照される純粋なジェネレータのため`controllers/`ではなく`domain/`に配置)
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）。
@@ -435,7 +438,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜4弾実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜5弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -664,11 +667,37 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   実機確認、実行時エラー0。main.jsx 1241→1257行（import整理で行数はほぼ横ばいだが、内容が実際に
   使われる識別子だけになった）。
 
-**未着手（今後の候補）**：分類B-3（`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`・
-合計約89行）は今回もあえて手を付けていない。着手する場合は、連打防止ロックとstale closure対策として
-過去に修正された経緯（コード中のv12バグ修正コメント参照）を先に読み解き、それを崩さない設計を個別に
-検討してから進めること（設計はOpus推奨・過去に実際にバグを踏んだ箇所の作り直しのため）。`ctx`89メンバーの
-手組み自体の解消（`useSeasonGame`/`useMyLifeGame`フック化）は、分類B-3の分離が終わってからの方が
-土台が整う。`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
-細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
-「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
+- **Step7第5弾（B-3の再調査・退行の発見と修正・入力組み立ての抽出）**：Opusで設計、Sonnetで実装。
+  「B-3には触らない」という前回までの方針を見直す前に、まず`startRace`/`startNextStage`/
+  `mlStartRace`/`mlStartLastRace`（合計約89行）を精読した。
+  **自分が作り込んだ退行の発見**：第3弾で`finishRace`をreducer化した際、`rankSim(sim)`が
+  `setG`のupdater内（`controllers/season/result.js`側）へ紛れ込んでいた。`rankSim`は`sim`を
+  破壊的に変更し、内部の`resolveFinishClusters`が`Math.random()`でジッターを掛けるため、
+  updaterが複数回呼ばれると着順が変わり得る＝第3弾・第4弾で潰して回っていた「非冪等な処理を
+  updaterに置かない」原則への違反を、その作業中に1つ新設していた。`rankSim(sim)`をApp()側の
+  `finishRace`ラッパー（`setG`を呼ぶ前）へ戻して修正した。回帰防止のテストも追加
+  （同一simを複数回渡しても結果が完全一致することを確認）。
+  **B-3の実態**：4関数のうちテスト価値のある「純粋な入力組み立て」は合計約35行のみで、残りは
+  `useRef`ロック・`setTimeout`・`setG`のupdater内での変数密輸（`simResult`/`raceRef`）・
+  `buildSim`自体（`Date.now()`シードのRNGを内包）といったv12でstale closureバグを実際に踏んだ
+  オーケストレーション。「確実な部分だけ抽出し、ロック/setTimeout/密輸/updater内buildSimには
+  一切触れない」案で合意し着手。
+  **分割**：`controllers/season/raceStart.js`（`prepareRaceInputs`＝ホームアドバンテージ適用・
+  aceId解決・itemBoost/directive算出、`prepareNextStageSquad`＝ステージ中日の疲労回復・
+  squad/aceId/roles解決）・`controllers/mylife/raceStart.js`（`resolveNationalRole`＝世界選手権/
+  オリンピックでの代表役割判定、`buildLastRaceMeta`＝ラストレースの脚質別テンプレ選択とmeta構築）。
+  **検証**：抽出4関数を直接呼ぶ24ケースの単体テストを新規作成（ホーム/アウェイ補正・出走1名時の
+  aceId自動決定・複数出走時のsel優先・監督評価の境界値54/55でのnationalRole分岐・未知の脚質での
+  フォールバック等を検証）し全PASS。既存Node191ケースと合わせ計215ケース全PASS。Playwrightで
+  season側`startRace`（観戦あり→finishRace）、mylife側`mlStartLastRace`（ラストレース→
+  `mlLastRaceFinish`→引退画面）を実機で最後まで通過確認、実行時エラー0。main.jsx 1257→1241行。
+
+**未着手（今後の候補）**：B-3の残り（`useRef`ロック・`setTimeout`・updater内の変数密輸・
+updater内`buildSim`自体）は今回もあえて手を付けていない。これを崩すのは「二相化」（意図をcommit→
+`useEffect`が確定済みstateを観測してsim実行）に作り替えることを意味し、v12で実際にバグを踏んだ
+箇所の作り直しになるため、着手するなら個別に厚めの検証を組んでから進めること（設計はOpus推奨）。
+`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`フック化）は、この二相化が
+終わってからの方が土台が整う。`hub.jsx`（season側949行・mylife側557行）は依然として大きく、
+タブ／画面単位でのさらなる細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ
+突出はしていない）。新機能は必ず「data / domain / controller / screen」の4箇所に配る
+（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

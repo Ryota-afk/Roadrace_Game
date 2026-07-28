@@ -5,20 +5,20 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { C, FONT_D, FONT_B, FONT_M } from "./data/theme.js";
 import { TYPES, AB_KEYS, AB_LABEL, ABILITIES } from "./data/abilities.js";
 import { CLASSES, DIFFICULTIES } from "./data/progression.js";
-import { MONTHS, ROSTER_MAX_BY_CLASS, UPKEEP_PER_RIDER, TEMPLATES, HOME_ABILITY_BONUS } from "./data/course.js";
+import { MONTHS, ROSTER_MAX_BY_CLASS, UPKEEP_PER_RIDER } from "./data/course.js";
 
 // ---- コンポーネント（Phase 3）----
 import { Btn, Eyebrow } from "./components/ui.jsx";
 
 // ---- 純ロジック（src/core, sim, breeding, world, state）----
 import { SUB_STAT_KEYS, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities } from "./core/core.js";
-import { PART_SLOTS } from "./sim/race.js";
+import { PART_SLOTS, rankSim } from "./sim/race.js";
 import { legendAncestorSet, legendBloodId, loadMlLegends, mlBloodlineBonus, mlBreedBonus, mlRecordLegend, protegeInherit } from "./breeding/breeding.js";
 import { mlWorldStarsForYear } from "./world/world.js";
 import { MYLIFE_TEAMS, buildMyLifeSim, computeAchievements, computePrestige, initGame, initMyLife, loadMeta, mlGenTeammates, sharedWorldRosters, advanceWorldYear, loadWorldMeta, cpShopMylifePerks, CP_SHOP, cpBalance, cpBuy, cpOwned, recordTitle, saveGame, saveMeta, saveMyLife } from "./state/state.js";
 
 // ---- App から使う表示層（Phase 4-1）----
-import { GROWTHPOW_ORDER, MANAGER_DIRECTIVES, ML_BACKGROUNDS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_OFFSEASON_CHOICES, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, STAFF_MAX_BY_CLASS, addAb, buildSim, bumpGrowthPow, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computeSeasonAchievements, growSub, mlCreateRival, mlGenDirective, mlGrowthCap, mlLivingCost, mlFactorCollection, mlLineageForest, protegeState, mlRollCrossroads, noteAbilityDiscovery, persistCourseRecord, raceIsHome, seasonRank, staffSalaryTotal } from "./logic/support.js";
+import { GROWTHPOW_ORDER, MANAGER_DIRECTIVES, ML_BACKGROUNDS, ML_CROSSROADS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_OFFSEASON_CHOICES, ML_SPONSOR_GIGS, ML_STOCK_ITEMS, STAFF_MAX_BY_CLASS, addAb, buildSim, bumpGrowthPow, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows, mlCpPerks, computeSeasonAchievements, growSub, mlCreateRival, mlGenDirective, mlGrowthCap, mlLivingCost, mlFactorCollection, mlLineageForest, protegeState, mlRollCrossroads, noteAbilityDiscovery, persistCourseRecord, seasonRank, staffSalaryTotal } from "./logic/support.js";
 // ---- 画面ディスパッチ（Phase 4-2）----
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -49,6 +49,8 @@ import { finishRace as srFinishRace, finishTeamTT as srFinishTeamTT, finishStage
 import { mlAdvanceMonth as mmAdvanceMonth } from "./controllers/mylife/month.js";
 import { mlRaceFinish as mrRaceFinish, mlLastRaceFinish as mrLastRaceFinish } from "./controllers/mylife/result.js";
 import { mlGenRace } from "./domain/mylife/race.js";
+import { prepareRaceInputs, prepareNextStageSquad } from "./controllers/season/raceStart.js";
+import { resolveNationalRole, buildLastRaceMeta } from "./controllers/mylife/raceStart.js";
 
 // ---------- メインアプリ ----------
 function App() {
@@ -247,19 +249,13 @@ function App() {
   const resolveEvent = (choiceIdx) => setG(s => seResolveEvent(s, choiceIdx));
 
   // ---- レース ----
+  // v41(§Step7第5弾): 入力組み立て（squad/aceId/itemBoost/directiveの算出）のみ
+  // controllers/season/raceStart.js の純関数へ抽出。ロック・setTimeout・updater内buildSimの
+  // タイミングは一切変更していない（v12でstale closureバグを実際に踏んだ箇所のため。詳細はDEVLOG §9参照）。
   function startRace(watch) {
     stage2LockRef.current = false;
     const race = g.races.find(r => r.id === g.sel.raceId);
-    const squadRaw = g.roster.filter(r => g.sel.starters.includes(r.id));
-    // v28: ホームアドバンテージ。地元開催なら出走選手の全能力に小ボーナス（元のroster配列は不変）
-    const isHome = raceIsHome(race, g.homeRegion);
-    const squad = isHome
-      ? squadRaw.map(r => ({ ...r, flat: r.flat + HOME_ABILITY_BONUS, climb: r.climb + HOME_ABILITY_BONUS, sprint: r.sprint + HOME_ABILITY_BONUS, stamina: r.stamina + HOME_ABILITY_BONUS, solo: r.solo + HOME_ABILITY_BONUS }))
-      : squadRaw;
-    const aceId = g.sel.starters.length === 1 ? g.sel.starters[0] : g.sel.ace;
-    const itemBoost = { wheel: g.sel.useWheel, suit: g.sel.useSuit };
-    // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
-    const directive = { chaseMode: g.sel.chaseMode || "normal", aceEarly: !!g.sel.aceEarly };
+    const { squad, aceId, itemBoost, directive } = prepareRaceInputs(race, g.roster, g.sel, g.homeRegion);
     // v29: 出走表用に事前生成した相手チーム布陣があればそれを使い、顔ぶれを一致させる
     const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, g.pendingAiTeams, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName, g.rivalRosters, g.year);
     // v35(チームTT): チームTTはペロトン演出を持たないため、観戦を選んでも結果画面へ直行する
@@ -294,13 +290,7 @@ function App() {
     let simResult = null, raceRef = null;
     setG(s => {
       const gc = s.gc;
-      const roster2 = s.roster.map(r => gc.starters.includes(r.id) ? { ...r, fatigue: Math.max(0, r.fatigue - 20) } : r);
-      const squad = roster2.filter(r => gc.starters.includes(r.id));
-      // v14.8: ステージごとに役割を変更できるようにしたため、初日から固定のgc.aceId/gc.rolesではなく、
-      // 直前の「作戦変更」画面（gc_role_setup）で更新したg.sel.ace/g.sel.rolesを都度反映する。
-      // 出走人数1名（solo）の場合は再設定画面自体を経由しないため、従来通りgc.aceIdを使う
-      const aceId = gc.starters.length === 1 ? gc.starters[0] : (s.sel.ace || gc.aceId);
-      const roles = s.sel.roles || gc.roles;
+      const { roster2, squad, aceId, roles } = prepareNextStageSquad(s, gc);
       // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
       const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty, undefined, s.dynastyLevel, s.teamName, s.rivalRosters, s.year);
       simResult = sim; raceRef = gc.race;
@@ -319,7 +309,13 @@ function App() {
   // finishStage内のrecordTitle("grandTour")は呼ばず、返り値gc.justWonGrandTourフラグを見た
   // useEffectへ移した（下記・詳細はDEVLOG §9参照）。stage2LockRef のリセットは、最終ステージか
   // 否かに関わらずここで行っても実害はない（startRace自身が次回開始時に必ず再リセットするため）。
-  const finishRace = (sim, race, stageOverride) => setG(s => srFinishRace(s, sim, race, stageOverride));
+  // v41(§Step7第5弾・退行修正): rankSim(sim)はsimを破壊的に変更しMath.random()でジッターを掛けるため、
+  // setGのupdater内で呼ぶと再実行時に着順が変わり得る。第3弾のreducer化でうっかりupdater内へ
+  // 移動していたのを、元の位置（setGを呼ぶ前に1回だけ）へ戻した。
+  const finishRace = (sim, race, stageOverride) => {
+    rankSim(sim);
+    setG(s => srFinishRace(s, sim, race, stageOverride));
+  };
   const finishTeamTT = (sim, race) => setG(s => srFinishTeamTT(s, sim, race));
   const finishStage = (sim, race, stageOverride) => {
     stage2LockRef.current = false;
@@ -653,36 +649,24 @@ function App() {
     setMl(s => ({ ...s, rivalSceneReply: null }));
     mlAdvanceMonth("race");
   }
+  // v41(§Step7第5弾): 入力組み立て（代表役割の解決・ラストレースmeta構築）のみ
+  // controllers/mylife/raceStart.js の純関数へ抽出。mlRaceLockRefのロックは一切変更していない。
   function mlStartRace() {
     if (mlRaceLockRef.current) return;
     mlRaceLockRef.current = true;
-    let race = ml.races[0];
-    // v28: 代表チームでの立場。世界選手権・オリンピックでは代表監督から役割が与えられる。
-    // 監督評価が高い（信頼されている）ほどエースを任され、そうでなければアシスト役になる。
-    // 役割はそのままレースでの立ち回り（directive）に反映される
-    let directiveKey = ml.directive ? ml.directive.key : null;
-    if (race.milestone && !race.nationalRole) {
-      const natRole = ml.managerEval >= 55 ? "ace" : "support";
-      race = { ...race, nationalRole: natRole };
-      directiveKey = natRole;
-      setMl(s => ({ ...s, races: [race, ...s.races.slice(1)] }));
-    } else if (race.milestone && race.nationalRole) {
-      directiveKey = race.nationalRole;
-    }
+    const baseDirectiveKey = ml.directive ? ml.directive.key : null;
+    const { race, directiveKey } = resolveNationalRole(ml.races[0], ml.managerEval, baseDirectiveKey);
+    if (race !== ml.races[0]) setMl(s => ({ ...s, races: [race, ...s.races.slice(1)] }));
     const worldStars = mlWorldStarsForYear(ml.worldSeed, ml.year, loadMlLegends());
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
     const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, worldStars, ml.worldRosters, protegeForRace);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
     setMl(s => ({ ...s, result: sim, screen: "mylife_startlist" }));
   }
-  // v27: ラストレース演出。引退前に「最後のレース」を特別に用意し、有終の美を飾れるようにする。
-  // 脚質に合ったコースのグレード4エキシビションとして、両ライバルも駆けつける最高の舞台にする
   function mlStartLastRace() {
     if (mlRaceLockRef.current) return;
     mlRaceLockRef.current = true;
-    const tmplByType = { SPR: TEMPLATES[0], CLM: TEMPLATES[3], RUL: TEMPLATES[2], PUN: TEMPLATES[2], TT: TEMPLATES[5] };
-    const tmpl = tmplByType[ml.player.type] || TEMPLATES[2];
-    const meta = { id: `ml-lastrace-${ml.year}`, name: `${ml.player.name} 引退記念ラストレース`, tmpl, grade: 4, cls: ml.classIdx, rivalPresent: true, rival2Present: true, weather: "clear", isLastRace: true };
+    const meta = buildLastRaceMeta(ml.player, ml.year, ml.classIdx);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
     const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", undefined, ml.worldRosters, protegeForRace);
     setMl(s => ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
