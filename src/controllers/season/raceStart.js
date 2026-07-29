@@ -1,7 +1,8 @@
 // レース開始（startRace/startNextStage）の入力組み立てのみを抽出した純関数。Step7第5弾。
-// 注意：ロック（stage2LockRef）・setTimeout・setGのupdater内でのsimResult/raceRef密輸・
-// buildSim自体（Date.now()シードのRNGを内包）には一切触れていない（v12でstale closureバグを
-// 実際に踏んだ箇所のため、案A＝確実にテスト可能な部分だけを切り出す方針。詳細はDEVLOG §9参照）。
+// 注意：startRace側のsetTimeout・buildSim自体（Date.now()シードのRNGを内包）には
+// 一切触れていない（v12でstale closureバグを実際に踏んだ箇所のため、案A＝確実にテスト可能な
+// 部分だけを切り出す方針。詳細はDEVLOG §9参照）。startNextStage側は第7弾でstage2LockRefを
+// 廃止し、beginNextStage（下記）による二相化のフェーズ1に置き換えた。
 import { HOME_ABILITY_BONUS } from "../../data/course.js";
 import { raceIsHome } from "../../logic/support.js";
 
@@ -28,4 +29,19 @@ export function prepareNextStageSquad(state, gc) {
   const aceId = gc.starters.length === 1 ? gc.starters[0] : (state.sel.ace || gc.aceId);
   const roles = state.sel.roles || gc.roles;
   return { roster2, squad, aceId, roles };
+}
+
+// Step7第7弾: startNextStageの二相化（フェーズ1＝意図の確定）。
+// buildSim（重い計算・非冪等ではないがコストがかかる）はここでは呼ばず、
+// 次に進むステージ番号・エース・役割の「意図」だけをgcへ確定する。実際の
+// buildSim呼び出しとロスター疲労反映・結果確定は、この意図（gc.pendingStage）を
+// 観測するuseEffect（フェーズ2）側で行う。stage2LockRef（useRefロック）の代わりに
+// gc.pendingStageの有無そのものを二重発火防止のガードとして使うため、レンダーの
+// たびに再生成されるuseRefと違い、状態遷移そのものに紐づいた安全なガードになる
+export function beginNextStage(s) {
+  const gc = s.gc;
+  if (!gc || gc.pendingStage) return s;
+  const aceId = gc.starters.length === 1 ? gc.starters[0] : (s.sel.ace || gc.aceId);
+  const roles = s.sel.roles || gc.roles;
+  return { ...s, gc: { ...gc, pendingStage: gc.stage + 1, pendingAceId: aceId, pendingRoles: roles } };
 }

@@ -438,7 +438,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜6弾実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜7弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -721,14 +721,55 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   DEVLOGに残るため、今後B-3の残りに着手する際は同じ手法（PROセーブ注入→スキップ経路で
   グランツール3日間）を再現できる。
 
-**未着手（今後の候補）**：B-3の残り（`useRef`ロック・`setTimeout`・updater内の変数密輸・
-updater内`buildSim`自体）は今回もあえて手を付けていない。これを崩すのは「二相化」（意図をcommit→
-`useEffect`が確定済みstateを観測してsim実行）に作り替えることを意味し、v12で実際にバグを踏んだ
-箇所の作り直しになるため、着手するなら個別に厚めの検証を組んでから進めること（設計はOpus推奨）。
-**この3ウェーブ（第3・第5・第6弾）でB-3周辺に退行/実バグを計2件作り込んだ実績があるため、
-二相化に着手する際は必ず本セクションのPROセーブ注入による実機再現手順を先に動かし、
-着手前後で同じシナリオが通ることを確認すること。**`ctx`89メンバーの手組み自体の解消
-（`useSeasonGame`/`useMyLifeGame`フック化）は、この二相化が終わってからの方が土台が整う。
-`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
+- **Step7第7弾（`startNextStage`の二相化・`stage2LockRef`の廃止）**：Opusで設計、Sonnetで実装。
+  第6弾末尾の申し送り通り、B-3の最後の危険地帯である`startNextStage`の作り直しに着手した。
+  **設計**：Opusとの対話で不確定要素を洗い出した結果、対象は`startNextStage`のみに絞った
+  （`startRace`／`mlStartRace`／`mlStartLastRace`は今回も触らない＝第5弾の「案A」を踏襲）。
+  加えて2点を事前に確認：①`startRace`の`setTimeout(0)`は今回も外さない（触らない）、
+  ②新設するフェーズ2の`useEffect`内で`buildSim`が例外を投げた場合はtry/catchで握り潰さず
+  そのまま外へ伝播させる（`pendingStage`が残ったまま止まるが、中途半端な状態を握り潰して
+  次の操作を誤動作させるより、壊れていることが画面上も分かる形で止まる方が安全という判断）。
+  **旧実装の問題**：`startNextStage`は`useRef`ロック（`stage2LockRef`）で連打を防ぎつつ、
+  `setG`のupdater内で`buildSim`を呼び、その結果（`simResult`/`raceRef`）をupdater外側の`let`
+  変数へ代入する「密輸」でスキップ経路の`setTimeout`に渡していた。`useRef`はレンダーと無関係に
+  生存するため解除のタイミングが本質的にズレやすく（第6弾で実際に解除漏れバグを踏んだ）、
+  密輸パターンもupdaterが複数回呼ばれ得ることを前提にすると本質的に脆い構造だった。
+  **新実装（二相化）**：フェーズ1＝`controllers/season/raceStart.js`に追加した`beginNextStage(s)`。
+  `gc.pendingStage`（次のステージ番号）・`gc.pendingAceId`・`gc.pendingRoles`という「意図」だけを
+  `setG`で確定する純関数で、`buildSim`は一切呼ばない。`gc.pendingStage`が既に立っていれば同一参照
+  を返してno-op＝これが`stage2LockRef`の代替となる二重発火防止ガード（`useRef`という別チャンネルの
+  状態を持つ必要がなくなった）。`gc.stage`自体はフェーズ1では変更しない（`gc_stage`/`gc_role_setup`
+  画面が`gc.stage`から「STAGE N 完了」「N+1日目に向けて作戦変更」を表示するため、変更すると
+  1フレームだけ表示がずれる）。フェーズ2＝main.jsxに新設した`gc.pendingStage`を監視する
+  `useEffect`。`pendingStage`が立った直後にのみ発火し、常に最新の`g`（レンダー確定済みの値）から
+  `buildSim`を呼ぶためstale closureの心配がない。ロスター疲労反映と`squad`算出は
+  `prepareNextStageSquad`（第5弾で抽出済み）を再利用しつつ、aceId/rolesだけはフェーズ1で確定済みの
+  `pendingAceId`/`pendingRoles`を使う（`prepareNextStageSquad`が返すaceId/rolesは捨てる）。
+  `startNextStage`自体は`const startNextStage = () => setG(beginNextStage);`という1行の薄い
+  ラッパーになった。`stage2LockRef`の宣言・第6弾で追加した解除用`useEffect`・`startRace`内の
+  解除呼び出しはすべて削除した。
+  **検証**：`beginNextStage`を直接呼ぶ11ケースの単体テストを新規作成（pendingStage/pendingAceId/
+  pendingRolesの確定・出走1名時はgc.aceIdへのフォールバック・複数出走時はsel.ace/sel.rolesが
+  優先されること・pendingStageが既に立っている状態での二重発火防止no-op・gc自体が無い場合のno-op
+  を検証）し全PASS。既存Node215ケースと合わせ計226ケース全PASS。ビルド成功。
+  Playwrightは第6弾の(A)(B)に加え、`beginNextStage`のもう一方の呼び出し元である
+  `gc_role_setup`画面（出走複数名時の作戦変更ボタン）経由の3日間グランツールを(C)として新設。
+  (A)出走1名・スキップ経路のみで3日間（第6弾バグの回帰確認）、(B)出走1名・観戦経路のみで
+  3日間（`gc.watch=true`分岐＝フェーズ2の`screen:"race"`側の確認。ライブ観戦アニメーションは
+  `PLAY_DUR=56`＝等速で実時間56秒かかる仕様のため、ゲーム内の「スキップ」ボタンで早送りしてから
+  検証した）、(C)出走2名・`gc_role_setup`経由で3日間（2日目・3日目の両方でエース再指名→
+  「N日目のレースへ →」ボタンをクリックし、都度画面が正しく変化し最終的にgc_finalへ遷移することを
+  確認）。3シナリオ計38項目・実行時エラー0で全PASS。main.jsx 1254→1233行。
+
+**未着手（今後の候補）**：B-3のうち`startRace`／`mlStartRace`／`mlStartLastRace`の3関数は今回も
+あえて手を付けていない（`useRef`ロック・`setTimeout`・`buildSim`自体は変更なし）。`startNextStage`
+の二相化と同じアプローチ（意図をcommit→`useEffect`が確定済みstateを観測してsim実行）を適用すれば
+`mlRaceLockRef`も同様に廃止できるはずだが、v12で実際にバグを踏んだ箇所の作り直しになるため、
+着手するなら個別に厚めの検証を組んでから進めること（設計はOpus推奨）。**この4ウェーブ
+（第3・第5・第6・第7弾）でB-3周辺に退行/実バグを計2件作り込んだ実績があるため、次にこの領域へ
+着手する際も必ず本セクションのPROセーブ注入による実機再現手順を先に動かし、着手前後で同じ
+シナリオが通ることを確認すること。**`ctx`89メンバーの手組み自体の解消
+（`useSeasonGame`/`useMyLifeGame`フック化）は、B-3の残り（`startRace`系3関数）が片付いてからの方が
+土台が整う。`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
 細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
 「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

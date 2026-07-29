@@ -49,7 +49,7 @@ import { finishRace as srFinishRace, finishTeamTT as srFinishTeamTT, finishStage
 import { mlAdvanceMonth as mmAdvanceMonth } from "./controllers/mylife/month.js";
 import { mlRaceFinish as mrRaceFinish, mlLastRaceFinish as mrLastRaceFinish } from "./controllers/mylife/result.js";
 import { mlGenRace } from "./domain/mylife/race.js";
-import { prepareRaceInputs, prepareNextStageSquad } from "./controllers/season/raceStart.js";
+import { prepareRaceInputs, prepareNextStageSquad, beginNextStage } from "./controllers/season/raceStart.js";
 import { resolveNationalRole, buildLastRaceMeta } from "./controllers/mylife/raceStart.js";
 
 // ---------- メインアプリ ----------
@@ -73,7 +73,6 @@ function App() {
   // v29: 選手名の変更用モーダル（アプリ内完結のテキスト入力）
   const [renameState, setRenameState] = useState(null); // { title, value, onCommit }
   const openRename = (title, current, onCommit) => setRenameState({ title, value: current || "", onCommit });
-  const stage2LockRef = useRef(false);
   // v28: 新規ゲーム開始時のチーム名入力
   const [teamNameChoice, setTeamNameChoice] = useState("");
   // v13: 新規ゲーム開始時の難易度選択（newgame_setup画面用。永続ボーナスは選択不要で自動適用）
@@ -230,19 +229,6 @@ function App() {
     }
     if (ml.screen !== "mylife_result") mlCourseRecordRef.current = false;
   }, [ml.screen]);
-  // v41(§Step7第6弾・バグ修正): stage2LockRef（次ステージ連打防止ロック）の解除を、
-  // 「"gc_stage"画面に到達した」という状態遷移で検知するここへ一本化した。
-  // 以前はApp側finishStageラッパー内で解除していたが、第3弾でfinishRace/finishStageを
-  // reducer化した際、スキップ経路（結果だけ見る）はsetTimeout→finishRace→setG(srFinishRace)→
-  // controller内部でのfinishStageへの委譲、という経路をたどるためApp側finishStageラッパーを
-  // 経由しなくなり、ロックが解除されないまま残っていた。3日間グランツールをスキップ経路のみで
-  // 進めると3日目が永久に開始できない不具合として実機で再現・確認済み（観戦経路は
-  // raceFinishHandler→App側finishStageを経由するため無傷だった）。
-  // 画面遷移そのものを解除の合図にすることで、今後どちらの経路が増えても解除漏れが起きない。
-  useEffect(() => {
-    if (g.screen === "gc_stage") stage2LockRef.current = false;
-  }, [g.screen]);
-
   const equippedCount = (pid) => g.roster.reduce((s, r) => s + (PART_SLOTS.reduce((n, sl) => n + (r.parts[sl] === pid ? 1 : 0), 0)), 0);
   const availParts = (pid) => (g.partsInv[pid] || 0) - equippedCount(pid);
 
@@ -265,7 +251,6 @@ function App() {
   // controllers/season/raceStart.js の純関数へ抽出。ロック・setTimeout・updater内buildSimの
   // タイミングは一切変更していない（v12でstale closureバグを実際に踏んだ箇所のため。詳細はDEVLOG §9参照）。
   function startRace(watch) {
-    stage2LockRef.current = false;
     const race = g.races.find(r => r.id === g.sel.raceId);
     const { squad, aceId, itemBoost, directive } = prepareRaceInputs(race, g.roster, g.sel, g.homeRegion);
     // v29: 出走表用に事前生成した相手チーム布陣があればそれを使い、顔ぶれを一致させる
@@ -281,39 +266,38 @@ function App() {
     if (!effWatch) setTimeout(() => finishRace(sim, race, race.stageRace ? 1 : undefined), 0);
   }
 
-  // v12: 以前はg（renderクロージャのstale値）からroster2/simを計算した後にsetGへ渡していたため、
-  // 何らかの理由でgが更新される前に呼ばれる／連打で二重発火すると2日目のシミュレーションが
-  // 食い違う・実行されない不具合があった。setGのfunctional updater内で毎回最新のsから
-  // 計算するよう変更し、連打防止のロックも追加
-  // v13: 2日間固定だったステージレースを任意日数（race.stageCount）に一般化。
-  // 「2日目」だけを特別扱いしていたstartStage2を、現在のgc.stageから次の日を
-  // 割り出すstartNextStageに置き換えた
-  function startNextStage() {
-    if (stage2LockRef.current) return;
-    stage2LockRef.current = true;
-    // v12バグ修正: watchFlagをsetGのfunctional updater内で代入し、その直後（同期的に）
-    // if(!watchFlag)で参照していたため、Reactがupdaterをこの行より後（バッチ処理の
-    // 反映時）に呼ぶ場合、常にwatchFlag=falseの初期値のまま判定されてしまい、観戦モードで
-    // 開始したはずの次の日が毎回「結果だけ見る」経路に落ちて即座に確定してしまっていた
-    // （日程が実行されないように見えるバグの原因）。gc.watchはステージレース開始時に
-    // 一度決まったら変わらない値なので、setGを呼ぶ前に外側のgから同期的に読んで安全に使う
-    const watchFlag = g.gc.watch;
-    const nextStage = g.gc.stage + 1;
-    let simResult = null, raceRef = null;
-    setG(s => {
-      const gc = s.gc;
-      const { roster2, squad, aceId, roles } = prepareNextStageSquad(s, gc);
-      // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-      const { sim } = buildSim(gc.race, squad, aceId, roles, s.equip, { wheel: false, suit: false }, s.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, s.difficulty, undefined, s.dynastyLevel, s.teamName, s.rivalRosters, s.year);
-      simResult = sim; raceRef = gc.race;
-      return {
-        ...s, roster: roster2, result: sim,
-        gc: { ...s.gc, stage: nextStage, aceId, roles },
-        screen: watchFlag ? "race" : "result_pending",
-      };
-    });
-    if (!watchFlag) setTimeout(() => finishRace(simResult, raceRef, nextStage), 0);
-  }
+  // v41(§Step7第7弾): startNextStageの二相化。以前はuseRefロック（stage2LockRef）＋
+  // setGのupdater内でのbuildSim呼び出し＋simResult/raceRefのクロージャ変数への「密輸」で
+  // 次ステージ開始後のsetTimeoutにsim/raceを渡していたが、useRefロックはレンダーと無関係に
+  // 生存するため解除漏れが起きやすく（第6弾で実際にバグを踏んだ）、密輸パターンもupdaterが
+  // 複数回呼ばれ得ることを前提にすると本質的に脆い。フェーズ1（本関数）はgc.pendingStage等の
+  // 「意図」を確定するだけの純粋なsetGとし、実際のbuildSim呼び出しと結果確定は、その意図を
+  // 観測する下のuseEffect（フェーズ2）に一本化した。ロックはgc.pendingStageの有無そのものが
+  // 兼ねるため、useRefという別チャンネルの状態を持つ必要がなくなった。
+  const startNextStage = () => setG(beginNextStage);
+
+  // v41(§Step7第7弾): startNextStageのフェーズ2。gc.pendingStageが確定した直後にのみ発火し、
+  // 常に最新のg（レンダー確定済みの値）からbuildSimを呼ぶため、stale closureの心配がない。
+  // buildSimが例外を投げた場合はここでは握り潰さず、そのまま外へ伝播させる（pendingStageが
+  // 残ったままになるが、それは「壊れている」ことが画面上も分かる形で止まるほうが、中途半端な
+  // 状態を握り潰して次の操作を誤動作させるより安全という判断）。
+  useEffect(() => {
+    const gc = g.gc;
+    if (!gc || !gc.pendingStage) return;
+    const nextStage = gc.pendingStage;
+    // v41(§Step7第7弾): aceId/rolesは既にフェーズ1（beginNextStage）でgc.pendingAceId/pendingRolesとして
+    // 確定済みのため、prepareNextStageSquadが返すaceId/rolesは使わず、roster2/squad（疲労反映済みの
+    // ロスター）だけを再利用する
+    const { roster2, squad } = prepareNextStageSquad(g, gc);
+    // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
+    const { sim } = buildSim(gc.race, squad, gc.pendingAceId, gc.pendingRoles, g.equip, { wheel: false, suit: false }, g.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, g.difficulty, undefined, g.dynastyLevel, g.teamName, g.rivalRosters, g.year);
+    setG(s => ({
+      ...s, roster: roster2, result: sim,
+      gc: { ...s.gc, stage: nextStage, aceId: gc.pendingAceId, roles: gc.pendingRoles, pendingStage: null, pendingAceId: null, pendingRoles: null },
+      screen: gc.watch ? "race" : "result_pending",
+    }));
+    if (!gc.watch) finishRace(sim, gc.race, nextStage);
+  }, [g.gc?.pendingStage]);
 
   // stageOverride: skip経路（結果だけ見る）はステージ番号を明示で渡し、
   // setG後にgが更新前のまま参照される（stale closure）事故を避ける
@@ -328,11 +312,6 @@ function App() {
     setG(s => srFinishRace(s, sim, race, stageOverride));
   };
   const finishTeamTT = (sim, race) => setG(s => srFinishTeamTT(s, sim, race));
-  // v41(§Step7第6弾・バグ修正): stage2LockRefの解除はここではなく、"gc_stage"画面への遷移を
-  // 検知するuseEffectに一本化した（上記・詳細はDEVLOG §9参照）。以前ここで解除していたが、
-  // スキップ経路（結果だけ見る）はこのfinishStageを経由せず、srFinishStage（controller内部）へ
-  // 直接委譲されるため解除漏れが起きていた（グランツール3日目が永久に開始できないバグとして
-  // 実機で再現・確認済み）。
   const finishStage = (sim, race, stageOverride) => setG(s => srFinishStage(s, sim, race, stageOverride));
 
   const raceFinishHandler = () => {
