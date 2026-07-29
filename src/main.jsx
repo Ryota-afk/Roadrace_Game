@@ -61,7 +61,6 @@ function App() {
   const [uiTick, setUiTick] = useState(0); // v37: CPショップ購入後の再描画トリガー
   const buyCpItem = (id) => { const meta = loadMeta(); const next = cpBuy(meta, id); if (next !== meta) { saveMeta(next); setUiTick(t => t + 1); } };
   const [ml, setMl] = useState(initMyLife);
-  const mlRaceLockRef = useRef(false);
   const mlCreateArgsRef = useRef(null); // v36(#5): リセマラ引き直し用に直近の作成引数を保持
   // v12バグ修正: window.confirm()はモバイル端末（特にホーム画面追加時のPWA表示や
   // 一部のアプリ内ブラウザ）で表示されない・即falseを返すことがあり、その場合
@@ -248,8 +247,14 @@ function App() {
 
   // ---- レース ----
   // v41(§Step7第5弾): 入力組み立て（squad/aceId/itemBoost/directiveの算出）のみ
-  // controllers/season/raceStart.js の純関数へ抽出。ロック・setTimeout・updater内buildSimの
-  // タイミングは一切変更していない（v12でstale closureバグを実際に踏んだ箇所のため。詳細はDEVLOG §9参照）。
+  // controllers/season/raceStart.js の純関数へ抽出。
+  // v41(§Step7第8弾): startRaceには連打防止ガードが元から無く、コミット前（1レンダー分）に
+  // 2連打するとsetG(u1)/setG(u2)が両方キューされ、inv.wheel/suitの二重消費に加え、
+  // setTimeoutも2回スケジュールされてfinishRaceが2回走り賞金・ポイントが二重加算される
+  // 実バグがあった（PROセーブ注入で高速2連打し実機で再現・確認済み）。setTimeout(0)を廃止し、
+  // setGのupdaterに「screenが"lineup"のままでなければno-op」というガードを追加。連打の
+  // 2発目のupdaterはこのガードでno-opになる。結果確定（旧setTimeout→finishRace）は
+  // "result_pending"画面への遷移を検知する下のuseEffectへ委譲した。
   function startRace(watch) {
     const race = g.races.find(r => r.id === g.sel.raceId);
     const { squad, aceId, itemBoost, directive } = prepareRaceInputs(race, g.roster, g.sel, g.homeRegion);
@@ -257,13 +262,12 @@ function App() {
     const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, g.pendingAiTeams, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName, g.rivalRosters, g.year);
     // v35(チームTT): チームTTはペロトン演出を持たないため、観戦を選んでも結果画面へ直行する
     const effWatch = race.tmpl.teamTT ? false : watch;
-    setG(s => ({
+    setG(s => s.screen !== "lineup" ? s : ({
       ...s, result: sim,
       gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch: effWatch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,
       inv: { ...s.inv, wheel: s.inv.wheel - (itemBoost.wheel ? 1 : 0), suit: s.inv.suit - (itemBoost.suit ? 1 : 0) },
       screen: effWatch ? "race" : "result_pending",
     }));
-    if (!effWatch) setTimeout(() => finishRace(sim, race, race.stageRace ? 1 : undefined), 0);
   }
 
   // v41(§Step7第7弾): startNextStageの二相化。以前はuseRefロック（stage2LockRef）＋
@@ -281,6 +285,9 @@ function App() {
   // buildSimが例外を投げた場合はここでは握り潰さず、そのまま外へ伝播させる（pendingStageが
   // 残ったままになるが、それは「壊れている」ことが画面上も分かる形で止まるほうが、中途半端な
   // 状態を握り潰して次の操作を誤動作させるより安全という判断）。
+  // v41(§Step7第8弾): スキップ経路の結果確定（旧：ここでの直接finishRace呼び出し）は、
+  // startRaceと同じく"result_pending"画面への遷移を検知する下のuseEffectへ委譲した
+  // （2箇所に分かれていたfinishRace呼び出しを1箇所に統合）。
   useEffect(() => {
     const gc = g.gc;
     if (!gc || !gc.pendingStage) return;
@@ -296,8 +303,28 @@ function App() {
       gc: { ...s.gc, stage: nextStage, aceId: gc.pendingAceId, roles: gc.pendingRoles, pendingStage: null, pendingAceId: null, pendingRoles: null },
       screen: gc.watch ? "race" : "result_pending",
     }));
-    if (!gc.watch) finishRace(sim, gc.race, nextStage);
   }, [g.gc?.pendingStage]);
+
+  // v41(§Step7第8弾): スキップ経路（結果だけ見る）の結果確定を"result_pending"画面への
+  // 遷移そのものへ一本化した。以前はstartRace側のsetTimeout(0)とstartNextStageのフェーズ2の
+  // 2箇所でそれぞれfinishRaceを直接呼んでいたが、setTimeoutはsetGのupdaterガードの外側で
+  // 無条件にスケジュールされるため連打時に二重実行され得た（詳細は各関数のコメント参照）。
+  // "result_pending"はスキップ経路専用の中間画面としてすでに存在するため、その画面への
+  // 遷移を1回検知して1回だけfinishRaceを呼ぶ形にすれば、呼び出し元がstartRace／
+  // startNextStageのどちらでも二重発火の心配がなくなる。srFinishRace側でsim.teamTTを見て
+  // finishTeamTTへ委譲する既存の分岐があるため、チームTTもこの経路でそのまま処理される。
+  // 注意：g.gcはステージレース終了後（gc_final到達後）もクリアされず残留するため、
+  // 「ステージレースかどうか」の判定にg.gcの有無やg.gc.raceを使うと、グランツール完走後に
+  // 単発レースを始めた場合に古いgcを誤って参照する（旧startRaceのsetTimeoutは呼び出し時に
+  // 捕捉したraceのローカル変数を使っていたためこの問題が無かった）。raceMeta.stageRaceは
+  // 常に「今まさに確定させようとしているレースそのもの」の性質なので、これだけを判定に使い、
+  // g.gc.stageは「raceMeta.stageRaceがtrueの場合に限り」参照する（この場合はstartRace／
+  // startNextStageフェーズ2のどちらも必ずgc.race===raceMetaを保って更新するため安全）。
+  useEffect(() => {
+    if (g.screen !== "result_pending") return;
+    const race = g.result.raceMeta;
+    finishRace(g.result, race, race.stageRace ? g.gc.stage : undefined);
+  }, [g.screen]);
 
   // stageOverride: skip経路（結果だけ見る）はステージ番号を明示で渡し、
   // setG後にgが更新前のまま参照される（stale closure）事故を避ける
@@ -642,39 +669,38 @@ function App() {
     mlAdvanceMonth("race");
   }
   // v41(§Step7第5弾): 入力組み立て（代表役割の解決・ラストレースmeta構築）のみ
-  // controllers/mylife/raceStart.js の純関数へ抽出。mlRaceLockRefのロックは一切変更していない。
+  // controllers/mylife/raceStart.js の純関数へ抽出。
+  // v41(§Step7第8弾): mlRaceLockRef（useRefロック）を廃止し、「ロックがtrueの間＝
+  // screenがmylife_main以外」という不変条件（開始ボタんは両方ともmylife_main画面にしか
+  // 無いため常に成立する）に基づき、画面そのものをガードとして使う二段構えに変更した。
+  // 関数先頭のガードは無駄なsim構築を避けるだけの早期リターンで、二重発火防止の本命は
+  // setMlのupdater内での再チェック（updaterは常に最新のsを受け取るため、連打の2発目は
+  // ここでno-opになる）。setMlは1回に統合した（以前はraces更新とresult更新で2回呼んでいた）。
   function mlStartRace() {
-    if (mlRaceLockRef.current) return;
-    mlRaceLockRef.current = true;
+    if (ml.screen !== "mylife_main") return;
     const baseDirectiveKey = ml.directive ? ml.directive.key : null;
     const { race, directiveKey } = resolveNationalRole(ml.races[0], ml.managerEval, baseDirectiveKey);
-    if (race !== ml.races[0]) setMl(s => ({ ...s, races: [race, ...s.races.slice(1)] }));
     const worldStars = mlWorldStarsForYear(ml.worldSeed, ml.year, loadMlLegends());
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
     const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, worldStars, ml.worldRosters, protegeForRace);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
-    setMl(s => ({ ...s, result: sim, screen: "mylife_startlist" }));
+    setMl(s => s.screen !== "mylife_main" ? s : ({
+      ...s, races: race !== ml.races[0] ? [race, ...s.races.slice(1)] : s.races,
+      result: sim, screen: "mylife_startlist",
+    }));
   }
   function mlStartLastRace() {
-    if (mlRaceLockRef.current) return;
-    mlRaceLockRef.current = true;
+    if (ml.screen !== "mylife_main") return;
     const meta = buildLastRaceMeta(ml.player, ml.year, ml.classIdx);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
     const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", undefined, ml.worldRosters, protegeForRace);
-    setMl(s => ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
+    setMl(s => s.screen !== "mylife_main" ? s : ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
   }
   // v41(§Step7第3弾): マイライフのレース結果確定は controllers/mylife/result.js の純関数に集約。
   // mlLastRaceFinish内のmlRecordLegend、mlRaceFinish内のrecordTitle(race.milestone)は呼ばず、
-  // 各々のuseEffectへ移した（下記・詳細はDEVLOG §9参照）。mlRaceLockRef のリセットは元の位置
-  // （setMl呼び出し前）を保つ。
-  const mlLastRaceFinish = () => {
-    mlRaceLockRef.current = false;
-    setMl(mrLastRaceFinish);
-  };
-  const mlRaceFinish = () => {
-    mlRaceLockRef.current = false;
-    setMl(mrRaceFinish);
-  };
+  // 各々のuseEffectへ移した（下記・詳細はDEVLOG §9参照）。
+  const mlLastRaceFinish = () => setMl(mrLastRaceFinish);
+  const mlRaceFinish = () => setMl(mrRaceFinish);
   // v41(§Step7第3弾): マイライフの月次アクション・年度末処理は controllers/mylife/month.js の
   // 純関数に集約。非冪等なlocalStorage書き込み（advanceWorldYear）は呼ばず、ml.yearの変化を
   // 検知するuseEffectへ移した（下記・詳細はDEVLOG §9参照）。
@@ -1220,7 +1246,7 @@ function App() {
   }
 
   // ================= v14: マイライフモード 画面群 =================
-  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlRaceLockRef, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, poachRetain, poachAccept, poachSign, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
+  const ctx = { ML_MILESTONE_LABEL, acceptTrade, advanceMonth, askConfirm, availParts, breedYouthSel, buyEquip, buyItem, buyPart, cls, declineTrade, diffChoice, dismissObCoach, equipMax, expandedRiderId, g, grantTransferRequest, growthCap, healthy, hireObCoach, hireStaff, ml, mlAdvanceMonth, mlBecomeMentor, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlConfirmCandidate, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlCreateChar, mlRerollCandidate, mlGenRace, mlLastRaceFinish, mlPrivateCamp, mlRaceFinish, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue, mlResolveOffseason, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlSetFocus, mlSetPart, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, raceFinishHandler, releaseRider, resolveEvent, retainRider, poachRetain, poachAccept, poachSign, rosterMax, setBreedYouthSel, setCaptain, setDiffChoice, setExpandedRiderId, setFocus, setG, setMl, setPart, setSuperMode, setTeamNameChoice, signBredYouth, signFa, signScout, signYouthProspect, staffMax, startNextStage, startRace, teamNameChoice, toggleFavorite, useCamp, useSupp, useTune, wrap };
 
   if (superMode === "mylife") return renderMyLifeScreens(ctx);
 

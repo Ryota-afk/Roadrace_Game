@@ -438,7 +438,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜7弾実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜8弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -761,15 +761,64 @@ core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮�
   「N日目のレースへ →」ボタンをクリックし、都度画面が正しく変化し最終的にgc_finalへ遷移することを
   確認）。3シナリオ計38項目・実行時エラー0で全PASS。main.jsx 1254→1233行。
 
-**未着手（今後の候補）**：B-3のうち`startRace`／`mlStartRace`／`mlStartLastRace`の3関数は今回も
-あえて手を付けていない（`useRef`ロック・`setTimeout`・`buildSim`自体は変更なし）。`startNextStage`
-の二相化と同じアプローチ（意図をcommit→`useEffect`が確定済みstateを観測してsim実行）を適用すれば
-`mlRaceLockRef`も同様に廃止できるはずだが、v12で実際にバグを踏んだ箇所の作り直しになるため、
-着手するなら個別に厚めの検証を組んでから進めること（設計はOpus推奨）。**この4ウェーブ
-（第3・第5・第6・第7弾）でB-3周辺に退行/実バグを計2件作り込んだ実績があるため、次にこの領域へ
-着手する際も必ず本セクションのPROセーブ注入による実機再現手順を先に動かし、着手前後で同じ
-シナリオが通ることを確認すること。**`ctx`89メンバーの手組み自体の解消
-（`useSeasonGame`/`useMyLifeGame`フック化）は、B-3の残り（`startRace`系3関数）が片付いてからの方が
-土台が整う。`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
+- **Step7第8弾（B-3の残り全部を解消・`startRace`の実バグ発見/修正・`mlRaceLockRef`廃止）**：
+  Opusで設計、Sonnetで実装。B-3最後の3関数（`startRace`／`mlStartRace`／`mlStartLastRace`）に
+  着手する前に精読したところ、3関数は「同じ危険地帯」ではなく問題の性質がバラバラだと判明した：
+  `buildSim`はどれも既にupdaterの外（第7弾以前から）で呼ばれており「updater内buildSim」問題は
+  無かった。残っていたのは①`startRace`にはそもそも連打防止ガードが無かった、②`mlStartRace`／
+  `mlStartLastRace`は`mlRaceLockRef`（useRefロック）で防御されてはいたが、そのrefが
+  `screens/mylife/race.jsx`まで漏れている（層の逆流）、の2種類。
+  **自分が見つけた実バグ**：`startRace`を高速2連打すると、コミット前（1レンダー分）に
+  `setG(u1)`/`setG(u2)`が両方キューされ、`inv.wheel`/`suit`の二重消費に加えて
+  `setTimeout`も2回スケジュールされ`finishRace`が2回走り、**賞金・ポイントが二重加算される**
+  実バグがあった。着手前にPROセーブ不要の通常フローでbutton.click()を同一tick内で2回発火させる
+  手法（真の連打の再現。Playwrightの`.click()`は1マウス操作ずつ直列処理するため代用にならない）
+  で実機再現し、`careerStats.totalRaces`（finishRace1回につき必ず+1されるRNG非依存の不変量）が
+  連打1回で2になることを確認してから着手した。
+  **修正**：
+  1. `startRace`：`setTimeout(0)`を廃止し、`setG`のupdaterに`s.screen !== "lineup"`のno-opガードを
+     追加。結果確定（旧：setTimeoutからの直接`finishRace`呼び出し、および`startNextStage`
+     フェーズ2からの直接呼び出しの計2箇所）を、`"result_pending"`画面への遷移を検知する
+     新規`useEffect`1箇所へ統合した。
+  2. `mlStartRace`／`mlStartLastRace`：`mlRaceLockRef`を廃止し、「ロックがtrueの間＝
+     `screen ∈ {mylife_startlist, mylife_race}`」という不変条件（開始ボタンは両方とも
+     `mylife_main`画面にしか無いため常に成立）に基づき、画面状態そのものをガードにする方式へ
+     変更した。関数先頭の早期リターンは無駄なsim構築を避けるだけで、二重発火防止の本命は
+     `setMl`のupdater内での再チェック（updaterは常に最新のsを受け取るため、連打の2発目は
+     ここでno-opになる）。`mlStartRace`の`races`更新／`result`更新は`setMl`1回に統合した。
+     `screens/mylife/race.jsx`のキャンセルボタンから`mlRaceLockRef.current = false`を削除。
+  **設計時に発見した潜在バグ（着手前に設計段階で潰した）**：`"result_pending"`監視の新規
+  `useEffect`を単純に「`g.gc`があればステージレース」という判定で書くと、**グランツール完走後も
+  `g.gc`がクリアされず残留する**ため、その後に単発レースをスキップ経路で始めた場合に古い
+  `gc.race`／`gc.stage`を誤って参照してしまう（旧`startRace`のsetTimeoutは呼び出し時に捕捉した
+  `race`のローカル変数を使っていたためこの問題が無かった）。判定を`g.result.raceMeta.stageRace`
+  （今まさに確定させようとしているレースそのものの性質・常に正しい）だけに絞り、`g.gc.stage`は
+  「`raceMeta.stageRace`がtrueの場合に限り」参照する形にして回避した（この場合は`startRace`／
+  `startNextStage`フェーズ2のどちらも必ず`gc.race === raceMeta`を保って更新するため安全）。
+  **検証**：`startRace`の連打を高速2連打で再現するPlaywrightスクリプトを新設し、修正前ビルド
+  （`git worktree`で第7弾コミットを別ディレクトリにチェックアウトして比較）では
+  `careerStats.totalRaces`が2（バグ再現）、修正後ビルドでは1（修正確認）になることを実機で
+  確認した。`mlStartRace`／`mlStartLastRace`は`ml.player.raceLog.length`（同じくRNG非依存の
+  不変量）を自動セーブ経由でlocalStorageから直接読み、連打しても1のままであることを確認
+  （13/13・7/7項目PASS）。mylife側の「出走を取りやめる→再出走」導線もロック解除漏れなく
+  動作することを確認。第7弾のグランツール回帰スクリプト3本（(A)スキップ・(B)観戦・
+  (C)`gc_role_setup`経由、計38項目）も再実行し全PASS（`startRace`／`startNextStage`フェーズ2の
+  両方を触ったため必須の再検証）。さらに「グランツール完走直後に単発レースをスキップ経路で
+  開始する」という上記の潜在バグのシナリオも新規Playwrightスクリプトで検証し、正しく
+  `result`画面（`gc_stage`ではなく）へ到達することを確認した。既存Node226ケースも全PASS、
+  ビルド成功。main.jsx 1233→1259行。
+  **今回スコープ外として残した既知の類似パターン**：`raceFinishHandler`
+  （`if (g.gc && g.gc.race.stageRace) finishStage(...) else finishRace(...)`）も同じ
+  「`g.gc`の残留」による誤判定の可能性を理論上は持つ（観戦経路でグランツール完走後に単発レースを
+  観戦した場合）。今回の設計・実装の対象外だったため意図的に手を付けていない。次にこの関数に
+  触れる機会があれば、同じく`g.result.raceMeta.stageRace`を判定に使う形へ揃えることを検討する
+  価値がある。
+
+**B-3は今回で全て解消した**（`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`の
+4関数すべてが二重発火に対して安全になり、`useRef`ロック[`stage2LockRef`・`mlRaceLockRef`]は
+両方とも廃止された）。**残っている候補**：`ctx`89メンバーの手組み自体の解消
+（`useSeasonGame`/`useMyLifeGame`フック化）は、B-3が完全に片付いた今が着手の好機。
+`raceFinishHandler`の`g.gc`残留による理論上の誤判定（上記）は優先度低いが把握しておくこと。
+`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
 細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
 「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

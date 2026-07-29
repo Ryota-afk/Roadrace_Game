@@ -1,6 +1,7 @@
 // マイライフのレース開始（mlStartRace/mlStartLastRace）の入力組み立てのみを抽出した純関数。Step7第5弾。
-// 注意：mlRaceLockRef（連打防止ロック）・buildMyLifeSim自体には一切触れていない
-// （案A＝確実にテスト可能な部分だけを切り出す方針。詳細はDEVLOG §9参照）。
+// 注意：buildMyLifeSim自体には一切触れていない（詳細はDEVLOG §9参照）。連打防止は
+// 第8弾でmlRaceLockRef（useRefロック）を廃止し、main.jsx側でscreen状態そのものを
+// ガードに使う方式へ置き換えた。
 import { TEMPLATES } from "../../data/course.js";
 
 // v28: 代表チームでの立場。世界選手権・オリンピックでは代表監督から役割が与えられる。

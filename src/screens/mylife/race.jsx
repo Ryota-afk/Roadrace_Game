@@ -8,7 +8,7 @@ import { TYPES } from "../../data/abilities.js";
 import { C, FONT_D, FONT_M } from "../../data/theme.js";
 
 export function renderMyLifeRaceScreens(ctx) {
-  const { ML_MILESTONE_LABEL, ml, mlAdvanceMonth, mlLastRaceFinish, mlRaceFinish, mlRaceLockRef, mlResolveRivalScene, mlRivalSceneContinue, mlWrap, setMl } = ctx;
+  const { ML_MILESTONE_LABEL, ml, mlAdvanceMonth, mlLastRaceFinish, mlRaceFinish, mlResolveRivalScene, mlRivalSceneContinue, mlWrap, setMl } = ctx;
     if (ml.screen === "mylife_startlist" && ml.result) return mlWrap(
       <div style={{ display: "grid", gap: 12 }}>
         <Eyebrow color={C.purple}>🏁 出走表 — {ml.result.raceMeta.name}</Eyebrow>
@@ -16,7 +16,7 @@ export function renderMyLifeRaceScreens(ctx) {
         <StartListPanel entrants={ml.result.entrants} favors={ml.result.raceMeta.tmpl.favors} />
         {/* v37: チームTTは集団シミュ（観戦アニメ）が無いため、結果画面へ直行する */}
         <Btn onClick={() => { if (ml.result.teamTT) { mlRaceFinish(); } else setMl(s => ({ ...s, screen: "mylife_race" })); }}>🏁 {ml.result.teamTT ? "チームタイムトライアルに挑む（結果へ）" : "レースを始める"}</Btn>
-        <Btn outline color={C.sub} onClick={() => { mlRaceLockRef.current = false; setMl(s => ({ ...s, result: null, screen: "mylife_main" })); }}>← 出走を取りやめる</Btn>
+        <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, result: null, screen: "mylife_main" }))}>← 出走を取りやめる</Btn>
       </div>
     );
     if (ml.screen === "mylife_race" && ml.result) return mlWrap(
