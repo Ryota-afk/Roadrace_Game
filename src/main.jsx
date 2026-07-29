@@ -230,6 +230,18 @@ function App() {
     }
     if (ml.screen !== "mylife_result") mlCourseRecordRef.current = false;
   }, [ml.screen]);
+  // v41(§Step7第6弾・バグ修正): stage2LockRef（次ステージ連打防止ロック）の解除を、
+  // 「"gc_stage"画面に到達した」という状態遷移で検知するここへ一本化した。
+  // 以前はApp側finishStageラッパー内で解除していたが、第3弾でfinishRace/finishStageを
+  // reducer化した際、スキップ経路（結果だけ見る）はsetTimeout→finishRace→setG(srFinishRace)→
+  // controller内部でのfinishStageへの委譲、という経路をたどるためApp側finishStageラッパーを
+  // 経由しなくなり、ロックが解除されないまま残っていた。3日間グランツールをスキップ経路のみで
+  // 進めると3日目が永久に開始できない不具合として実機で再現・確認済み（観戦経路は
+  // raceFinishHandler→App側finishStageを経由するため無傷だった）。
+  // 画面遷移そのものを解除の合図にすることで、今後どちらの経路が増えても解除漏れが起きない。
+  useEffect(() => {
+    if (g.screen === "gc_stage") stage2LockRef.current = false;
+  }, [g.screen]);
 
   const equippedCount = (pid) => g.roster.reduce((s, r) => s + (PART_SLOTS.reduce((n, sl) => n + (r.parts[sl] === pid ? 1 : 0), 0)), 0);
   const availParts = (pid) => (g.partsInv[pid] || 0) - equippedCount(pid);
@@ -307,8 +319,7 @@ function App() {
   // setG後にgが更新前のまま参照される（stale closure）事故を避ける
   // v41(§Step7第3弾): レース結果確定は controllers/season/result.js の純関数に集約。
   // finishStage内のrecordTitle("grandTour")は呼ばず、返り値gc.justWonGrandTourフラグを見た
-  // useEffectへ移した（下記・詳細はDEVLOG §9参照）。stage2LockRef のリセットは、最終ステージか
-  // 否かに関わらずここで行っても実害はない（startRace自身が次回開始時に必ず再リセットするため）。
+  // useEffectへ移した（詳細はDEVLOG §9参照）。
   // v41(§Step7第5弾・退行修正): rankSim(sim)はsimを破壊的に変更しMath.random()でジッターを掛けるため、
   // setGのupdater内で呼ぶと再実行時に着順が変わり得る。第3弾のreducer化でうっかりupdater内へ
   // 移動していたのを、元の位置（setGを呼ぶ前に1回だけ）へ戻した。
@@ -317,10 +328,12 @@ function App() {
     setG(s => srFinishRace(s, sim, race, stageOverride));
   };
   const finishTeamTT = (sim, race) => setG(s => srFinishTeamTT(s, sim, race));
-  const finishStage = (sim, race, stageOverride) => {
-    stage2LockRef.current = false;
-    setG(s => srFinishStage(s, sim, race, stageOverride));
-  };
+  // v41(§Step7第6弾・バグ修正): stage2LockRefの解除はここではなく、"gc_stage"画面への遷移を
+  // 検知するuseEffectに一本化した（上記・詳細はDEVLOG §9参照）。以前ここで解除していたが、
+  // スキップ経路（結果だけ見る）はこのfinishStageを経由せず、srFinishStage（controller内部）へ
+  // 直接委譲されるため解除漏れが起きていた（グランツール3日目が永久に開始できないバグとして
+  // 実機で再現・確認済み）。
+  const finishStage = (sim, race, stageOverride) => setG(s => srFinishStage(s, sim, race, stageOverride));
 
   const raceFinishHandler = () => {
     if (g.gc && g.gc.race.stageRace) finishStage(g.result, g.gc.race, g.gc.stage);
