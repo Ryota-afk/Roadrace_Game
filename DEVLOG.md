@@ -430,7 +430,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜8弾実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜9弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -636,9 +636,59 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 **B-3は今回で全て解消した**（`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`の
 4関数すべてが二重発火に対して安全になり、`useRef`ロック[`stage2LockRef`・`mlRaceLockRef`]は
-両方とも廃止された）。**残っている候補**：`ctx`89メンバーの手組み自体の解消
-（`useSeasonGame`/`useMyLifeGame`フック化）は、B-3が完全に片付いた今が着手の好機。
-`raceFinishHandler`の`g.gc`残留による理論上の誤判定（上記）は優先度低いが把握しておくこと。
-`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
-細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
+両方とも廃止された）。
+
+- **Step7第9弾（`ctx`フック化に先立つ調査・mylifeハンドラ586行のcontroller/domain抽出）**：
+  Opusで設計、Sonnetで実装。ユーザーから「`ctx`89メンバーの手組み解消の設計」を依頼されたが、
+  着手前にmain.jsxの中身を機械的に棚卸ししたところ、**hook化を今すぐやると危険**なことが判明した。
+  main.jsx 1259行のうち586行（`mlCreateChar`237行を筆頭に、キャラ作成・イベント・キャリア分岐の
+  クラスタ）がStep7第2〜3弾の対象から漏れ、`function mlXxx()`のまま生で残っていた
+  （Step8のscreens分割はJSXディスパッチのみが対象で、App()内のロジックには手を付けていなかった
+  ため）。この586行を先にcontroller/domain抽出しないと、hookは「main.jsxをhooksファイルに
+  改名しただけ」になってしまう。加えて、`superMode`分岐直下（モード選択／生涯評価／系譜／因子／
+  CPショップの5画面・205行）もStep8の分割から漏れていることも判明したが、今回は対象外とした
+  （下記「残っている候補」参照）。
+  **調査で分かった好材料**：対象20ハンドラのうち18個が既に`setMl(s => ...)`1回・外側`ml`読み
+  ゼロの純reducer形だった。`useRef`ロック・`setTimeout`・localStorage書き込みもこの領域には
+  一切無く（`mlCreateChar`の`loadMeta()`読み取りのみ）、season/mylifeの画面分離も機械検証で
+  ほぼ完璧と確認済み（mylife画面が使うseason系メンバーはわずか5つ、うち`setG`の使用は
+  「選手→監督の転身ブリッジ」1箇所のみ）。B-3（第3・第5〜8弾）ほど危険な領域ではなかった。
+  **分割**：`mlCreateChar`（237行のジェネレータ）は`mlGenRace`と同じ理由で`controllers/`ではなく
+  **`domain/mylife/createChar.js`**へ。`loadMeta()`はApp側で呼びcpMetaとして引数で渡す方式に
+  正規化した（呼び出し側だけがlocalStorageに触れる。第5弾のprepareRaceInputsと同型）。
+  キャリア分岐（`mlChooseTeam`／`mlRetireAdvice`×3／`mlResolveOffseason`／`mlContinueAfterOffseason`／
+  `mlResolveCrossroads`／`mlContinueAfterCrossroads`／`mlBecomeMentor`）は
+  **`controllers/mylife/career.js`**へ。イベント系（`mlTriggerEvent`／`mlTriggerSponsorGig`／
+  `mlResolveEvent`／`mlResolveProtegeEvent`／`mlResolveRivalScene`／`mlRivalSceneContinue`＋
+  内部ヘルパー`mlApplyEventEffects`／`eventEffectSummary`）は**`controllers/mylife/event.js`**へ。
+  正規化が必要だったのは2つのみ：①`mlRivalSceneContinue`（旧実装は外側の`ml`を読んで分岐し
+  `setMl`を2回＋`mlAdvanceMonth`を呼ぶ3呼び出しだったのを、`mlAdvanceMonth`（既存controller）を
+  そのまま合成する1つの純reducerへ統合）、②`mlUseStockConfirm`は`askConfirm`（UIダイアログ）に
+  依存するためApp側に残した（第2弾で同じ判断をした前例あり）。`mlCreateArgsRef`（リセマラ用）・
+  `mlRerollCandidate`／`mlConfirmCandidate`（refに依存）も同様にApp側据え置き。
+  **検証**：抽出した関数を直接呼ぶ61ケースの単体テストを新規作成（`mlCreateChar`の師弟/配合
+  デビュー・cpMeta特典反映・`mlBecomeMentor`の弟子生成とno-opガード・`mlChooseTeam`の昇格/降格と
+  チームメイト再生成・`mlRetireAdvice`3分岐・`mlResolveOffseason`→`mlContinueAfterOffseason`の
+  連鎖・`mlResolveCrossroads`→`mlContinueAfterCrossroads`の連鎖・イベント効果の反映と整形・
+  `mlRivalSceneContinue`が号外の有無で`mlAdvanceMonth`合成と直接一致することを検証）し全PASS。
+  既存Node226ケースと合わせ計287ケース全PASS。ビルド成功、dead import 33個も併せて削除。
+  Playwrightは実UIでのキャラ作成→取材イベントの一気通貫に加え、引退勧告・オフシーズン・人生の
+  岐路は「何年もプレイしないと到達しない画面」のため、season側PROセーブ注入と同じ手法の
+  **mylife版**（`roadrace_v12_mylife_save`へ直接JSON注入し「続きから」で任意のキャリア局面を
+  再現）を新設して検証した（メンター就任・弟子イベント・引退勧告3分岐・オフシーズン・人生の
+  岐路(結婚)の計50項目、実行時エラー0）。**注記**：検証スクリプト作成中、`pendingOffseason`に
+  `{player,year,flags}`だけの断片を注入してクラッシュさせてしまったが、これは
+  `mlContinueAfterOffseason`が`{...po,...}`で新stateをまるごと採用する実装（`pendingOffseason`は
+  実際には年度末処理が作る完全なstateスナップショット）を把握せずテスト側のモックを簡略化した
+  ことが原因で、本体側のバグではないと確認した（テスト側を修正して解消）。Wave 8のmylife連打
+  防止回帰（13/7項目）・season側グランツール回帰（26項目）も再実行し全PASS。main.jsx 1259→822行。
+
+**残っている候補**：`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`フック化）
+は、第9弾でmylifeハンドラが片付いた今が本来の着手どころ。ただし`superMode`分岐直下の5画面
+（モード選択／生涯評価／系譜／因子／CPショップ・205行）がStep8のscreens分割から漏れて
+main.jsxに残っている点は要考慮（フック化の前にこれも`screens/`へ出すか、フックの中にJSXごと
+含めるかは設計判断が要る）。`raceFinishHandler`の`g.gc`残留による理論上の誤判定
+（第8弾で発見・スコープ外）は優先度低いが把握しておくこと。`hub.jsx`（season側949行・
+mylife側557行）は依然として大きく、タブ／画面単位でのさらなる細分化の余地はあるが、現状は
+許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
 「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
