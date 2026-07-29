@@ -225,15 +225,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 | commit | 内容 |
 |---|---|
-| `v41 第1候補③：移籍市場の駆け引き（引き抜き合戦）` | シーズンの駆け引き第三弾＝**引き抜き**を双方向で実装。**被引き抜き（受け身）**＝ライバルが自チームの主力（主将以外・健康・OVR66以上の最上位）を引き抜きに来る `poachOffer` モーダル（月送り時に16%＋条件で発火・移籍志願より優先）。**引き止める**（慰留費用≒移籍金×0.4を払い残留＋調子+1）か、**放出**（移籍金を受け取り主力を手放す＝相手の rivalAlumni に加わり以後ライバルとして自チームの前に出走）を選ぶ。**引き抜き（攻め）**＝ショップの `poachMarket` 画面で各ライバルの看板選手（baseline最上位）を移籍金で獲得。**1シーズン1回まで**（`poachDoneThisYear`・年度末リセット）。成立で相手の `rivalRosters` から外れ（世界に反映）自チームへ加入。移籍金は実効OVR×係数×移籍意欲（前向き0.8／標準1.0／看板1.45）で算定。**実装**＝`state.js` に `worldRiderToRosterRider`（baseline方式のワールド選手を実能力へ実体化）／`genPoachTargets`（年1更新・rivalRostersとid共有）／`makePoachOffer`、`poachTargets`・`poachDoneThisYear` を initGame／SAVE_FIELDS／resyncRid に追加。`main.jsx` に `poachRetain`／`poachAccept`／`poachSign` ＋advanceMonthへ被引き抜き挿入＋yearendで市場再生成。`season.jsx` にモーダル・市場画面・ショップ導線・ヘルプ。**検証**＝Nodeで19ケース単体テスト（実体化のidentity維持/決定論/OVRスケール・候補生成の主力選出/降順/意欲/null安全・オファーの対象選別＝主将/負傷/薄いロースター除外）全PASS。Playwrightで引き抜き市場（候補6名・移籍意欲表示）→落札でロースター6→7＆年1枠が使用済みに→被引き抜きモーダル（引き止め／放出の両分岐）→年度末ロールオーバーまで実エラー0 |
-| `v40 第1候補②：シーズンに「中期目標」（複数レースにまたがるスポンサーの約束）` | ①監督指示カードに続く**シーズンの駆け引き**第二弾。単月の「指定レース」（見せ場ボーナス）や年間ノルマ（総pt）とは別枠で、**複数レースにまたがる中期目標**をスポンサーが契約時に1つ提示する。5種＝`wins`常勝軍団(通算4勝)／`climb`山岳の覇者(登坂系2勝)／`sprint`平坦の常勝(平坦系3表彰台)／`bigstage`大舞台の栄光(★★★で1表彰台)／`youth`新星の証明(25歳以下エースで1勝)。**期限月**（8〜10月＝MONTHS index）までに達成すれば臨時ボーナス（資金＋ノルマpt）、未達なら違約金。関数(match/desc)はセーブに載らないため id で引き直す（監督指示と同方式）。**実装**＝`support.js` に `SEASON_OBJECTIVES`／`genSeasonObjective`(classでスケール)／`raceObjectiveEvent`／`advanceObjective`(達成でその場報酬)／`expireObjective`(期限切れで違約金)／`objectiveStatusText`。`main.jsx` の finishRace／finishTeamTT／finishStage の3経路すべてで進捗判定、advanceMonth で期限切れ判定＋違約金を budget に計上、yearendに総括を追加。`season.jsx` はスポンサー選択画面（3提案を表示）・主画面パネル（常時進捗）・レース結果／GC FINAL／年度末サマリー・ヘルプに配線。**検証**＝Nodeで22ケース単体テスト（5種の進捗/達成/報酬・4着や脚質違いで非進捗・期限切れ違約金・達成済みは失効しない・クラススケール・null安全）全PASS。Playwrightで load→契約(3目標提示)→主画面(進捗パネル)→実レース(結果だけ見る経路=finishRace)→翌月(expireObjective)まで実エラー0 |
-| `v39.20 sim本体に展開戦術を実装（トレイン/発射/前待ち/ピールオフ）＋観戦で可視化` | v39.19の「用語で見せる」からさらに踏み込み、**駆け引きそのものをsimの挙動として実装**。**トレイン**＝終盤(最終区間 or 進捗86%超)、同集団の自チームは脚が残る順に縦一列でエースの前に並び(slot=0..k)、エースは列車直後の風除けに入る。**前待ち**＝勝負所の手前(進捗72〜86%)でエースと第一アシストだけ集団前方へ位置取り（脚は使わない）。**発射(launch)**＝リードアウトが脚を使い切って役目を終えた瞬間にエースへ`launchLeft`を付与。**ピールオフ**＝力尽きた牽き手が後方へ下がる。これらは slot に反映されるため俯瞰マップの隊列としても目に見える。**バグ修正**＝エースが一時的に別集団になっただけでpeel/launchが誤発火していた（同集団にいるのに脚が尽きた場合に限定）。**可視化**＝`tagHist`に展開タグを記録し`tagAt()`で再生時刻から引いてバッジ表示（トレイン/リードアウト/発射！/前待ち/力尽き後退）。Node検証：現実的なコースで front 2592 / train 2402 / leadout 432 tick 発生、自分にも front→train→leadout が付与。Playwright実エラー0 |
-| `v39.19 展開のリアリティ（逃げ/追走/ペロトン/牽引/リードアウトの明示）＋ゴール演出の導入カメラ` | 2点。**展開のリアリティ**＝simには既にグループ・牽引ローテ・リードアウトの実装があったが「今どういう構図か」が読めなかったため、ロードレースの用語で可視化。(1)**集団の役割ラベル**＝各グループを人数と前後関係から分類し「逃げ集団 N名／追走集団／ペロトン（最大の塊）／遅れた集団／独走」を集団の上に表示。(2)**役割バッジ**＝各選手に「牽引（先頭交代の当番）／次に牽引／リードアウト」を明示（自チーム・自分・牽引者のみ＝混雑回避）。**ゴール演出の導入カメラ**＝ユーザー提案を採用。開始1.5秒はカメラをゴール手前の路面に置き（先頭の6ユニット前方）、集団が画面奥から入ってくるのを見せてから先頭へフォーカスを移す＝「いきなり選手が現れる」違和感を解消。Playwrightで俯瞰マップに「逃げ集団5名／ペロトン21名／遅れた集団2名」＋牽引バッジが出ることを確認・実エラー0 |
-| `v39.18 沿道を道のカーブに追従＋難易度で判断の効きを変える` | 2点。**沿道の柵が画面と平行で違和感**＝v39.17の柵は画面軸に沿った縦棒＋垂直オフセットだったため、カーブする道に対して並行に見えていた。道の局所方向を微小差分から求め、**法線方向に道幅ぶんオフセット＋道の傾きぶん回転**して配置＝道に沿って並ぶ自然な沿道に。**難易度で判断の成功率**＝`MOVE_EFF_BY_DIFF`（easy1.15/normal1.0/hard0.82/oni0.66）を導入し、resumeSimで一手の効き（アタック持続・追い込み量finaleSend・温存/粘りのtick）をスケール。simに`difficulty`を持たせ両モードのbuilderから渡す。Node検証（丘陵で「仕掛ける」の着順改善量）：easy -7.9pts / normal -12.2 / hard -4.2 / **oni 0.0**＝上位難易度ほど同じ一手が決まらず、仕掛けどころの見極めがシビアに。Playwrightで俯瞰(道に沿う沿道)を確認・実エラー0 |
-| `v39.17 俯瞰マップにもスピード感／ゴール前の間合いを長く／ズーム往復のハンチング修正` | 3点。**俯瞰マップのスピード感**＝カメラが集団を追う＝選手は画面上ほぼ静止するので、速度は背景で見せる必要がある。道の両脇にコース全長0.4%間隔の並木/柵（交互色）を敷き、カメラの前進に応じて高速に流れるようにした。**ゴール前のやりとりを再現**＝ゴール演出の接近フェーズを延長（t1 2.9〜3.6→5.2〜6.2秒）し、同時に走行距離も延長（vtStart -15→-26）してスピード感を維持（時間だけ延ばすと遅く見えるため）＝差し・リードアウト・抜きつ抜かれつを見せる尺を確保。**ズーム往復で集団の挙動が不自然**＝集団の伸縮で目標spanが揺れ、非対称補間と枠寄せ補正が競合して倍率が振動（ハンチング）していた。目標との差が12%未満なら倍率据え置きのデッドバンドを導入＋枠寄せ補正の1フレーム変化量を制限。**スリム化**＝演出刷新で未使用になった定数（SPRINT_CINEMATIC_MS/SPRINT_MAX_SPREAD）を削除。Playwrightで俯瞰(沿道の並木)・ゴール演出を確認・実エラー0 |
-| `v39.16 ゴール演出のスピード感を根本強化（走行距離4倍・沿道密度・常時ease-out）` | 「ゴールスプリント全体で速度感がない」への根本対応。**原因**＝接近フェーズの移動距離が3.6ユニットしかなく、カメラが先頭を追う構造上「地面がほとんど流れない」＝スピード感が出ようがなかった（背景が動かなければ速く見えない）。**対策**＝(1)開始地点を大きく手前へ（vtStart -3.6→-15）＝同じ時間で**約4倍の距離**を走り地面・沿道が高速に流れる、(2)沿道の柵を0.5ユニット間隔へ密度アップ＋交互色＝流れる速さが目で読み取れる参照物に、(3)イージングを常時ease-out化（序盤ほど高速→ラインに向けて減速。接戦はさらに強い減速で"ゴールの瞬間"を溜める）＝**速い→スロー＆ズーム**の落差でゴール前が引き立つ、(4)地面タイル範囲を拡張(16→20)して長距離移動でも欠けない。Playwrightで実走キャプチャ（開始時は集団がライン遥か手前、沿道の柵が密に流れる）・実エラー0 |
-| `v39.15 ゴール演出のスピード感強化＋レース中のスロー/ズームを強めに` | 2点の体感調整。**スピード感**＝ゴール演出の通過後フェーズを短縮(t2 3.0→1.7秒)して一気に流れるようにし、接近時のスローとの落差で緩急を強調。あわせて高速フェーズ中は全選手に速度線を出す（簡易スプライトにも追加）＝スロー解除後の疾走感。**レース中のスロー/ズーム**＝ズーム連動スローを強化＋効き始めを早く（しきい値span 0.14→0.20、減速率0.62→0.76＝最大で約1/4速）、山場(beat)の減速も強めた（判断カード0.42→0.30／フラムルージュ0.5→0.38／アクションカム0.6→0.42）、持続も延長（+600ms前後）、山場のズーム倍率も強化(span×0.6→×0.44)。Playwrightで両ビュー・実エラー0 |
-| `v39.14以前〜v33系（85件・要約リスト）` | 全文はgit履歴に保存済み。件名で `git log --oneline --grep="<キーワード>"` または `git log --oneline \| grep <キーワード>` すれば該当コミットが見つかり、`git show <hash>` で当時の詳細（実装箇所・検証結果込み）を復元できる。以下は件名のみの索引（新しい順）：<br>v39.14 残像の描画負荷対策＋マイライフ育成カーブの再設計（カンスト対策・難易度連動） ／ v39.13 残像対策＋最終スプリント判断＋ゴールスロー再調整＋縮尺バー ／ v39.12 俯瞰マップ大幅強化（6点：自転車アイコン/ギャップ可視化/KOM・残距離/アクションカム/隊列/沿道） ／ v39.11 ロードバイクのドット絵化／再生を遅く＆×0.5追加／俯瞰マップを地形着色＋勾配表示 ／ v39.10 ゴール演出：ドット絵化・密集緩和・ゴール固定カメラ／俯瞰の緩ズーム＆スロー連動＆右寄り修正 ／ v39.9 ゴール演出の修正：重なり解消・自転車スプライト・駆け引きを手前から ／ v39.8 ゴール演出をカイロソフト風アイソメ(2:1ディメトリック)に ／ v39.7 ゴールを斜め視点＋スプリントの駆け引き演出／俯瞰ズームを滑らかに ／ v39.6 ゴールスプリントを横視点(サイドビュー)＋高速スクロール背景に ／ v39.5 ゴール演出を放送カメラ風に（follow→ライン固定・左→右・接戦スロー） ／ v39.4 ゴールスプリント演出を横フロー化＋アシストのエース着順表示バグ修正 ／ v39.3 観戦演出の強化：スロー＋ズームの山場(beat)と実況拡充 ／ v39.2 最終直線シネマティックを集団スプリント対応（表示人数拡大） ／ v39.1 判断カードを脚質・特性・役割・地形と連動（種類拡充） ／ v39 A案:レース中の判断カード（観戦→"プレイ"へ）＋スリム化 ／ #9 A-4:選手→監督の転身ブリッジ＋世界暦の可視化（A案の連結完了） ／ #9 A-2/A-3:レジェンド招聘＋共有ワールド（1つの世界が両モードで年を取る） ／ #9 A-1:統合ダイナスティ・ハブ（両モード共通の系譜/因子）＋ヘルプ拡充 ／ #9 B案（配合・系統の深掘り）B-1〜B-4＋2修正 ／ フィードバック9項目バッチ（#1〜#8＋リードアウト・スタミナAI） ／ シーズン:相手チームを永続ロースター化（選手とチーム同期） ／ 両モード:チーム数拡張＋マイライフ所属/クラス実効化 ／ マイライフ:ワールド選手の年次成長・引退で世代交代 ／ マイライフ:永続ワールドロースター＋全チーム成績台帳 ／ 拡充:パーソナリティ3種＋異名を追加（会話/イベント完備） ／ 拡充:特殊能力をさらに7種追加（第2弾・良5/悪2） ／ 拡充:特殊能力を5種追加（既存simレバーに接続） ／ メタ:CPショップ（貯めたCPで恒久解禁を購入） ／ メタ:クリアポイント(CP)拡充 — マイライフでも獲得＆CP特典 ／ マイライフ:観戦マップに選手名ラベル＋選手成績台帳 ／ マイライフ:チームTTをチーム結果に＋全レースに順位表 ／ fd862f2 ／ a7678b4 ／ d407a7d ／ 1a15631 ／ 0abbcfd ／ d905587 ／ f9b1bc8 ／ fc29891 ／ ca54130 ／ 20dc260 ／ e98092f ／ DEVLOG ／ A-3 ／ C-2増分1 ／ C-2増分2 ／ UI下馬評 ／ バランス:シーズン順位実効化 ／ UI:マイライフ主画面導線 ／ UI:能力プレビュー ／ UI:レース後サマリー ／ UI:シーズン主画面導線 ／ UI:マイライフ・ショップ整理 ／ 修正:アシストの自滅・大敗 ／ C-2 新競技:チームTT ／ D演出:引退セレモニー＆殿堂の集大成 ／ B-2 逆メンター:弟子を育てる ／ マイライフ:アシストの不整合を修正 ／ シーズン深掘り:スタッフの個性化 ／ シーズン深掘り:育成の手応え ／ シーズン深掘り:ケミストリーの可視化＋絆の節目 ／ シーズン深掘り:ライバルチームの個性 ／ シーズン深掘り:タイトル争いの物語化 ／ UI:選手詳細にキャリアの軌跡 ／ UI:実況の充実（注目選手を名指し） ／ UI:セーブの安心感（続きから明細） ／ D物語:メディアナラティブ ／ D物語:因縁が育つライバル ／ バランス:配合小要素点検＋危険度を実効化 ／ バランス:配合点検＋二刀流を実効化 ／ バランス:難易度つまみを高クラスで実効化（鬼を強化） ／ バランス:エース早期発射を実効化（勝負の逃げ） ／ バランス:シーズン作戦の点検 ／ バランス:作戦説明の正直化 ／ バランス:地形別フィニッシュ決着 ／ 修正:アシストの観戦⇔リザルト同期ズレを根治 ／ 修正:アシスト大敗＆横一線ゴールの再修正 ／ 改善:ライバル会話ドラマを双方向イベント化 ／ 両モード:性格ベースのイベント ／ マイライフ:完全休養・取材/私生活を有意義に ／ マイライフ:新聞・雑誌イベント（大勝・連勝の号外） ／ マイライフ:性格ベースのライバル会話ドラマ（紙芝居/VN風） ／ マイライフ:リセマラ（素質診断＋引き直し）強化 ／ マイライフ:経歴（出自）ごとの固有メリット ／ マイライフ:弟子育成の深化（絆・鍛錬・指導イベント） ／ マイライフ:突然の強制引退→契約更改の選択制 |
+| `v41以前〜v33系（93件・要約リスト）` | 全文はgit履歴に保存済み。件名で `git log --oneline --grep="<キーワード>"` または `git log --oneline | grep <キーワード>` すれば該当コミットが見つかり、`git show <hash>` で当時の詳細（実装箇所・検証結果込み）を復元できる。以下は件名のみの索引（新しい順）：<br>v41 第1候補③：移籍市場の駆け引き（引き抜き合戦） ／ v40 第1候補②：シーズンの中期目標 ／ v39.20 sim本体に展開戦術を実装（トレイン/発射/前待ち/ピールオフ） ／ v39.19 展開のリアリティ（逃げ/追走/ペロトン明示）＋ゴール導入カメラ ／ v39.18 沿道を道のカーブに追従＋難易度で判断の効きを変える ／ v39.17 俯瞰マップにもスピード感／ゴール前の間合いを長く ／ v39.16 ゴール演出のスピード感を根本強化（走行距離4倍） ／ v39.15 ゴール演出のスピード感強化＋レース中のスロー/ズーム強化 ／ v39.14 残像の描画負荷対策＋マイライフ育成カーブの再設計（カンスト対策・難易度連動） ／ v39.13 残像対策＋最終スプリント判断＋ゴールスロー再調整＋縮尺バー ／ v39.12 俯瞰マップ大幅強化（6点：自転車アイコン/ギャップ可視化/KOM・残距離/アクションカム/隊列/沿道） ／ v39.11 ロードバイクのドット絵化／再生を遅く＆×0.5追加／俯瞰マップを地形着色＋勾配表示 ／ v39.10 ゴール演出：ドット絵化・密集緩和・ゴール固定カメラ／俯瞰の緩ズーム＆スロー連動＆右寄り修正 ／ v39.9 ゴール演出の修正：重なり解消・自転車スプライト・駆け引きを手前から ／ v39.8 ゴール演出をカイロソフト風アイソメ(2:1ディメトリック)に ／ v39.7 ゴールを斜め視点＋スプリントの駆け引き演出／俯瞰ズームを滑らかに ／ v39.6 ゴールスプリントを横視点(サイドビュー)＋高速スクロール背景に ／ v39.5 ゴール演出を放送カメラ風に（follow→ライン固定・左→右・接戦スロー） ／ v39.4 ゴールスプリント演出を横フロー化＋アシストのエース着順表示バグ修正 ／ v39.3 観戦演出の強化：スロー＋ズームの山場(beat)と実況拡充 ／ v39.2 最終直線シネマティックを集団スプリント対応（表示人数拡大） ／ v39.1 判断カードを脚質・特性・役割・地形と連動（種類拡充） ／ v39 A案:レース中の判断カード（観戦→"プレイ"へ）＋スリム化 ／ #9 A-4:選手→監督の転身ブリッジ＋世界暦の可視化（A案の連結完了） ／ #9 A-2/A-3:レジェンド招聘＋共有ワールド（1つの世界が両モードで年を取る） ／ #9 A-1:統合ダイナスティ・ハブ（両モード共通の系譜/因子）＋ヘルプ拡充 ／ #9 B案（配合・系統の深掘り）B-1〜B-4＋2修正 ／ フィードバック9項目バッチ（#1〜#8＋リードアウト・スタミナAI） ／ シーズン:相手チームを永続ロースター化（選手とチーム同期） ／ 両モード:チーム数拡張＋マイライフ所属/クラス実効化 ／ マイライフ:ワールド選手の年次成長・引退で世代交代 ／ マイライフ:永続ワールドロースター＋全チーム成績台帳 ／ 拡充:パーソナリティ3種＋異名を追加（会話/イベント完備） ／ 拡充:特殊能力をさらに7種追加（第2弾・良5/悪2） ／ 拡充:特殊能力を5種追加（既存simレバーに接続） ／ メタ:CPショップ（貯めたCPで恒久解禁を購入） ／ メタ:クリアポイント(CP)拡充 — マイライフでも獲得＆CP特典 ／ マイライフ:観戦マップに選手名ラベル＋選手成績台帳 ／ マイライフ:チームTTをチーム結果に＋全レースに順位表 ／ fd862f2 ／ a7678b4 ／ d407a7d ／ 1a15631 ／ 0abbcfd ／ d905587 ／ f9b1bc8 ／ fc29891 ／ ca54130 ／ 20dc260 ／ e98092f ／ DEVLOG ／ A-3 ／ C-2増分1 ／ C-2増分2 ／ UI下馬評 ／ バランス:シーズン順位実効化 ／ UI:マイライフ主画面導線 ／ UI:能力プレビュー ／ UI:レース後サマリー ／ UI:シーズン主画面導線 ／ UI:マイライフ・ショップ整理 ／ 修正:アシストの自滅・大敗 ／ C-2 新競技:チームTT ／ D演出:引退セレモニー＆殿堂の集大成 ／ B-2 逆メンター:弟子を育てる ／ マイライフ:アシストの不整合を修正 ／ シーズン深掘り:スタッフの個性化 ／ シーズン深掘り:育成の手応え ／ シーズン深掘り:ケミストリーの可視化＋絆の節目 ／ シーズン深掘り:ライバルチームの個性 ／ シーズン深掘り:タイトル争いの物語化 ／ UI:選手詳細にキャリアの軌跡 ／ UI:実況の充実（注目選手を名指し） ／ UI:セーブの安心感（続きから明細） ／ D物語:メディアナラティブ ／ D物語:因縁が育つライバル ／ バランス:配合小要素点検＋危険度を実効化 ／ バランス:配合点検＋二刀流を実効化 ／ バランス:難易度つまみを高クラスで実効化（鬼を強化） ／ バランス:エース早期発射を実効化（勝負の逃げ） ／ バランス:シーズン作戦の点検 ／ バランス:作戦説明の正直化 ／ バランス:地形別フィニッシュ決着 ／ 修正:アシストの観戦⇔リザルト同期ズレを根治 ／ 修正:アシスト大敗＆横一線ゴールの再修正 ／ 改善:ライバル会話ドラマを双方向イベント化 ／ 両モード:性格ベースのイベント ／ マイライフ:完全休養・取材/私生活を有意義に ／ マイライフ:新聞・雑誌イベント（大勝・連勝の号外） ／ マイライフ:性格ベースのライバル会話ドラマ（紙芝居/VN風） ／ マイライフ:リセマラ（素質診断＋引き直し）強化 ／ マイライフ:経歴（出自）ごとの固有メリット ／ マイライフ:弟子育成の深化（絆・鍛錬・指導イベント） ／ マイライフ:突然の強制引退→契約更改の選択制 |
 
 ---
 
@@ -442,8 +434,9 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
-「理想的なファイル・モジュールの細分化設計図」を作成し、リスクの低い Step 1〜4 を実施した（Step 5〜8＝
-`domain/`・`controllers/`層への本格分離は未着手、下記参照）。
+「理想的なファイル・モジュールの細分化設計図」を作成し、リスクの低い Step 1〜4 から着手。その後
+`domain/`・`controllers/`層への本格分離（Step 5〜8）、さらにcontrollers抽出のうち特に危険度の高い
+レース進行系（B-3）を段階的に潰すStep7第2〜8弾まで、すべて完了済み（下記参照）。
 
 **設計原則（新規追加は必ずこれに従う）**：
 1. 依存は下向き一方通行：`data → core/sim → domain/state/view → controllers → screens → app`
@@ -454,218 +447,45 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
    `data/`へ移送しない（`CP_MILESTONES`・`ML_CROSSROADS`・`ML_OFFSEASON_CHOICES`・`SEASON_ACHIEVEMENTS`が該当し、
    `support.js`に意図して残している）
 
-### 実施内容
-- **Step 1**：`main.jsx`の死コメント477行を削除（55〜506行目＝分割前の単一ファイル時代の見出しのみで実コード0行、
-  ＋v11→v12変更履歴ヘッダ23行＝DEVLOGと重複）。3041行→2564行。
-- **Step 2**：`roadrace_v5〜v11.*`(1.7MB)・`roadrace_design_v2〜v12.md`(120KB)を`archive/`へ`git mv`（履歴保存）。
-  `.gitignore`にallowlist追加。DEVLOG §1のファイル構成記述も更新。
-- **Step 3**：`support.js`の静的データ定数のうち、**外部関数呼び出しを含まない純データ**41ブロック(457行)を
-  `data/economy.js`(経済・スタッフ・天候等)・`data/events.js`(選択肢イベント)・`data/directives.js`(監督指示・
-  中期目標)・`data/gear.js`(マイライフ装備)・`data/progression.js`(種目/成長順/チーム関連の分類テーブル)へ移送。
-  `support.js`は`import`＋`export {}`で再エクスポートする**互換シム**を追加し、main.jsx/screens/*.jsxの
-  既存import文（100箇所超）は無変更のまま動作。2574行→2137行。
-- **Step 4**：文字列生成の純関数群を`view/`へ新設。`view/flavor.js`（`riderFlavorText`＋FLAVOR_*表＋
-  内部ヘルパー6個、選手の戦績から語り口を選ぶ）、`view/news.js`（`rivalNews`／`mlWorldNews`／`mlNewspaper`＋
-  `RIVAL_NEWS_TEMPLATES`）。同じく互換シムで再エクスポート。2137行→1776行（**support.js合計 -31%**）。
+### 実施内容（Step1〜8・完了済みの基盤整備）
+**Step1〜8は全て完了済み。** 全文は各コミットに保存済みで、件名で `git log --oneline --grep="Step"` すれば
+該当コミットが見つかり、`git show <hash>` で当時の詳細（実装箇所・検証結果込み）を復元できる。
+以下は件名のみの索引（新しい順ではなく実施順）：
 
-**検証**（全Stepで実施・push前に必ず通す）：
-- `npm run build` 毎ステップ後に実行（構文エラー・未解決import・重複識別子はesbuildが検出＝ビルド成功が強い証拠）
-- 波括弧/角括弧の対応数を機械チェック（削除境界の欠落検出）
-- 既存Node単体テスト（v40中期目標22ケース・v41移籍市場19ケース）を毎ステップ後に再実行→全PASS
-- Playwrightで両モードの主要画面（シーズン：契約→主画面→選手→ショップ→引き抜き市場→記録→ヘルプ→レース実施→
-  月送り、マイライフ：経歴選択画面）を実機で遷移確認→実エラー0
+- **Step1**：main.jsxの死コメント477行削除（3041→2564行）
+- **Step2**：archive/整理（roadrace_v5〜v11等をgit mv、履歴保存）
+- **Step3**：support.jsxの純データ41ブロックをdata/（economy/events/directives/gear/progression）へ移送、
+  互換シム方式（2574→2137行）。**判定基準（新規追加は必ず従う）**：`check`/`match`が自分の引数だけを
+  参照する自己完結の述語関数はデータとして扱ってよいが、`bumpRosterAbAll(s,8)`のように外部の状態変更
+  関数を呼ぶクロージャはロジック（`CP_MILESTONES`/`ML_CROSSROADS`等はこの理由でsupport.jsに意図的に残置）
+- **Step4**：文字列生成の純関数をview/へ新設（`riderFlavorText`・`rivalNews`等、2137→1776行）
+- **Step5**：domain/season・domain/sharedを新設し純粋なドメインロジック（生成器・計算関数）を集約。
+  循環import回避のため`data/teams.js`（`RIVAL_TEAMS`/`MYLIFE_TEAMS`）新設が前提整理として必須だった
+- **Step6**：`state.js⇄breeding.js`の循環依存を解消（`mlLegendSnapshot`等5関数をbreeding.jsへ集約、
+  互換シム経由で`===`一致することをテストで確認）
+- **Step7（着手・移籍ドメインのみ）**：`controllers/season/transfer.js`新設（移籍・トレード7ハンドラ抽出）。
+  **ここで確立した型（以後のcontroller抽出全てで踏襲）**：`(state, ...args) => newState`という純粋な
+  reducerを`controllers/`へ、`setG`/`setMl`への接続は1行の薄いラッパーとしてmain.jsxに残す
+- **Step8**：`screens/season.jsx`・`screens/mylife.jsx`（巨大ディスパッチャ）を用途クラスタ単位で
+  各6ファイルへ分割。byte-for-byte機械照合（コピペミス検出）＋Playwright実機確認で検証
 
-**Step 3で判明した重要な知見**：`CP_MILESTONES`・`ML_CROSSROADS`・`ML_OFFSEASON_CHOICES`・`SEASON_ACHIEVEMENTS`は
-一見データテーブルだが、`apply`/`check`フィールドが`bumpRosterAbAll`等の外部domain関数や`hasAbility`等の
-core関数を呼ぶクロージャを持つ（＝ロジックがデータの皮を被っている）。これらを`data/`へ移送すると
-「data → domain」という逆依存が発生するため、**意図的に`support.js`に残した**。新規のデータテーブルを追加する際は、
-「`match`/`check`が自分の引数だけを参照するか、外部関数を呼ぶか」で置き場所を判断すること。
+検証はいずれも`npm run build`→brace対応の機械チェック→既存Nodeテスト再実行→Playwright実機確認（実行時
+エラー0）を経てpush。
 
-- **Step 5**：純粋なドメインロジック（生成器・計算関数）を`domain/`へ集約。まず`data/teams.js`を新設し
-  `RIVAL_TEAMS`／`MYLIFE_TEAMS`（純データ・関数を含まない）を`state.js`から移送——これが無いと
-  `domain/season/*`が`RIVAL_TEAMS`を参照するのに`state.js`へ逆import、かつ`state.js`は`initGame()`用に
-  生成器を呼び返す必要があり**循環importになる**ため、必須の前提整理だった。続けて5ファイルを新設：
-  `domain/season/transfer.js`（`legendToSeasonRider`／`worldRiderToRosterRider`／`genPoachTargets`／
-  `makePoachOffer`／`genFaPool`／`genTradeOffers`／`computePickupChance`）、`domain/season/roster.js`
-  （`initRoster`／`genScouts`＋内部ヘルパー`scoutSpecs`）、`domain/season/sponsor.js`（`genSponsors`＋
-  中期目標一式＝`genSeasonObjective`/`raceObjectiveEvent`/`advanceObjective`/`expireObjective`/
-  `objectiveStatusText`）、`domain/season/standings.js`（`computeStandings`／`seasonRank`／
-  `seasonTitleRace`／`standingsRankReward`／`champPromoteCut`）、`domain/shared/forecast.js`
-  （`raceForecast`）。`state.js`/`support.js`は同じ互換シムで再エクスポート。未使用になった import
-  （`CLASSES`/`MONTHS`/`overall`等）も併せて除去。state.js 1257→1071行、support.js 1776→1615行。
-  **判明した知見（Step3の教訓を再確認）**：`unlockedTemplates`／`genMonthRaces`は`loadMeta()`
-  （localStorage読み取り）に依存するため**domain抽出を見送り**state.js に残した。`SEASON_ACHIEVEMENTS`
-  の`chemistry_max`判定が`teamChemistryTier`（support.js）を呼ぶため、`computeSeasonAchievements`も
-  同様に**support.js に残した**（一度`domain/season/standings.js`へ移してビルドエラーで発覚→即座に差し戻し）。
-  「データ/ロジックの区別」は一度で完璧に判定できるとは限らず、**ビルドエラーが出たら虚心に戻す**姿勢が安全。
-  検証は同じ手順（build→brace確認→重複確認→Node41ケース→Playwright全画面）を各グループごとに実施、全PASS。
-
-- **Step 6**：`state.js⇄breeding.js`の循環依存を解消。原因は`breeding.js`の`mlLegendSnapshot`（引退時の
-  殿堂スナップショット生成）が`ML_ACHIEVEMENTS`／`computeAchievements`／`mlCareerArchetype`／
-  `riderCareerSummary`／`riderNickname`の5つを`state.js`から借りていたこと。調べると、この5つは
-  **`state.js`固有の依存を一切持たない完全に自己完結した純関数・純データ**で、`breeding.js`の
-  `mlLegendSnapshot`だけが唯一の利用者だった（`state.js`内の他の場所からは一度も呼ばれていない）。
-  そこで5つ（＋`riderNickname`の内部ヘルパー`hasEarnedNickname`）をまるごと`breeding.js`へ移し、
-  `breeding.js`から`state.js`へのimportを完全に撤廃。残るのは`state.js`が`breeding.js`の`loadMlLegends`
-  （殿堂リストの読み込み）を使う一方向だけになった。`state.js`側は同じ互換シムで5つを再エクスポートし、
-  main.jsxの既存import文は無変更。state.js 931行、breeding.js 290→408行。
-  **検証**：build→brace確認→重複確認に加え、`state.js`経由と`breeding.js`直接importで**同一関数参照
-  （`===`で一致）**であることを確認するテストを追加（シムが正しく機能している証拠）。`mlLegendSnapshot`／
-  `mlRecordLegend`（循環解消の核心となった関数）を直接呼び出す16ケースの単体テストを新規作成し全PASS
-  （殿堂スナップショットの内容・実績判定・キャリア生き様・localStorageへの記録まで実地検証）。既存の
-  Node41ケース・Playwright全画面回帰（シーズン：選手/トロフィー画面、マイライフ：起動）も実エラー0。
-
-- **Step 7（着手・移籍ドメインのみ完了）**：`main.jsx`のApp()内ハンドラを`controllers/`へ分離する着手。
-  Step1〜6が全て「純粋な関数・データの再配置」だったのに対し、Step7はApp()の生きたReact状態
-  （`setG`/`setMl`のクロージャ、89メンバーの`ctx`）に触れるため質的にリスクが高い。**最初の一歩として
-  最小の移籍ドメインだけを切り出した**（`retainRider`／`grantTransferRequest`／`poachRetain`／
-  `poachAccept`／`poachSign`／`acceptTrade`／`declineTrade`の7ハンドラ）。
-  **パターン**：これらは元々すべて`setG(s => {...新state...})`という形だった＝実質
-  **`(state, ...args) => newState`という純粋なreducer関数**。`controllers/season/transfer.js`に
-  その形のまま抽出し（JSX/React非依存）、`main.jsx`側は`const retainRider = () => setG(tfRetainRider);`
-  のような**1行の薄いラッパー**に置き換えた。この「reducer関数を`controllers/`へ・`setG`接続はApp()に残す」
-  パターンは、React特有の再レンダリング・クロージャの罠を避けつつcontroller抽出の恩恵（Node単体テスト化・
-  App()の縮小）を得られる型として、以後のcontroller抽出でも踏襲する。main.jsx 2564→2474行。
-  **検証**：抽出したreducer関数を直接呼ぶ25ケースの単体テストを新規作成（引き止め・移籍金授受・
-  ロースター上限・年内1回制限・トレード成立/見送りの分岐を実地検証）し全PASS。既存Node57ケース
-  （v40/v41/Step6）と合わせ計82ケース全PASS。Playwrightで引き抜き市場からの落札・トレードの見送り・
-  月送りループを実機確認、実エラー0。
-
-- **Step 8（着手・season.jsxのみ完了）**：`screens/season.jsx`（2038行・22種の`g.screen`分岐を1関数に
-  収めたディスパッチャ）を、用途クラスタ単位で`screens/season/*.jsx`へ分割。ユーザーとの合意により
-  「season.jsxのみ先行・mylife.jsxは次回以降」「画面ごとに全部バラす（22ファイル）のではなく中粒度
-  （6ファイル程度）」の2点を確認してから着手。
-  **分割**：`intro.jsx`(オンボーディング：intro/newgame_setup/scoutpolicy_initial/sponsor)・
-  `hub.jsx`(mainのhome/riders/shop/career/help 5タブ・949行)・
-  `transferEvents.jsx`(event/transferRequest/poachOffer/poachMarket/event_result)・
-  `scheduleBoard.jsx`(program/standings/trophy)・`race.jsx`(startlist/lineup/race/result/gc系)・
-  `yearend.jsx`(yearend/clear)。各ファイルは`ctx`のうちその画面群が実際に使うメンバーだけを
-  destructureする（機械的に使用識別子を洗い出して決定・全メンバーを毎回丸ごと渡す方式は踏襲しない）。
-  `screens/season.jsx`自体は`g.screen`の値を見てどのサブファイルへ委譲するかだけを決める27行の
-  薄いdispatcherとして残す（`renderSeasonScreens(ctx)`という関数名・シグネチャは不変＝main.jsx側は
-  無変更）。
-  **手法・検証の質的な違い**：Step7は状態遷移の「純粋なreducer関数」の抽出だったのでNode単体テストで
-  機械的に正しさを検証できたが、Step8はJSXレンダリング関数の「置き場所を移すだけ・中身は1文字も変えない」
-  作業。そのため「元テキストの当該行範囲が新ファイルの内容にbyte-for-byte含まれているか」をPythonスクリプトで
-  機械照合し、6ブロック全て完全一致を確認（コピペミスの混入をゼロにする一次検証）。その上でPlaywrightで
-  season系の全主要画面（intro→newgame_setup→scoutpolicy→sponsor→main5タブ→引き抜き市場→順位表→
-  トロフィールーム→lineup→レース結果）を実機で辿り、実行時エラー0を確認。ビルド成功、既存Node82ケース
-  全PASS（機能面はStep7までと不変のため新規テストは追加せず）。season.jsx 2038→27行
-  （分割後6ファイル合計2107行、import重複による若干増はあるが機能変更なし）。
-
-- **Step 8（mylife.jsx側も完了・season.jsxと合わせてStep8完遂）**：`screens/mylife.jsx`
-  （1980行・30種の`ml.screen`分岐を1関数`renderMyLifeScreens`に収めたディスパッチャ）を、season.jsxで
-  確立した型（用途クラスタ単位・byte-for-byte照合・中粒度）をそのまま踏襲して分割。
-  **分割**：`create.jsx`(mylife_create/mylife_scout)・`hub.jsx`(main/achievements/abilityfile/
-  riderstats/worldstats/records・557行)・`help.jsx`(mylife_help)・`race.jsx`(startlist/race/result/
-  rival_scene/newspaper)・`events.jsx`(shop/event/protege_event/offseason/crossroads/contract)・
-  `career.jsx`(retire_advice/retired/teamroster/graph/ranking/lineage/factors/legends)。
-  `screens/mylife.jsx`自体は27行の薄いdispatcherとして残す（`renderMyLifeScreens(ctx)`のシグネチャ不変）。
-  **season.jsxとの違い・注意点**：`ctx`メンバーの使用箇所を機械的な識別子マッチだけで決めると、
-  CSSの`flexWrap: "wrap"`/`whiteSpace: "pre-wrap"`という文字列リテラルが`wrap`という関数名に誤検出
-  されたり、`.map(g => ...)`のようなローカル変数名`g`が、ctxの状態`g`（シーズン側の状態）と衝突して
-  誤検出されたりする（実際にcareer.jsx分割時に両方発生し、`wrap`はどのグループにも実は不要
-  （mylife側は全て`mlWrap`を使い`wrap`は使わない）、career.jsxの`g`は系譜フォレスト表示のローカル変数
-  シャドーイングだと判明し、どちらも除外して正しい依存関係に修正した）。**ctxの使用識別子を機械抽出する
-  際は、コード中の文字列リテラルやアロー関数のローカル変数名との衝突を必ず目視で確認すること**
-  （特に`g`/`s`/`r`のような1文字変数名や、`wrap`のようなCSSプロパティ名と被る単語は要注意）。
-  **検証**：6ブロック全てbyte-for-byte一致を機械照合。ビルド成功、既存Node82ケース全PASS。Playwrightで
-  マイライフの主要画面（キャラ作成の脚質/経歴/難易度選択→デビュー→素質確認→main→ヘルプ→ショップ→
-  出走表→ライブレース観戦→ゴールまで）を実機で辿り、実行時エラー0を確認。mylife.jsx 1980→27行。
-
-- **Step7第2弾（分類Aのみ実施）**：main.jsx App() に残る約40個のハンドラを調査した結果、性質が
-  はっきり2種類に分かれることが判明した。**分類A**＝`setG`/`setMl`だけで完結する単純なshop/roster系
-  reducer（約27個）。**分類B**＝`advanceMonth`/`finishRace`/`startRace`/`mlAdvanceMonth`等のレース・月進行
-  ハンドラで、`useRef`によるロック（連打防止）・`setTimeout`・「クロージャのstale値問題を過去に踏んだ」
-  という修正コメントが複数残っており、単純な`(state)=>newState`には収まらない。ユーザーと相談の上、
-  **今回は分類Aのみ実施し、分類Bは別途慎重な設計をしてから対応する方針**で合意し着手。
-  **分割**：`controllers/season/shop.js`（buyItem/buyPart/setPart/buyEquip/hireStaff/hireObCoach/
-  dismissObCoach の7個・ショップ/スタッフ経済）・`controllers/season/roster.js`（signScout/signFa/
-  useSupp/useTune/setFocus/useCamp/toggleFavorite/setCaptain/releaseRider/signYouthProspect/
-  signBredYouth の11個・日常のロースター運用）・`controllers/mylife/shop.js`（mlBuyPart/mlSetPart/
-  mlBuyGear/mlBuyStock/mlUseStock/mlPrivateCamp/mlBuyCar/mlBuyHouse/mlSetFocus の9個）。
-  `mlUseStockConfirm`は`askConfirm`によるUI確認ダイアログの分岐制御を持つため純粋なreducerではなく、
-  main.jsxに残して抽出後の`mlUseStock`を呼ぶ薄い呼び出し元とした（controller化の対象外に据え置いた
-  唯一の例）。`signBredYouth`は`setG`以外に`setBreedYouthSel(null)`という別の副作用も持つため、
-  reducer本体はcontrollers/へ、その副作用呼び出しはmain.jsxのラッパー内に残した。
-  **正規化**：元コードには「render時点の`g`/`ml`（＝直前の描画で確定した状態のスナップショット）」を
-  setG呼び出しの外側でガード条件に使っている箇所が複数あった（例：`buyPart`は`if (g.budget < ...) return;`
-  を`setG`の外で判定してから呼んでいた）。Step7（poachSign）の前例に倣い、全てのガード条件を
-  `setG(s => ...)`のupdater内・すなわち更新時点の最新状態`s`を見る形に統一した（`equipMax`/`staffMax`も
-  `s.classIdx`から都度算出）。動作は同一で、より安全な方向への整理（挙動を変えたのではなく、
-  常に最新の状態を見るという既存の慣習に合わせた）。
-  **検証**：抽出した27関数を直接呼ぶ53ケースの単体テストを新規作成（各ハンドラの成功パス・
-  ガード条件によるno-op分岐の両方を実地検証）し全PASS。既存Node82ケースと合わせ計135ケース全PASS。
-  Playwrightでseason側ショップ/選手・練習タブ、mylife側ショップの全3タブ（パーツ・消耗品/合宿・
-  恒久投資）を実機確認、実行時エラー0。main.jsx 2474→2262行。
-
-- **Step7第3弾（分類Bの再分類・約1,070行をcontrollersへ・休眠地雷の解消）**：Opusで設計、Sonnetで実装。
-  「分類B」は前回ひとくくりにしていたが、精読（closure読み・`useRef`・`setTimeout`・localStorage副作用を
-  機械的に洗い出す）の結果、実際は3層に分かれることが判明した。
-  - **B-1（完全に純粋）**：`resolveEvent`／`monthlyUpdate`／`mlApplyMonthEffect`。closure読みゼロ。
-  - **B-2（reducer形＋副作用埋め込み）**：`advanceMonth`／`mlAdvanceMonth`／`finishRace`／`finishTeamTT`／
-    `finishStage`／`mlRaceFinish`／`mlFinishTeamTT`／`mlLastRaceFinish`。closure読みはあるが`setG(s=>...)`の
-    外側で`g`/`ml`を読んでいるだけで、`s`ベースに正規化すれば純関数化できる。
-  - **B-3（真の危険地帯・今回も未着手）**：`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`
-    のみ。合計約89行。`stage2LockRef`/`mlRaceLockRef`という連打防止ロックと`setTimeout`を持ち、
-    v12で実際に踏んだstale closureバグの修正コメントが残る。抽出したいテスト対象ロジック
-    （月次成長・年度末処理・報酬計算）は合計約1,070行あり、危険地帯はごく小さい部分に限られると分かった。
-  **休眠地雷**：`setG`/`setMl`のupdater内側で、`recordTitle`/`advanceWorldYear`/`mlRecordLegend`という
-  非冪等なlocalStorage書き込みが直接呼ばれていた（Reactのupdater契約は「純粋であるべき・複数回呼ばれ得る」
-  ため、本来はバグの種）。現状`<StrictMode>`未使用のため実害は出ていないが、既存の`clearAwardedRef`／
-  `mlClearAwardedRef`イディオム（画面遷移をrefガード付きで検知し、副作用を1回だけ実行するuseEffect）に
-  合流させて解消した。副作用の呼び出し元を4パターンに整理：
-  1. `recordTitle("grandFinal")`→ 既存の`clearAwardedRef`（"clear"画面遷移）に合流
-  2. `mlRecordLegend`→ 既存の`mlClearAwardedRef`（"mylife_retired"画面遷移）に合流。抽出作業中に
-     **`mlLastRaceFinish`以外にもう1箇所**（`mlRetireAdviceAccept`、当初の抽出対象リストに無かった
-     小さな関数）で同じ非冪等呼び出しをしていたことを発見し、合わせて修正した
-  3. `advanceWorldYear`（season/mylife）→ `g.year`/`ml.year`の変化を検知する新規ref+useEffect（各モード
-     独立、season側とmylife側で同じ共有ワールド関数を呼ぶため）
-  4. `recordTitle("grandTour")`（finishStage）・`recordTitle(race.milestone)`（mlRaceFinish）→
-     reducerの返り値に`gc.justWonGrandTour`／`resultInfo.milestoneWin`という記述的フラグを持たせ、
-     "gc_final"/"mylife_result"画面遷移を検知する新規ref+useEffectがそのフラグを見て1回だけ記録する
-  なお`recordCourseResult`（コースレコード更新）は同じ非冪等書き込みを持つが、戻り値（`isNew`等）が
-  同じ呼び出しでUI表示に使われるため、後段のuseEffectへ切り離せない。今回は意図的に対応を見送った
-  （StrictMode下での表示バグの可能性はあるが、データ破損はしない軽微な既知の残課題として明記）。
-  **分割**：`controllers/season/month.js`（monthlyUpdate・advanceMonth）・`controllers/season/event.js`
-  （resolveEvent）・`controllers/season/result.js`（finishRace・finishTeamTT・finishStage）・
-  `controllers/mylife/month.js`（mlApplyMonthEffect・mlAdvanceMonth）・`controllers/mylife/result.js`
-  （mlRaceFinish・mlFinishTeamTT・mlLastRaceFinish）・`domain/mylife/race.js`（mlGenRace＝複数箇所から
-  参照される純粋なジェネレータのため`controllers/`ではなく`domain/`に配置）。`monthlyUpdate`の戻り値は
-  `state._injured`への書き込み（out-param方式）から`{roster, notices}`（引数を壊さない普通の戻り値）に
-  正規化した。
-  **副次的なimport整理**：抽出により新たに不要となった61個のimport識別子をmain.jsxから削除。同時に、
-  Step8（screens分割）以降ずっと未使用のまま残っていた**124個の古いimport**（`AbilityGrid`/`CondFc`等の
-  panels.jsxコンポーネント・`SEG_COLOR`/`WEATHER`等、screens/へ委譲済みで元々main.jsx本体では使われて
-  いなかったもの）も検出したが、これは今回の変更範囲外（Step8時点からの積み残し）と判断しあえて残した。
-  次にmain.jsxのimportを触る際は、この124個の削除も合わせて提案する価値がある。
-  **検証**：抽出11関数を直接呼ぶ46ケースの単体テストを新規作成（月次成長・3連闘故障・年度末の昇格/降格/
-  クリア判定・グランツール優勝時のjustWonGrandTourフラグ・世界選手権優勝時のmilestoneWinフラグ・
-  マイライフの年度末オフシーズン遷移等を実地検証、`Math.random`を固定して決定論的に確認）し全PASS。
-  既存Node135ケースと合わせ計181ケース全PASS。Playwrightでseason/mylife双方の月送りループ・レース出走
-  〜結果確定（finishRace/mlRaceFinish双方を実地で通過）を実機確認、実行時エラー0。main.jsx 2262→1241行。
-
-- **Step7第4弾（低リスク2件・recordCourseResultの非冪等性解消／dead import 124個の削除）**：前回
-  「今後の候補」に残した2件のうち、リスクの低い方から着手（B-3の抽出・`ctx`フック化は引き続き未着手）。
-  1. **`recordCourseResult`の分割**：「判定（読み取り）」と「更新（書き込み）」を1関数に同居させていたのを、
-     `peekCourseRecord`（`loadCourseRecords()`を読むだけ・書き込みなし・reducerがUI表示用に同期的に呼ぶ）と
-     `persistCourseRecord`（実際の書き込み・App()側のuseEffectから呼ぶ）に分離した。第3弾で確立した
-     パターンと同じ形：`finishRace`/`mlRaceFinish`の返り値（`prizeInfo.courseRecord`/
-     `resultInfo.courseRecord`）に`isNew`等の判定結果を持たせ、"result"/"mylife_result"画面への遷移を
-     検知する新規ref+useEffect（`courseRecordRef`/`mlCourseRecordRef`）が`isNew`を見て1回だけ
-     `persistCourseRecord`を呼ぶ。これで5箇所すべての非冪等なlocalStorage書き込み
-     （recordTitle×2種／advanceWorldYear×2モード／mlRecordLegend／recordCourseResult）が
-     reducerの外（App()側の画面遷移駆動useEffect）に統一された。
-  2. **dead import 124個の削除**：Step8（screens分割）でJSXレンダリングをscreens/へ委譲して以降、
-     main.jsx本体では一度も使われないまま残っていた古いimport（`AbilityGrid`/`CondFc`等の
-     panels.jsxコンポーネント・`SEG_COLOR`/`WEATHER`/`hasSaveGame`等）を機械的に検出し削除した。
-     削除前に該当識別子が本当にmain.jsx内で参照されていないか個別にgrepで再確認してから実施。
-  **検証**：`peekCourseRecord`/`persistCourseRecord`を直接呼ぶ8ケースの単体テストを新規作成
-  （複数回呼んでも判定が食い違わないこと＝旧`recordCourseResult`の非冪等バグが再現しないことを
-  中心に検証、Node環境向けの簡易localStorageモックを使用）し全PASS。既存Node181ケースと合わせ計189
-  ケース全PASS。ビルド成功、Playwrightでseason/mylife双方の主要画面・タブ・レース出走〜結果確定を
-  実機確認、実行時エラー0。main.jsx 1241→1257行（import整理で行数はほぼ横ばいだが、内容が実際に
-  使われる識別子だけになった）。
+- **Step7第2弾〜第4弾（完了・詳細はgit履歴）**：`git log --oneline --grep="controllers抽出"` で
+  該当コミットを検索し `git show <hash>` で当時の詳細を復元できる。以下は件名のみの索引：
+  - **第2弾**：分類Aの単純reducer27個を`controllers/season/shop.js`・`roster.js`・`mylife/shop.js`へ
+    抽出（main.jsx 2564→2262行）。この時点でApp()の残ハンドラを**分類A**（`setG`/`setMl`だけで完結）と
+    **分類B**（`useRef`ロック・`setTimeout`・stale closure修正コメントを持つレース/月進行系）に分類した。
+  - **第3弾**：分類Bをさらに3層に再分類——**B-1**（完全に純粋）・**B-2**（reducer形＋副作用埋め込み）・
+    **B-3＝真の危険地帯**（`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`のみ・合計約89行）。
+    B-1/B-2（約1,070行）を`controllers/season(mylife)/month.js`・`event.js`・`result.js`へ抽出。
+    setG/setMlのupdater内側で非冪等なlocalStorage書き込み（`recordTitle`/`advanceWorldYear`/
+    `mlRecordLegend`）が直接呼ばれていた「休眠地雷」も発見し、画面遷移をrefガード付きで検知する
+    useEffectへ解消（main.jsx 2262→1241行）。**B-3にはこの時点では意図的に未着手**（後述の第5〜8弾で対応）。
+  - **第4弾**：`recordCourseResult`の非冪等性解消（`peekCourseRecord`＝判定のみ／`persistCourseRecord`＝
+    書き込みのみに分離）・dead import 124個の削除（main.jsx 1241→1257行）。
+  検証はいずれもNode単体テスト新規追加＋既存分の全PASS、Playwright実機確認・実行時エラー0。
 
 - **Step7第5弾（B-3の再調査・退行の発見と修正・入力組み立ての抽出）**：Opusで設計、Sonnetで実装。
   「B-3には触らない」という前回までの方針を見直す前に、まず`startRace`/`startNextStage`/
