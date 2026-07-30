@@ -317,7 +317,8 @@ export const cycMod = (v, m) => ((v % m) + m) % m;
 export const CAP_COLORS = ["#e9e2d4", "#d94f4f", "#e0b23c", "#4b7fc1", "#43a047", "#7e57c2", "#eeeeee", "#2b3038"];
 // v39.11: ロードバイクに乗ったレーサーのドット絵（側面・進行方向＝右）。細い前後同径ホイール＋ダイヤ型
 // フレーム＋ドロップハンドル、選手はドロップを握って深く前傾したエアロ姿勢。接地点(x,y)に描く。拡縮なし。
-function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple }) {
+// v41(§Step13第3弾): BaseView（敷地画面）から再利用するためexport化。挙動は無変更。
+export function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple }) {
   const s = isAce ? 1.14 : 1, u = 1.45 * s;
   const X = (a) => +(a * u).toFixed(2), Y = (b) => +(-b * u).toFixed(2);
   const px = (a, b, w, h, f) => <rect x={X(a)} y={Y(b + h)} width={(w * u).toFixed(2)} height={(h * u).toFixed(2)} fill={f} shapeRendering="crispEdges" />;
