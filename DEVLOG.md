@@ -799,10 +799,54 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   （`index.html`もHEADと1バイトも変わっていないことを確認済み）。既存Node348ケースと
   合わせ計394ケース全PASS、ビルド成功。
 
-**次にやること**：④BaseViewとメニューシェルの同時配線（一括カットオーバー）。`main.jsx`の
-`screen:"main"`をBaseView＋MenuShellへ置き換え、旧5タブNav（`hub.jsx`のディスパッチ）を
-撤去する。第1弾で作った6セクション関数（`hub/riders.jsx`等）をメニューの行き先として実配線し、
-`data/seasonMenu.js`の`race`/`save`/`titleReturn`セクションキーの実体（`hub/home.jsx`の
-再分割・セーブ処理・タイトル復帰）も配線する。カットオーバー後は第11弾の23点DOM比較・
-第13弾第1弾のhub.jsx DOM比較のうち動線に依存する分（`season_main`等）のベースライン
-取り直しが必要になる見込み。
+- **Step13第4弾（カットオーバー：BaseView＋MenuShellの本配線、旧5タブNav撤去）**：Sonnetで
+  実装。4波構成の④、ユーザーが選んだ「最初から置き換える」を実行する最終波。①〜③は
+  「配線せず単体で完成させ休眠させる」方針だったが、本弾は逆に**このまま本番採用する配線**
+  として`main.jsx`／`hub.jsx`を書き換えた（②③のような検証後`git checkout`revertはしない）。
+  **配線内容**：`main.jsx`は`useSeasonMenu()`を、②で踏んだRules of Hooks教訓のとおり
+  `becomeManager`/`metaScreen`の早期returnより前・無条件セクションで呼び、返り値`seasonMenu`
+  を`renderSeasonScreens`へのctxに追加した。`hub.jsx`は950行→30行の旧ディスパッチャを
+  丸ごと書き換え、`seasonMenu.menuState.section`で分岐して①の6セクション関数
+  （`riders`/`facility`/`market`/`records`/`help`、`race`は`home.jsx`）か
+  `<BaseView g={g} paused={seasonMenu.menuState.open}/>`のどちらかを描画し、
+  `<MenuShell>`をオーバーレイとして常に併置する形にした。「セーブ」「タイトルに戻る」は
+  フルスクリーン遷移ではなく`handleSelectSection`内の即時アクションとして特別扱い
+  （選択と同時にメニューは閉じるが、セクション自体は変えない＝タイトル復帰のダイアログを
+  キャンセルしても元の画面に留まる）。
+  **`base`クイックアクションの追加**：小ジャンルで「選手」等へ入った後、BaseView（敷地の
+  俯瞰）へ戻る手段がメニュー階層に無いことに気付き、`data/seasonMenu.js`の`misc`カテゴリへ
+  `"🏠 拠点に戻る"`（`section:"base"`、`null`と同じ扱いでBaseViewを描画）を追加した
+  （既存のNode単体テストの期待値配列も6→9キーへ更新し再検証）。
+  **発生したビルドエラー**：`hub.jsx`に書いた`import { BaseView } from "../base/BaseView.jsx"`
+  が誤り（`hub.jsx`は`src/screens/season/`直下、`BaseView.jsx`の実体は
+  `src/components/base/`直下のため、正しくは`"../../components/base/BaseView.jsx"`）。
+  `[UNRESOLVED_IMPORT]`でビルドが即座に落ちたため実害はなし。
+  **検証**：`data/seasonMenu.js`のキー整合を見るNode単体テスト（41→43ケースに更新）と
+  ③の46ケースが全PASS、ビルド成功。旧5タブNavから新メニュー動線への置き換えに伴い、
+  第1弾の`hub.jsx` DOMバイト比較スナップショット（タブ切替前提）はこの弾で意図的に前提が
+  崩れるため退役させ、代わりに新メニュー動線を直接検証するPlaywrightスクリプトを新規作成
+  （`step13_cutover_check.mjs`18項目・`step13_cutover_check2.mjs`3項目、計21項目全PASS）：
+  main画面到達時のBaseViewデフォルト表示・旧Nav不在・☰トグル表示／6大ジャンル一覧表示／
+  6カテゴリそれぞれから対応セクションへの到達／「🏠拠点に戻る」でのBaseView復帰／
+  「セーブ」でのlocalStorage更新とBaseView据え置き＋メニュー自動クローズ／「タイトルに戻る」
+  の確認ダイアログとOK確定でのタイトル画面復帰／メニュー経由で選手セクションの練習指定
+  selectが実際に操作できること、を確認した。
+  既存の`gt_regress_*`・`step7*_regress*`・`step8_regress*`・`regression.mjs`・
+  `wave11_button_walk`などseason画面を経由する回帰スクリプト群は、直接
+  「ショップ」「選手・練習」「翌月へ進む（今月は休養）」等の**旧5タブボタンをクリックする**
+  実装のため軒並み該当ボタンが見つからず失敗するようになった。これは今回の変更が
+  「最初から置き換える」設計どおり意図的に旧Navを撤去した結果であり、ゲームロジック側の
+  リグレッションではないと判断した（同じ操作を新メニュー経由で行う`step13_cutover_check*`が
+  全PASSしていることで裏付け済み）。一方、season画面を経由しない
+  `mylife_regress`・`step8ml_regress`(1〜7)・`step7c_regress_ml`・`step7e_regress_ml`・
+  `step7f_regress_ml`・`ml_wave9_verify`(50項目)・`ml_dblclick_repro`(13項目)・
+  `become_manager_check`(6項目)・`ob_coach_bug_check`・`wave11_button_walk`のCPショップ/
+  生涯評価部分は全てPASSし無傷を確認した。これら大量の旧season E2Eスクリプト自体の
+  更新（新メニュー動線への書き換え）は本弾のスコープ外とし、将来のテスト整理タスクとして
+  残す（`step13_cutover_check*`が実質的な後継として機能する）。
+
+**この4波で、カイロソフト式動線への移行（BaseView常設表示＋2階層メニュー、旧5タブNav撤去）が
+完了した。** マイライフモードへの展開・敷地画面の視覚的な磨き込み（Wave D）は今後の課題として
+残る。次のセッション冒頭で、CLAUDE.md §4の指示どおりDEVLOG.mdのスリム化（旧waveの本文を
+「件名のみの索引＋git showでの復元手順」へ圧縮）に着手する（ユーザーが「今は進めて、
+④の後でまとめて整理」を明示的に選択済み）。

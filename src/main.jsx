@@ -11,6 +11,10 @@ import { renderSeasonScreens } from "./screens/season.jsx";
 import { useAppShell } from "./hooks/useAppShell.js";
 import { useSeasonGame } from "./hooks/useSeasonGame.js";
 import { useMyLifeGame } from "./hooks/useMyLifeGame.js";
+// Step13第4弾: カイロソフト式メニューの状態。早期returnより前で無条件に呼ぶ
+// （Rules of Hooks。第2弾の実機検証で「早期returnの後段で呼ぶとレンダーごとにフック
+// 呼び出し回数が変わりクラッシュする」ことを確認済み。詳細はDEVLOG §10参照）。
+import { useSeasonMenu } from "./hooks/useSeasonMenu.js";
 
 // ---------- メインアプリ ----------
 function App() {
@@ -20,6 +24,7 @@ function App() {
   const { g, setG } = season;
   const mylife = useMyLifeGame({ superMode, askConfirm });
   const { ml } = mylife;
+  const seasonMenu = useSeasonMenu();
 
   // v38(#9 A-4): 選手→監督の転身ブリッジ。マイライフの殿堂選手を新チームの監督として招聘する
   // （生涯評価画面の「監督として新チームを率いる」から呼ばれる、season/mylifeを跨ぐ唯一の導線）
@@ -40,7 +45,7 @@ function App() {
   if (superMode === "mylife") return renderMyLifeScreens({ ...shellForScreens, ...mylife, mlWrap, becomeManager });
 
   // ================= 画面（シーズンモード） =================
-  return renderSeasonScreens({ ...shellForScreens, ...season, wrap });
+  return renderSeasonScreens({ ...shellForScreens, ...season, wrap, seasonMenu });
 }
 
 
