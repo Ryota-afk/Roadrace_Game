@@ -36,21 +36,6 @@ export function SeasonHeader({ g, cls }) {
   );
 }
 
-export function SeasonNav({ g, setG }) {
-  return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-      {[["home", "🏁 レース"], ["riders", "👥 選手・練習"], ["shop", "🛒 ショップ"], ["career", "📜 記録"], ["help", "📖 ヘルプ"]].map(([k, l]) => (
-        <button key={k} onClick={() => setG(s => ({ ...s, tab: k }))}
-          style={{
-            flex: 1, padding: "9px 4px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: FONT_D, cursor: "pointer",
-            background: g.tab === k ? C.yellow : C.panel, color: g.tab === k ? "#14171d" : C.sub,
-            border: `1px solid ${g.tab === k ? C.yellow : C.line}`,
-          }}>{l}</button>
-      ))}
-    </div>
-  );
-}
-
 // v29: 選手名変更モーダル（wrap/mlWrap両方で表示する共用JSX）
 export function RenameModal({ renameState, setRenameState }) {
   if (!renameState) return null;
@@ -88,13 +73,21 @@ export function ConfirmDialog({ confirmDialog, setConfirmDialog }) {
   );
 }
 
-export function makeWrap({ g, setG, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
+// 第2引数 opts.fill=true のとき、内側コンテナを縦フレックスにして children に残り高さを
+// 全て与える（BaseView＝敷地画面のように「画面いっぱいに敷き詰めたい」画面向け）。
+// Step13第4弾で旧5タブNavを撤去して以降 withNav を渡す呼び出し元は無くなったため、
+// Wave D2で SeasonNav ごと削除し、第2引数をこのオプションに作り替えた。
+// 通常の画面は従来どおり wrap(children) だけで呼べる（既存の呼び出しは全て無変更）。
+export function makeWrap({ g, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
   const cls = CLASSES[g.classIdx];
-  return (children, withNav) => (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT_B }}>
-      <div style={{ maxWidth: 560, margin: "0 auto", padding: "6px 14px 40px" }}>
+  return (children, opts = {}) => (
+    <div style={{ minHeight: "100svh", background: C.bg, fontFamily: FONT_B, ...(opts.fill ? { display: "flex", flexDirection: "column" } : null) }}>
+      <div style={{
+        maxWidth: 560, margin: "0 auto", width: "100%", boxSizing: "border-box",
+        padding: opts.fill ? "6px 14px 10px" : "6px 14px 40px",
+        ...(opts.fill ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : null),
+      }}>
         <SeasonHeader g={g} cls={cls} />
-        {withNav && <SeasonNav g={g} setG={setG} />}
         {children}
       </div>
       <RenameModal renameState={renameState} setRenameState={setRenameState} />

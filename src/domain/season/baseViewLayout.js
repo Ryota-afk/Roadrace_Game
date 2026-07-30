@@ -29,6 +29,58 @@ export function visibleFacePair(corners) {
   return { front, left, right };
 }
 
+// 立方体（world座標のダイヤ形footprint＋高さ）の可視2面＋天面の頂点をまとめて返す共通関数。
+// 建物・チームカー・ベンチ・自転車ラックなど「箱状のもの」は全てこれを使って描くことで、
+// 必ずアイソメ格子に乗る（Wave Dでは小物をスクリーン座標の矩形で描いており、斜めの角度が
+// 周囲と合わない＝「角度が変」の原因になっていた。詳細はDEVLOG §10）。
+// footprintは **world軸に平行な矩形**（w∈[w±hw], l∈[l±hl]）である必要がある。
+// Wave D2初版は N=(-hw,0)/E=(0,hl)/S=(hw,0)/W=(0,-hl) という「world空間で45°回転した菱形」
+// を使っていた。これを2:1投影すると画面軸に平行な長方形になってしまい（hw=hlなら完全な
+// 長方形）、可視2面の画面上の幅が44px対7.8pxと極端に非対称になる＝アイソメに見えない、
+// というのがユーザー指摘「建物その他の斜めの角度が変」の根因だった。
+// world軸平行の矩形なら投影後は必ず正しい菱形になり、hw=hlのとき2面の幅も一致する。
+export function isoBoxFaces(w, l, hw, hl, height, proj) {
+  const N = isoProject(w - hw, l + hl, 0, proj); // 奥（画面上）
+  const E = isoProject(w + hw, l + hl, 0, proj); // 右
+  const S = isoProject(w + hw, l - hl, 0, proj); // 手前（画面下）
+  const W = isoProject(w - hw, l - hl, 0, proj); // 左
+  const corners = { N, E, S, W };
+  const { front, left, right } = visibleFacePair(corners);
+  const lift = (p) => ({ x: p.x, y: p.y - height });
+  const top = { N: lift(N), E: lift(E), S: lift(S), W: lift(W) };
+  return {
+    corners, top, front, left, right,
+    top4: [top.N, top.E, top.S, top.W], // 天面を多角形として描くための順序付き4頂点
+    botFront: corners[front], botLeft: corners[left], botRight: corners[right],
+    topFront: top[front], topLeft: top[left], topRight: top[right],
+  };
+}
+
+// world座標のw/l矩形の内側かどうか（プラザ等の領域判定）。
+export function inWorldRect(w, l, rect) {
+  return w >= rect.wMin && w <= rect.wMax && l >= rect.lMin && l <= rect.lMax;
+}
+
+// 芝の装飾を決定論的に散らすための点列。Math.randomを使わずriderHash01でふるい分けと
+// ゆらぎを与えるため、同じ引数なら常に同じ配置になる（毎フレーム位置が動かない）。
+export function scatterPoints(bounds, step, salt, keepRatio) {
+  const pts = [];
+  let i = 0;
+  for (let w = bounds.wMin; w <= bounds.wMax + 1e-6; w += step) {
+    for (let l = bounds.lMin; l <= bounds.lMax + 1e-6; l += step) {
+      i++;
+      const h = riderHash01(i, salt);
+      if (h > keepRatio) continue;
+      pts.push({
+        w: w + (riderHash01(i, salt + 7) - 0.5) * step * 0.8,
+        l: l + (riderHash01(i, salt + 13) - 0.5) * step * 0.8,
+        h,
+      });
+    }
+  }
+  return pts;
+}
+
 // 壁面の4頂点（botA-botB-topB-topA）上の任意の点をバイリニア補間で求める。
 // u∈[0,1]：botA→botB方向（壁の横方向）、v∈[0,1]：床(0)→天井(1)方向。
 // 窓・扉など「壁面に貼り付く矩形」を頂点座標だけから機械的に配置するための共通関数。
@@ -110,6 +162,16 @@ export function roundedLoopPoint(t, pathW, pathL, cornerR = 0) {
 export function riderLoopPoint(riderId, tSec, speed, pathW, pathL, cornerR = 0) {
   const phase = riderHash01(riderId, 41);
   return roundedLoopPoint(phase + tSec * speed, pathW, pathL, cornerR);
+}
+
+// 選手の進行方向がスクリーン上で左向きか（＝スプライトを水平反転すべきか）を返す。
+// IsoRiderは常に右向きに描かれる固定スプライトのため、周回路の左側の直線では逆走して
+// 見えていた（Wave Dの積み残し）。わずかに先の位置との screen x の差で判定する。
+export function riderFacesLeft(riderId, tSec, speed, pathW, pathL, cornerR, proj) {
+  const dt = 0.05;
+  const a = riderLoopPoint(riderId, tSec, speed, pathW, pathL, cornerR);
+  const b = riderLoopPoint(riderId, tSec + dt, speed, pathW, pathL, cornerR);
+  return isoProject(b.w, b.l, 0, proj).x < isoProject(a.w, a.l, 0, proj).x;
 }
 
 // 周回路をn分割した中心線サンプル列。

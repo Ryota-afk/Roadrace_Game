@@ -51,9 +51,13 @@ export function renderSeasonHubScreen(ctx) {
   else if (sec === "help") content = renderHelpSection();
   else content = <BaseView g={g} paused={seasonMenu.menuState.open} />; // sec===null || "base"
 
+  // BaseView（敷地画面）表示中だけ wrap を fill モードにし、画面の残り高さを全て使う
+  // （Wave D2以前は横長固定のSVGが縦長スマホで画面高の27%しか占めず下半分が余っていた）。
+  const isBase = !sec || sec === "base";
+
   return (
     <>
-      {wrap(content)}
+      {wrap(content, isBase ? { fill: true } : undefined)}
       <MenuShell categories={SEASON_MENU_CATEGORIES} menuState={seasonMenu.menuState}
         openMenu={seasonMenu.openMenu} closeMenu={seasonMenu.closeMenu}
         selectCategory={seasonMenu.selectCategory} backToCategories={seasonMenu.backToCategories}
