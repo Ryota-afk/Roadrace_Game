@@ -430,7 +430,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜10弾実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜11弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -729,11 +729,51 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   newgame_setup遷移）を追加、合計114項目・実行時エラー0で全PASS。main.jsx 822→365行、
   `hooks/`3ファイル合計537行を新設。
 
-**残っている候補**：`superMode`分岐直下の5画面（モード選択／生涯評価／系譜／因子／
-CPショップ・main.jsx内に約280行）は、第10弾のフック化から意図的に除外した。次に着手するなら
-Step8で確立した型（用途クラスタ単位・byte-for-byte照合）で`screens/meta.jsx`へ出すのが自然で、
-その頃にはmain.jsxがほぼchrome＋dispatchのみ（100行程度）になる見込み。`raceFinishHandler`の
-`g.gc`残留による理論上の誤判定（第8弾で発見・スコープ外）は優先度低いが把握しておくこと。
-`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
-細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
-「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
+- **Step7第11弾（`superMode`メタ画面5つの`screens/meta.jsx`分離・クローム
+  （Header/Nav/モーダル/wrap/mlWrap）の`components/chrome.jsx`分離・系譜/因子ビューの
+  season/mylife共通化）**：Opusで設計、Sonnetで実装。第10弾で意図的にスコープ外とした
+  `superMode`直下のメタ画面5つ（モード選択／生涯評価／系譜ツリー／因子図鑑／CPショップ・
+  203行）に着手。調査の結果、メタ画面がApp()外から必要とするメンバーはわずか4つ
+  （`superMode`/`setSuperMode`/`buyCpItem`/`wrap`）で、依存の向きも
+  `screens/meta.jsx → logic/state/breeding/components/data`の一方向のみと判明し、
+  season/mylifeのフック分割（第10弾）よりも危険度の低い、単純な切り出しだった。
+  併せて、`main.jsx`の`dynasty_lineage`/`dynasty_factors`と
+  `screens/mylife/career.jsx`の`mylife_lineage`/`mylife_factors`が約9割同一のJSXを
+  2箇所で保守していたこと（差分は見出し要素・空状態文言・`position:relative`の有無・
+  戻るボタン先の5点のみ）も発覚。ユーザーはメタ画面分離とクローム分離を同時に行う案、
+  および系譜/因子の共通化も今回まとめて行う案の両方を選択した。
+  **分割**：`screens/meta.jsx`（メタ画面5つのディスパッチ＋各画面のレンダ関数）、
+  `components/chrome.jsx`（`SeasonHeader`/`SeasonNav`/`RenameModal`/`ConfirmDialog`＋
+  それらを束ねる`makeWrap`/`makeMlWrap`ファクトリ）、`components/dynasty.jsx`
+  （`LineageForestView`/`FactorCollectionView`。差分は`variant`props＋呼び出し側が渡す
+  `footer`で吸収）。`wrap`/`mlWrap`はファクトリ化した上で呼び出し側の形
+  （`wrap(children, withNav)`）を変えていないため、`screens/season/*.jsx`・
+  `screens/mylife/*.jsx`は無変更。副産物として、旧`wrap`/`mlWrap`内にバイト単位で
+  完全一致する確認モーダルJSXが2箇所独立に存在していた（`main.jsx`旧105-115行目と
+  134-144行目、`diff`で一致確認済み）ものを`ConfirmDialog`1つに統合した（出力DOM不変）。
+  `main.jsx`は365→48行（合成ルートのみ）に、`career.jsx`は504→454行になった。
+  **検証**：Header/Navをモジュールスコープの独立コンポーネントへ切り出すとReactの
+  差分検出アルゴリズムが型で同一視するため、従来App()内で定義されていた頃（毎レンダ新しい
+  関数式＝型が変わり続けアンマウント/リマウントされていた）と挙動が変わる可能性
+  （特に`renameModal`内の非制御`<input autoFocus>`のフォーカス維持）を設計段階で洗い出し、
+  重点的に検証した。前回のOB_COACH_SALARY事件（単語境界の正規表現マッチングがdead-import
+  検出を欺いた）を踏まえ、今回は**静的チェックを主軸に据えず**、`Date.now`/`Math.random`を
+  決定的なシード付き実装へ差し替えた上でリファクタ前後のDOM（`#root`配下の`innerHTML`、
+  空欄markup属性値の正規化のみ）を**バイト単位で比較**する手法を主軸にした。メタ5画面×2
+  フィクスチャ（未プレイ／殿堂・系統tier0〜3・世代・因子★超過・CP購入可否等を網羅した
+  リッチフィクスチャ）＋season/mylifeの主要画面＋改名・確認モーダル展開状態、計23スナップ
+  ショットが全てリファクタ前後でバイト完全一致した。加えてDOM比較では捕まらない
+  「onClick内シンボル欠落」「フォーカス喪失」のクラスに対応するため、メタ画面の全遷移
+  ボタン・Nav全タブ・CPショップの実購入（残高減少と「✓解禁済」表示を確認）・改名モーダルへの
+  3文字連続入力（`document.activeElement`がinputのまま保たれ、値が正しく累積し、Enterで
+  反映されることを確認）を実機で走査し22/22 PASS。既存Node287ケース全PASS、ビルド成功。
+  Playwrightは第7弾グランツール回帰（26+12項目）・第8弾season/mylife連打防止回帰
+  （13項目）・第9弾mylifeセーブ注入（50項目）・第10弾becomeManagerブリッジ（6項目）を
+  全再実行し全PASS、OBコーチクラッシュ修正の再現テストも実行時エラー0を再確認した。
+
+**残っている候補**：`raceFinishHandler`の`g.gc`残留による理論上の誤判定（第8弾で発見・
+スコープ外）は優先度低いが把握しておくこと。`hub.jsx`（season側949行・mylife側557行）は
+依然として大きく、タブ／画面単位でのさらなる細分化の余地はあるが、現状は許容範囲（他の
+分割済みファイルと比べ突出はしていない）。`main.jsx`は48行までスリム化され、当面の
+コード構造の肥大化リスクは低い。新機能は必ず「data / domain / controller / screen」の
+4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。
