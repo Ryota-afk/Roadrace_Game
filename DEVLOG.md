@@ -430,7 +430,7 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
 
 ---
 
-## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜9弾実施）
+## 9. モジュール細分化・整理（2026-07・Opus設計→Step1〜8実施・Step7第2〜10弾実施）
 
 **背景**：v41（移籍市場）完了時点で `main.jsx`(3041行)・`logic/support.js`(2574行) が肥大化し、
 ロジックが単一Reactクロージャ(`App()`)と雑多な`support.js`に集約される構造リスクを検出。Opusが実測ベースで
@@ -683,12 +683,57 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   ことが原因で、本体側のバグではないと確認した（テスト側を修正して解消）。Wave 8のmylife連打
   防止回帰（13/7項目）・season側グランツール回帰（26項目）も再実行し全PASS。main.jsx 1259→822行。
 
-**残っている候補**：`ctx`89メンバーの手組み自体の解消（`useSeasonGame`/`useMyLifeGame`フック化）
-は、第9弾でmylifeハンドラが片付いた今が本来の着手どころ。ただし`superMode`分岐直下の5画面
-（モード選択／生涯評価／系譜／因子／CPショップ・205行）がStep8のscreens分割から漏れて
-main.jsxに残っている点は要考慮（フック化の前にこれも`screens/`へ出すか、フックの中にJSXごと
-含めるかは設計判断が要る）。`raceFinishHandler`の`g.gc`残留による理論上の誤判定
-（第8弾で発見・スコープ外）は優先度低いが把握しておくこと。`hub.jsx`（season側949行・
-mylife側557行）は依然として大きく、タブ／画面単位でのさらなる細分化の余地はあるが、現状は
-許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
+- **Step7第10弾（`ctx`89メンバーの手組み解消・`useAppShell`/`useSeasonGame`/`useMyLifeGame`への
+  フック化・OBコーチ選択時のライブクラッシュバグ発見/修正）**：Opusで設計、Sonnetで実装。
+  第9弾完了直後にユーザーから直接依頼された作業。着手前にmain.jsx（822行）を棚卸ししたところ、
+  season/mylifeの状態分離が既にほぼ完璧（useEffect14個のうちseason/mylife混在ゼロ、UI状態4組
+  全てseason専用、season画面が使う`ml*`系メンバーはゼロ）と判明し、B-3や第9弾ほどの危険は
+  無いと確認してから設計・実装した。両モードの本当の結合はmylifeの`career.jsx`にある
+  「選手→監督の転身ブリッジ」（引退した殿堂選手を新チーム監督として招聘し、season側の
+  `setG`/`initGame`を直接呼ぶ）1箇所のみだった。
+  **設計判断（ユーザー選択）**：①ctxをseason/mylifeに分割し、season画面にmylifeハンドラを
+  一切渡さない（層の逆流を構造的に不可能にする）。②`superMode`直下のメタ画面5つ
+  （モード選択／生涯評価／系譜／因子／CPショップ・205行）は今回のフック化のスコープ外とし
+  次のウェーブへ回す。
+  **分割**：`hooks/useAppShell.js`（`superMode`／`confirmDialog`／`renameState`／`uiTick`＋
+  `askConfirm`／`openRename`／`buyCpItem`。両モードから共有される3メンバーのみ）、
+  `hooks/useSeasonGame.js`（`g`/`setG`＋season専用UI状態4組＋派生値＋season effect8個＋
+  seasonハンドラ全部。外部依存なし）、`hooks/useMyLifeGame.js`（`ml`/`setMl`＋
+  `mlCreateArgsRef`＋mylife effect6個＋mylifeハンドラ全部。引数は`{ superMode, askConfirm }`
+  の2つのみ）。転身ブリッジは`career.jsx`内の直書き`setG`/`setSuperMode`呼び出しを、
+  App()側で組み立てた`becomeManager()`コールバック1つに置き換えた（今回唯一の実質的な
+  配線変更）。chrome（`Header`/`Nav`/`renameModal`/`wrap`/`mlWrap`）とメタ画面5つはApp()に
+  残置。ctxは`{ ...shellForScreens, ...season, wrap }`（season向け）／
+  `{ ...shellForScreens, ...mylife, mlWrap, becomeManager }`（mylife向け）の2種類に分割し、
+  手組みの88行は消えた。
+  **副次的に発見した実バグ（OBコーチ選択で全画面クラッシュ）**：main.jsxを精読中、Header内の
+  `{g.obCoach && <>／OBコーチ -{OB_COACH_SALARY}万/月</>}`が`OB_COACH_SALARY`を一切
+  importしていないことを発見した（過去waveのdead import削除で誤って巻き込まれたと推測される。
+  この識別子は`m.overall`のようなプロパティアクセスと単語境界が一致するため、これまでの
+  機械的なdead-import検出では見逃されていた）。`Header`は全画面で常時レンダリングされるため、
+  **OBコーチを1人でも雇うと即座に白画面クラッシュする**、本番相当のライブバグだった。
+  localStorage注入で`g.obCoach`を設定した状態を実機再現し（修正前：`ReferenceError:
+  OB_COACH_SALARY is not defined`が3回連続で発生）、`data/economy.js`からの1行importを
+  追加して修正・再現テストで解消を確認した。今回の主目的（hook化）とは独立した発見のため、
+  DEVLOGでも別枠として明記する。
+  **検証**：この作業特有のリスク（分割代入は欠けたキーを`undefined`にするだけでビルドエラーに
+  ならず、そのボタンを押した瞬間に初めてクラッシュする）に対応するため、通常の検証に先立って
+  **機械的な突合スクリプト**を作成・実行した——①全`screens/**/*.jsx`の`const {...} = ctx;`を
+  パースして各画面が要求するctxメンバーを抽出、②season/mylifeそれぞれの実際の提供メンバーと
+  突合し不足ゼロを確認、③season画面が`ml*`系を使っていないか／mylife画面が`g`/`setG`を
+  使っていないかの層の逆流チェック。3つとも一発でPASS（season:要求51/提供54・mylife:要求
+  41/提供43・逆流ゼロ）。その上で既存Node287ケース全PASS、ビルド成功。Playwrightは
+  第7弾のグランツール回帰（(A)(B)(C)計38項目）・第8弾のmylife/season連打防止回帰
+  （13/7/26項目）・第9弾のmylifeセーブ注入50項目を**全部再実行**（App()全体を作り替えたため
+  必須）、さらに転身ブリッジ専用の新規シナリオ（引退画面→「監督として新チームを率いる」→
+  newgame_setup遷移）を追加、合計114項目・実行時エラー0で全PASS。main.jsx 822→365行、
+  `hooks/`3ファイル合計537行を新設。
+
+**残っている候補**：`superMode`分岐直下の5画面（モード選択／生涯評価／系譜／因子／
+CPショップ・main.jsx内に約280行）は、第10弾のフック化から意図的に除外した。次に着手するなら
+Step8で確立した型（用途クラスタ単位・byte-for-byte照合）で`screens/meta.jsx`へ出すのが自然で、
+その頃にはmain.jsxがほぼchrome＋dispatchのみ（100行程度）になる見込み。`raceFinishHandler`の
+`g.gc`残留による理論上の誤判定（第8弾で発見・スコープ外）は優先度低いが把握しておくこと。
+`hub.jsx`（season側949行・mylife側557行）は依然として大きく、タブ／画面単位でのさらなる
+細分化の余地はあるが、現状は許容範囲（他の分割済みファイルと比べ突出はしていない）。新機能は必ず
 「data / domain / controller / screen」の4箇所に配る（1機能が既存の巨大ファイルへ"にじむ"のを禁止）。

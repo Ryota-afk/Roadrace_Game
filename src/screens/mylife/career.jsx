@@ -8,10 +8,10 @@ import { ABILITIES, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { C, FONT_D, FONT_M } from "../../data/theme.js";
 import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlEpilogueAway, mlEpilogueDirector, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlWorldBoard, mlWorldNews, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
-import { initGame, initMyLife, mlCareerArchetype, riderCareerSummary, riderNickname } from "../../state/state.js";
+import { initMyLife, mlCareerArchetype, riderCareerSummary, riderNickname } from "../../state/state.js";
 
 export function renderMyLifeCareerScreens(ctx) {
-  const { askConfirm, ml, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlWrap, setG, setMl, setSuperMode } = ctx;
+  const { askConfirm, becomeManager, ml, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlWrap, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_retire_advice" && ml.player) {
       const r = ml.player;
       const info = ml.adviceInfo || { age: r.age, ovr: overall(r), joinOvr: r.joinOvr, declining: false, reducedRole: false };
@@ -168,7 +168,7 @@ export function renderMyLifeCareerScreens(ctx) {
           <div style={{ background: "linear-gradient(180deg,#233026,#1d2a22)", borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.green}` }}>
             <Eyebrow color={C.green}>🏢 監督として、第二のキャリアへ</Eyebrow>
             <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px", lineHeight: 1.6 }}>現役を退いた{ml.player.name}を創設メンバーに迎え、同じ世界でチームを率いる監督としての人生を歩みます（シーズンモードへ・招聘レジェンドとして自動選択）。</div>
-            <Btn small color={C.green} onClick={() => { setSuperMode("season"); setG({ ...initGame(), screen: "newgame_setup", legendRecruitIdx: 0 }); }}>🏢 監督として新チームを率いる（{ml.player.name}を招聘）</Btn>
+            <Btn small color={C.green} onClick={becomeManager}>🏢 監督として新チームを率いる（{ml.player.name}を招聘）</Btn>
           </div>
           <Btn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</Btn>
           <Btn outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>🏛 歴代選手の殿堂を見る</Btn>
