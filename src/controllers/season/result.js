@@ -8,8 +8,11 @@
 // 移動してしまっていた。rankSimはsimを破壊的に変更し、内部のresolveFinishClustersがMath.random()で
 // ジッターを掛けるため、updaterが複数回呼ばれると着順が変わり得る（第3弾・第4弾で潰していた
 // 「非冪等な処理をupdaterに置かない」原則の違反を、同じ作業中に1つ作り込んでいた）。
-// rankSimはApp()側のfinishRaceラッパーがsetGを呼ぶ前に1回だけ実行する。この関数は
-// 「simは既にランク済み」を前提とする（詳細はDEVLOG §9参照）。
+// v41(§Step7第12弾): 上記のApp()側finishRaceラッパーのrankSim呼び出しはさらに削除した。
+// rankSimはbuildSim（sim/race.js・support.js）が末尾で既に1回呼んでいるため、ここでもう1回
+// 呼ぶと経路によって呼び出し回数が不揃いになり、観戦中にRaceViewが描いた着順と結果画面の
+// 着順がずれ得た（詳細はDEVLOG §9参照）。この関数は「simはbuildSimの時点で既にランク済み」
+// を前提とする。
 import { CLASSES } from "../../data/progression.js";
 import { MONTHS } from "../../data/course.js";
 import {

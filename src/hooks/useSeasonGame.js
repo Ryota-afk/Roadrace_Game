@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CLASSES, DIFFICULTIES } from "../data/progression.js";
 import { ROSTER_MAX_BY_CLASS } from "../data/course.js";
-import { PART_SLOTS, rankSim } from "../sim/race.js";
+import { PART_SLOTS } from "../sim/race.js";
 import { buildSim, STAFF_MAX_BY_CLASS, computeClearPoints, computeSeasonAchievements, noteAbilityDiscovery, persistCourseRecord } from "../logic/support.js";
 import { advanceWorldYear, initGame, loadMeta, recordTitle, saveGame, saveMeta } from "../state/state.js";
 import {
@@ -224,19 +224,28 @@ export function useSeasonGame() {
   // v41(§Step7第3弾): レース結果確定は controllers/season/result.js の純関数に集約。
   // finishStage内のrecordTitle("grandTour")は呼ばず、返り値gc.justWonGrandTourフラグを見た
   // useEffectへ移した（上記・詳細はDEVLOG §9参照）。
-  // v41(§Step7第5弾・退行修正): rankSim(sim)はsimを破壊的に変更しMath.random()でジッターを掛けるため、
-  // setGのupdater内で呼ぶと再実行時に着順が変わり得る。第3弾のreducer化でうっかりupdater内へ
-  // 移動していたのを、元の位置（setGを呼ぶ前に1回だけ）へ戻した。
-  const finishRace = (sim, race, stageOverride) => {
-    rankSim(sim);
-    setG(s => srFinishRace(s, sim, race, stageOverride));
-  };
+  // v41(§Step7第12弾): rankSim(sim)は buildSim（sim/race.js・support.js）が末尾で既に1回
+  // 呼んでいる。ここでもう1回呼ぶと、経路によってrankSim呼び出し回数が1回（観戦・ステージ経路。
+  // raceFinishHandlerがfinishStageを直接呼ぶため）と2回（それ以外の3経路）で不揃いになり、
+  // 2回目の呼び出し（resolveFinishClustersのMath.randomジッター再抽選）で観戦中にRaceViewが
+  // 描いた着順と結果画面の着順がずれ得る実測済みの不整合があった（詳細はDEVLOG §9参照）。
+  // 全経路をbuildSimの1回だけに統一し、rankSimの呼び出しを削除した。
+  const finishRace = (sim, race, stageOverride) => setG(s => srFinishRace(s, sim, race, stageOverride));
   const finishTeamTT = (sim, race) => setG(s => srFinishTeamTT(s, sim, race));
   const finishStage = (sim, race, stageOverride) => setG(s => srFinishStage(s, sim, race, stageOverride));
 
+  // v41(§Step7第12弾): 判定をg.gcからg.result.raceMetaへ移した。g.gcはグランツール完走後
+  // （gc_final到達後）もadvanceMonthを通るまでクリアされないため、「gcがある＝ステージレース」
+  // という判定は、gc設定中の画面（race/result_pending/gc_stage/gc_role_setup/gc_final）から
+  // mainへ戻る導線が将来1本でも増えた瞬間に誤判定になる（現状はそのような導線が無いため
+  // 到達不能だが、暗黙の大域不変条件に依存している）。raceMetaは「今まさに確定させようと
+  // しているレースそのもの」の性質なので常に正しい（すぐ上のresult_pending用useEffectと
+  // 同じ判定基準に揃えた）。buildSimはraceMeta引数を参照ごとsimへ格納するため、到達可能な
+  // 全状態でg.result.raceMeta === g.gc.race（オブジェクト同一）であり、分岐先は変わらない。
   const raceFinishHandler = () => {
-    if (g.gc && g.gc.race.stageRace) finishStage(g.result, g.gc.race, g.gc.stage);
-    else finishRace(g.result, g.result.raceMeta);
+    const race = g.result.raceMeta;
+    if (race.stageRace) finishStage(g.result, race, g.gc.stage);
+    else finishRace(g.result, race);
   };
 
   // ---- 購入・装備・アイテム ----

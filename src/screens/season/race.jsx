@@ -216,7 +216,7 @@ export function renderSeasonRaceScreens(ctx) {
   if (g.screen === "race" && g.result) return wrap(
     <div>
       <div style={{ marginBottom: 8 }}>
-        <Eyebrow color={C.red}>LIVE — {g.result.raceMeta.name}{g.gc && g.gc.race.stageRace ? `（${g.gc.stage}日目）` : ""}</Eyebrow>
+        <Eyebrow color={C.red}>LIVE — {g.result.raceMeta.name}{g.result.raceMeta.stageRace ? `（${g.gc.stage}日目）` : ""}</Eyebrow>
       </div>
       <RaceErrorBoundary onRecover={raceFinishHandler}>
         <RaceView sim={g.result} onFinish={raceFinishHandler} />
