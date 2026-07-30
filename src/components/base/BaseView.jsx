@@ -5,32 +5,41 @@
 // ゲーム状態（月・育成・資金）には一切触れない環境演出専用コンポーネント（月は季節演出の
 // 参照にのみ使う＝時間経過そのものはメニュー操作でのみ進む設計を崩さない）。
 //
-// Wave E-2の変更（ユーザーの手描きスケッチに基づく・詳細はDEVLOG §11）：
-// 3D箱の外観建物（IsoBuilding）を全廃し、床＋奥2壁だけの「カットアウト部屋」（Room）へ
-// 置き換えた。部屋をタップすると対応するメニューセクションが開く（onRoomTap経由）。
-// タップの当たり判定はカメラの scene 座標系で行う（Wave E-1のuseIsoCamera.onTap）。
+// Wave E-2 redo（ユーザーの手描きスケッチの再確認に基づく・詳細はDEVLOG §11）：
+// 当初「5棟の小さな建物」として実装したが、スケッチは「敷地全体を屋外(コース)/屋内
+// (クラブハウス)の2つに大きく割り、屋内は単一の大部屋で、その中にトレーニング・
+// メカニック・メディカル・スカウトの持ち場（机など）が点在する」という構図だった。
+// クラブハウス（Room、単一の大部屋）＋4つの持ち場（Station）へ作り直した。
+// 持ち場をタップすると対応するメニューセクションが、部屋の何もない床をタップすると
+// メニュー全体（大ジャンル一覧）が開く（onRoomTap経由。当たり判定は持ち場を優先し、
+// 外れたら部屋全体のfloorへフォールバックする）。
 import React, { useEffect, useRef, useState } from "react";
 import { C, FONT_M } from "../../data/theme.js";
 import {
-  BASE_VIEW_PROJ, BASE_VIEW_BUILDINGS, BASE_VIEW_LOOP,
+  BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
 } from "../../data/baseViewBuildings.js";
-import { isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf, pointInQuad, roomFloorQuad } from "../../domain/season/baseViewLayout.js";
+import {
+  isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf,
+  pointInQuad, roomFloorQuad, stationQuad,
+} from "../../domain/season/baseViewLayout.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
 import { useIsoCamera } from "../../hooks/useIsoCamera.js";
 import { IsoRider, CAP_COLORS, riderWander } from "../RaceView.jsx";
 import { riderHash01 } from "../../sim/race.js";
 import { Room } from "./Room.jsx";
+import { Station } from "./Station.jsx";
 import { Track } from "./Track.jsx";
 import { Ground } from "./Ground.jsx";
 import { propItems } from "./Props.jsx";
 import { TYPES } from "../../data/abilities.js";
 
 const PROJ = BASE_VIEW_PROJ;
-const RIDER_SPEED = 0.035; // 周回速度（t/秒）。周回路を拡大したぶん見かけの速度を揃える
+const RIDER_SPEED = 0.035; // 周回速度（t/秒）
 // 選手が7名を超えたら簡易スプライト（IsoRiderのsimple版）に切り替える。
 // FinalSprintCinematicが確立した「大人数ほど残像対策で簡易化する」しきい値を踏襲。
 const SIMPLE_THRESHOLD = 7;
+const STATION_HIT_SIZE = 0.85; // 持ち場タップの当たり判定の半径（world単位）
 
 // paused=true（メニュー展開中）の間はelapsed秒数の加算そのものを止める。rAFの再開時に
 // 経過時間がジャンプしない（＝一時停止中は本当に世界が止まって見える）よう、加算量を
@@ -58,7 +67,7 @@ function useElapsedSeconds(paused) {
 // 描画物が占めるscene座標の範囲。レイアウトは静的なので一度だけ求めればよい。
 const SCENE_BOUNDS = sceneContentBounds({
   proj: BASE_VIEW_PROJ, plaza: BASE_VIEW_PLAZA, loop: BASE_VIEW_LOOP,
-  buildings: BASE_VIEW_BUILDINGS, props: BASE_VIEW_PROPS,
+  buildings: [BASE_VIEW_CLUBHOUSE], props: BASE_VIEW_PROPS,
 });
 
 // SVGの描画領域の実ピクセルサイズを追う。viewBoxをこれと一致させることで
@@ -80,18 +89,20 @@ function useElementSize() {
   return [ref, size];
 }
 
-// 各部屋のfloor四角形（タップ当たり判定用）。レイアウトは静的なので一度だけ求めればよい。
-const ROOM_QUADS = BASE_VIEW_BUILDINGS.map(b => ({ key: b.key, quad: roomFloorQuad(b, BASE_VIEW_PROJ) }));
+// タップ当たり判定用の四角形。持ち場（小さい・優先）→部屋全体の床（大きい・フォールバック）の順。
+const STATION_QUADS = BASE_VIEW_STATIONS.map(s => ({ key: s.key, quad: stationQuad(s, STATION_HIT_SIZE, BASE_VIEW_PROJ) }));
+const CLUBHOUSE_QUAD = roomFloorQuad(BASE_VIEW_CLUBHOUSE, BASE_VIEW_PROJ);
 
 export function BaseView({ g, paused, onRoomTap }) {
   const elapsed = useElapsedSeconds(!!paused);
   const [viewRef, view] = useElementSize();
   const [tappedKey, setTappedKey] = useState(null);
   const handleTap = (scenePt) => {
-    const hit = ROOM_QUADS.find(r => pointInQuad(scenePt, r.quad));
-    if (!hit) return;
-    setTappedKey(hit.key);
-    onRoomTap && onRoomTap(hit.key);
+    const hitStation = STATION_QUADS.find(s => pointInQuad(scenePt, s.quad));
+    const key = hitStation ? hitStation.key : (pointInQuad(scenePt, CLUBHOUSE_QUAD) ? "clubhouse" : null);
+    if (!key) return;
+    setTappedKey(key);
+    onRoomTap && onRoomTap(key);
   };
   const camera = useIsoCamera({ bounds: SCENE_BOUNDS, viewW: view.w, viewH: view.h, onTap: handleTap });
   const levels = buildingLevels(g);
@@ -112,12 +123,16 @@ export function BaseView({ g, paused, onRoomTap }) {
       color: (TYPES[r.type] && TYPES[r.type].color) || C.yellow,
     };
   });
-  const buildingRows = BASE_VIEW_BUILDINGS.map(b => {
-    const quad = ROOM_QUADS.find(r => r.key === b.key).quad; // [N,E,S,W]のscene座標（世界軸平行の実際のfootprint）
-    return { kind: "building", b, sortY: Math.max(...quad.map(p => p.y)) };
-  });
+  // クラブハウス（床+壁）と持ち場（什器）は1つの描画ユニットとしてまとめる。
+  // 什器は必ず部屋の床の「上」に乗る関係にあるが、それぞれ独立にsortYで奥行きソートすると
+  // 部屋自体のsortY（footprintの最前面＝部屋の外周のうち最もカメラに近い点）が、内側に
+  // マージンを取って置かれた什器のsortYより大きくなりがちで、不透明な床ポリゴンが後から
+  // 描かれて什器を覆い隠してしまう（実機確認で発覚。什器がほぼ透けて見えない不具合）。
+  // 部屋＋全持ち場を1つのdrawOrderエントリにまとめ、内部では必ず「床→什器」の順で描くことで
+  // 解消する（他の要素＝小物・選手との奥行き比較には部屋のsortYをそのまま使う）。
+  const clubhouseRow = { kind: "clubhouse", sortY: Math.max(...CLUBHOUSE_QUAD.map(p => p.y)) };
   const propRows = propItems(PROJ, BASE_VIEW_PROPS, palette).map(item => ({ kind: "prop", ...item }));
-  const drawOrder = [...buildingRows, ...propRows, ...riderRows].sort((a, b) => a.sortY - b.sortY);
+  const drawOrder = [clubhouseRow, ...propRows, ...riderRows].sort((a, b) => a.sortY - b.sortY);
 
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -131,7 +146,12 @@ export function BaseView({ g, paused, onRoomTap }) {
               <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
               <Track proj={PROJ} loop={BASE_VIEW_LOOP} />
               {drawOrder.map((item, i) => {
-                if (item.kind === "building") return <Room key={`b${item.b.key}`} b={item.b} snow={snow} proj={PROJ} selected={item.b.key === tappedKey} />;
+                if (item.kind === "clubhouse") return (
+                  <g key="clubhouse">
+                    <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"} />
+                    {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} />)}
+                  </g>
+                );
                 if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
                 // 左へ進むときは x=item.x の垂直線でスプライトを鏡像反転する
                 const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap} isPlayer={false} isAce={false} surging={false} simple={simple} />;
@@ -153,8 +173,9 @@ export function BaseView({ g, paused, onRoomTap }) {
         </div>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", fontSize: 10, color: C.sub, marginTop: 4, fontFamily: FONT_M, flexShrink: 0 }}>
-        {BASE_VIEW_BUILDINGS.map(b => (
-          <span key={b.key}>{b.icon} {b.label} Lv{levels[b.levelKey]}</span>
+        <span>{BASE_VIEW_CLUBHOUSE.icon} {BASE_VIEW_CLUBHOUSE.label} Lv{levels.clubhouse}</span>
+        {BASE_VIEW_STATIONS.map(s => (
+          <span key={s.key}>{s.icon} {s.label} Lv{levels[s.levelKey]}</span>
         ))}
       </div>
     </div>

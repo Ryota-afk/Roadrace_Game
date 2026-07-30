@@ -8,8 +8,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fitScale, coverScale, clampCam, cameraTransform, zoomAbout, viewToScene } from "../domain/season/camera.js";
 
-const TAP_SLOP = 8;      // これ未満の移動はタップ扱い（px）
-const MAX_ZOOM_MUL = 3;  // 下限(fit)に対する上限倍率
+const TAP_SLOP = 8;         // これ未満の移動はタップ扱い（px）
+const MAX_ZOOM_MUL = 3;     // 下限(fit)に対する上限倍率の基準値
+const COVER_HEADROOM = 1.3; // 上限(max)がcoverよりどれだけ大きい余地を持つか
 
 export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
   const [cam, setCam] = useState(null);   // {x,y} scene座標のカメラ中心
@@ -20,7 +21,17 @@ export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
 
   const limits = useMemo(() => {
     const min = fitScale(bounds, viewW, viewH);
-    return { min, max: min * MAX_ZOOM_MUL, initial: Math.min(coverScale(bounds, viewW, viewH), min * MAX_ZOOM_MUL) };
+    const cover = coverScale(bounds, viewW, viewH);
+    // 上限は必ずcover以上（さらに少し寄れる余地＝COVER_HEADROOM）を確保する。
+    const max = Math.max(min * MAX_ZOOM_MUL, cover * COVER_HEADROOM);
+    // 初期表示はfit（＝全体が画面に収まる倍率）にする。Wave E-2 redoでクラブハウス＋
+    // コースを横並びにしたところ、内容の縦横比(約1.95)がスマホ縦長画面(約0.52)と
+    // 大きく異なり、cover（画面を隙間なく覆う倍率）を初期値にすると内容の横幅の大部分が
+    // 画面外に押し出され、クラブハウスかコースのどちらかが最初は見えない状態になって
+    // いた（実機のタップ検証で発覚：計算上のタップ座標がビューポート外に出ていた）。
+    // 芝の下地はカメラの外側にあり倍率に関わらず必ず画面を埋めるため（Wave E-1）、
+    // fitを初期値にしても黒い余白は出ない＝「最初から敷地全体を見せる」を安全に選べる。
+    return { min, max, initial: min };
   }, [bounds, viewW, viewH]);
 
   // 画面サイズが決まったら初期化し、以後サイズが変わっても内容が画面外へ出ないよう再クランプする

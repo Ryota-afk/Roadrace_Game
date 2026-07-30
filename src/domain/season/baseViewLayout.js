@@ -51,6 +51,16 @@ export function roomFloorQuad(b, proj) {
   return [corners.N, corners.E, corners.S, corners.W];
 }
 
+// クラブハウス内の持ち場（什器）1つぶんの当たり判定用の小さな四角形（[N,E,S,W]の順）。
+// Wave E-2 redo：5棟の建物ではなく単一の大部屋＋持ち場という構図に変更したことに伴い新設。
+// roomFloorQuadと同じ考え方だが、部屋全体ではなく什器1つぶんの小さな範囲を対象にする
+// （BaseView側でまずstationQuadを判定し、当たらなければ部屋全体のroomFloorQuadへ
+// フォールバックする＝什器のピンポイントタップを部屋全体より優先する）。
+export function stationQuad(s, size, proj) {
+  const { corners } = isoBoxFaces(s.w, s.l, size, size, 0, proj);
+  return [corners.N, corners.E, corners.S, corners.W];
+}
+
 // 点pが凸四角形quad(4頂点・順序通りに並んでいること)の内側かどうか。
 // 全ての辺についてpが同じ側にあるかを外積の符号で判定する（辺上=符号0は許容）。
 // 部屋タップの当たり判定に使う（floor四角形はisoProjectの線形写像で必ず凸になる）。

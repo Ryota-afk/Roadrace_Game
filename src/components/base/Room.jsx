@@ -9,7 +9,7 @@
 // 一致）。これはWave D2で修正した可視面選択(front=Y最大)の鏡像であり、
 // `domain/season/baseViewLayout.js`の`backFacePair()`が同じ頂点集合から求める。
 import React from "react";
-import { isoBoxFaces, backFacePair } from "../../domain/season/baseViewLayout.js";
+import { isoBoxFaces, backFacePair, visibleFacePair, wallPoint } from "../../domain/season/baseViewLayout.js";
 
 const poly = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 
@@ -17,13 +17,28 @@ export function Room({ b, proj, snow, selected }) {
   const f = isoBoxFaces(b.w, b.l, b.hw, b.hl, b.wallHeight, proj);
   const { corners, top } = f;
   const { back, left, right } = backFacePair(corners);
+  const { front } = visibleFacePair(corners); // backの対角＝手前の開放頂点
   const botBack = corners[back], botLeft = corners[left], botRight = corners[right];
   const topBack = top[back], topLeft = top[left], topRight = top[right];
+
+  // 入口（扉）：開放辺の1つ（left-front）の中央に、目印としての枠線＋マットを置く。
+  // 実際に床を切り欠くわけではなく、どこから出入りするかを示す最小限の表現。
+  const doorJamb1 = wallPoint(corners[left], corners[front], top[left], top[front], 0.40, 0);
+  const doorJamb1Top = wallPoint(corners[left], corners[front], top[left], top[front], 0.40, 0.42);
+  const doorJamb2 = wallPoint(corners[left], corners[front], top[left], top[front], 0.60, 0);
+  const doorJamb2Top = wallPoint(corners[left], corners[front], top[left], top[front], 0.60, 0.42);
+  const matA = wallPoint(corners[left], corners[front], top[left], top[front], 0.36, 0);
+  const matB = wallPoint(corners[left], corners[front], top[left], top[front], 0.64, 0);
 
   return (
     <g opacity={selected ? 1 : 0.98}>
       {/* 床：footprint全体（4頂点とも高さ0） */}
       <polygon points={poly([corners.N, corners.E, corners.S, corners.W])} fill={b.floor} stroke="#00000022" strokeWidth="0.6" />
+
+      {/* 入口（扉）：開放辺(left-front)の中央に敷物＋短い枠柱を置き、出入口の目印にする */}
+      <polygon points={poly([matA, matB, { x: matB.x, y: matB.y - 3 }, { x: matA.x, y: matA.y - 3 }])} fill="#8a6a45" opacity="0.85" />
+      <line x1={doorJamb1.x.toFixed(1)} y1={doorJamb1.y.toFixed(1)} x2={doorJamb1Top.x.toFixed(1)} y2={doorJamb1Top.y.toFixed(1)} stroke="#5a4632" strokeWidth="1.6" />
+      <line x1={doorJamb2.x.toFixed(1)} y1={doorJamb2.y.toFixed(1)} x2={doorJamb2Top.x.toFixed(1)} y2={doorJamb2Top.y.toFixed(1)} stroke="#5a4632" strokeWidth="1.6" />
 
       {/* 奥2壁：backに接する2面。leftは明るい面、rightは陰の面（光源は右上想定） */}
       <polygon points={poly([botLeft, botBack, topBack, topLeft])} fill={b.wallLight} stroke="#00000030" strokeWidth="0.6" />

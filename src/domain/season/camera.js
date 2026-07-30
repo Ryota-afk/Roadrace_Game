@@ -25,7 +25,7 @@ export function sceneContentBounds({ proj, plaza, loop, buildings, props }, pad 
     add(-r, -s); add(-r, s); add(r, s); add(r, -s);
   }
   for (const b of buildings || []) {
-    const h = 3 * (b.floorHeight || 0); // 最大階数ぶんの高さを見込む
+    const h = b.wallHeight || 0; // Wave E-2で階数の概念を廃止（旧floorHeight×3階分は参照切れだった）
     add(b.w - b.hw, b.l - b.hl); add(b.w - b.hw, b.l + b.hl, h);
     add(b.w + b.hw, b.l + b.hl); add(b.w + b.hw, b.l - b.hl, h);
   }
