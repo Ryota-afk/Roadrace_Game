@@ -715,5 +715,45 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   （このwaveはcontrollers/domain層に一切触れていないため、いずれも無傷であることの確認）。
   `hub.jsx`は950→30行、`hub/`配下6ファイル合計1,005行を新設。
 
-**次にやること**：②メニューシェル（右下ボタン→左パネル→大ジャンル→小ジャンルの2階層UI）の
-設計・実装。行き先は今回作った6セクション関数。
+- **Step13第2弾（メニューシェル：右下ボタン→左パネル→大ジャンル→小ジャンルの2階層UI）**：
+  Sonnetで実装。4波構成の②に着手。ユーザーの選択（既存5タブUIは「最初から置き換える」＝
+  段階併存はしない）を踏まえ、メニューシェル自体はゲーム画面（BaseView）が無い今の時点では
+  **どこにも配線せず**、単体で完成させて休眠させる方針にした。BaseView（③）が揃う④の
+  カットオーバーで初めて配線し、旧5タブNavの撤去と同時に本番導線として登場させる。
+  **分割**：状態遷移は`domain/season/menuNav.js`（`(state,...args)=>newState`の純関数群。
+  `openMenu`/`closeMenu`/`selectCategory`/`backToCategories`/`selectSection`）に集約し、
+  `hooks/useSeasonMenu.js`はそれをuseStateへ薄く接続するだけのラッパーにした（Step7の
+  `controllers/`パターンをUIナビゲーション状態にもそのまま適用）。カテゴリツリーは
+  `data/seasonMenu.js`（`SEASON_MENU_CATEGORIES`、JSX非依存の純データ）に切り出し、
+  🚴選手／🏗施設・機材／🛒市場／🏁レース／📜記録／⚙その他の6大ジャンルとその小ジャンルを
+  定義した（section keyは第1弾で作った6セクション関数と1:1対応する設計）。見た目は
+  `components/menu/MenuShell.jsx`（ゲーム固有のレンダ先には一切依存しない提示専用
+  コンポーネント。categoriesとコールバックのみを受け取る）。
+  **実機検証で発覚したReact Hooksルール違反**：`useSeasonMenu()`を`App()`内の早期return
+  （`if (metaScreen) return ...`・`if (superMode==="mylife") return ...`）より後段に
+  呼ぶ形で一時配線したところ、`Rendered more hooks than during the previous render`で
+  クラッシュした。モード選択／マイライフ分岐ではその呼び出しに到達せずフックの呼び出し回数が
+  レンダーごとに変わってしまうためで、他のフック（`useAppShell`/`useSeasonGame`/
+  `useMyLifeGame`）と同じく**早期returnより前の無条件セクション**へ移動して解消した。
+  ④で本配線する際に必ず踏襲すべき制約として記録する。
+  **検証方法**：メニューシェル自体はまだ配線しないため、`main.jsx`へ`TEMP-DEV-ONLY`と
+  明記した一時配線を追加し実機で動作確認した後、確認が終わった時点で`git checkout`により
+  `main.jsx`を完全に元の状態へ戻した（コミットには一切含めていない。`index.html`が
+  HEADと1バイトも変わっていないことも確認済み）。検証内容：開閉トグル・大ジャンル一覧
+  表示・小ジャンルへのドリルダウン・戻るボタン・小ジャンル選択での自動クローズ・
+  オーバーレイ外側クリックでのクローズ・main画面到達時に旧5タブNavと純粋に共存できることの
+  計11項目を実クリックで確認、実行時エラー0。`domain/season/menuNav.js`の状態遷移と
+  `SEASON_MENU_CATEGORIES`のデータ健全性（重複key無し・第1弾のセクションキーとの整合）は
+  Node単体テスト41ケースを新規作成し全PASS。既存Node307ケースと合わせ計348ケース全PASS、
+  ビルド成功（新規ファイルはどこからもimportされていないため通常のPlaywright回帰スイート
+  への影響はゼロ。第7弾グランツール回帰・第8弾連打防止回帰・第9弾mylifeセーブ注入・
+  第10弾becomeManagerブリッジ・OBコーチクラッシュ再現・第11弾メタ/クロームDOM比較・
+  第13弾第1弾hub.jsx DOM比較を全再実行し無傷を確認。第7弾グランツール回帰と旧来の連打防止
+  回帰スクリプトは、実際のMath.random()を使う設計のため月次イベント抽選（EVENT_CHANCE=0.35、
+  第12弾で判明）やグランツール出現待ちに左右されるフレーキーさが引き続き確認されたが、
+  これは第12弾で既に記録済みの既知の不安定性であり、今回の変更とは無関係と判断した）。
+
+**次にやること**：③敷地画面（BaseView）の設計・実装。`components/RaceView.jsx`の
+`FinalSprintCinematic`（2:1ディメトリック投影・`IsoRider`・`riderWander`・30fps間引き
+rAFループ）を土台に、建物スプライトを新規に描く。④でBaseViewとメニューシェルを同時配線し、
+旧5タブNavを撤去する。
