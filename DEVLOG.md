@@ -488,167 +488,61 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   検証はいずれもNode単体テスト新規追加＋既存分の全PASS、Playwright実機確認・実行時エラー0。
 
 - **Step7第5弾〜第9弾（B-3残り4関数の段階的解消・`ctx`フック化着手前の下準備。完了済み）**：
-  `git log --oneline --grep="Step7第[5-9]弾"` で該当コミットを検索し `git show <hash>` で当時の
-  詳細（実装箇所・発見した実バグの再現手順・検証結果込み）を復元できる。以下は件名のみの索引：
-  - **第5弾**：B-3再調査。第3弾で作り込んだ退行（`rankSim`のupdater内混入・着順が非冪等になる
-    休眠バグ）を発見し修正。`startRace`系4関数のうち「純粋な入力組み立て」約35行だけを
-    `controllers/season(mylife)/raceStart.js`へ抽出（残りのuseRefロック/setTimeout/密輸/
-    updater内buildSimは意図的に未着手のまま）。Node215ケース全PASS。
-  - **第6弾**：グランツール3日間をスキップ経路のみで進めると3日目が永久に進行不能になる実バグを
-    発見（`stage2LockRef`解除漏れ）。PROクラスのセーブ注入で実機再現してから、解除ロジックを
-    "gc_stage"画面遷移を検知するuseEffectへ一本化。
-  - **第7弾**：`startNextStage`の二相化（フェーズ1=意図の確定のみの純関数`beginNextStage`、
-    フェーズ2=`gc.pendingStage`監視useEffectでのbuildSim実行）。`stage2LockRef`useRefロックを
-    廃止し、状態そのものをガードにする方式へ。Node226ケース全PASS。
-  - **第8弾**：B-3最後の3関数（`startRace`/`mlStartRace`/`mlStartLastRace`）を解消。`startRace`の
-    連打で賞金・ポイントが二重加算される実バグを発見・修正（`setTimeout`廃止＋updaterのno-opガード
-    ＋"result_pending"画面遷移検知への統合）。`mlRaceLockRef`useRefロックも廃止。この時点で
-    `raceFinishHandler`の`g.gc`残留誤判定を発見したが意図的にスコープ外とした（→第12弾で対応）。
-  - **第9弾**：`ctx`フック化の設計依頼に対し、着手前の棚卸しでmain.jsx 586行（`mlCreateChar`ほか
-    キャラ作成/イベント/キャリア分岐）がStep8のscreens分割から漏れて生で残っていたことを発見。
-    先にこれを`domain/mylife/createChar.js`・`controllers/mylife/career.js`・
-    `controllers/mylife/event.js`へ抽出。mylife版セーブ注入（`roadrace_v12_mylife_save`直接
-    書き換え）による実機検証手法を新設。既存Node226ケースと合わせ計287ケース全PASS。
-    main.jsx 1259→822行。
+  `git log --oneline --grep="Step7第[5-9]弾"` で該当コミットを検索し `git show <hash>` で
+  当時の詳細（実装箇所・発見した実バグの再現手順・検証結果込み）を復元できる。
+  以下は件名のみの索引：
+  - **第5弾**：B-3再調査（第3弾混入のrankSim退行を発見・修正）。`startRace`系の
+    「純粋な入力組み立て」約35行を`controllers/season(mylife)/raceStart.js`へ抽出。
+  - **第6弾**：グランツール3日間をスキップ経路のみで進めると3日目が永久に進行不能になる
+    実バグを発見・修正（`stage2LockRef`解除漏れ→"gc_stage"遷移検知useEffectへ一本化）。
+  - **第7弾**：`startNextStage`の二相化（意図確定の純関数＋`pendingStage`監視useEffect）。
+    `stage2LockRef`useRefロックを廃止。
+  - **第8弾**：B-3最後の3関数（`startRace`/`mlStartRace`/`mlStartLastRace`）を解消。
+    連打で賞金・ポイントが二重加算される実バグを発見・修正、`mlRaceLockRef`も廃止
+    （これでB-3＝真の危険地帯は全解消）。
+  - **第9弾**：main.jsxに生で残っていた586行（`mlCreateChar`ほかキャラ作成/イベント/
+    キャリア分岐）を`domain/mylife/createChar.js`等へ抽出。mylifeセーブ注入という
+    実機検証手法を新設。main.jsx 1259→822行。
+  検証はいずれもNode単体テスト新規追加＋既存分の全PASS（226→287ケース）、Playwright実機
+  確認（PROセーブ注入・連打の高速2回発火・mylifeセーブ注入等の各弾で新設した手法込み）・
+  実行時エラー0。
 
-  検証はいずれもNode単体テスト新規追加＋既存分の全PASS、Playwright実機確認（PROセーブ注入・
-  連打の高速2回発火・mylifeセーブ注入等の各弾で新設した手法込み）・実行時エラー0。
-  **B-3（`startRace`／`startNextStage`／`mlStartRace`／`mlStartLastRace`の4関数）は第8弾で全て
-  解消し、`useRef`ロック（`stage2LockRef`・`mlRaceLockRef`）は両方とも廃止された。**
+- **Step7第10弾（`ctx`89メンバーの手組み解消・`useAppShell`/`useSeasonGame`/
+  `useMyLifeGame`へのフック化・OBコーチ選択時のライブクラッシュ発見/修正）**：
+  `git log --oneline --grep="Step7第10弾"` → `git show <hash>` で復元可能。
+  ctxをseason/mylifeに分割しseason画面へmylifeハンドラを一切渡さない構造にし（層の逆流を
+  構造的に不可能にする）、両モードの唯一の実結合点（引退選手→監督への転身ブリッジ）を
+  `becomeManager()`1つに集約した。副次的に、`Header`が`OB_COACH_SALARY`を未importのまま
+  参照しており**OBコーチを1人でも雇うと即座に全画面クラッシュする**本番相当のライブバグを
+  発見・修正（過去のdead import一括削除で誤って巻き込まれたと推測）。
+  検証：ctx要求/提供メンバーの機械突合（season要求51/提供54・mylife要求41/提供43・
+  層の逆流ゼロ）＋既存Node287ケース全PASS＋Playwright114項目（グランツール回帰・
+  season/mylife連打防止回帰・mylifeセーブ注入・転身ブリッジ新規シナリオ）全PASS。
+  main.jsx 822→365行、`hooks/`3ファイル合計537行を新設。
 
-- **Step7第10弾（`ctx`89メンバーの手組み解消・`useAppShell`/`useSeasonGame`/`useMyLifeGame`への
-  フック化・OBコーチ選択時のライブクラッシュバグ発見/修正）**：Opusで設計、Sonnetで実装。
-  第9弾完了直後にユーザーから直接依頼された作業。着手前にmain.jsx（822行）を棚卸ししたところ、
-  season/mylifeの状態分離が既にほぼ完璧（useEffect14個のうちseason/mylife混在ゼロ、UI状態4組
-  全てseason専用、season画面が使う`ml*`系メンバーはゼロ）と判明し、B-3や第9弾ほどの危険は
-  無いと確認してから設計・実装した。両モードの本当の結合はmylifeの`career.jsx`にある
-  「選手→監督の転身ブリッジ」（引退した殿堂選手を新チーム監督として招聘し、season側の
-  `setG`/`initGame`を直接呼ぶ）1箇所のみだった。
-  **設計判断（ユーザー選択）**：①ctxをseason/mylifeに分割し、season画面にmylifeハンドラを
-  一切渡さない（層の逆流を構造的に不可能にする）。②`superMode`直下のメタ画面5つ
-  （モード選択／生涯評価／系譜／因子／CPショップ・205行）は今回のフック化のスコープ外とし
-  次のウェーブへ回す。
-  **分割**：`hooks/useAppShell.js`（`superMode`／`confirmDialog`／`renameState`／`uiTick`＋
-  `askConfirm`／`openRename`／`buyCpItem`。両モードから共有される3メンバーのみ）、
-  `hooks/useSeasonGame.js`（`g`/`setG`＋season専用UI状態4組＋派生値＋season effect8個＋
-  seasonハンドラ全部。外部依存なし）、`hooks/useMyLifeGame.js`（`ml`/`setMl`＋
-  `mlCreateArgsRef`＋mylife effect6個＋mylifeハンドラ全部。引数は`{ superMode, askConfirm }`
-  の2つのみ）。転身ブリッジは`career.jsx`内の直書き`setG`/`setSuperMode`呼び出しを、
-  App()側で組み立てた`becomeManager()`コールバック1つに置き換えた（今回唯一の実質的な
-  配線変更）。chrome（`Header`/`Nav`/`renameModal`/`wrap`/`mlWrap`）とメタ画面5つはApp()に
-  残置。ctxは`{ ...shellForScreens, ...season, wrap }`（season向け）／
-  `{ ...shellForScreens, ...mylife, mlWrap, becomeManager }`（mylife向け）の2種類に分割し、
-  手組みの88行は消えた。
-  **副次的に発見した実バグ（OBコーチ選択で全画面クラッシュ）**：main.jsxを精読中、Header内の
-  `{g.obCoach && <>／OBコーチ -{OB_COACH_SALARY}万/月</>}`が`OB_COACH_SALARY`を一切
-  importしていないことを発見した（過去waveのdead import削除で誤って巻き込まれたと推測される。
-  この識別子は`m.overall`のようなプロパティアクセスと単語境界が一致するため、これまでの
-  機械的なdead-import検出では見逃されていた）。`Header`は全画面で常時レンダリングされるため、
-  **OBコーチを1人でも雇うと即座に白画面クラッシュする**、本番相当のライブバグだった。
-  localStorage注入で`g.obCoach`を設定した状態を実機再現し（修正前：`ReferenceError:
-  OB_COACH_SALARY is not defined`が3回連続で発生）、`data/economy.js`からの1行importを
-  追加して修正・再現テストで解消を確認した。今回の主目的（hook化）とは独立した発見のため、
-  DEVLOGでも別枠として明記する。
-  **検証**：この作業特有のリスク（分割代入は欠けたキーを`undefined`にするだけでビルドエラーに
-  ならず、そのボタンを押した瞬間に初めてクラッシュする）に対応するため、通常の検証に先立って
-  **機械的な突合スクリプト**を作成・実行した——①全`screens/**/*.jsx`の`const {...} = ctx;`を
-  パースして各画面が要求するctxメンバーを抽出、②season/mylifeそれぞれの実際の提供メンバーと
-  突合し不足ゼロを確認、③season画面が`ml*`系を使っていないか／mylife画面が`g`/`setG`を
-  使っていないかの層の逆流チェック。3つとも一発でPASS（season:要求51/提供54・mylife:要求
-  41/提供43・逆流ゼロ）。その上で既存Node287ケース全PASS、ビルド成功。Playwrightは
-  第7弾のグランツール回帰（(A)(B)(C)計38項目）・第8弾のmylife/season連打防止回帰
-  （13/7/26項目）・第9弾のmylifeセーブ注入50項目を**全部再実行**（App()全体を作り替えたため
-  必須）、さらに転身ブリッジ専用の新規シナリオ（引退画面→「監督として新チームを率いる」→
-  newgame_setup遷移）を追加、合計114項目・実行時エラー0で全PASS。main.jsx 822→365行、
-  `hooks/`3ファイル合計537行を新設。
+- **Step7第11弾（`superMode`メタ画面5つの`screens/meta.jsx`分離・クローム（Header/Nav/
+  モーダル/wrap/mlWrap）の`components/chrome.jsx`分離・系譜/因子ビューのseason/mylife
+  共通化）**：`git log --oneline --grep="Step7第11弾"` → `git show <hash>` で復元可能。
+  `main.jsx`は365→48行（合成ルートのみ）になり、season/mylifeで9割同一だった系譜・因子
+  ビューは`components/dynasty.jsx`へ共通化、2箇所に重複していた確認モーダルも
+  `ConfirmDialog`1つへ統合した。
+  検証：`Date.now`/`Math.random`固定によるリファクタ前後DOMバイト比較（メタ5画面×2
+  フィクスチャ＋season/mylife主要画面等、計23点）が全一致、実クリック走査22項目＋
+  既存Playwright回帰（グランツール・連打防止・mylifeセーブ注入・転身ブリッジ）全PASS、
+  既存Node287ケース全PASS。
 
-- **Step7第11弾（`superMode`メタ画面5つの`screens/meta.jsx`分離・クローム
-  （Header/Nav/モーダル/wrap/mlWrap）の`components/chrome.jsx`分離・系譜/因子ビューの
-  season/mylife共通化）**：Opusで設計、Sonnetで実装。第10弾で意図的にスコープ外とした
-  `superMode`直下のメタ画面5つ（モード選択／生涯評価／系譜ツリー／因子図鑑／CPショップ・
-  203行）に着手。調査の結果、メタ画面がApp()外から必要とするメンバーはわずか4つ
-  （`superMode`/`setSuperMode`/`buyCpItem`/`wrap`）で、依存の向きも
-  `screens/meta.jsx → logic/state/breeding/components/data`の一方向のみと判明し、
-  season/mylifeのフック分割（第10弾）よりも危険度の低い、単純な切り出しだった。
-  併せて、`main.jsx`の`dynasty_lineage`/`dynasty_factors`と
-  `screens/mylife/career.jsx`の`mylife_lineage`/`mylife_factors`が約9割同一のJSXを
-  2箇所で保守していたこと（差分は見出し要素・空状態文言・`position:relative`の有無・
-  戻るボタン先の5点のみ）も発覚。ユーザーはメタ画面分離とクローム分離を同時に行う案、
-  および系譜/因子の共通化も今回まとめて行う案の両方を選択した。
-  **分割**：`screens/meta.jsx`（メタ画面5つのディスパッチ＋各画面のレンダ関数）、
-  `components/chrome.jsx`（`SeasonHeader`/`SeasonNav`/`RenameModal`/`ConfirmDialog`＋
-  それらを束ねる`makeWrap`/`makeMlWrap`ファクトリ）、`components/dynasty.jsx`
-  （`LineageForestView`/`FactorCollectionView`。差分は`variant`props＋呼び出し側が渡す
-  `footer`で吸収）。`wrap`/`mlWrap`はファクトリ化した上で呼び出し側の形
-  （`wrap(children, withNav)`）を変えていないため、`screens/season/*.jsx`・
-  `screens/mylife/*.jsx`は無変更。副産物として、旧`wrap`/`mlWrap`内にバイト単位で
-  完全一致する確認モーダルJSXが2箇所独立に存在していた（`main.jsx`旧105-115行目と
-  134-144行目、`diff`で一致確認済み）ものを`ConfirmDialog`1つに統合した（出力DOM不変）。
-  `main.jsx`は365→48行（合成ルートのみ）に、`career.jsx`は504→454行になった。
-  **検証**：Header/Navをモジュールスコープの独立コンポーネントへ切り出すとReactの
-  差分検出アルゴリズムが型で同一視するため、従来App()内で定義されていた頃（毎レンダ新しい
-  関数式＝型が変わり続けアンマウント/リマウントされていた）と挙動が変わる可能性
-  （特に`renameModal`内の非制御`<input autoFocus>`のフォーカス維持）を設計段階で洗い出し、
-  重点的に検証した。前回のOB_COACH_SALARY事件（単語境界の正規表現マッチングがdead-import
-  検出を欺いた）を踏まえ、今回は**静的チェックを主軸に据えず**、`Date.now`/`Math.random`を
-  決定的なシード付き実装へ差し替えた上でリファクタ前後のDOM（`#root`配下の`innerHTML`、
-  空欄markup属性値の正規化のみ）を**バイト単位で比較**する手法を主軸にした。メタ5画面×2
-  フィクスチャ（未プレイ／殿堂・系統tier0〜3・世代・因子★超過・CP購入可否等を網羅した
-  リッチフィクスチャ）＋season/mylifeの主要画面＋改名・確認モーダル展開状態、計23スナップ
-  ショットが全てリファクタ前後でバイト完全一致した。加えてDOM比較では捕まらない
-  「onClick内シンボル欠落」「フォーカス喪失」のクラスに対応するため、メタ画面の全遷移
-  ボタン・Nav全タブ・CPショップの実購入（残高減少と「✓解禁済」表示を確認）・改名モーダルへの
-  3文字連続入力（`document.activeElement`がinputのまま保たれ、値が正しく累積し、Enterで
-  反映されることを確認）を実機で走査し22/22 PASS。既存Node287ケース全PASS、ビルド成功。
-  Playwrightは第7弾グランツール回帰（26+12項目）・第8弾season/mylife連打防止回帰
-  （13項目）・第9弾mylifeセーブ注入（50項目）・第10弾becomeManagerブリッジ（6項目）を
-  全再実行し全PASS、OBコーチクラッシュ修正の再現テストも実行時エラー0を再確認した。
-
-- **Step7第12弾（`raceFinishHandler`の`g.gc`残留誤判定の修正・二重`rankSim`呼び出しの削除）**：
-  Opusで設計、Sonnetで実装。第8弾で発見しスコープ外としていた`raceFinishHandler`
-  （`if (g.gc && g.gc.race.stageRace) finishStage(...) else finishRace(...)`）の理論上の
-  誤判定に着手。設計前の調査で、当初の想定と2点食い違うことが判明した。
-  **調査結果1（到達可能性）**：`advanceMonth`の全5return経路（通常月／年度末通常／
-  グランファイナル制覇／poachOffer／transferRequest／event）が例外なく`gc: null`を返すこと、
-  `SAVE_FIELDS`に`"gc"`が含まれないためロードでも常に`gc: null`になること、`gc`設定中の
-  5画面（race/result_pending/gc_stage/gc_role_setup/gc_final）から`main`へ戻る導線が
-  1本も無いことを機械的に確認し、**現行UIからは到達不能**（潜在バグ）と確定した。ただし
-  「コードに書かれていない暗黙の大域不変条件」に安全性が依存している状態のため、修正自体は
-  引き続き価値がある（将来GT棄権等の導線が1本増えた瞬間にライブ化し、`recordTitle`の
-  誤発火や`gtWins`偽装＝グランファイナル出場条件の不正成立に繋がる）。
-  **調査結果2（副次的発見）**：`buildSim`が末尾で既に`rankSim`を1回呼んでいるにも関わらず、
-  App側`finishRace`ラッパーがもう1回`rankSim`を呼んでおり、経路によって呼び出し回数が
-  不揃い（観戦・ステージ経路のみ1回、残り3経路は2回）だった。実測（200試行）では
-  全体着順が27%の頻度で変化するが優勝者・自チーム最高位は0%、自チームいずれかの選手の
-  着順が変わるのは2%（賞金素点の変化は平均-1.5、範囲-6〜+6）と、ゲームバランスへの影響は
-  極小。一方`RaceView`はレース中`sim.ranked`ではなく`finishTime`を直接描画するため、
-  2回目の`rankSim`によって**観戦中に見た着順と結果画面の着順が最頻経路（観戦・単発）で
-  ずれ得る**という実害が判明した。ユーザーはこの2点を踏まえ「今回まとめて揃える（観戦側の
-  1回だけに統一する）」を選択した。
-  **修正**：①`raceFinishHandler`の判定を`g.gc.race.stageRace`から`g.result.raceMeta.stageRace`
-  へ変更（`buildSim`が`raceMeta`引数を参照ごとsimへ格納するため、到達可能な全状態で
-  `g.result.raceMeta === g.gc.race`＝オブジェクト同一であり、分岐先・rankSim有無とも不変。
-  `screens/season/race.jsx`のLIVEヘッダー表示も同じ判定に揃えた）。②App側`finishRace`
-  ラッパーから`rankSim(sim)`呼び出しを削除し、全経路を`buildSim`の1回だけに統一した
-  （`rankSim`のimportも削除）。
-  **検証**：UIから到達不能な変更のため、通常のPlaywright回帰だけでは効果を証明できないと
-  判断し、Node単体テストを主軸に据えた（新規20ケース）——(1)`advanceMonth`の全5経路が
-  `gc: null`を返すことを固定するテスト（暗黙の不変条件を明示化）、(2)`serializeState`が
-  `gc`キー自体を出力しないこと、(3)`initGame`/`loadGame`が`gc: null`を返すこと（`loadGame`は
-  セーブに`gc`が紛れ込んでいても常に上書きすることも確認）、(4)潜在バグの直接再現——
-  「古いGTの`gc`が残った状態で単発レースのsimが来た」状態を人為的に構成し、旧判定（`true`）を
-  採用すると`finishStage`が古いGTのデータで`gc_final`へ誤って進むこと、新判定（`false`）を
-  採用すると正しく`finishRace`で`result`へ進むことを実際のreducerで対比、(5)ソースの静的確認で
-  `useSeasonGame.js`から`rankSim`のimport・呼び出しが完全に削除されたことを確認。
-  既存Node287ケースと合わせ計307ケース全PASS、ビルド成功。Playwrightは第11弾の23点DOM
-  バイト比較（メタ/クローム/系譜因子は無変更のため全一致）・第7弾グランツール回帰
-  （26+12項目）・第8弾season/mylife連打防止回帰（13項目）・第9弾mylifeセーブ注入
-  （50項目）・第10弾becomeManagerブリッジ（6項目）・OBコーチクラッシュ再現テストを
-  全再実行し全PASS。なお第7弾グランツール回帰スクリプトは、ランダム生成される月間
-  レースの中から3日間グランツールが出現する月を実プレイで探す作りのため元々フレーキー
-  （固定シード無し）であることを、本弾着手前のHEAD時点で複数回実行して確認済み
-  （26/26と18/19が入り混じる）。今回の変更後も同じ頻度・同じ失敗パターンで再現し、
-  新規のPAGEERRORは一切発生しなかったため、無関係な既存の不安定性と判断した。
+- **Step7第12弾（`raceFinishHandler`の`g.gc`残留誤判定修正・二重`rankSim`呼び出しの削除）**：
+  `git log --oneline --grep="Step7第12弾"` → `git show <hash>` で復元可能。
+  調査の結果、`g.gc`残留による誤判定は現行UIからは到達不能（潜在バグ）と確定したが、
+  暗黙の大域不変条件に依存する危うさがあるため修正（判定を`g.result.raceMeta.stageRace`
+  基準に変更）。副次的に`buildSim`と`finishRace`ラッパーで`rankSim`が二重に呼ばれ、
+  観戦中と結果画面で着順がずれ得る実害も発見・削除（全経路を`buildSim`内の1回に統一）。
+  検証：UIから到達不能な変更のためNode単体テストを主軸に据え20ケース新規（暗黙の不変
+  条件の明示化・潜在バグの直接再現含む）、既存287→307ケース全PASS。Playwrightは第11弾
+  DOM比較23点・グランツール回帰・連打防止回帰・mylifeセーブ注入・転身ブリッジ・OBコーチ
+  再現テストを全再実行し全PASS（グランツール回帰スクリプトの元来のフレーキーさ
+  ＝固定シード無しによる出現待ちの不安定性は、本弾着手前から確認済みの既知の挙動であり
+  今回の変更とは無関係と判断）。
 
 **残っている候補**：`hub.jsx`は本セクション（§10）第1弾で950行→30行（ディスパッチャのみ）に
 分解済み（下記参照）。mylife側`hub.jsx`（557行）は依然大きいが現状は許容範囲。第7弾
