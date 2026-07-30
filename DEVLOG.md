@@ -919,3 +919,39 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   transformに反映される・パンで倍率が変わらない・**ズームアウト下限で内容全体が画面内に
   収まる**・⌂で初期表示に戻る・カメラ導入後も☰メニューが開く・実行時エラー0）。
   既存の`step13_cutover_check`(18)・`waved_domain`(75)・`waved_data`(126)・`menunav`(43)も全PASS。
+
+- **Wave E-2（建物→カットアウト部屋・完了）**：ユーザーの手描きスケッチ通り、3D箱の外観
+  建物（`components/base/IsoBuilding.jsx`）を全廃し、**床＋奥2壁だけ**の「カットアウト部屋」
+  （`components/base/Room.jsx`新設）へ置き換えた。手前2辺は開けたままにして中を見せる
+  （什器・人はWave E-3/E-4で追加）。部屋タップで対応するメニューセクションが開く。
+  **奥2壁の選び方は幾何学的に一意**：footprint(w±hw, l±hl)の4頂点のうち画面Y座標が
+  最小＝カメラから最も遠い頂点(back)に接する2面が奥の壁になる（スケッチの「∧」型と一致）。
+  これはWave D2で修正した可視面選択（front=Y最大）の鏡像であり、
+  `domain/season/baseViewLayout.js`に`backFacePair()`を新設して同じ頂点集合から求めた
+  （Node単体テストで「backはfrontの対角頂点」であることを機械的に確認済み）。
+  **タップの当たり判定**：`roomFloorQuad(b, proj)`（部屋のfloor四角形をscene座標で返す。
+  当初`Room.jsx`に置いたが、JSXを含むファイルはNodeから直接importできずテストできない
+  ことに気付き、JSX非依存のdomain層へ移設した）と、凸四角形の内外判定`pointInQuad()`を
+  新設。Wave E-1で作った`useIsoCamera`の`onTap`（ドラッグ距離がしきい値未満ならタップと
+  判定しscene座標を返す）と組み合わせ、`BaseView`が全部屋のfloor四角形を走査してヒットした
+  部屋のkeyを`onRoomTap`で通知する。
+  **行き先の対応表**：`data/seasonMenu.js`に`ROOM_SECTION_MAP`を新設。training/mechanic/
+  medical/scoutはいずれも`hub/facility.jsx`（施設状況・機材強化・スタッフ・OBコーチ）で
+  管理される状態（equip.frame/wheels/facility・staff.doctor/manager/scout）を表すため
+  同じ`"facility"`へ、clubhouseだけは特定のセクションを持たない「チームの拠点」そのもの
+  なので`null`にして`hub.jsx`側でメニュー全体（大ジャンル一覧）を開く特別扱いにした。
+  **データのスキーマ変更**：施設Lvに応じた表現（旧`floorHeight`による階数の高さ変化）は
+  什器の数・種類（Wave E-3）へ役割を移すため廃止し、`wallHeight`（部屋ごとの固定の奥壁高）
+  と`floor`（床タイル色）を新設。`roof`（屋根色）は屋根が無くなったため削除。
+  **ついでの死にコード除去**（CLAUDE.md §5）：`buildingFloors`（domain）は
+  `IsoBuilding.jsx`削除により参照元が消えたため削除。`BASE_VIEW_CANVAS`（data）は
+  Wave E-1のResizeObserver化で既に参照元が無くなっていたため、今回まとめて削除した。
+  **検証**：Node単体テストを拡充（domain 58ケース：`backFacePair`の不変条件・
+  `visibleFacePair`との対角関係／`pointInQuad`／data 120ケース：`wallHeight`/`floor`の
+  存在／新規`room`テスト41ケース：`roomFloorQuad`で「隣接する部屋同士のfloorが重ならない」
+  ことを5棟全組み合わせで検算）。Playwrightは、カメラのtransform(translate/scale)を
+  DOMから読み取って部屋のscene座標を逆算し**ピクセル精度でタップ**する新規4項目
+  （mechanic/scout棟タップで「🏭 施設・投資の状況」が開く・clubhouse棟タップで大ジャンル
+  一覧が開く・実行時エラー0）で検証し、既存の`step13_cutover_check`(18)・
+  `menunav`(43)・`wavee_camera_check`(12)・`waved_domain`(58)・`waved_data`(120)・
+  `wavee_camera_test`(34)も全PASS（計326項目）。

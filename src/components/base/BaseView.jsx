@@ -1,28 +1,26 @@
 // カイロソフト式敷地画面（BaseView）。Step13第3弾で新設 → Wave D（磨き込み）
-// → Wave D2（カイロソフト準拠の再設計）。
+// → Wave D2（カイロソフト準拠の再設計）→ Wave E（カメラ＋カットアウト部屋）。
 // FinalSprintCinematic（components/RaceView.jsx）の2:1ディメトリック投影・IsoRider・
 // riderWander・30fps間引きrAFループを流用した、固定カメラ・周回路の「常設の拠点」表示。
 // ゲーム状態（月・育成・資金）には一切触れない環境演出専用コンポーネント（月は季節演出の
 // 参照にのみ使う＝時間経過そのものはメニュー操作でのみ進む設計を崩さない）。
 //
-// Wave D2の見直し（実機計測＋スクショに基づく診断・詳細はDEVLOG §10）：
-//  ・キャンバスが横長(480x300)で、iPhone相当(390x844)では画面高のわずか26.8%しか
-//    占めておらず下半分がまるごと余っていた → 480x720の縦長にし、preserveAspectRatioを
-//    "none"（潜在的な歪みリスク）から"xMidYMid slice"へ変更して余白ゼロで敷き詰める
-//  ・IsoRiderが常に右向き固定で、周回路の左側の直線では逆走して見えていた
-//    → 進行方向のscreen x差で判定し、左進行時はスプライトを水平反転する
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// Wave E-2の変更（ユーザーの手描きスケッチに基づく・詳細はDEVLOG §11）：
+// 3D箱の外観建物（IsoBuilding）を全廃し、床＋奥2壁だけの「カットアウト部屋」（Room）へ
+// 置き換えた。部屋をタップすると対応するメニューセクションが開く（onRoomTap経由）。
+// タップの当たり判定はカメラの scene 座標系で行う（Wave E-1のuseIsoCamera.onTap）。
+import React, { useEffect, useRef, useState } from "react";
 import { C, FONT_M } from "../../data/theme.js";
 import {
   BASE_VIEW_PROJ, BASE_VIEW_BUILDINGS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
 } from "../../data/baseViewBuildings.js";
-import { isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf } from "../../domain/season/baseViewLayout.js";
+import { isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf, pointInQuad, roomFloorQuad } from "../../domain/season/baseViewLayout.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
 import { useIsoCamera } from "../../hooks/useIsoCamera.js";
 import { IsoRider, CAP_COLORS, riderWander } from "../RaceView.jsx";
 import { riderHash01 } from "../../sim/race.js";
-import { IsoBuilding } from "./IsoBuilding.jsx";
+import { Room } from "./Room.jsx";
 import { Track } from "./Track.jsx";
 import { Ground } from "./Ground.jsx";
 import { propItems } from "./Props.jsx";
@@ -82,10 +80,20 @@ function useElementSize() {
   return [ref, size];
 }
 
-export function BaseView({ g, paused }) {
+// 各部屋のfloor四角形（タップ当たり判定用）。レイアウトは静的なので一度だけ求めればよい。
+const ROOM_QUADS = BASE_VIEW_BUILDINGS.map(b => ({ key: b.key, quad: roomFloorQuad(b, BASE_VIEW_PROJ) }));
+
+export function BaseView({ g, paused, onRoomTap }) {
   const elapsed = useElapsedSeconds(!!paused);
   const [viewRef, view] = useElementSize();
-  const camera = useIsoCamera({ bounds: SCENE_BOUNDS, viewW: view.w, viewH: view.h });
+  const [tappedKey, setTappedKey] = useState(null);
+  const handleTap = (scenePt) => {
+    const hit = ROOM_QUADS.find(r => pointInQuad(scenePt, r.quad));
+    if (!hit) return;
+    setTappedKey(hit.key);
+    onRoomTap && onRoomTap(hit.key);
+  };
+  const camera = useIsoCamera({ bounds: SCENE_BOUNDS, viewW: view.w, viewH: view.h, onTap: handleTap });
   const levels = buildingLevels(g);
   const palette = BASE_VIEW_SEASON_PALETTE[seasonOf(g.month)];
   const snow = !!palette.snow;
@@ -105,11 +113,8 @@ export function BaseView({ g, paused }) {
     };
   });
   const buildingRows = BASE_VIEW_BUILDINGS.map(b => {
-    const pts = [
-      isoProject(b.w - b.hw, b.l, 0, PROJ), isoProject(b.w, b.l + b.hl, 0, PROJ),
-      isoProject(b.w + b.hw, b.l, 0, PROJ), isoProject(b.w, b.l - b.hl, 0, PROJ),
-    ];
-    return { kind: "building", b, level: levels[b.levelKey], sortY: Math.max(...pts.map(p => p.y)) };
+    const quad = ROOM_QUADS.find(r => r.key === b.key).quad; // [N,E,S,W]のscene座標（世界軸平行の実際のfootprint）
+    return { kind: "building", b, sortY: Math.max(...quad.map(p => p.y)) };
   });
   const propRows = propItems(PROJ, BASE_VIEW_PROPS, palette).map(item => ({ kind: "prop", ...item }));
   const drawOrder = [...buildingRows, ...propRows, ...riderRows].sort((a, b) => a.sortY - b.sortY);
@@ -126,7 +131,7 @@ export function BaseView({ g, paused }) {
               <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
               <Track proj={PROJ} loop={BASE_VIEW_LOOP} />
               {drawOrder.map((item, i) => {
-                if (item.kind === "building") return <IsoBuilding key={`b${item.b.key}`} b={item.b} level={item.level} snow={snow} proj={PROJ} />;
+                if (item.kind === "building") return <Room key={`b${item.b.key}`} b={item.b} snow={snow} proj={PROJ} selected={item.b.key === tappedKey} />;
                 if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
                 // 左へ進むときは x=item.x の垂直線でスプライトを鏡像反転する
                 const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap} isPlayer={false} isAce={false} surging={false} simple={simple} />;

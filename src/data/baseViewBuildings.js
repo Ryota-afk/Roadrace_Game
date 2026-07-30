@@ -1,34 +1,36 @@
 // BaseView（敷地画面）の投影・建物・周回路・地面・季節パレット・小物の静的データ。
-// Step13第3弾で新設 → Wave D（磨き込み）→ Wave D2（カイロソフト準拠の再設計）。
+// Step13第3弾で新設 → Wave D（磨き込み）→ Wave D2（カイロソフト準拠の再設計）
+// → Wave E（カメラ＋カットアウト部屋）。
 //
-// Wave D2で見直した点（実機スクショに基づく診断・詳細はDEVLOG §10）：
-//  ・投影軸が非対称（w軸長26.83 / l軸長24.6）で正しい菱形になっていなかった → Px=Lx・Py=-Lyへ
-//  ・屋根が巨大な原色の平面菱形で建物が「色板」に見えていた → 階高を10-14px→26pxへ引き上げ、
-//    屋根は壁色から導く暗色＋軒の張り出しにして主張を弱めた
-//  ・キャンバスが横長(480x300)でスマホの画面高の27%しか占めていなかった → 480x720の縦長へ
-// キャンバス比はスマホ実機(390x844→SVG領域362x692・比0.523)に近い0.558にしてある。
-// preserveAspectRatio="xMidYMid slice" は「はみ出す方向を切り落として敷き詰める」ため、
-// viewBox比が実機比から離れるほど左右が大きく欠ける（480x720では左右計103px＝端の建物が
-// 半分見切れていた）。0.558なら欠けは左右計30px程度に収まる。
+// Wave D2で投影軸の非対称（w軸長26.83 / l軸長24.6で正しい菱形になっていなかった）を
+// Px=Lx・Py=-Lyへ修正した（詳細はDEVLOG §10）。
+// Wave E-1で固定キャンバス（旧BASE_VIEW_CANVAS）を廃止し、ResizeObserverで実ピクセルに
+// viewBoxを一致させる方式へ変更した（`components/base/BaseView.jsx`参照）。カメラの
+// ズーム/パンが拡縮を全て担うため、preserveAspectRatioへの依存も無くなった。
 export const BASE_VIEW_PROJ = { cx0: 240, cy0: 600, Px: 26, Py: 13, Lx: 26, Ly: -13 };
-export const BASE_VIEW_CANVAS = { W: 480, H: 860 };
 
-// 建物5棟。screen y が一定になる直線（w-l が一定）上に等間隔で並べ、手前の周回路を主役にする。
-// w = 1.75k - 11, l = 1.75k + 11 （k=-2..2）で w-l=-22 固定 → 全棟が screen y=314 に揃い、
-// 横方向は screen x = 240 + 91k（＝footprint幅88pxとほぼ等間隔で隣接）。
-// wallLight=光の当たる面(+l側)、wallDark=陰の面(-l側)、roof=軒の暗色、accent=看板帯。
+// 建物5棟＝5部屋。screen y が一定になる直線（w-l が一定）上に等間隔で並べ、手前の
+// 周回路を主役にする。w = 1.75k - 11, l = 1.75k + 11 （k=-2..2）で w-l=-22 固定 →
+// 全棟が screen y=314 に揃い、横方向は screen x = 240 + 91k（footprint幅88pxとほぼ等間隔）。
+//
+// Wave E-2でカイロソフト式の「床＋奥2壁だけのカットアウト部屋」へ全面変更。3D箱の外観
+// （壁2面＋屋根＋窓＋屋上設備）は廃止し、`roof`/`floorHeight`（旧：施設Lvに応じた階数の
+// 高さ）フィールドを削除、代わりに`floor`（床タイル色）と`wallHeight`（奥2壁の高さ・
+// 固定値。カイロソフトの間仕切り壁のように、実際の建物の全高より低く据え置く）を追加した。
+// 施設Lvに応じた表現は什器の数・種類（Wave E-3）に移す。
+// wallLight/wallDark＝奥2壁の明/暗面、floor＝床タイル色、accent＝扉枠・見出しのアクセント色。
 const mk = (k, rest) => ({ w: 1.75 * k - 11, l: 1.75 * k + 11, ...rest });
 export const BASE_VIEW_BUILDINGS = [
   mk(-2, { key: "training", levelKey: "training", levelMax: 5, label: "トレーニング棟", icon: "💪",
-    hw: 0.85, hl: 0.85, floorHeight: 26, wallLight: "#7fb894", wallDark: "#54876a", roof: "#2f4a3c", accent: "#2f8f5c" }),
+    hw: 0.85, hl: 0.85, wallHeight: 34, wallLight: "#a8d4b8", wallDark: "#7fb894", floor: "#e8dcc0", accent: "#2f8f5c" }),
   mk(-1, { key: "mechanic", levelKey: "mechanic", levelMax: 5, label: "メカニック工房", icon: "🔧",
-    hw: 0.85, hl: 0.85, floorHeight: 26, wallLight: "#d8bd83", wallDark: "#a68f5d", roof: "#4c3f28", accent: "#c9a23c" }),
+    hw: 0.85, hl: 0.85, wallHeight: 34, wallLight: "#e8d3a0", wallDark: "#d8bd83", floor: "#d9d1c2", accent: "#c9a23c" }),
   mk(0, { key: "clubhouse", levelKey: "clubhouse", levelMax: 2, label: "クラブハウス", icon: "🏠",
-    hw: 0.98, hl: 0.98, floorHeight: 28, wallLight: "#e6e0d2", wallDark: "#b8b2a4", roof: "#7a3733", accent: "#e05050" }),
+    hw: 0.98, hl: 0.98, wallHeight: 36, wallLight: "#f0ebe0", wallDark: "#e6e0d2", floor: "#c9a876", accent: "#e05050" }),
   mk(1, { key: "medical", levelKey: "medical", levelMax: 3, label: "メディカル/監督室", icon: "⚕",
-    hw: 0.85, hl: 0.85, floorHeight: 26, wallLight: "#a9c8dd", wallDark: "#7b9bb2", roof: "#2c4152", accent: "#4f8fe8" }),
+    hw: 0.85, hl: 0.85, wallHeight: 34, wallLight: "#cfe2ee", wallDark: "#a9c8dd", floor: "#eef2f4", accent: "#4f8fe8" }),
   mk(2, { key: "scout", levelKey: "scout", levelMax: 3, label: "スカウト事務所", icon: "🔍",
-    hw: 0.85, hl: 0.85, floorHeight: 26, wallLight: "#c9a8d8", wallDark: "#9b7dab", roof: "#432f4f", accent: "#c98bf0" }),
+    hw: 0.85, hl: 0.85, wallHeight: 34, wallLight: "#ddc4e8", wallDark: "#c9a8d8", floor: "#ded3c8", accent: "#c98bf0" }),
 ];
 
 // 練習コース（world原点中心）。Wave Dの1.7倍程度に拡大し、縦長キャンバスの下半分の主役にする。

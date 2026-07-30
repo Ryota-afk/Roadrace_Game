@@ -26,3 +26,17 @@ export const SEASON_MENU_CATEGORIES = [
     { key: "titleReturn", label: "タイトルに戻る" },
   ] },
 ];
+
+// Wave E-2: BaseView（敷地画面）の部屋（data/baseViewBuildings.jsのBASE_VIEW_BUILDINGS）を
+// タップしたときに開くセクションの対応表。training/mechanic/medical/scoutはいずれも
+// hub/facility.jsx（施設状況・機材強化・スタッフ・OBコーチ）で管理される状態
+// （equip.frame/wheels/facility・staff.doctor/manager/scout）を表すため同じ"facility"へ、
+// clubhouseだけは特定のセクションを持たない「チームの拠点」そのものなので、値をnullにして
+// hub.jsx側でメニュー全体（大ジャンル一覧）を開く特別扱いにする。
+export const ROOM_SECTION_MAP = {
+  training: "facility",
+  mechanic: "facility",
+  medical: "facility",
+  scout: "facility",
+  clubhouse: null,
+};

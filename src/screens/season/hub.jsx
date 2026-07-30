@@ -5,7 +5,7 @@
 // メニューの行き先になる（中身は無変更）。
 import React from "react";
 import { MONTHS } from "../../data/course.js";
-import { SEASON_MENU_CATEGORIES } from "../../data/seasonMenu.js";
+import { SEASON_MENU_CATEGORIES, ROOM_SECTION_MAP } from "../../data/seasonMenu.js";
 import { saveGame } from "../../state/state.js";
 import { BaseView } from "../../components/base/BaseView.jsx";
 import { MenuShell } from "../../components/menu/MenuShell.jsx";
@@ -41,6 +41,14 @@ export function renderSeasonHubScreen(ctx) {
     seasonMenu.selectSection(key);
   };
 
+  // Wave E-2: BaseView上の部屋をタップしたときの行き先。ROOM_SECTION_MAPがnullの部屋
+  // （クラブハウス＝拠点そのもの）は特定セクションへ飛ばさず、大ジャンル一覧を開く。
+  const handleRoomTap = (roomKey) => {
+    const target = ROOM_SECTION_MAP[roomKey];
+    if (target == null) seasonMenu.openMenu();
+    else handleSelectSection(target);
+  };
+
   const sec = seasonMenu.menuState.section;
   let content;
   if (sec === "riders") content = renderRidersSection(ctx);
@@ -49,7 +57,7 @@ export function renderSeasonHubScreen(ctx) {
   else if (sec === "race") content = renderHomeSection(ctx);
   else if (sec === "records") content = renderRecordsSection(ctx);
   else if (sec === "help") content = renderHelpSection();
-  else content = <BaseView g={g} paused={seasonMenu.menuState.open} />; // sec===null || "base"
+  else content = <BaseView g={g} paused={seasonMenu.menuState.open} onRoomTap={handleRoomTap} />; // sec===null || "base"
 
   // BaseView（敷地画面）表示中だけ wrap を fill モードにし、画面の残り高さを全て使う
   // （Wave D2以前は横長固定のSVGが縦長スマホで画面高の27%しか占めず下半分が余っていた）。

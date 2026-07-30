@@ -29,6 +29,45 @@ export function visibleFacePair(corners) {
   return { front, left, right };
 }
 
+// visibleFacePairの鏡像：4頂点のうち画面Y座標が最小＝カメラから最も遠い頂点(back)とその
+// 両隣を返す。back頂点に接する2面はvisibleFacePairの「奥に隠れる不可視面」と同一だが、
+// カイロソフト式のカットアウト部屋（Wave E-2）ではこの2面こそが「見せたい奥の壁」になる
+// （手前2面は開けたままにして中を見せる）。
+export function backFacePair(corners) {
+  let back = "N";
+  for (const k of DIAMOND_CYCLE) if (corners[k].y < corners[back].y) back = k;
+  const i = DIAMOND_CYCLE.indexOf(back);
+  const nbrs = [DIAMOND_CYCLE[(i + 3) % 4], DIAMOND_CYCLE[(i + 1) % 4]];
+  const [left, right] = corners[nbrs[0]].x <= corners[nbrs[1]].x ? nbrs : [nbrs[1], nbrs[0]];
+  return { back, left, right };
+}
+
+// 部屋のfloor四角形（world座標系のscene投影・[N,E,S,W]の順）。タップの当たり判定
+// （pointInQuad）にそのまま渡せる。JSXを持たないためNode単体テスト・BaseView両方から
+// 同じ計算を参照できる（旧実装はcomponents/base/Room.jsxに置いていたが、JSXを含む
+// ファイルはNodeから直接importできずテストできなかったため、こちらへ移設した）。
+export function roomFloorQuad(b, proj) {
+  const { corners } = isoBoxFaces(b.w, b.l, b.hw, b.hl, 0, proj);
+  return [corners.N, corners.E, corners.S, corners.W];
+}
+
+// 点pが凸四角形quad(4頂点・順序通りに並んでいること)の内側かどうか。
+// 全ての辺についてpが同じ側にあるかを外積の符号で判定する（辺上=符号0は許容）。
+// 部屋タップの当たり判定に使う（floor四角形はisoProjectの線形写像で必ず凸になる）。
+export function pointInQuad(p, quad) {
+  let sign = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = quad[i], b = quad[(i + 1) % 4];
+    const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    const s = Math.sign(cross);
+    if (s !== 0) {
+      if (sign === 0) sign = s;
+      else if (s !== sign) return false;
+    }
+  }
+  return true;
+}
+
 // 立方体（world座標のダイヤ形footprint＋高さ）の可視2面＋天面の頂点をまとめて返す共通関数。
 // 建物・チームカー・ベンチ・自転車ラックなど「箱状のもの」は全てこれを使って描くことで、
 // 必ずアイソメ格子に乗る（Wave Dでは小物をスクリーン座標の矩形で描いており、斜めの角度が
@@ -88,18 +127,6 @@ export function wallPoint(botA, botB, topA, topB, u, v) {
   const bx = botA.x + (botB.x - botA.x) * u, by = botA.y + (botB.y - botA.y) * u;
   const tx = topA.x + (topB.x - topA.x) * u, ty = topA.y + (topB.y - topA.y) * u;
   return { x: bx + (tx - bx) * v, y: by + (ty - by) * v };
-}
-
-// 施設Lv(0〜max)を階数(1〜3)へ変換する。Wave D以前は「建物全体を0.35〜1.0倍にスケール」して
-// いたが、footprintごと縮むため小さいLvほど「豆粒」になり読みにくかった。footprintは固定のまま
-// 階数を増やす表現へ変更した（クラブハウスはlevelKey=classIdxのため、B1/A/PROがそのまま
-// 1階/2階/3階建てに対応する）。
-export function buildingFloors(level, max) {
-  const clamped = Math.max(0, Math.min(max, level || 0));
-  const ratio = max > 0 ? clamped / max : 1;
-  if (ratio >= 2 / 3) return 3;
-  if (ratio >= 1 / 3) return 2;
-  return 1;
 }
 
 // シーズン状態(g)から各建物スロットのLvを導出する。g自体は変更しない読み取り専用の導出。
