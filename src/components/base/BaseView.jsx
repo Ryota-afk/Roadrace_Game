@@ -11,13 +11,15 @@
 //    "none"（潜在的な歪みリスク）から"xMidYMid slice"へ変更して余白ゼロで敷き詰める
 //  ・IsoRiderが常に右向き固定で、周回路の左側の直線では逆走して見えていた
 //    → 進行方向のscreen x差で判定し、左進行時はスプライトを水平反転する
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { C, FONT_M } from "../../data/theme.js";
 import {
-  BASE_VIEW_PROJ, BASE_VIEW_CANVAS, BASE_VIEW_BUILDINGS, BASE_VIEW_LOOP,
+  BASE_VIEW_PROJ, BASE_VIEW_BUILDINGS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
 } from "../../data/baseViewBuildings.js";
 import { isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf } from "../../domain/season/baseViewLayout.js";
+import { sceneContentBounds } from "../../domain/season/camera.js";
+import { useIsoCamera } from "../../hooks/useIsoCamera.js";
 import { IsoRider, CAP_COLORS, riderWander } from "../RaceView.jsx";
 import { riderHash01 } from "../../sim/race.js";
 import { IsoBuilding } from "./IsoBuilding.jsx";
@@ -27,7 +29,6 @@ import { propItems } from "./Props.jsx";
 import { TYPES } from "../../data/abilities.js";
 
 const PROJ = BASE_VIEW_PROJ;
-const { W, H } = BASE_VIEW_CANVAS;
 const RIDER_SPEED = 0.035; // 周回速度（t/秒）。周回路を拡大したぶん見かけの速度を揃える
 // 選手が7名を超えたら簡易スプライト（IsoRiderのsimple版）に切り替える。
 // FinalSprintCinematicが確立した「大人数ほど残像対策で簡易化する」しきい値を踏襲。
@@ -56,8 +57,35 @@ function useElapsedSeconds(paused) {
   return elapsedRef.current;
 }
 
+// 描画物が占めるscene座標の範囲。レイアウトは静的なので一度だけ求めればよい。
+const SCENE_BOUNDS = sceneContentBounds({
+  proj: BASE_VIEW_PROJ, plaza: BASE_VIEW_PLAZA, loop: BASE_VIEW_LOOP,
+  buildings: BASE_VIEW_BUILDINGS, props: BASE_VIEW_PROPS,
+});
+
+// SVGの描画領域の実ピクセルサイズを追う。viewBoxをこれと一致させることで
+// 1 SVG単位=1CSSピクセルになり、preserveAspectRatioによる切り落としも歪みも起きなくなる
+// （カメラのズーム/パンが拡縮を全て担うため、slice/meetに頼る必要がなくなった）。
+function useElementSize() {
+  const ref = useRef(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect;
+      setSize({ w: Math.max(0, Math.round(r.width)), h: Math.max(0, Math.round(r.height)) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, size];
+}
+
 export function BaseView({ g, paused }) {
   const elapsed = useElapsedSeconds(!!paused);
+  const [viewRef, view] = useElementSize();
+  const camera = useIsoCamera({ bounds: SCENE_BOUNDS, viewW: view.w, viewH: view.h });
   const levels = buildingLevels(g);
   const palette = BASE_VIEW_SEASON_PALETTE[seasonOf(g.month)];
   const snow = !!palette.snow;
@@ -88,20 +116,37 @@ export function BaseView({ g, paused }) {
 
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice"
-        style={{ width: "100%", flex: 1, minHeight: 260, borderRadius: 10, display: "block", background: palette.sky }}>
-        <Ground proj={PROJ} canvas={BASE_VIEW_CANVAS} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} />
-        <Track proj={PROJ} loop={BASE_VIEW_LOOP} />
-        {drawOrder.map((item, i) => {
-          if (item.kind === "building") return <IsoBuilding key={`b${item.b.key}`} b={item.b} level={item.level} snow={snow} proj={PROJ} />;
-          if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
-          // 左へ進むときは x=item.x の垂直線でスプライトを鏡像反転する
-          const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap} isPlayer={false} isAce={false} surging={false} simple={simple} />;
-          return item.flip
-            ? <g key={`r${item.r.id}`} transform={`translate(${(2 * item.x).toFixed(1)},0) scale(-1,1)`}>{sprite}</g>
-            : <React.Fragment key={`r${item.r.id}`}>{sprite}</React.Fragment>;
-        })}
-      </svg>
+      <div ref={viewRef} style={{ position: "relative", flex: 1, minHeight: 260, borderRadius: 10, overflow: "hidden" }}>
+        <svg viewBox={`0 0 ${view.w} ${view.h}`} width={view.w} height={view.h}
+          style={{ display: "block", touchAction: "none", cursor: "grab" }} {...camera.handlers}>
+          {/* 芝の下地はカメラ変換の外側。どこまで引いても必ずビューポートを埋める */}
+          <rect x="0" y="0" width={view.w} height={view.h} fill={palette.grass} />
+          {camera.ready && (
+            <g transform={camera.transform}>
+              <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
+              <Track proj={PROJ} loop={BASE_VIEW_LOOP} />
+              {drawOrder.map((item, i) => {
+                if (item.kind === "building") return <IsoBuilding key={`b${item.b.key}`} b={item.b} level={item.level} snow={snow} proj={PROJ} />;
+                if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
+                // 左へ進むときは x=item.x の垂直線でスプライトを鏡像反転する
+                const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap} isPlayer={false} isAce={false} surging={false} simple={simple} />;
+                return item.flip
+                  ? <g key={`r${item.r.id}`} transform={`translate(${(2 * item.x).toFixed(1)},0) scale(-1,1)`}>{sprite}</g>
+                  : <React.Fragment key={`r${item.r.id}`}>{sprite}</React.Fragment>;
+              })}
+            </g>
+          )}
+        </svg>
+        {/* ズーム操作ボタン（ピンチ/ホイールが使えない環境向けの代替） */}
+        <div style={{ position: "absolute", left: 8, bottom: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+          {[["＋", 1.35], ["－", 1 / 1.35]].map(([lbl, mul]) => (
+            <button key={lbl} onClick={() => camera.zoomBy(mul)} aria-label={lbl === "＋" ? "ズームイン" : "ズームアウト"}
+              style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.line}`, background: "rgba(20,23,29,0.72)", color: C.text, fontSize: 16, lineHeight: 1, cursor: "pointer" }}>{lbl}</button>
+          ))}
+          <button onClick={camera.reset} aria-label="表示をリセット"
+            style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.line}`, background: "rgba(20,23,29,0.72)", color: C.text, fontSize: 13, lineHeight: 1, cursor: "pointer" }}>⌂</button>
+        </div>
+      </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", fontSize: 10, color: C.sub, marginTop: 4, fontFamily: FONT_M, flexShrink: 0 }}>
         {BASE_VIEW_BUILDINGS.map(b => (
           <span key={b.key}>{b.icon} {b.label} Lv{levels[b.levelKey]}</span>
