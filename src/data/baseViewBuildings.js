@@ -87,32 +87,29 @@ export const BASE_VIEW_EMPTY_ROOMS = [
   { key: "spare2", room: "spare2", w: 9.875, l: 3.85, kind: "empty", icon: "📋", accent: "#9aa0a6" },
 ];
 
-// Wave F-2 redo 追補：ユーザー指摘「部屋の間取り的に人が生活してる感がない。ショールーム
-// みたいに感じる」への対応。各部屋に主要什器（BASE_VIEW_STATIONS）が1つだけポツンと
-// 置かれ、床の大部分が空いているのが「展示品を1点だけ置いた見せ場」に見える原因と判断し、
-// 機能に応じた小道具を壁際・隅に追加した（誰かが実際に使っている痕跡＝生活感）。
-// 主要什器の位置・出入り口の隙間(BASE_VIEW_PARTITIONS)とは重ならない位置を選んである。
-// roomは対応するBASE_VIEW_ROOMSのkey。描画はcomponents/base/Clutter.jsx。
+// Wave F-2 redo 追補（再改良版）：ユーザー指摘「部屋の間取り的に人が生活してる感がない。
+// ショールームみたいに感じる」への対応。1回目（浮遊アイコン方式）は「それっぽく見えない、
+// レイヤーもミスってる」と再度却下された（実機確認で、支える箱の無い小物がクラブハウス
+// 全体の見出しバッジ＝奥角w5,l4.5付近と重なって浮いて見えていた）。
+// 全項目を「箱＋影」の土台を持つcomponents/base/Clutter.jsxの実装に作り直し、什器・
+// バッジ位置（w5,l4.5）・出入り口の隙間(BASE_VIEW_PARTITIONS)のいずれとも十分離す
+// 座標へ選定し直した。roomは対応するBASE_VIEW_ROOMSのkey。
 export const BASE_VIEW_CLUTTER = [
-  // トレーニング室：予備のウェイト・丸めたマット・ボトル&タオル
-  { key: "training-weights", room: "training", kind: "weights", w: 5.5, l: -3.1 },
-  { key: "training-mat", room: "training", kind: "matRoll", w: 5.5, l: -0.05 },
-  { key: "training-bottle", room: "training", kind: "bottle", w: 7.6, l: -0.6 },
-  // メカニック室：予備ホイール・パーツ用クレート・散らばったボルト
-  { key: "mechanic-wheels", room: "mechanic", kind: "wheels", w: 5.5, l: 4.0 },
-  { key: "mechanic-crate", room: "mechanic", kind: "toolCrate", w: 5.5, l: 1.0 },
-  { key: "mechanic-bolts", room: "mechanic", kind: "boltsScatter", w: 7.3, l: 2.2 },
-  // メディカル室：薬品棚・待合の椅子・サイドテーブル
-  { key: "medical-cabinet", room: "medical", kind: "cabinet", w: 13.5, l: -3.1 },
-  { key: "medical-chair", room: "medical", kind: "chair", w: 10.9, l: -0.6 },
-  { key: "medical-table", room: "medical", kind: "sideTable", w: 12.9, l: -3.1 },
-  // スカウト室：選手写真のコルクボード・書類の束・来客用の椅子
-  { key: "scout-corkboard", room: "scout", kind: "corkboard", w: 13.6, l: 4.0 },
+  // トレーニング室：予備ウェイトを載せた棚、ボトル&タオルを載せたテーブル
+  { key: "training-weights", room: "training", kind: "weightRack", w: 5.6, l: -2.6 },
+  { key: "training-water", room: "training", kind: "waterTable", w: 7.6, l: -0.6 },
+  // メカニック室：予備ホイールを立てかけた置き台、パーツ用クレート
+  { key: "mechanic-wheels", room: "mechanic", kind: "wheelRack", w: 5.6, l: 1.0 },
+  { key: "mechanic-crate", room: "mechanic", kind: "partsCrate", w: 5.7, l: 2.6 },
+  // メディカル室：薬品棚、待合の椅子
+  { key: "medical-cabinet", room: "medical", kind: "cabinet", w: 13.5, l: -0.6 },
+  { key: "medical-chair", room: "medical", kind: "chair", w: 10.9, l: -2.6 },
+  // スカウト室：机の脇のホワイトボード、来客用の椅子、選手ファイルの束
+  { key: "scout-whiteboard", room: "scout", kind: "whiteboard", w: 13.4, l: 3.0 },
+  { key: "scout-chair", room: "scout", kind: "chair", w: 12.6, l: 3.4 },
   { key: "scout-folders", room: "scout", kind: "folders", w: 10.9, l: 1.0 },
-  { key: "scout-chair", room: "scout", kind: "chair", w: 11.0, l: 3.7 },
-  // 廊下：玄関そばの靴棚・敷物
-  { key: "corridor-shoerack", room: "corridor", kind: "shoeRack", w: 9.5, l: -3.2 },
-  { key: "corridor-rug", room: "corridor", kind: "rug", w: 9.25, l: -2.0 },
+  // 廊下：玄関そばの靴棚
+  { key: "corridor-shoerack", room: "corridor", kind: "shoeRack", w: 9.5, l: -2.8 },
 ];
 
 // 練習コース（world原点中心）。クラブハウス（w:5〜14）と重ならない範囲に収めてある。
