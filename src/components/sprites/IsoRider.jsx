@@ -13,16 +13,23 @@
 //  - 脚と腕は**2関節の逆運動学**で膝・肘を解く。姿勢ごとに腰・肩・手の位置を変えるだけで
 //    自然な関節の曲がりが出る（姿勢ごとに全部の線を手で置き直さなくてよい）。
 //  - ペダルはクランクを実際に回し、車輪にはスポークを入れて転がす。
+//
+// Wave G-1での作り直し（ユーザー提示の参考ドット絵と見比べて判明したギャップへの対応）：
+//  - フレームが細い灰色の線で存在感が無かった→`kit.jsx`の`tube()`で太く・色付き・縁取り付きに。
+//  - 顔が無くのっぺらぼうだった→頭を一回り拡大し、目を追加（`Person.jsx`と同じ顔の作法）。
+//  - 3姿勢の差が弱かった→ダンシングの車体の振り幅、スプリントの前傾をそれぞれ強調。
+//  - `Person.jsx`と色定数(SKIN/HAIR)・先細り四角形(quad)を`kit.jsx`で共有し、同一人物として
+//    自然に見えるようにした（このファイルとPerson.jsxで別々に定義されていた重複を解消）。
+//  - 向き（真横図→3/4ビュー）はWave G-3で扱う。本弾では向きを変えず造形のみ改善する。
 import React from "react";
+import { SKIN, HAIR, OUTLINE, quad as quadKit, tube, silhouette } from "./kit.jsx";
 
 // v39.9: ヘルメット色のバリエーション（同一チーム色でも見分けが付くように）。
 // Wave F-3bでRaceView.jsxからこちらへ移設（スプライトの見た目に属するデータのため）。
 export const CAP_COLORS = ["#e9e2d4", "#d94f4f", "#e0b23c", "#4b7fc1", "#43a047", "#7e57c2", "#eeeeee", "#2b3038"];
 
-const FRAME = "#aeb4be";
-const SKIN = "#f2d2a8";
+const FRAME = "#4d7ea8"; // Wave G-1: 灰色の細線→鋼色に着色（tube()で縁取りも付く）
 const LIMB = "#242830";
-const HAIR = "#4a3728";
 
 // 2関節の逆運動学。根元(ax,ab)と先端(bx,bb)、骨の長さl1/l2から中間関節を返す。
 // dirは曲げる向き(+1/-1)。届かない場合は距離をクランプして自然に伸び切らせる。
@@ -49,25 +56,14 @@ export function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple, p
   const X = (a) => +(a * u).toFixed(2), Y = (b) => +(-b * u).toFixed(2);
   const px = (a, b, w, h, f, key) => <rect key={key} x={X(a)} y={Y(b + h)} width={+(w * u).toFixed(2)} height={+(h * u).toFixed(2)} fill={f} shapeRendering="crispEdges" />;
   const ln = (a, b, c, d, f, wd = 1, key) => <line key={key} x1={X(a)} y1={Y(b)} x2={X(c)} y2={Y(d)} stroke={f} strokeWidth={+(wd * u).toFixed(2)} strokeLinecap="round" />;
-  // 先細りの四角形。胴を1本の太い線で描くと肩と腰の区別がつかない「ソーセージ状の塊」に
-  // 見えてしまうため、腰側と肩側で幅の違う多角形として描く。offは軸に対する平行移動
-  // （背中側のラインを引くのに使う）。
-  const quad = (p1, p2, hw1, hw2, f, key, off = 0) => {
-    const dx = p2[0] - p1[0], db = p2[1] - p1[1];
-    const len = Math.hypot(dx, db) || 1;
-    const nx = -db / len, nb = dx / len;
-    const a1 = [p1[0] + nx * off, p1[1] + nb * off], a2 = [p2[0] + nx * off, p2[1] + nb * off];
-    const pts = [
-      [a1[0] + nx * hw1, a1[1] + nb * hw1], [a2[0] + nx * hw2, a2[1] + nb * hw2],
-      [a2[0] - nx * hw2, a2[1] - nb * hw2], [a1[0] - nx * hw1, a1[1] - nb * hw1],
-    ];
-    return <polygon key={key} points={pts.map(([a, b]) => `${X(a)},${Y(b)}`).join(" ")} fill={f} />;
-  };
+  // フレームのチューブ（縁取り付き太線）と先細り四角形（胴・袖）は`kit.jsx`でPerson.jsxと共有。
+  const tb = (a, b, c, d, wd, key) => tube(X, Y, a, b, c, d, wd, u, FRAME, key);
+  const quad = (p1, p2, hw1, hw2, f, key, off = 0, outline = false) => quadKit(X, Y, p1, p2, hw1, hw2, f, key, off, outline);
 
   const P = POSTURES[posture] || POSTURES.normal;
   const crank = phase * Math.PI * 2;
-  // 立ち漕ぎは車体を左右に振る（ダンシングらしさはこの揺れで一気に伝わる）
-  const rock = P.rock ? Math.sin(crank) * 4.2 : 0;
+  // 立ち漕ぎは車体を左右に振る（ダンシングらしさはこの揺れで一気に伝わる）。Wave G-1で強調。
+  const rock = P.rock ? Math.sin(crank) * 6.5 : 0;
 
   // ---- 車体の基準点（実車の比率に寄せてある。車輪半径2.9単位 ≒ 33cm換算） ----
   const RW = [-5.4, 2.9], FW = [5.4, 2.9];   // 後輪・前輪の中心（下端がb=0＝接地）
@@ -108,17 +104,19 @@ export function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple, p
       <g transform={rock ? `rotate(${rock.toFixed(2)})` : undefined}>
         {wheel(RW, "rw")}
         {wheel(FW, "fw")}
-        {/* フレーム：チェーンステー／シートチューブ／ダウンチューブ／トップチューブ／フォーク／ステー */}
-        {ln(RW[0], RW[1], BB[0], BB[1], FRAME, 0.85, "cs")}
-        {ln(BB[0], BB[1], SEAT[0], SEAT[1], FRAME, 0.95, "st")}
-        {ln(BB[0], BB[1], HEADTOP[0], HEADTOP[1], FRAME, 1.0, "dt")}
-        {ln(SEAT[0], SEAT[1], HEADTOP[0], HEADTOP[1], FRAME, 0.95, "tt")}
-        {ln(RW[0], RW[1], SEAT[0], SEAT[1], FRAME, 0.8, "ss")}
-        {ln(HEADTOP[0], HEADTOP[1], FW[0], FW[1], FRAME, 0.9, "fork")}
+        {/* フレーム：チェーンステー／シートチューブ／ダウンチューブ／トップチューブ／フォーク／ステー。
+            Wave G-1：太さ+縁取り付きの`tube()`にし、灰色→鋼色へ着色して存在感を出した。 */}
+        {tb(RW[0], RW[1], BB[0], BB[1], 1.05, "cs")}
+        {tb(BB[0], BB[1], SEAT[0], SEAT[1], 1.15, "st")}
+        {tb(BB[0], BB[1], HEADTOP[0], HEADTOP[1], 1.25, "dt")}
+        {tb(SEAT[0], SEAT[1], HEADTOP[0], HEADTOP[1], 1.15, "tt")}
+        {tb(RW[0], RW[1], SEAT[0], SEAT[1], 1.0, "ss")}
+        {tb(HEADTOP[0], HEADTOP[1], FW[0], FW[1], 1.1, "fork")}
         {/* ステム＋上ハンドル＋ドロップ（下ハンドルへ弧を描いて下りる） */}
-        {ln(HEADTOP[0], HEADTOP[1], BAR[0], BAR[1], FRAME, 0.8, "stem")}
-        {ln(BAR[0] - 0.9, BAR[1], BAR[0], BAR[1], FRAME, 0.85, "tops")}
-        <path d={`M ${X(BAR[0])} ${Y(BAR[1])} Q ${X(BAR[0] + 1.1)} ${Y(BAR[1] - 0.3)} ${X(DROP[0])} ${Y(DROP[1])}`} fill="none" stroke={FRAME} strokeWidth={+(0.8 * u).toFixed(2)} strokeLinecap="round" />
+        {tb(HEADTOP[0], HEADTOP[1], BAR[0], BAR[1], 1.0, "stem")}
+        {tb(BAR[0] - 0.9, BAR[1], BAR[0], BAR[1], 1.05, "tops")}
+        <path d={`M ${X(BAR[0])} ${Y(BAR[1])} Q ${X(BAR[0] + 1.1)} ${Y(BAR[1] - 0.3)} ${X(DROP[0])} ${Y(DROP[1])}`} fill="none" stroke={OUTLINE} strokeWidth={+(1.35 * u).toFixed(2)} strokeLinecap="round" />
+        <path d={`M ${X(BAR[0])} ${Y(BAR[1])} Q ${X(BAR[0] + 1.1)} ${Y(BAR[1] - 0.3)} ${X(DROP[0])} ${Y(DROP[1])}`} fill="none" stroke={FRAME} strokeWidth={+(1.0 * u).toFixed(2)} strokeLinecap="round" />
         {/* サドル */}
         {px(-3.0, 7.6, 2.4, 0.55, "#20242c", "saddle")}
         {/* 奥側の脚 → 胴 → 手前側の脚 の順で重ねる */}
@@ -126,23 +124,28 @@ export function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple, p
         {ln(kneeFar.x, kneeFar.b, pedFar[0], pedFar[1], "#171a20", 0.85, "shF")}
         {ln(BB[0], BB[1], pedFar[0], pedFar[1], "#6f757f", 0.35, "crF")}
         {/* 短パン（腰まわり）→ 胴 の順。腰から肩へ先細りの多角形で描き、背中側に
-            個人識別色のラインを1本通す（姿勢の角度がそのまま背中の傾きに出る）。 */}
-        {quad([P.hip[0] - 0.5, P.hip[1] - 0.3], [P.hip[0] + 0.6, P.hip[1] + 0.25], 1.25, 1.2, "#20242c", "shorts")}
-        {quad(P.hip, P.sh, 1.2, 1.4, color, "torso")}
-        {quad(P.hip, P.sh, 0.28, 0.32, cap || "#e9e2d4", "stripe", 0.85)}
+            個人識別色のラインを1本通す（姿勢の角度がそのまま背中の傾きに出る）。
+            Wave G-1：半幅を拡大し縁取りを付けて、車体に対する人物の存在感を強めた。 */}
+        {quad([P.hip[0] - 0.5, P.hip[1] - 0.3], [P.hip[0] + 0.6, P.hip[1] + 0.25], 1.35, 1.3, "#20242c", "shorts", 0, true)}
+        {quad(P.hip, P.sh, 1.3, 1.55, color, "torso", 0, true)}
+        {quad(P.hip, P.sh, 0.3, 0.35, cap || "#e9e2d4", "stripe", 0.9)}
         {/* 手前側の脚 */}
         {ln(BB[0], BB[1], pedNear[0], pedNear[1], "#8a919b", 0.35, "crN")}
         {ln(P.hip[0], P.hip[1], kneeNear.x, kneeNear.b, LIMB, 1.25, "thN")}
         {ln(kneeNear.x, kneeNear.b, pedNear[0], pedNear[1], LIMB, 1.0, "shN")}
         {/* 半袖の袖（肩まわり）＋腕（肩→肘→手） */}
-        {quad(P.sh, [(P.sh[0] + elbow.x) / 2, (P.sh[1] + elbow.b) / 2], 1.25, 0.75, color, "sleeve")}
+        {quad(P.sh, [(P.sh[0] + elbow.x) / 2, (P.sh[1] + elbow.b) / 2], 1.35, 0.8, color, "sleeve", 0, true)}
         {ln(P.sh[0], P.sh[1], elbow.x, elbow.b, SKIN, 0.85, "ua")}
         {ln(elbow.x, elbow.b, P.hand[0], P.hand[1], SKIN, 0.75, "fa")}
-        {/* 頭：Person.jsx（歩行時）と同じ「肌＋髪＋帽子(＝ヘルメット)」構成にして同一人物に見せる */}
-        {px(P.head[0] - 1.0, P.head[1] - 1.1, 2.2, 2.1, SKIN, "head")}
-        {px(P.head[0] - 1.0, P.head[1] - 0.6, 0.8, 1.6, HAIR, "hair")}
-        {px(P.head[0] - 1.1, P.head[1] + 0.9, 2.4, 0.85, cap || "#e9e2d4", "helm")}
-        {px(P.head[0] + 1.1, P.head[1] + 0.9, 0.9, 0.4, cap || "#e9e2d4", "helmTail")}
+        {/* 頭：Person.jsxと同じ「肌＋髪＋帽子(＝ヘルメット)＋目」構成にして同一人物に見せる。
+            Wave G-1：一回り拡大し、目を追加して「顔」にした（のっぺらぼう対策）。 */}
+        {px(P.head[0] - 1.15, P.head[1] - 1.2, 2.5, 2.4, SKIN, "head")}
+        {px(P.head[0] - 1.15, P.head[1] - 0.65, 0.9, 1.85, HAIR, "hair")}
+        {px(P.head[0] + 0.75, P.head[1] - 0.05, 0.4, 0.4, "#2a2118", "eye")}
+        {px(P.head[0] - 1.25, P.head[1] + 1.0, 2.7, 0.95, cap || "#e9e2d4", "helm")}
+        {px(P.head[0] + 1.25, P.head[1] + 1.0, 1.0, 0.45, cap || "#e9e2d4", "helmTail")}
+        {/* 頭部のシルエット縁取り。髪・ヘルメットを重ねた後に描く（Person.jsxと同じ理由） */}
+        {silhouette(X, Y, u, P.head[0] - 1.15, P.head[1] - 1.2, 2.5, 2.4, "headOutline")}
       </g>
       {isPlayer && <rect x={X(-3.0)} y={Y(12.6)} width={+(9.2 * u).toFixed(2)} height={+(4.2 * u).toFixed(2)} rx={u} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
     </g>
