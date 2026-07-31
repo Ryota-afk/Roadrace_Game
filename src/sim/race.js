@@ -872,3 +872,14 @@ export function capExcessiveGaps(entrants) {
 }
 
 export function riderHash01(id, salt) { return ((id * 2654435761 + salt * 40503) % 100000) / 100000; }
+
+// 選手ごとに位相・周波数をずらした周期的な横ゆらぎ（Math.random不使用・決定論的）。
+// RaceView（集団の隊列）とBaseView（拠点の周回）の両方から使う汎用ヘルパーなので、
+// JSXを持たないこの層（sim/）に置く（domain層からも参照できるようにするため）。
+export function riderWander(id, salt, tSec, baseFreq) {
+  const h1 = riderHash01(id, salt), h2 = riderHash01(id, salt + 1);
+  const f1 = baseFreq * (0.6 + h1 * 0.8);
+  const f2 = f1 * (1.7 + h2 * 0.6);
+  return 0.65 * Math.sin(tSec * f1 * Math.PI * 2 + h1 * Math.PI * 2)
+       + 0.35 * Math.sin(tSec * f2 * Math.PI * 2 + h2 * Math.PI * 2);
+}

@@ -26,11 +26,10 @@ import {
   pointInQuad, roomFloorQuad, stationQuad,
 } from "../../domain/season/baseViewLayout.js";
 import {
-  riderActivityAt, activityFacesLeft, activityDir, isIndoors, routeToStation, workSpotFor,
+  riderActivityAt, activityFacesLeft, activityDir, activityWobble, isIndoors, routeToStation, workSpotFor,
 } from "../../domain/season/riderActivity.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
 import { useIsoCamera } from "../../hooks/useIsoCamera.js";
-import { riderWander } from "../RaceView.jsx";
 import { CAP_COLORS } from "../sprites/IsoRider.jsx";
 import { PixelBike } from "../sprites/pixelBike.jsx";
 import { riderHash01 } from "../../sim/race.js";
@@ -155,8 +154,10 @@ export function BaseView({ g, paused, onRoomTap }) {
   // （周回／コース⇔ラックの移動／徒歩での往復／持ち場での作業）。
   const riderRows = roster.map(r => {
     const act = riderActivityAt(r, elapsed, ACTIVITY_CTX);
-    // 周回中だけ左右のゆらぎを加える（歩行中は経路上をまっすぐ進ませる）
-    const wob = act.pose === "ride" ? riderWander(r.id, 7, elapsed, 0.5) * 0.10 : 0;
+    // 周回中だけ左右のゆらぎを加える（歩行中は経路上をまっすぐ進ませる）。
+    // activityFacesLeft/activityDirの向き判定も同じactivityWobbleを使っており、
+    // 実際の描画位置と向き判定がズレないようにしてある（Wave G-1改で発覚したバグの修正）。
+    const wob = activityWobble(r, act, elapsed);
     const p = isoProject(act.w, act.l + wob, 0, PROJ);
     return {
       kind: "rider", r, act, x: p.x, y: p.y, sortY: p.y,

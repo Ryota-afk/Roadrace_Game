@@ -4,7 +4,7 @@ import { FINISH_COMMENTARY, SEG_COMMENTARY } from "../data/course.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
 import { Btn, Eyebrow } from "./ui.jsx";
 import { fmtGap, fmtTime, hasAbility, strHash } from "../core/core.js";
-import { TICK_SEC, riderHash01, resumeSim } from "../sim/race.js";
+import { TICK_SEC, riderHash01, riderWander, resumeSim } from "../sim/race.js";
 
 // v39(A案): レース中の「判断カード」スロット定義。注目選手のコース進捗(frac)が at を越えた／
 // 状況条件 cond を満たした瞬間に再生を止め、その時点の状況(ctx)に応じて composeCard で選択肢を
@@ -291,14 +291,6 @@ export const PACK_ELONG_EASE = 0.035;
 export const PACK_WANDER_FREQ_X = 0.16; // 独立揺らぎの基準周波数（Hz、前後方向）
 
 export const PACK_WANDER_FREQ_Y = 0.12; // 独立揺らぎの基準周波数（Hz、左右方向）
-
-export function riderWander(id, salt, tSec, baseFreq) {
-  const h1 = riderHash01(id, salt), h2 = riderHash01(id, salt + 1);
-  const f1 = baseFreq * (0.6 + h1 * 0.8);
-  const f2 = f1 * (1.7 + h2 * 0.6);
-  return 0.65 * Math.sin(tSec * f1 * Math.PI * 2 + h1 * Math.PI * 2)
-       + 0.35 * Math.sin(tSec * f2 * Math.PI * 2 + h2 * Math.PI * 2);
-}
 
 export const SPRINT_CONTENDER_GAP_SEC = 30;  // この秒差以内の選手をスプリント演出の対象にする（v39.2: 拡大。
 // 演出の母集団は「直前までカメラが映していた先頭集団(cameraFramingRef)」なので、その集団を厳しく着差で

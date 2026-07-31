@@ -11,7 +11,7 @@
 //
 // 歩行ルートは**壁データ(BASE_VIEW_PARTITIONS)の「壁が無い区間」＝扉から機械的に導出**する。
 // 間仕切りを動かせばルートも自動で追従し、壁を通り抜ける経路が原理的に発生しない。
-import { riderHash01 } from "../../sim/race.js";
+import { riderHash01, riderWander } from "../../sim/race.js";
 import { isoProject, riderLoopPoint, roundedLoopPoint, inWorldRect } from "./baseViewLayout.js";
 
 // 1サイクルの構成（秒）。周回に最も長く時間を割り当てることで、実行時のカウンタを持たずに
@@ -198,12 +198,28 @@ export function riderActivityAt(rider, tSec, ctx) {
   return { mode: "work", pose: spotPose, roomKey, w: spot.w, l: spot.l };
 }
 
+// 周回中(pose==="ride")だけ描画位置に加える横ゆらぎ(riderWander)。BaseView.jsxの
+// 描画位置計算(x,y)と、本ファイル内の向き判定(activityFacesLeft/activityDir)の
+// 両方から同じ関数を呼ぶことで値のズレを構造的に防ぐ（以前は同じ式をBaseView.jsxに
+// 別途書いていたため、向き判定だけゆらぎ抜きになっていた＝下のバグの原因）。
+export function activityWobble(rider, act, tSec) {
+  return act.pose === "ride" ? riderWander(rider.id, 7, tSec, 0.5) * 0.10 : 0;
+}
+
 // スプライトを水平反転すべきか（進行方向がscreen上で左向きか）。
 // 既存のriderFacesLeftと同じ考え方だが、周回だけでなく歩行・作業も含む汎用版。
+//
+// 【重要】周回中はBaseView.jsxがriderWanderによる横ゆらぎを描画位置(l)に加えている。
+// 以前はこの関数がゆらぎ抜きの位置だけで向きを判定していたため、カーブの頂点付近など
+// 進行方向の画面上のx成分がもともと小さい区間では、ゆらぎの変化量が本来の移動量を
+// 上回って実際の見た目の動きが逆転することがあり、「NEへ進もうとしているのにNW向きに
+// 見える（逆もまた然り）」という間欠的なバグになっていた（実機でユーザーが発見）。
+// 向き判定にも同じゆらぎを加えて実際の描画位置と一致させることで解消する。
 export function activityFacesLeft(rider, tSec, ctx, proj) {
   const a = riderActivityAt(rider, tSec, ctx);
   const b = riderActivityAt(rider, tSec + 0.12, ctx);
-  const pa = isoProject(a.w, a.l, 0, proj), pb = isoProject(b.w, b.l, 0, proj);
+  const wa = activityWobble(rider, a, tSec), wb = activityWobble(rider, b, tSec + 0.12);
+  const pa = isoProject(a.w, a.l + wa, 0, proj), pb = isoProject(b.w, b.l + wb, 0, proj);
   if (Math.abs(pb.x - pa.x) < 0.01) return false; // 静止中は向きを変えない
   return pb.x < pa.x;
 }
@@ -212,10 +228,12 @@ export function activityFacesLeft(rider, tSec, ctx, proj) {
 // 必ず画面上は斜め方向になる（dx=26*(dw+dl), dy=13*(dw-dl)）ため、画面yの増減だけで
 // 「SE系（下向き）」か「NE系（上向き）」かが決まる。左右はactivityFacesLeftのflipが担当し、
 // 本関数はその直交する軸（上下）を担当する。静止中・純水平移動中はSEをデフォルトにする。
+// activityFacesLeftと同じ理由でriderWanderの横ゆらぎを加えてから判定する。
 export function activityDir(rider, tSec, ctx, proj) {
   const a = riderActivityAt(rider, tSec, ctx);
   const b = riderActivityAt(rider, tSec + 0.12, ctx);
-  const pa = isoProject(a.w, a.l, 0, proj), pb = isoProject(b.w, b.l, 0, proj);
+  const wa = activityWobble(rider, a, tSec), wb = activityWobble(rider, b, tSec + 0.12);
+  const pa = isoProject(a.w, a.l + wa, 0, proj), pb = isoProject(b.w, b.l + wb, 0, proj);
   if (Math.abs(pb.y - pa.y) < 0.01) return "SE";
   return pb.y >= pa.y ? "SE" : "NE";
 }
