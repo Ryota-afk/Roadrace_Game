@@ -19,7 +19,7 @@ import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
   BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_PARTITION_HEIGHT,
-  BASE_VIEW_EMPTY_ROOMS,
+  BASE_VIEW_EMPTY_ROOMS, BASE_VIEW_CLUTTER,
 } from "../../data/baseViewBuildings.js";
 import {
   isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf,
@@ -34,6 +34,7 @@ import { Station } from "./Station.jsx";
 import { Track } from "./Track.jsx";
 import { Ground } from "./Ground.jsx";
 import { propItems } from "./Props.jsx";
+import { clutterItems } from "./Clutter.jsx";
 import { TYPES } from "../../data/abilities.js";
 
 const PROJ = BASE_VIEW_PROJ;
@@ -173,6 +174,7 @@ export function BaseView({ g, paused, onRoomTap }) {
                       rooms={BASE_VIEW_ROOMS} partitions={BASE_VIEW_PARTITIONS} partitionHeight={BASE_VIEW_PARTITION_HEIGHT} />
                     {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} />)}
                     {BASE_VIEW_EMPTY_ROOMS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} />)}
+                    {clutterItems(PROJ, BASE_VIEW_CLUTTER)}
                   </g>
                 );
                 if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
