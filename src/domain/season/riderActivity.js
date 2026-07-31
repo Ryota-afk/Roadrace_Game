@@ -12,7 +12,7 @@
 // 歩行ルートは**壁データ(BASE_VIEW_PARTITIONS)の「壁が無い区間」＝扉から機械的に導出**する。
 // 間仕切りを動かせばルートも自動で追従し、壁を通り抜ける経路が原理的に発生しない。
 import { riderHash01 } from "../../sim/race.js";
-import { isoProject, riderLoopPoint, inWorldRect } from "./baseViewLayout.js";
+import { isoProject, riderLoopPoint, roundedLoopPoint, inWorldRect } from "./baseViewLayout.js";
 
 // 1サイクルの構成（秒）。周回に最も長く時間を割り当てることで、実行時のカウンタを持たずに
 // 「常に一定割合だけが屋内にいる」状態が自動的に生まれる（純関数のまま人数バランスが取れる）。
@@ -121,6 +121,28 @@ export function destinationFor(riderId, fatigue, cycleIndex, roomKeys) {
 
 const lerpPt = (a, b, u) => ({ w: a.w + (b.w - a.w) * u, l: a.l + (b.l - a.l) * u });
 
+// ラックに最も近い周回路上の位置(t∈[0,1))を数値探索で求める。ラックは周回路の外側に
+// あるため、周回路上の任意の地点から直線で向かうと芝生を斜めに横切ってしまう
+// （実機で発覚したバグ）。一旦この最寄り点まで周回路沿いに進み、そこから短い距離だけ
+// ラックへ出入りするようにして、コースを外れる区間を最小化する。
+function nearestLoopT(pathW, pathL, cornerR, target) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < 200; i++) {
+    const t = i / 200;
+    const p = roundedLoopPoint(t, pathW, pathL, cornerR);
+    const d = (p.w - target.w) ** 2 + (p.l - target.l) ** 2;
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best;
+}
+
+// 周回路パラメータ(t)を、mod 1で最短経路になる向きへ補間する（周回路沿いの移動に使う）。
+function lerpLoopT(ta, tb, u) {
+  let d = tb - ta;
+  d -= Math.round(d);
+  return ((ta + d * u) % 1 + 1) % 1;
+}
+
 // 時刻tSecにおける選手の位置・モード・ポーズ。ctxは静的データ（data/baseViewBuildings.js由来）。
 export function riderActivityAt(rider, tSec, ctx) {
   const { loop, rack, speed, roomKeys } = ctx;
@@ -142,6 +164,8 @@ export function riderActivityAt(rider, tSec, ctx) {
   const tRideEnd = tCycleStart + ACTIVITY_SEGMENTS[0].dur;
   const tNextRideStart = tCycleStart + ACTIVITY_CYCLE;
   const onLoop = (t) => riderLoopPoint(rider.id, t, speed, loop.pathW, loop.pathL, loop.cornerR);
+  const loopPhase = riderHash01(rider.id, 41); // riderLoopPointの内部位相と揃える
+  const loopT = (t) => ((loopPhase + t * speed) % 1 + 1) % 1;
 
   const roomKey = destinationFor(rider.id, rider.fatigue, cycleIndex, roomKeys);
   const route = ctx.routes[roomKey] || ctx.routes[roomKeys[0]];
@@ -149,8 +173,26 @@ export function riderActivityAt(rider, tSec, ctx) {
   const spotPose = ctx.poses[roomKey] || "stand";
 
   if (seg.mode === "ride") return { mode: "ride", pose: "ride", roomKey, ...onLoop(tSec) };
-  if (seg.mode === "approach") return { mode: "approach", pose: "ride", roomKey, ...lerpPt(onLoop(tRideEnd), rack, u) };
-  if (seg.mode === "depart") return { mode: "depart", pose: "ride", roomKey, ...lerpPt(rack, onLoop(tNextRideStart), u) };
+  if (seg.mode === "approach") {
+    // 周回路沿いにラック近くまで進んでから(前半)、短距離でラックへ入る(後半)。
+    const nT = nearestLoopT(loop.pathW, loop.pathL, loop.cornerR, rack);
+    if (u < 0.5) {
+      const tOnLoop = lerpLoopT(loopT(tRideEnd), nT, u / 0.5);
+      return { mode: "approach", pose: "ride", roomKey, ...roundedLoopPoint(tOnLoop, loop.pathW, loop.pathL, loop.cornerR) };
+    }
+    const nearPt = roundedLoopPoint(nT, loop.pathW, loop.pathL, loop.cornerR);
+    return { mode: "approach", pose: "ride", roomKey, ...lerpPt(nearPt, rack, (u - 0.5) / 0.5) };
+  }
+  if (seg.mode === "depart") {
+    // ラックから短距離で周回路近くまで出て(前半)、周回路沿いに元の位置へ戻る(後半)。
+    const nT = nearestLoopT(loop.pathW, loop.pathL, loop.cornerR, rack);
+    if (u < 0.5) {
+      const nearPt = roundedLoopPoint(nT, loop.pathW, loop.pathL, loop.cornerR);
+      return { mode: "depart", pose: "ride", roomKey, ...lerpPt(rack, nearPt, u / 0.5) };
+    }
+    const tOnLoop = lerpLoopT(nT, loopT(tNextRideStart), (u - 0.5) / 0.5);
+    return { mode: "depart", pose: "ride", roomKey, ...roundedLoopPoint(tOnLoop, loop.pathW, loop.pathL, loop.cornerR) };
+  }
   if (seg.mode === "walkIn") return { mode: "walkIn", pose: "walk", roomKey, ...polylineAt(route, u) };
   if (seg.mode === "walkOut") return { mode: "walkOut", pose: "walk", roomKey, ...polylineAt(route, 1 - u) };
   return { mode: "work", pose: spotPose, roomKey, w: spot.w, l: spot.l };
