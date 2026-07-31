@@ -26,38 +26,65 @@ export const BASE_VIEW_CLUBHOUSE = {
 // 現時点では各持ち場に固定の什器を1つ置く）。levelKey/levelMaxは
 // domain/season/baseViewLayout.jsのbuildingLevels(g)が返すキーと対応する。
 // w/lはBASE_VIEW_CLUBHOUSEのfootprint（w:5〜14, l:-3.5〜4.5）内、壁際から
-// 十分離した位置に配置。
-// Wave F-2：col/rowはBASE_VIEW_ROOM_GRID（3列×2行）上のセル座標、floorTintはそのセルの
-// 床色。domain/season/baseViewLayout.jsのclubhouseRoomGrid(BASE_VIEW_CLUBHOUSE,3,2)が
-// 返すセル中心と一致するよう手で計算して直書きしてある（データ層はdomain層をimportしない
-// 方針のため。整合性はscratchpadのNode単体テストでclubhouseRoomGridの出力と突き合わせて
-// 検算している）。
+// 十分離した位置に配置。roomは下記BASE_VIEW_ROOMSのkeyと対応（どの部屋の什器かを示す。
+// 座標が対応する部屋のfootprint内に収まっているかはNode単体テストで検算している）。
 export const BASE_VIEW_STATIONS = [
   { key: "training", levelKey: "training", levelMax: 5, label: "トレーニング", icon: "💪",
-    w: 7.0, l: -1.8, kind: "roller", accent: "#2f8f5c", col: 0, row: 0, floorTint: "#dcefd5" },
+    w: 7.0, l: -1.8, kind: "roller", accent: "#2f8f5c", room: "training" },
   { key: "mechanic", levelKey: "mechanic", levelMax: 5, label: "メカニック", icon: "🔧",
-    w: 7.0, l: 2.8, kind: "workbench", accent: "#c9a23c", col: 0, row: 1, floorTint: "#f2e7c6" },
+    w: 7.0, l: 2.8, kind: "workbench", accent: "#c9a23c", room: "mechanic" },
   { key: "medical", levelKey: "medical", levelMax: 3, label: "メディカル", icon: "⚕",
-    w: 12.0, l: -1.8, kind: "medical", accent: "#4f8fe8", col: 2, row: 0, floorTint: "#dbe8f8" },
+    w: 12.0, l: -1.8, kind: "medical", accent: "#4f8fe8", room: "medical" },
   { key: "scout", levelKey: "scout", levelMax: 3, label: "スカウト", icon: "🔍",
-    w: 12.0, l: 2.8, kind: "desk", accent: "#c98bf0", col: 2, row: 1, floorTint: "#ecdff8" },
+    w: 12.0, l: 2.8, kind: "desk", accent: "#c98bf0", room: "scout" },
 ];
 
-// Wave F-2：クラブハウスの床を3列×2行=6部屋に分割する間取り。列(0〜2)はw軸、行(0〜1)は
-// l軸を機械的に三等分・二等分するだけ（domain/season/baseViewLayout.jsの
-// clubhouseRoomGrid/clubhousePartitions参照）。既存4持ち場は列0(w5〜8)と列2(w11〜14)に
-// 自然に収まっており、中央の列1(w8〜11)の2部屋がそのまま「空き部屋」になる（座標は
-// 一切動かしていない）。partitionHeightは外壁(wallHeight:40)より低い間仕切り壁の高さ
-// （上から中が見渡せる普通の間取りらしさを出すため）。
-export const BASE_VIEW_ROOM_GRID = { cols: 3, rows: 2, partitionHeight: 16 };
+// Wave F-2 redo：クラブハウスの間取り。均等な3列×2行グリッドで機械的に割った初版を
+// ユーザーの指摘（「出入り口と廊下を一切考慮していない」「均等に並べる必要は必ずしもない」
+// 「現実的な間取りにして」）を受けて全面的に作り直した。玄関（Room.jsxの扉。footprintの
+// 手前辺、w9.5付近の中央）を入ってすぐが廊下(corridor)で、廊下の左右に4つの持ち場、
+// 廊下の突き当りに小さな空き部屋(納戸)2つを配置する、普通の建物に近い構成。
+// 各部屋はfootprint（w:5〜14, l:-3.5〜4.5）内の矩形として手作業で配置してあり
+// （面積の合計はfootprint全体と一致＝隙間なく敷き詰めてある）、既存4持ち場のw/lは
+// Wave E-2 redo時点の座標から一切動かしていない（すべて対応する部屋の範囲内に収まる）。
+export const BASE_VIEW_ROOMS = [
+  { key: "training", w: 6.5, l: -1.6, hw: 1.5, hl: 1.9, floorTint: "#dcefd5" },     // 手前左
+  { key: "mechanic", w: 6.5, l: 2.4, hw: 1.5, hl: 2.1, floorTint: "#f2e7c6" },      // 奥左
+  { key: "medical", w: 12.25, l: -1.6, hw: 1.75, hl: 1.9, floorTint: "#dbe8f8" },   // 手前右
+  { key: "scout", w: 12.25, l: 2.4, hw: 1.75, hl: 2.1, floorTint: "#ecdff8" },      // 奥右
+  { key: "corridor", w: 9.25, l: -0.15, hw: 1.25, hl: 3.35, floorTint: "#cbb896" }, // 玄関〜納戸手前の廊下
+  { key: "spare1", w: 8.625, l: 3.85, hw: 0.625, hl: 0.65, floorTint: "#e6e3da" },  // 廊下突き当りの納戸(左)
+  { key: "spare2", w: 9.875, l: 3.85, hw: 0.625, hl: 0.65, floorTint: "#e6e3da" },  // 廊下突き当りの納戸(右)
+];
+
+// 部屋を隔てる壁（間仕切り）の線分。廊下と各持ち場を隔てる壁(w=8/w=10.5)には、対応する
+// 持ち場ごとに出入り口の隙間を開けてあるため、1本の壁線が複数のセグメントに分かれている
+// （隙間の区間には壁を描かない＝そこが扉）。training/mechanic間・medical/scout間・
+// 納戸2部屋の間は単純な1本の間仕切り（扉なし＝廊下側からのみ出入りする部屋どうしの区切り）。
+// 外壁（backFacePairが選ぶ2面＝w=5の辺とl=4.5の辺）とは異なる位置になるため重ならない。
+export const BASE_VIEW_PARTITIONS = [
+  // 廊下←→左側(training/mechanic)の壁。training入口(l:-2.2〜-1.0)・mechanic入口(l:1.8〜3.0)を開けてある。
+  { w1: 8, l1: -3.5, w2: 8, l2: -2.2 },
+  { w1: 8, l1: -1.0, w2: 8, l2: 1.8 },
+  { w1: 8, l1: 3.0, w2: 8, l2: 3.2 },
+  // 廊下←→右側(medical/scout)の壁。medical入口(l:-2.2〜-1.0)・scout入口(l:1.8〜3.0)を開けてある。
+  { w1: 10.5, l1: -3.5, w2: 10.5, l2: -2.2 },
+  { w1: 10.5, l1: -1.0, w2: 10.5, l2: 1.8 },
+  { w1: 10.5, l1: 3.0, w2: 10.5, l2: 3.2 },
+  // training/mechanicの間、medical/scoutの間、納戸2部屋の間（扉なし）
+  { w1: 5, l1: 0.3, w2: 8, l2: 0.3 },
+  { w1: 10.5, l1: 0.3, w2: 14, l2: 0.3 },
+  { w1: 9.25, l1: 3.2, w2: 9.25, l2: 4.5 },
+];
+
+// 間仕切り壁の高さ（外壁 wallHeight:40 より低い＝上から中が見渡せる普通の間取りらしさを出す）。
+export const BASE_VIEW_PARTITION_HEIGHT = 16;
 
 // 「機能のない空き部屋」（後々の機能追加用に確保。ユーザー要望：バグに見えないよう最小限の
-// 仮置きの意匠を入れる）。中央列(col:1)の2部屋。既存の玄関（Room.jsxのdoor、クラブハウス
-// footprintの手前辺の中央付近）はちょうどこの列の手前(row:0)に開いているため、入って正面が
-// 空き部屋という自然な導線になる。
+// 仮置きの意匠を入れる）。廊下の突き当り＝納戸2部屋(BASE_VIEW_ROOMSのspare1/spare2)。
 export const BASE_VIEW_EMPTY_ROOMS = [
-  { key: "spare1", col: 1, row: 0, w: 9.5, l: -1.5, kind: "empty", icon: "🚧", accent: "#9aa0a6", floorTint: "#e6e3da" },
-  { key: "spare2", col: 1, row: 1, w: 9.5, l: 2.5, kind: "empty", icon: "📋", accent: "#9aa0a6", floorTint: "#e6e3da" },
+  { key: "spare1", room: "spare1", w: 8.625, l: 3.85, kind: "empty", icon: "🚧", accent: "#9aa0a6" },
+  { key: "spare2", room: "spare2", w: 9.875, l: 3.85, kind: "empty", icon: "📋", accent: "#9aa0a6" },
 ];
 
 // 練習コース（world原点中心）。クラブハウス（w:5〜14）と重ならない範囲に収めてある。

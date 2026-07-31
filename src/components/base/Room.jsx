@@ -9,29 +9,21 @@
 // 一致）。これはWave D2で修正した可視面選択(front=Y最大)の鏡像であり、
 // `domain/season/baseViewLayout.js`の`backFacePair()`が同じ頂点集合から求める。
 import React from "react";
-import {
-  isoBoxFaces, backFacePair, visibleFacePair, wallPoint,
-  clubhouseRoomGrid, clubhousePartitions, wallPanel,
-} from "../../domain/season/baseViewLayout.js";
+import { isoBoxFaces, backFacePair, visibleFacePair, wallPoint, wallPanel } from "../../domain/season/baseViewLayout.js";
 
 const poly = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 
-// Wave F-2: gridを渡すと床をcols×rowsのセルに分割し、roomsの{col,row,floorTint}で
-// セルごとに色分けする（普通の建築物のような部屋割りの表現）。gridを渡さない呼び出し元
-// （テスト・将来の別用途）は従来通り単色の床1枚にフォールバックする。
-export function Room({ b, proj, snow, selected, grid, rooms }) {
+// Wave F-2 redo: roomsを渡すと床を（玄関→廊下→各部屋という現実的な間取りの）部屋ごとに
+// 色分けし、partitionsで間仕切り壁（廊下側は扉の隙間を開けてある区間だけ描く＝隙間には
+// 何も描かない）を描く。渡さない呼び出し元（テスト・将来の別用途）は従来通り単色の床
+// 1枚にフォールバックする。
+export function Room({ b, proj, snow, selected, rooms, partitions, partitionHeight }) {
   const f = isoBoxFaces(b.w, b.l, b.hw, b.hl, b.wallHeight, proj);
   const { corners, top } = f;
   const { back, left, right } = backFacePair(corners);
   const { front } = visibleFacePair(corners); // backの対角＝手前の開放頂点
   const botBack = corners[back], botLeft = corners[left], botRight = corners[right];
   const topBack = top[back], topLeft = top[left], topRight = top[right];
-  const cells = grid ? clubhouseRoomGrid(b, grid.cols, grid.rows) : null;
-  const partitions = grid ? clubhousePartitions(b, grid.cols, grid.rows) : [];
-  const tintOf = (col, row) => {
-    const r = (rooms || []).find(x => x.col === col && x.row === row);
-    return (r && r.floorTint) || b.floor;
-  };
 
   // 入口（扉）：開放辺の1つ（left-front）の中央に、目印としての枠線＋マットを置く。
   // 実際に床を切り欠くわけではなく、どこから出入りするかを示す最小限の表現。
@@ -44,11 +36,11 @@ export function Room({ b, proj, snow, selected, grid, rooms }) {
 
   return (
     <g opacity={selected ? 1 : 0.98}>
-      {/* 床：gridがあれば部屋(セル)ごとに色分け。無ければfootprint全体を単色(従来通り)。 */}
-      {cells
-        ? cells.map((c) => {
-            const cf = isoBoxFaces(c.w, c.l, c.hw, c.hl, 0, proj).corners;
-            return <polygon key={`cell-${c.col}-${c.row}`} points={poly([cf.N, cf.E, cf.S, cf.W])} fill={tintOf(c.col, c.row)} stroke="#00000018" strokeWidth="0.5" />;
+      {/* 床：roomsがあれば部屋ごとに色分け。無ければfootprint全体を単色(従来通り)。 */}
+      {rooms
+        ? rooms.map((r) => {
+            const rf = isoBoxFaces(r.w, r.l, r.hw, r.hl, 0, proj).corners;
+            return <polygon key={`room-${r.key}`} points={poly([rf.N, rf.E, rf.S, rf.W])} fill={r.floorTint} stroke="#00000018" strokeWidth="0.5" />;
           })
         : <polygon points={poly([corners.N, corners.E, corners.S, corners.W])} fill={b.floor} stroke="#00000022" strokeWidth="0.6" />}
 
@@ -66,10 +58,13 @@ export function Room({ b, proj, snow, selected, grid, rooms }) {
       <polygon points={poly([botLeft, botBack, { x: botBack.x, y: botBack.y - 3 }, { x: botLeft.x, y: botLeft.y - 3 }])} fill="#00000022" />
       <polygon points={poly([botBack, botRight, { x: botRight.x, y: botRight.y - 3 }, { x: botBack.x, y: botBack.y - 3 }])} fill="#00000022" />
 
-      {/* Wave F-2: 部屋を隔てる間仕切り壁（外壁より低い＝上から中が見渡せる高さに留める） */}
-      {grid && partitions.map((seg, i) => {
-        const wp = wallPanel(seg.w1, seg.l1, seg.w2, seg.l2, grid.partitionHeight, proj);
-        const shade = seg.axis === "w" ? b.wallDark : b.wallLight;
+      {/* Wave F-2 redo: 部屋を隔てる間仕切り壁（外壁より低い＝上から中が見渡せる高さに留める）。
+          廊下側の壁は扉の隙間の区間だけpartitionsから抜けているため、そこには何も描かれず
+          開口部になる。 */}
+      {partitions && partitions.map((seg, i) => {
+        const wp = wallPanel(seg.w1, seg.l1, seg.w2, seg.l2, partitionHeight, proj);
+        const vertical = Math.abs(seg.w1 - seg.w2) < 1e-6; // w一定＝l方向に伸びる縦の壁
+        const shade = vertical ? b.wallDark : b.wallLight;
         return <polygon key={`part${i}`} points={poly([wp.botA, wp.botB, wp.topB, wp.topA])} fill={shade} opacity="0.85" stroke="#00000030" strokeWidth="0.5" />;
       })}
 
