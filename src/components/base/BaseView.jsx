@@ -240,7 +240,8 @@ export function BaseView({ g, paused, onRoomTap }) {
                 // Wave G-1改：PixelBikeは自前でflip(左右反転)を持つため、旧IsoRiderのような
                 // 外側からのtranslate+scale(-1,1)ラップは不要。
                 return <PixelBike key={`r${item.r.id}`} x={item.x} y={item.y} color={item.color}
-                  posture={item.dancing ? "dancing" : "normal"} dir={item.dir} flip={item.flip} />;
+                  posture={item.dancing ? "dancing" : "normal"} dir={item.dir} flip={item.flip}
+                  t={elapsed} phase={item.phase} />;
               })}
             </g>
           )}
