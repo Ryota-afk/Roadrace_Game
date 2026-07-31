@@ -12,10 +12,18 @@ import { isoProject } from "./baseViewLayout.js";
 // 求めるのが要点：world軸に平行な矩形は2:1投影すると必ず横2:縦1の菱形になるため、
 // world矩形をそのまま境界にすると極端に横長（縦長スマホでは上下が大きく余る）になってしまう。
 // 実コンテンツ（プラザ・周回路・建物・小物）の和集合はおおむね正方形に近く、縦長画面に収まりやすい。
-export function sceneContentBounds({ proj, plaza, loop, buildings, props }, pad = 70) {
+export function sceneContentBounds({ proj, land, plaza, loop, buildings, props }, pad = 70) {
   const xs = [], ys = [];
   const add = (w, l, lift = 0) => { const p = isoProject(w, l, 0, proj); xs.push(p.x); ys.push(p.y - lift); };
 
+  // Wave F-1: 所有敷地（陸地）そのものの外形。ground/land長方形は横長のため、対角線方向の
+  // 投影後の張り出しがplaza等の他要素より大きくなることがある（実測：敷地1092pxに対し
+  // 他要素からの計算値は1084px）。陸地ポリゴンを描くようになった以上、その外形も境界計算に
+  // 含めないと「fitで表示したはずの陸地が実際は画面から数%はみ出す」不整合が起きる。
+  if (land) {
+    add(land.wMin, land.lMin); add(land.wMin, land.lMax);
+    add(land.wMax, land.lMax); add(land.wMax, land.lMin);
+  }
   if (plaza) {
     add(plaza.wMin, plaza.lMin); add(plaza.wMin, plaza.lMax);
     add(plaza.wMax, plaza.lMax); add(plaza.wMax, plaza.lMin);
@@ -29,7 +37,7 @@ export function sceneContentBounds({ proj, plaza, loop, buildings, props }, pad 
     add(b.w - b.hw, b.l - b.hl); add(b.w - b.hw, b.l + b.hl, h);
     add(b.w + b.hw, b.l + b.hl); add(b.w + b.hw, b.l - b.hl, h);
   }
-  const propLists = [props?.backTrees, props?.trees, props?.benches, props?.lamps];
+  const propLists = [props?.backTrees, props?.trees, props?.benches, props?.lamps, props?.groundsDecor];
   for (const list of propLists) for (const o of list || []) add(o.w, o.l, 34);
   for (const o of [props?.bikeRack, props?.teamCar]) if (o) add(o.w, o.l, 20);
 

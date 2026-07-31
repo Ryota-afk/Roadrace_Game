@@ -24,7 +24,10 @@ export function setPart(s, rid, slot, pid) {
 }
 
 export function buyEquip(s, k) {
-  const lv = s.equip[k];
+  // v42(Wave F-1): "grounds"のような後発キーは旧セーブのequipオブジェクトに存在しない
+  // ことがある（loadGameはequipをオブジェクトごと上書きするため、初期値の0が失われる）。
+  // hireStaffが同じ理由でstaff[k]に既に適用している`|| 0`ガードをこちらにも合わせた。
+  const lv = s.equip[k] || 0;
   const equipMax = 3 + s.classIdx;
   if (lv >= equipMax || s.budget < EQUIP_COST[lv]) return s;
   return { ...s, budget: s.budget - EQUIP_COST[lv], equip: { ...s.equip, [k]: lv + 1 } };

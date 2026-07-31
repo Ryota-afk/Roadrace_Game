@@ -277,7 +277,7 @@ export function initGame() {
     // v38(#9 A-3): 共有ワールドから取得＝新しいシーズンでも前回・マイライフと同じ顔ぶれの相手が
     // （年を取った状態で）出走する。世界が1つに繋がる。
     rivalRosters,
-    equip: { frame: 0, wheels: 0, facility: 0 },
+    equip: { frame: 0, wheels: 0, facility: 0, grounds: 0 },
     staff: { manager: 0, trainer: 0, doctor: 0, scout: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
     partsInv: {},

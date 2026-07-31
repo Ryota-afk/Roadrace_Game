@@ -47,6 +47,8 @@ export const BASE_VIEW_LOOP = { pathW: 3.6, pathL: 2.6, cornerR: 1.1, trackHalfW
 export const BASE_VIEW_PLAZA = { wMin: 3.6, wMax: 14.5, lMin: -4.8, lMax: 5.8 };
 
 // 芝の装飾（草むら等）を散らす範囲。市松塗りは廃止したので、ここは「点在させる装飾の範囲」。
+// Wave F-1でこの矩形を「所有敷地（陸地）」の外形としても兼用する（下記BASE_VIEW_PROPS
+// コメント・BaseView.jsx参照）。敷地の外は海（palette.sky）になる。
 export const BASE_VIEW_GROUND = { wMin: -9, wMax: 16, lMin: -8, lMax: 9, scatterStep: 1.6 };
 
 // 季節ごとの配色（domain/season/baseViewLayout.jsのseasonOf(month)のキーと対応）。
@@ -75,3 +77,16 @@ export const BASE_VIEW_PROPS = {
   bikeRack: { w: 5.2, l: -4.2 },
   teamCar: { w: 5.8, l: 4.8 },
 };
+
+// Wave F-1: 敷地の見た目だけを変える購入枠（data/items.jsのEQUIPS.grounds、g.equip.grounds
+// のLv0〜5）で段階的に解禁される屋外装飾のカタログ。既存のBASE_VIEW_PROPSと違い、
+// 各項目にminLevelを持たせゲーム状態（g）に応じてBaseView側でフィルタする
+// （`components/base/BaseView.jsx`参照）。位置はコース・クラブハウスのプラザ・既存の
+// 小物のいずれとも重ならないよう選んである。
+export const BASE_VIEW_GROUNDS_DECOR = [
+  { key: "pond", minLevel: 1, kind: "pond", w: 1.5, l: 4.6 },
+  { key: "hedge", minLevel: 2, kind: "hedge", w: -6.2, l: -5.0 },
+  { key: "gym", minLevel: 3, kind: "gym", w: -6.5, l: 5.2 },
+  { key: "arch", minLevel: 4, kind: "arch", w: 3.9, l: 0.3 },
+  { key: "fountain", minLevel: 5, kind: "fountain", w: -1.8, l: -5.2 },
+];

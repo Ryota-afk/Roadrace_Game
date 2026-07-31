@@ -12,6 +12,9 @@ export const EQUIPS = {
   frame: { label: "エアロフレーム(チーム)", desc: "平坦 +6%/Lv（全員・恒常）" },
   wheels: { label: "軽量ホイール(チーム)", desc: "登坂 +6%/Lv（全員・恒常）" },
   facility: { label: "トレーニング設備", desc: "練習効果 +15%/Lv（恒常）" },
+  // v42(Wave F-1): 敷地の見た目だけを変える枠。能力値への効果は無い（購入UI・経済は
+  // 既存のEQUIPS/buyEquipをそのまま流用し、Lvに応じて敷地画面の装飾が増える）。
+  grounds: { label: "敷地整備", desc: "池・植栽・屋外機器などで敷地の雰囲気が変化（見た目のみ・能力値への影響なし）" },
 };
 
 export const EQUIP_COST = [40, 70, 110, 160, 220];

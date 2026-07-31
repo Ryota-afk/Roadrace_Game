@@ -88,6 +88,76 @@ function teamCarNode(w, l, proj, key) {
   );
 }
 
+// Wave F-1: 敷地整備（g.equip.grounds、施設ショップの新規購入枠）で段階的に解禁される
+// 屋外装飾。data/baseViewBuildings.jsのBASE_VIEW_GROUNDS_DECORのkindごとに描く。
+
+function pondNode(w, l, proj, key) {
+  const outer = isoBoxFaces(w, l, 1.1, 0.85, 0, proj).corners;
+  const inner = isoBoxFaces(w, l, 0.85, 0.62, 0, proj).corners;
+  const c = isoProject(w, l, 0, proj);
+  return (
+    <g key={key}>
+      <polygon points={poly([outer.N, outer.E, outer.S, outer.W])} fill="#3a7a9e" stroke="#2a5c78" strokeWidth="1" />
+      <polygon points={poly([inner.N, inner.E, inner.S, inner.W])} fill="#5aa3c9" opacity="0.85" />
+      <ellipse cx={c.x} cy={c.y} rx="9" ry="3.6" fill="#c9ecfa" opacity="0.5" />
+    </g>
+  );
+}
+
+function hedgeNode(w, l, proj, key) {
+  const offs = [[-0.32, -0.18], [0.32, -0.12], [0, 0.26]];
+  return (
+    <g key={key}>
+      {shadowDiamond(w, l, 0.55, 0.42, proj)}
+      {offs.map(([dw, dl], i) => <g key={i}>{isoBox(w + dw, l + dl, 0.24, 0.22, 7, proj, "#3d7a3f", "#569c58", "#72bb74")}</g>)}
+    </g>
+  );
+}
+
+function gymNode(w, l, proj, key) {
+  const a = isoProject(w - 0.32, l, 0, proj), b = isoProject(w + 0.32, l, 0, proj);
+  return (
+    <g key={key}>
+      {shadowDiamond(w, l, 0.42, 0.22, proj)}
+      <line x1={a.x.toFixed(1)} y1={a.y.toFixed(1)} x2={a.x.toFixed(1)} y2={(a.y - 22).toFixed(1)} stroke="#5a626c" strokeWidth="2.4" strokeLinecap="round" />
+      <line x1={b.x.toFixed(1)} y1={b.y.toFixed(1)} x2={b.x.toFixed(1)} y2={(b.y - 22).toFixed(1)} stroke="#5a626c" strokeWidth="2.4" strokeLinecap="round" />
+      <line x1={a.x.toFixed(1)} y1={(a.y - 22).toFixed(1)} x2={b.x.toFixed(1)} y2={(b.y - 22).toFixed(1)} stroke="#5a626c" strokeWidth="2.4" strokeLinecap="round" />
+      <line x1={a.x.toFixed(1)} y1={(a.y - 12).toFixed(1)} x2={b.x.toFixed(1)} y2={(b.y - 12).toFixed(1)} stroke="#7a828c" strokeWidth="1.8" />
+    </g>
+  );
+}
+
+function archNode(w, l, proj, key) {
+  const a = isoProject(w, l - 0.5, 0, proj), b = isoProject(w, l + 0.5, 0, proj);
+  const topA = { x: a.x, y: a.y - 30 }, topB = { x: b.x, y: b.y - 30 };
+  return (
+    <g key={key}>
+      {shadowDiamond(w, l, 0.15, 0.55, proj)}
+      <line x1={a.x.toFixed(1)} y1={a.y.toFixed(1)} x2={topA.x.toFixed(1)} y2={topA.y.toFixed(1)} stroke="#8a6a45" strokeWidth="2.2" />
+      <line x1={b.x.toFixed(1)} y1={b.y.toFixed(1)} x2={topB.x.toFixed(1)} y2={topB.y.toFixed(1)} stroke="#8a6a45" strokeWidth="2.2" />
+      <line x1={topA.x.toFixed(1)} y1={topA.y.toFixed(1)} x2={topB.x.toFixed(1)} y2={topB.y.toFixed(1)} stroke="#8a6a45" strokeWidth="2.6" />
+      <polygon points={`${topA.x.toFixed(1)},${topA.y.toFixed(1)} ${topB.x.toFixed(1)},${topB.y.toFixed(1)} ${((topA.x + topB.x) / 2).toFixed(1)},${((topA.y + topB.y) / 2 + 9).toFixed(1)}`} fill="#e05050" opacity="0.88" />
+    </g>
+  );
+}
+
+function fountainNode(w, l, proj, key) {
+  const outer = isoBoxFaces(w, l, 1.0, 0.75, 0, proj).corners;
+  const c = isoProject(w, l, 0, proj);
+  return (
+    <g key={key}>
+      <polygon points={poly([outer.N, outer.E, outer.S, outer.W])} fill="#3a7a9e" stroke="#2a5c78" strokeWidth="1" />
+      <ellipse cx={c.x} cy={c.y} rx="8" ry="3.2" fill="#c9ecfa" opacity="0.55" />
+      {isoBox(w, l, 0.18, 0.18, 10, proj, "#8a8f99", "#a9aeb8", "#c3c8d1")}
+      <line x1={c.x.toFixed(1)} y1={(c.y - 10).toFixed(1)} x2={(c.x - 4).toFixed(1)} y2={(c.y - 22).toFixed(1)} stroke="#c9ecfa" strokeWidth="1.4" opacity="0.85" />
+      <line x1={c.x.toFixed(1)} y1={(c.y - 10).toFixed(1)} x2={(c.x + 4).toFixed(1)} y2={(c.y - 22).toFixed(1)} stroke="#c9ecfa" strokeWidth="1.4" opacity="0.85" />
+      <circle cx={c.x.toFixed(1)} cy={(c.y - 24).toFixed(1)} r="2" fill="#c9ecfa" opacity="0.85" />
+    </g>
+  );
+}
+
+const GROUNDS_DECOR_RENDER = { pond: pondNode, hedge: hedgeNode, gym: gymNode, arch: archNode, fountain: fountainNode };
+
 export function propItems(proj, props, palette) {
   const items = [];
   const push = (w, l, render) => { items.push({ sortY: isoProject(w, l, 0, proj).y, node: render() }); };
@@ -97,5 +167,9 @@ export function propItems(proj, props, palette) {
   (props.lamps || []).forEach((l, i) => push(l.w, l.l, () => lampNode(l.w, l.l, proj, `lamp${i}`)));
   if (props.bikeRack) push(props.bikeRack.w, props.bikeRack.l, () => bikeRackNode(props.bikeRack.w, props.bikeRack.l, proj, "rack"));
   if (props.teamCar) push(props.teamCar.w, props.teamCar.l, () => teamCarNode(props.teamCar.w, props.teamCar.l, proj, "car"));
+  (props.groundsDecor || []).forEach((d) => {
+    const render = GROUNDS_DECOR_RENDER[d.kind];
+    if (render) push(d.w, d.l, () => render(d.w, d.l, proj, d.key));
+  });
   return items;
 }

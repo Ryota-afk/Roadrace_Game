@@ -18,6 +18,7 @@ import { C, FONT_M } from "../../data/theme.js";
 import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
+  BASE_VIEW_GROUNDS_DECOR,
 } from "../../data/baseViewBuildings.js";
 import {
   isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf,
@@ -65,10 +66,19 @@ function useElapsedSeconds(paused) {
 }
 
 // 描画物が占めるscene座標の範囲。レイアウトは静的なので一度だけ求めればよい。
+// 屋外装飾(BASE_VIEW_GROUNDS_DECOR)は未解禁のものも含めて全件を境界計算に含める
+// （解禁状況でカメラのfit/cover倍率がガタつかないようにするため。実際に描くかどうかは
+// 後述のunlockedDecorでg.equip.groundsに応じてフィルタする）。
 const SCENE_BOUNDS = sceneContentBounds({
-  proj: BASE_VIEW_PROJ, plaza: BASE_VIEW_PLAZA, loop: BASE_VIEW_LOOP,
-  buildings: [BASE_VIEW_CLUBHOUSE], props: BASE_VIEW_PROPS,
+  proj: BASE_VIEW_PROJ, land: BASE_VIEW_GROUND, plaza: BASE_VIEW_PLAZA, loop: BASE_VIEW_LOOP,
+  buildings: [BASE_VIEW_CLUBHOUSE], props: { ...BASE_VIEW_PROPS, groundsDecor: BASE_VIEW_GROUNDS_DECOR },
 });
+// 敷地（陸地）の外形。BASE_VIEW_GROUNDのworld矩形をそのまま「所有敷地」の輪郭として使う
+// （芝の装飾もこの範囲に散らしているため、境界を揃えると自然に一致する）。
+const LAND_QUAD_WORLD = [
+  { w: BASE_VIEW_GROUND.wMin, l: BASE_VIEW_GROUND.lMin }, { w: BASE_VIEW_GROUND.wMin, l: BASE_VIEW_GROUND.lMax },
+  { w: BASE_VIEW_GROUND.wMax, l: BASE_VIEW_GROUND.lMax }, { w: BASE_VIEW_GROUND.wMax, l: BASE_VIEW_GROUND.lMin },
+];
 
 // SVGの描画領域の実ピクセルサイズを追う。viewBoxをこれと一致させることで
 // 1 SVG単位=1CSSピクセルになり、preserveAspectRatioによる切り落としも歪みも起きなくなる
@@ -131,18 +141,26 @@ export function BaseView({ g, paused, onRoomTap }) {
   // 部屋＋全持ち場を1つのdrawOrderエントリにまとめ、内部では必ず「床→什器」の順で描くことで
   // 解消する（他の要素＝小物・選手との奥行き比較には部屋のsortYをそのまま使う）。
   const clubhouseRow = { kind: "clubhouse", sortY: Math.max(...CLUBHOUSE_QUAD.map(p => p.y)) };
-  const propRows = propItems(PROJ, BASE_VIEW_PROPS, palette).map(item => ({ kind: "prop", ...item }));
+  // Wave F-1: 施設ショップの「敷地整備」(g.equip.grounds、Lv0〜5)で段階的に解禁される
+  // 屋外装飾。旧セーブに未存在のことがあるためstaff.scout等と同じ`|| 0`ガードを踏襲する。
+  const groundsLv = g.equip.grounds || 0;
+  const unlockedDecor = BASE_VIEW_GROUNDS_DECOR.filter(d => groundsLv >= d.minLevel);
+  const propRows = propItems(PROJ, { ...BASE_VIEW_PROPS, groundsDecor: unlockedDecor }, palette).map(item => ({ kind: "prop", ...item }));
   const drawOrder = [clubhouseRow, ...propRows, ...riderRows].sort((a, b) => a.sortY - b.sortY);
+  const landQuad = LAND_QUAD_WORLD.map(p => isoProject(p.w, p.l, 0, PROJ));
 
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div ref={viewRef} style={{ position: "relative", flex: 1, minHeight: 260, borderRadius: 10, overflow: "hidden" }}>
         <svg viewBox={`0 0 ${view.w} ${view.h}`} width={view.w} height={view.h}
           style={{ display: "block", touchAction: "none", cursor: "grab" }} {...camera.handlers}>
-          {/* 芝の下地はカメラ変換の外側。どこまで引いても必ずビューポートを埋める */}
-          <rect x="0" y="0" width={view.w} height={view.h} fill={palette.grass} />
+          {/* Wave F-1: 下地はカメラ変換の外側＝海（palette.sky）。どこまで引いても必ず
+              ビューポートを埋める。所有敷地（陸地）は緑の芝としてカメラ内側に別途描き、
+              「敷地の外は海」で境界をはっきりさせる（ユーザー指摘：緑の範囲が広すぎる）。 */}
+          <rect x="0" y="0" width={view.w} height={view.h} fill={palette.sky} />
           {camera.ready && (
             <g transform={camera.transform}>
+              <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill={palette.grass} stroke={palette.plazaEdge} strokeWidth="1.5" opacity="0.9" />
               <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
               <Track proj={PROJ} loop={BASE_VIEW_LOOP} />
               {drawOrder.map((item, i) => {
@@ -177,6 +195,7 @@ export function BaseView({ g, paused, onRoomTap }) {
         {BASE_VIEW_STATIONS.map(s => (
           <span key={s.key}>{s.icon} {s.label} Lv{levels[s.levelKey]}</span>
         ))}
+        <span>🌳 敷地整備 Lv{groundsLv}</span>
       </div>
     </div>
   );
