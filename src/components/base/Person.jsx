@@ -18,8 +18,11 @@ import React from "react";
 const U = 1.5; // 1ローカル単位あたりのpx。IsoRiderのu=1.45に合わせてある
 const SKIN = "#f2d2a8";
 const HAIR = "#4a3728"; // 髪。帽子がどんな色でも頭が肌色の塊に潰れないようにする
-const LIMB_NEAR = "#2b3038"; // 手前側の脚
-const LIMB_FAR = "#191d23";  // 奥側の脚（同じ色だと2本が団子になって1本に見える）
+// 素肌の脚。顔より少しだけ濃くして、明るい床の上でも脚のシルエットが消えないようにする。
+const LEG_NEAR = "#e6bd8e";
+const LEG_FAR = "#c99f74";  // 奥側（同じ色だと2本が団子になって1本に見える）
+const SHORTS = "#20242c";   // ビブショーツ＝黒。自転車の装いとして最も読み取りやすい
+const SOCK = "#f4f6f8";
 const SHOE = "#14171c";
 
 const X = (a) => +(a * U).toFixed(2);
@@ -32,14 +35,19 @@ const ln = (a1, b1, a2, b2, f, wd, key) => (
 );
 
 // 股関節から足先までを膝で1回折った脚。膝は股と足の中点をやや前方へ押し出して作る。
+// 素肌の脚＋白いソックス＋暗い靴、という自転車競技の装いにして、上のビブショーツと
+// あわせて「サイクリングウェアを着た選手」だと一目で分かるようにする。
 function leg(hipA, hipB, footA, footB, color, key) {
   const kneeA = (hipA + footA) / 2 + 0.35;
   const kneeB = (hipB + footB) / 2;
+  const sockB = footB + 0.95;
+  const sockA = footA + (kneeA - footA) * 0.22;
   return (
     <g key={key}>
       {ln(hipA, hipB, kneeA, kneeB, color, 1.15, "th")}
       {ln(kneeA, kneeB, footA, footB, color, 1.0, "sh")}
-      {ln(footA - 0.15, footB + 0.15, footA + 0.75, footB + 0.15, SHOE, 0.75, "ft")}
+      {ln(sockA, sockB, footA, footB + 0.2, SOCK, 1.0, "sock")}
+      {ln(footA - 0.15, footB + 0.15, footA + 0.75, footB + 0.15, SHOE, 0.8, "ft")}
     </g>
   );
 }
@@ -78,16 +86,19 @@ function Upright({ color, cap, p }) {
     <>
       {/* 脚2本 → 短パン → 胴 の順。短パンを脚より後に描かないと、脚の付け根に隠れて
           短パンがまったく見えなくなる（6倍プレビューで判明） */}
-      {leg(-0.2, hipB, far.a, far.b, LIMB_FAR, "legFar")}
-      {leg(-0.2, hipB, near.a, near.b, LIMB_NEAR, "legNear")}
-      {/* 短パン＝個人識別色 */}
-      {px(-1.2, 3.8, 2.5, 1.6, cap, "shorts")}
+      {leg(-0.2, hipB, far.a, far.b, LEG_FAR, "legFar")}
+      {leg(-0.2, hipB, near.a, near.b, LEG_NEAR, "legNear")}
+      {/* ビブショーツ（黒）。個人識別色は裾のラインにだけ入れる */}
+      {px(-1.2, 3.8, 2.5, 1.7, SHORTS, "shorts")}
+      {px(-1.2, 3.8, 2.5, 0.3, cap, "shortsHem")}
       {/* 胴＝チーム色のジャージ（側面なので正面向きより細い） */}
-      {px(-1.1, 5.1, 2.5, 3.5, color, "torso")}
-      {px(-1.1, 7.2, 2.5, 0.5, cap, "stripe")}
-      {/* 腕（脚と逆位相・肩から手へ1本） */}
+      {px(-1.1, 5.3, 2.5, 3.3, color, "torso")}
+      {/* 襟と袖口だけを個人識別色にする（胸を横切る帯は「何を着ているか分からない」原因だった） */}
+      {px(-1.1, 8.3, 2.5, 0.35, cap, "collar")}
+      {/* 腕（脚と逆位相・肩から手へ1本）＋半袖の袖 */}
       {ln(0.25, 8.1, handA, 5.4, SKIN, 0.95, "arm")}
-      {px(-0.4, 7.5, 1.5, 1.0, color, "sleeve")}
+      {px(-0.4, 7.4, 1.5, 1.1, color, "sleeve")}
+      {px(-0.4, 7.4, 1.5, 0.28, cap, "cuff")}
       {/* 首・頭 */}
       {px(-0.4, 8.4, 1.1, 0.5, SKIN, "neck")}
       {head(8.8, cap)}
@@ -102,20 +113,22 @@ function Seated({ color, cap }) {
   return (
     <>
       {/* 奥の脚 */}
-      {ln(hipA, hipB, 1.35, hipB - 0.15, LIMB_FAR, 1.1, "thighFar")}
-      {ln(1.35, hipB - 0.15, 1.5, 0, LIMB_FAR, 0.95, "shinFar")}
-      {/* 腰＝個人識別色 */}
-      {px(-1.2, 2.6, 2.2, 1.5, cap, "hip")}
+      {ln(hipA, hipB, 1.35, hipB - 0.15, LEG_FAR, 1.1, "thighFar")}
+      {ln(1.35, hipB - 0.15, 1.5, 0, LEG_FAR, 0.95, "shinFar")}
+      {/* ビブショーツ（黒） */}
+      {px(-1.2, 2.6, 2.2, 1.5, SHORTS, "hip")}
       {/* 胴（座っているぶん低い位置から立ち上がる） */}
       {px(-1.1, 3.9, 2.5, 3.2, color, "torso")}
-      {px(-1.1, 5.7, 2.5, 0.5, cap, "stripe")}
+      {px(-1.1, 6.8, 2.5, 0.35, cap, "collar")}
       {/* 手前の脚：腿は水平、すねは垂直に落とす */}
-      {ln(hipA, hipB, 1.55, hipB, LIMB_NEAR, 1.15, "thighNear")}
-      {ln(1.55, hipB, 1.7, 0, LIMB_NEAR, 1.0, "shinNear")}
-      {ln(1.55, 0.15, 2.45, 0.15, SHOE, 0.75, "foot")}
+      {ln(hipA, hipB, 1.55, hipB, LEG_NEAR, 1.15, "thighNear")}
+      {ln(1.55, hipB, 1.7, 0, LEG_NEAR, 1.0, "shinNear")}
+      {ln(1.62, 1.0, 1.7, 0.2, SOCK, 1.0, "sock")}
+      {ln(1.55, 0.15, 2.45, 0.15, SHOE, 0.8, "foot")}
       {/* 腕：肩から腿の上へ下ろす */}
       {ln(0.25, 6.5, 1.3, 3.5, SKIN, 0.95, "arm")}
-      {px(-0.4, 5.9, 1.5, 1.0, color, "sleeve")}
+      {px(-0.4, 5.9, 1.5, 1.1, color, "sleeve")}
+      {px(-0.4, 5.9, 1.5, 0.28, cap, "cuff")}
       {/* 首・頭 */}
       {px(-0.4, 6.8, 1.1, 0.5, SKIN, "neck")}
       {head(7.2, cap)}

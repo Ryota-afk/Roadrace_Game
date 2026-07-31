@@ -30,7 +30,8 @@ import {
 } from "../../domain/season/riderActivity.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
 import { useIsoCamera } from "../../hooks/useIsoCamera.js";
-import { IsoRider, CAP_COLORS, riderWander } from "../RaceView.jsx";
+import { riderWander } from "../RaceView.jsx";
+import { IsoRider, CAP_COLORS } from "../sprites/IsoRider.jsx";
 import { riderHash01 } from "../../sim/race.js";
 import { Room } from "./Room.jsx";
 import { Station } from "./Station.jsx";
@@ -166,7 +167,10 @@ export function BaseView({ g, paused, onRoomTap }) {
       flip: activityFacesLeft(r, elapsed, ACTIVITY_CTX, PROJ),
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
       color: (TYPES[r.type] && TYPES[r.type].color) || C.yellow,
-      phase: riderHash01(r.id, 91) * 4, // 歩調が全員で揃わないようずらす
+      phase: riderHash01(r.id, 91) * 4, // 歩調・ペダリングが全員で揃わないようずらす
+      // 立ち漕ぎ：選手ごとに違う周期で断続的に立つ（決定論的・Math.random不使用）
+      dancing: act.pose === "ride"
+        && Math.sin(elapsed * (0.24 + riderHash01(r.id, 37) * 0.12) + riderHash01(r.id, 61) * 6.28) > 0.72,
     };
   });
   // 屋内の人物は不透明な床・什器の後に描かないと埋もれるため、クラブハウスのatomicな
@@ -234,7 +238,11 @@ export function BaseView({ g, paused, onRoomTap }) {
                     color={item.color} cap={item.cap} flip={item.flip} phase={item.phase} />;
                 }
                 // 左へ進むときは x=item.x の垂直線でスプライトを鏡像反転する
-                const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap} isPlayer={false} isAce={false} surging={false} simple={simple} />;
+                // Wave F-3b: 練習中は通常姿勢。一部の選手が周期的に立ち漕ぎ（ダンシング）を
+                // 見せて単調さを消す。判定は決定論的（riderHash01と経過時間のみ）。
+                const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap}
+                  isPlayer={false} isAce={false} surging={false} simple={simple}
+                  posture={item.dancing ? "dancing" : "normal"} phase={elapsed * 1.5 + item.phase} />;
                 return item.flip
                   ? <g key={`r${item.r.id}`} transform={`translate(${(2 * item.x).toFixed(1)},0) scale(-1,1)`}>{sprite}</g>
                   : <React.Fragment key={`r${item.r.id}`}>{sprite}</React.Fragment>;

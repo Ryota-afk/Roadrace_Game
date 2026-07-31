@@ -313,74 +313,12 @@ export function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 // v39.6: スクロール背景用の剰余ヘルパー（負値でも0..mに収める）
 export const cycMod = (v, m) => ((v % m) + m) % m;
 
-// v39.9: ヘルメット色のバリエーション（同一チーム色でも見分けが付くように）
-export const CAP_COLORS = ["#e9e2d4", "#d94f4f", "#e0b23c", "#4b7fc1", "#43a047", "#7e57c2", "#eeeeee", "#2b3038"];
-// v39.11: ロードバイクに乗ったレーサーのドット絵（側面・進行方向＝右）。細い前後同径ホイール＋ダイヤ型
-// フレーム＋ドロップハンドル、選手はドロップを握って深く前傾したエアロ姿勢。接地点(x,y)に描く。拡縮なし。
-// v41(§Step13第3弾): BaseView（敷地画面）から再利用するためexport化。挙動は無変更。
-export function IsoRider({ x, y, color, cap, isPlayer, isAce, surging, simple }) {
-  const s = isAce ? 1.14 : 1, u = 1.45 * s;
-  const X = (a) => +(a * u).toFixed(2), Y = (b) => +(-b * u).toFixed(2);
-  const px = (a, b, w, h, f) => <rect x={X(a)} y={Y(b + h)} width={(w * u).toFixed(2)} height={(h * u).toFixed(2)} fill={f} shapeRendering="crispEdges" />;
-  const ln = (a, b, c, d, f, wd = 1) => <line x1={X(a)} y1={Y(b)} x2={X(c)} y2={Y(d)} stroke={f} strokeWidth={(wd * u).toFixed(2)} strokeLinecap="round" />;
-  const FR = "#aeb4be";
-  // v39.14(残像対策): 大人数のときはノード数を抑えた簡易スプライトで描く（1人あたり約20→7ノード）。
-  // 端末の描画負荷が下がり、尾を引くような残像が出にくくなる。シルエットは自転車のまま。
-  if (simple) {
-    return (
-      <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-        <ellipse cx="0" cy={0.9 * s} rx={7.5 * s} ry={1.8 * s} fill="#000" opacity="0.22" />
-        {surging && <rect x={-14 * s} y={-7 * s} width={8 * s} height={1.2 * s} fill="#fff" opacity="0.3" />}
-        <circle cx={X(-5.4)} cy={Y(2.4)} r={2.7 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
-        <circle cx={X(5.4)} cy={Y(2.4)} r={2.7 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
-        {ln(-5.4, 2.4, 5.4, 4.6, FR, 0.9)}
-        {px(-2.2, 6.4, 5.2, 1.8, color)}
-        {isPlayer && <rect x={X(-2.8)} y={Y(9.4)} width={(8.6 * u).toFixed(2)} height={(3.6 * u).toFixed(2)} rx={u} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
-        {px(2.6, 7.4, 2.4, 1.5, cap || "#e9e2d4")}
-      </g>
-    );
-  }
-  return (
-    <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-      <ellipse cx="0" cy={0.9 * s} rx={8.5 * s} ry={2 * s} fill="#000" opacity="0.22" />
-      {surging && <g><rect x={-13 * s} y={-6.5 * s} width={8 * s} height={1.2 * s} fill="#fff" opacity="0.32" /><rect x={-11 * s} y={-9.5 * s} width={5 * s} height={1 * s} fill="#fff" opacity="0.2" /></g>}
-      {/* 前後ホイール（細リム＋ハブ） */}
-      <circle cx={X(-5.4)} cy={Y(2.4)} r={2.9 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
-      <circle cx={X(5.4)} cy={Y(2.4)} r={2.9 * u} fill="none" stroke="#12141a" strokeWidth={1 * u} />
-      <circle cx={X(-5.4)} cy={Y(2.4)} r={0.5 * u} fill="#12141a" />
-      <circle cx={X(5.4)} cy={Y(2.4)} r={0.5 * u} fill="#12141a" />
-      {/* ダイヤ型フレーム（チェーンステー/シートチューブ/ダウンチューブ/トップチューブ/フォーク） */}
-      {ln(-5.4, 2.4, 0.2, 2.4, FR, 0.9)}
-      {ln(0.2, 2.4, -1.4, 7, FR, 1)}
-      {ln(0.2, 2.4, 5.4, 4.6, FR, 1)}
-      {ln(-1.4, 7, 5.2, 4.9, FR, 1)}
-      {ln(-5.4, 2.4, -1.4, 7, FR, 0.9)}
-      {ln(5.4, 2.4, 5.4, 4.9, FR, 0.9)}
-      {/* ドロップハンドル */}
-      {ln(5.2, 4.9, 6.2, 4.9, FR, 0.9)}
-      {ln(6.2, 4.9, 6.2, 3.6, FR, 0.9)}
-      {/* サドル */}
-      {px(-2.4, 6.8, 1.9, 0.6, "#20242c")}
-      {/* 脚（ペダリング） */}
-      {ln(-1.2, 6.6, 0.3, 2.6, "#242830", 1.3)}
-      {ln(0.3, 2.6, 1.6, 3.4, "#242830", 1.1)}
-      {/* 深い前傾の胴（ジャージ＝識別色）：ほぼ水平な背中 */}
-      {px(-2.2, 6.6, 2.0, 1.7, color)}
-      {px(-0.6, 6.9, 1.9, 1.6, color)}
-      {px(1.0, 7.0, 1.8, 1.5, color)}
-      {/* v39.13: 選手ごとに違う色の背中ストライプ＋ショーツ＝同じチーム色でも見分けが付き残像に見えない */}
-      {px(-2.0, 7.45, 4.6, 0.42, cap || "#e9e2d4")}
-      {px(-2.3, 5.7, 1.7, 1.0, cap || "#333")}
-      {/* 腕→ドロップ */}
-      {ln(2.6, 7.2, 5.8, 4.6, "#242830", 1.1)}
-      {/* 頭＋エアロヘルメット（色でバリエーション・後方に尾） */}
-      {isPlayer && <rect x={X(-2.6)} y={Y(9.6)} width={(8.4 * u).toFixed(2)} height={(4 * u).toFixed(2)} rx={u} fill="none" stroke="#27d3ff" strokeWidth="1.7" />}
-      {px(3.0, 7.0, 1.7, 1.6, "#f2d2a8")}
-      {px(2.2, 8.3, 2.7, 0.95, cap || "#e9e2d4")}
-      {px(1.7, 8.3, 0.7, 0.7, cap || "#e9e2d4")}
-    </g>
-  );
-}
+// v39.9/v39.11のヘルメット色とライダースプライトは、Step13 Wave F-3bで
+// `components/sprites/IsoRider.jsx` へ切り出した（本ファイルが1448行と突出して大きく、
+// かつ拠点画面(BaseView)が「レース画面」からスプライトをimportする構造のねじれがあったため。
+// CLAUDE.md §5）。既存の呼び出し側を書き換えずに済むよう、ここから再exportしている。
+import { IsoRider, CAP_COLORS } from "./sprites/IsoRider.jsx";
+export { IsoRider, CAP_COLORS };
 
 // v39.7: バンプ関数（x=0で0、x=Wbで最大1、その先は減衰）。ごぼう抜き/リードアウトの一過性の前後移動に使う。
 function sprintBump(x, Wb) { return x > 0 ? (x / Wb) * Math.exp(1 - x / Wb) : 0; }
@@ -512,7 +450,10 @@ export function FinalSprintCinematic({ contenders }) {
           return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#14171d"} />;
         })}
         {/* 選手（立ったスプライト） */}
-        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging || !approaching} simple={n > 10 && !r.c.isPlayer && !r.c.isAce} />)}
+        {/* Wave F-3b: アタック中の選手は下ハンドルを握るスプリント姿勢、そうでない選手は
+            通常姿勢。同じ集団の中に姿勢差が生まれ、誰が踏んでいるのかが絵で分かる。
+            phaseは選手ごとにずらしてペダリングが揃わないようにする。 */}
+        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging || !approaching} simple={n > 10 && !r.c.isPlayer && !r.c.isAce} posture={r.surging ? "sprint" : "normal"} phase={el * 1.6 + riderHash01(r.c.id, 23)} />)}
       </svg>
       {fade > 0.01 && <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />}
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
