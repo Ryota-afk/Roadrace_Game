@@ -26,12 +26,13 @@ import {
   pointInQuad, roomFloorQuad, stationQuad,
 } from "../../domain/season/baseViewLayout.js";
 import {
-  riderActivityAt, activityFacesLeft, isIndoors, routeToStation, workSpotFor,
+  riderActivityAt, activityFacesLeft, activityDir, isIndoors, routeToStation, workSpotFor,
 } from "../../domain/season/riderActivity.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
 import { useIsoCamera } from "../../hooks/useIsoCamera.js";
 import { riderWander } from "../RaceView.jsx";
-import { IsoRider, CAP_COLORS } from "../sprites/IsoRider.jsx";
+import { CAP_COLORS } from "../sprites/IsoRider.jsx";
+import { PixelBike } from "../sprites/pixelBike.jsx";
 import { riderHash01 } from "../../sim/race.js";
 import { Room } from "./Room.jsx";
 import { Station } from "./Station.jsx";
@@ -39,14 +40,11 @@ import { Track } from "./Track.jsx";
 import { Ground } from "./Ground.jsx";
 import { propItems } from "./Props.jsx";
 import { fixtureItems } from "./Fixtures.jsx";
-import { Person } from "./Person.jsx";
+import { PixelPerson } from "../sprites/pixelPerson.jsx";
 import { TYPES } from "../../data/abilities.js";
 
 const PROJ = BASE_VIEW_PROJ;
 const RIDER_SPEED = 0.035; // 周回速度（t/秒）
-// 選手が7名を超えたら簡易スプライト（IsoRiderのsimple版）に切り替える。
-// FinalSprintCinematicが確立した「大人数ほど残像対策で簡易化する」しきい値を踏襲。
-const SIMPLE_THRESHOLD = 7;
 const STATION_HIT_SIZE = 0.85; // 持ち場タップの当たり判定の半径（world単位）
 
 // paused=true（メニュー展開中）の間はelapsed秒数の加算そのものを止める。rAFの再開時に
@@ -153,7 +151,6 @@ export function BaseView({ g, paused, onRoomTap }) {
   const snow = !!palette.snow;
 
   const roster = (g.roster || []).slice(0, 12);
-  const simple = roster.length > SIMPLE_THRESHOLD;
   // Wave F-3a: 選手ごとの「今なにをしているか」を時刻の純関数として解く
   // （周回／コース⇔ラックの移動／徒歩での往復／持ち場での作業）。
   const riderRows = roster.map(r => {
@@ -165,6 +162,7 @@ export function BaseView({ g, paused, onRoomTap }) {
       kind: "rider", r, act, x: p.x, y: p.y, sortY: p.y,
       indoors: isIndoors(act.w, act.l, BASE_VIEW_CLUBHOUSE),
       flip: activityFacesLeft(r, elapsed, ACTIVITY_CTX, PROJ),
+      dir: activityDir(r, elapsed, ACTIVITY_CTX, PROJ),
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
       color: (TYPES[r.type] && TYPES[r.type].color) || C.yellow,
       phase: riderHash01(r.id, 91) * 4, // 歩調・ペダリングが全員で揃わないようずらす
@@ -225,7 +223,7 @@ export function BaseView({ g, paused, onRoomTap }) {
                     {fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity)))}
                     {/* 屋内の人物（選手＋常駐スタッフ）は必ず床・壁・什器より後に描く */}
                     {indoorPeople.map(pn => (
-                      <Person key={pn.r ? `ir${pn.r.id}` : `st${pn.key}`} x={pn.x} y={pn.y}
+                      <PixelPerson key={pn.r ? `ir${pn.r.id}` : `st${pn.key}`} x={pn.x} y={pn.y}
                         pose={pn.r ? pn.act.pose : "stand"} t={elapsed}
                         color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />
                     ))}
@@ -234,18 +232,15 @@ export function BaseView({ g, paused, onRoomTap }) {
                 if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
                 // 自転車に乗っていない選手（ラック〜玄関の屋外を歩く）は人型で描く
                 if (item.act.pose !== "ride") {
-                  return <Person key={`r${item.r.id}`} x={item.x} y={item.y} pose={item.act.pose} t={elapsed}
+                  return <PixelPerson key={`r${item.r.id}`} x={item.x} y={item.y} pose={item.act.pose} t={elapsed}
                     color={item.color} cap={item.cap} flip={item.flip} phase={item.phase} />;
                 }
-                // 左へ進むときは x=item.x の垂直線でスプライトを鏡像反転する
                 // Wave F-3b: 練習中は通常姿勢。一部の選手が周期的に立ち漕ぎ（ダンシング）を
                 // 見せて単調さを消す。判定は決定論的（riderHash01と経過時間のみ）。
-                const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap}
-                  isPlayer={false} isAce={false} surging={false} simple={simple}
-                  posture={item.dancing ? "dancing" : "normal"} phase={elapsed * 1.5 + item.phase} />;
-                return item.flip
-                  ? <g key={`r${item.r.id}`} transform={`translate(${(2 * item.x).toFixed(1)},0) scale(-1,1)`}>{sprite}</g>
-                  : <React.Fragment key={`r${item.r.id}`}>{sprite}</React.Fragment>;
+                // Wave G-1改：PixelBikeは自前でflip(左右反転)を持つため、旧IsoRiderのような
+                // 外側からのtranslate+scale(-1,1)ラップは不要。
+                return <PixelBike key={`r${item.r.id}`} x={item.x} y={item.y} color={item.color}
+                  posture={item.dancing ? "dancing" : "normal"} dir={item.dir} flip={item.flip} />;
               })}
             </g>
           )}

@@ -166,6 +166,18 @@ export function activityFacesLeft(rider, tSec, ctx, proj) {
   return pb.x < pa.x;
 }
 
+// ドット絵スプライト(pixelBike.jsx)の向き判定。アイソメ投影では世界座標の単軸移動が
+// 必ず画面上は斜め方向になる（dx=26*(dw+dl), dy=13*(dw-dl)）ため、画面yの増減だけで
+// 「SE系（下向き）」か「NE系（上向き）」かが決まる。左右はactivityFacesLeftのflipが担当し、
+// 本関数はその直交する軸（上下）を担当する。静止中・純水平移動中はSEをデフォルトにする。
+export function activityDir(rider, tSec, ctx, proj) {
+  const a = riderActivityAt(rider, tSec, ctx);
+  const b = riderActivityAt(rider, tSec + 0.12, ctx);
+  const pa = isoProject(a.w, a.l, 0, proj), pb = isoProject(b.w, b.l, 0, proj);
+  if (Math.abs(pb.y - pa.y) < 0.01) return "SE";
+  return pb.y >= pa.y ? "SE" : "NE";
+}
+
 // その位置がクラブハウスの中か（＝屋内グループで描くべきか）。
 // 屋内の人物を独立して奥行きソートすると不透明な床に埋もれるため、BaseView側で
 // クラブハウスのatomicな描画グループへ入れる判定に使う（Wave E-2で実際に踏んだ罠）。
