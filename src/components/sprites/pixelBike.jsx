@@ -646,8 +646,10 @@ export function bikeLegend(color) {
 // t: 経過秒（ペダリングのアニメーションに使う。paused中はtが進まないので自然に静止する）。
 // phase: 選手ごとの位相ずらし（全員のペダリングが揃わないように）。
 export function PixelBike({ x, y, color, posture = "normal", dir = "SE", flip, t = 0, phase = 0 }) {
-  // クランク半回転ごとにBIKE⇔BIKE_Bを交互に切り替える（周期約0.9秒≒普通のケイデンス感）。
-  const table = Math.floor((t + phase) * 2.2) % 2 === 0 ? BIKE : BIKE_B;
+  // クランク半回転ごとにBIKE⇔BIKE_Bを交互に切り替える（周期約0.22秒）。
+  // 元は2.2（周期約0.9秒）だったが「切り替えはもっともっと早くていいです」との指摘により
+  // 大幅に高速化（9.0＝約4倍）。
+  const table = Math.floor((t + phase) * 9.0) % 2 === 0 ? BIKE : BIKE_B;
   const frame = table[`${posture}_${dir}`] || table.normal_SE;
   const inner = pixelSprite(frame, bikeLegend(color), BIKE_PX,
     frame[0].length / 2, frame.length, "b", "#161616", false);
