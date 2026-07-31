@@ -1,11 +1,14 @@
-// クラブハウス各部屋の小道具（Wave F-2 redo 追補）。
+// クラブハウス各部屋の什器・小道具（Wave F-2 redo 追補 → Wave E-3で「施設Lvに応じて
+// 増える什器」を統合し、旧`Clutter.jsx`から`git mv`で改称）。
 // 追補1（isoProjectの地面点から手加減のpxオフセットで浮かせて描く方式）は「それっぽく
 // 見えない、レイヤーもミスってる」、追補2（isoBoxの土台を追加した版）は「そもそもの形状が
 // 単純な立方体・円+棒・長方形止まりでデザインが足りない。浮いて見えるものもある」と、
-// 2度にわたりユーザーから却下・再指摘を受けた。今回（追補3）は形状そのものを実物の特徴的な
-// シルエット（自転車の車輪＝タイヤ+リム+スポーク、椅子＝座面+背もたれ+4脚、ダンベル＝
-// バー+両端の円盤等）へ作り直し、床に接する要素は影と確実に接するよう座標を再検算した
-// （詳細な設計判断はDEVLOG参照）。
+// 2度にわたりユーザーから却下・再指摘を受けた。追補3で形状を実物の特徴的なシルエット
+// （自転車の車輪＝タイヤ+リム+スポーク、椅子＝座面+背もたれ+4脚、ダンベル＝バー+両端の
+// 円盤等）へ作り直し、床に接する要素は影と確実に接するよう座標を再検算した。
+// Wave E-3では、この描画方式を踏襲したまま新規9種（ローラー増設・大型ファン・モニター・
+// パーツ棚・2台目の作業スタンド・ホイール組み台・ワゴン・2台目のベッド・資料棚）を追加し、
+// data/baseViewBuildings.jsのBASE_VIEW_FIXTURESの`minLevel`で段階的に解禁する。
 import React from "react";
 import { isoBoxFaces } from "../../domain/season/baseViewLayout.js";
 
@@ -86,6 +89,54 @@ function waterTableNode(w, l, proj, key) {
   );
 }
 
+// トレーニング室（Wave E-3新規）：増設ローラー（低い台＋ローラー2本。フレームは無く
+// 「予備の台」であることを示す最小限の構成）。
+function rollerUnitNode(w, l, proj, key) {
+  const hw = 0.24, hl = 0.16, h = 5;
+  const top = isoBoxFaces(w, l, hw, hl, h, proj).top.N;
+  return (
+    <g key={key}>
+      {shadow(w, l, hw, hl, proj)}
+      {isoBox(w, l, hw, hl, h, proj, "#5a6068", "#7a828c", "#9aa0a6")}
+      <ellipse cx={(top.x - 2.4).toFixed(1)} cy={(top.y - 0.4).toFixed(1)} rx="1.5" ry="2.6" fill="#3a3f46" />
+      <ellipse cx={(top.x + 1.6).toFixed(1)} cy={(top.y - 0.6).toFixed(1)} rx="1.5" ry="2.6" fill="#3a3f46" />
+    </g>
+  );
+}
+
+// トレーニング室（Wave E-3新規）：大型サーキュレーター（支柱＋丸いガード付きの羽根＋台座）。
+function fanNode(w, l, proj, key) {
+  const base = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  const h = 10, headY = base.y - h;
+  return (
+    <g key={key}>
+      {shadow(w, l, 0.22, 0.2, proj)}
+      <ellipse cx={base.x.toFixed(1)} cy={base.y.toFixed(1)} rx="3.2" ry="1.3" fill="#3a3f46" />
+      <line x1={base.x.toFixed(1)} y1={base.y.toFixed(1)} x2={base.x.toFixed(1)} y2={(headY + 3).toFixed(1)} stroke="#5a626c" strokeWidth="1.5" />
+      <circle cx={base.x.toFixed(1)} cy={headY.toFixed(1)} r="4.2" fill="#e8ecef" stroke="#8a919b" strokeWidth="0.8" />
+      {[0, 60, 120].map((deg) => {
+        const rad = (deg * Math.PI) / 180, dx = Math.cos(rad) * 3.3, dy = Math.sin(rad) * 3.3;
+        return <line key={deg} x1={base.x.toFixed(1)} y1={headY.toFixed(1)} x2={(base.x + dx).toFixed(1)} y2={(headY + dy).toFixed(1)} stroke="#8a919b" strokeWidth="0.7" />;
+      })}
+      <circle cx={base.x.toFixed(1)} cy={headY.toFixed(1)} r="0.8" fill="#8a919b" />
+    </g>
+  );
+}
+
+// トレーニング室（Wave E-3新規）：計測モニター（支柱＋画面＋簡易グラフ）。
+function monitorNode(w, l, proj, key) {
+  const base = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  const h = 11, screenY = base.y - h;
+  return (
+    <g key={key}>
+      {shadow(w, l, 0.16, 0.14, proj)}
+      <line x1={base.x.toFixed(1)} y1={base.y.toFixed(1)} x2={base.x.toFixed(1)} y2={(screenY + 2.4).toFixed(1)} stroke="#5a626c" strokeWidth="1.3" />
+      <rect x={(base.x - 3.4).toFixed(1)} y={(screenY - 2.6).toFixed(1)} width="6.8" height="5" rx="0.6" fill="#1c2a33" stroke="#3a4a54" strokeWidth="0.5" />
+      <polyline points={`${(base.x - 2.4).toFixed(1)},${(screenY + 1).toFixed(1)} ${(base.x - 0.8).toFixed(1)},${(screenY - 0.6).toFixed(1)} ${(base.x + 0.6).toFixed(1)},${(screenY + 0.4).toFixed(1)} ${(base.x + 2.2).toFixed(1)},${(screenY - 1.4).toFixed(1)}`} fill="none" stroke="#4fd1c5" strokeWidth="0.6" />
+    </g>
+  );
+}
+
 // メカニック室：予備の車輪2本を壁際に立てかける。円の下端がちょうど床影に接するよう
 // cyを計算し（cy = 地面y - r）、宙に浮かない。手前の車輪をわずかに大きく・低い位置に
 // 置いて奥行きを表現する。
@@ -119,6 +170,55 @@ function toolboxNode(w, l, proj, key) {
   );
 }
 
+// メカニック室（Wave E-3新規）：パーツ棚（2段の棚板＋色違いの部品ケース3つ）。
+function partsShelfNode(w, l, proj, key) {
+  const hw = 0.28, hl = 0.16, h = 10;
+  const f = isoBoxFaces(w, l, hw, hl, h, proj);
+  const shelfY1 = f.botFront.y - h * 0.35, shelfY2 = f.botFront.y - h * 0.7;
+  return (
+    <g key={key}>
+      {shadow(w, l, hw, hl, proj)}
+      {isoBox(w, l, hw, hl, h, proj, "#6b5636", "#8a6f48", "#a3814f")}
+      <line x1={(f.botFront.x - 4).toFixed(1)} y1={shelfY1.toFixed(1)} x2={(f.botFront.x + 4).toFixed(1)} y2={shelfY1.toFixed(1)} stroke="#00000030" strokeWidth="0.5" />
+      <line x1={(f.botFront.x - 4).toFixed(1)} y1={shelfY2.toFixed(1)} x2={(f.botFront.x + 4).toFixed(1)} y2={shelfY2.toFixed(1)} stroke="#00000030" strokeWidth="0.5" />
+      <rect x={(f.botFront.x - 2.6).toFixed(1)} y={(shelfY1 - 2.1).toFixed(1)} width="2" height="2" fill="#c9463c" />
+      <rect x={(f.botFront.x + 0.4).toFixed(1)} y={(shelfY1 - 2.1).toFixed(1)} width="2" height="2" fill="#4f8fe8" />
+      <rect x={(f.botFront.x - 0.8).toFixed(1)} y={(shelfY2 - 2.1).toFixed(1)} width="2" height="2" fill="#e0a032" />
+    </g>
+  );
+}
+
+// メカニック室（Wave E-3新規）：2台目の作業スタンド（本体は主什器のWorkbenchFurnitureより
+// 簡略化。支柱+車輪1つのみで「予備のスタンド」であることを示す）。
+function workbench2Node(w, l, proj, key) {
+  const p = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  const standY = p.y - 7, wheelCx = p.x + 3.5, wheelCy = p.y - 5.5;
+  return (
+    <g key={key}>
+      {shadow(w, l, 0.32, 0.22, proj)}
+      {isoBox(w, l, 0.32, 0.22, 5, proj, "#6b5636", "#8a6f48", "#a3814f")}
+      <line x1={p.x.toFixed(1)} y1={p.y.toFixed(1)} x2={p.x.toFixed(1)} y2={standY.toFixed(1)} stroke="#8a8f99" strokeWidth="1.3" />
+      <line x1={p.x.toFixed(1)} y1={standY.toFixed(1)} x2={wheelCx.toFixed(1)} y2={wheelCy.toFixed(1)} stroke="#c9463c" strokeWidth="1.2" strokeLinecap="round" />
+      {wheelIcon(wheelCx, wheelCy, 3.3)}
+    </g>
+  );
+}
+
+// メカニック室（Wave E-3新規）：ホイール組み台（振れ取り台。2本脚のジグ＋車輪を垂直に固定）。
+function wheelBuildStandNode(w, l, proj, key) {
+  const p = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  const legTop = p.y - 5.2, cx = p.x, cy = p.y - 8.5;
+  return (
+    <g key={key}>
+      {shadow(w, l, 0.22, 0.2, proj)}
+      <line x1={(p.x - 2.6).toFixed(1)} y1={p.y.toFixed(1)} x2={(p.x - 2.6).toFixed(1)} y2={legTop.toFixed(1)} stroke="#5a626c" strokeWidth="1.3" />
+      <line x1={(p.x + 2.6).toFixed(1)} y1={p.y.toFixed(1)} x2={(p.x + 2.6).toFixed(1)} y2={legTop.toFixed(1)} stroke="#5a626c" strokeWidth="1.3" />
+      <line x1={(p.x - 2.6).toFixed(1)} y1={legTop.toFixed(1)} x2={(p.x + 2.6).toFixed(1)} y2={legTop.toFixed(1)} stroke="#5a626c" strokeWidth="1.3" />
+      {wheelIcon(cx, cy, 4.4)}
+    </g>
+  );
+}
+
 // メディカル室：薬品棚（本体＋2段の棚板＋小さな薬瓶＋前面の赤十字）。
 function cabinetNode(w, l, proj, key) {
   const hw = 0.2, hl = 0.15, h = 11;
@@ -135,6 +235,35 @@ function cabinetNode(w, l, proj, key) {
       <circle cx={(f.botFront.x + 1.6).toFixed(1)} cy={(shelfY2 - 1).toFixed(1)} r="0.8" fill="#c9463c" />
       <rect x={(cx - 1).toFixed(1)} y={(cy - 3).toFixed(1)} width="2" height="6" fill="#c9463c" />
       <rect x={(cx - 3).toFixed(1)} y={(cy - 1).toFixed(1)} width="6" height="2" fill="#c9463c" />
+    </g>
+  );
+}
+
+// メディカル室（Wave E-3新規）：処置用ワゴン（低い台＋天面のトレー＋足元の小さな車輪2つ）。
+function medCartNode(w, l, proj, key) {
+  const hw = 0.2, hl = 0.16, h = 6;
+  const top = isoBoxFaces(w, l, hw, hl, h, proj).top.N;
+  const base = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  return (
+    <g key={key}>
+      {shadow(w, l, hw, hl, proj)}
+      {isoBox(w, l, hw, hl, h, proj, "#c7d3d8", "#eef4f6", "#ffffff")}
+      <rect x={(top.x - 2.6).toFixed(1)} y={(top.y - 1.3).toFixed(1)} width="5.2" height="1.5" fill="#dfe6e9" />
+      <circle cx={(base.x - 2).toFixed(1)} cy={(base.y - 0.6).toFixed(1)} r="1" fill="#3a3f46" />
+      <circle cx={(base.x + 2).toFixed(1)} cy={(base.y - 0.6).toFixed(1)} r="1" fill="#3a3f46" />
+    </g>
+  );
+}
+
+// メディカル室（Wave E-3新規）：2台目のベッド（主什器のMedicalFurnitureより簡略化。
+// 枕のみで点滴スタンドは無く「予備のベッド」であることを示す）。
+function bed2Node(w, l, proj, key) {
+  const p = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  return (
+    <g key={key}>
+      {shadow(w, l, 0.5, 0.24, proj)}
+      {isoBox(w, l, 0.5, 0.24, 7, proj, "#c7d3d8", "#eef4f6", "#ffffff")}
+      <ellipse cx={(p.x - 8).toFixed(1)} cy={(p.y - 8).toFixed(1)} rx="3.6" ry="2" fill="#ffffff" stroke="#00000020" strokeWidth="0.4" />
     </g>
   );
 }
@@ -208,6 +337,22 @@ function foldersNode(w, l, proj, key) {
   );
 }
 
+// スカウト室（Wave E-3新規）：資料棚（棚板＋色違いの資料ケース2つ）。
+function archiveShelfNode(w, l, proj, key) {
+  const hw = 0.26, hl = 0.16, h = 10;
+  const f = isoBoxFaces(w, l, hw, hl, h, proj);
+  const shelfY = f.botFront.y - h * 0.5;
+  return (
+    <g key={key}>
+      {shadow(w, l, hw, hl, proj)}
+      {isoBox(w, l, hw, hl, h, proj, "#5c4a68", "#8a6fa0", "#a288b8")}
+      <line x1={(f.botFront.x - 4).toFixed(1)} y1={shelfY.toFixed(1)} x2={(f.botFront.x + 4).toFixed(1)} y2={shelfY.toFixed(1)} stroke="#00000030" strokeWidth="0.5" />
+      <rect x={(f.botFront.x - 3).toFixed(1)} y={(shelfY - 2.3).toFixed(1)} width="2.6" height="2.2" fill="#c9a23c" />
+      <rect x={(f.botFront.x + 0.2).toFixed(1)} y={(shelfY - 2.3).toFixed(1)} width="2.6" height="2.2" fill="#4f8fe8" />
+    </g>
+  );
+}
+
 // 廊下：玄関そばの靴棚（2段の棚板＋それぞれに先の尖った靴のシルエット）。
 function shoeRackNode(w, l, proj, key) {
   const hw = 0.34, hl = 0.13, h = 6;
@@ -232,17 +377,19 @@ function shoeRackNode(w, l, proj, key) {
   );
 }
 
-const CLUTTER_RENDER = {
+const FIXTURE_RENDER = {
   dumbbells: dumbbellsNode, waterTable: waterTableNode,
+  rollerUnit: rollerUnitNode, fan: fanNode, monitor: monitorNode,
   wheelsLeaning: wheelsLeaningNode, toolbox: toolboxNode,
-  cabinet: cabinetNode, chair: chairNode,
-  whiteboard: whiteboardNode, folders: foldersNode,
+  partsShelf: partsShelfNode, workbench2: workbench2Node, wheelBuildStand: wheelBuildStandNode,
+  cabinet: cabinetNode, medCart: medCartNode, bed2: bed2Node, chair: chairNode,
+  whiteboard: whiteboardNode, folders: foldersNode, archiveShelf: archiveShelfNode,
   shoeRack: shoeRackNode,
 };
 
-export function clutterItems(proj, list) {
+export function fixtureItems(proj, list) {
   return (list || []).map((c) => {
-    const render = CLUTTER_RENDER[c.kind];
+    const render = FIXTURE_RENDER[c.kind];
     return render ? render(c.w, c.l, proj, c.key) : null;
   }).filter(Boolean);
 }

@@ -54,7 +54,7 @@ export function doorFor(room, corridor, partitions, clubhouse) {
   return { w: wallW, l: (Math.max(g[0], rMin) + Math.min(g[1], rMax)) / 2 };
 }
 
-// 持ち場での立ち位置とポーズ。同じ部屋に椅子(BASE_VIEW_CLUTTERのkind==="chair")があれば
+// 持ち場での立ち位置とポーズ。同じ部屋に椅子(BASE_VIEW_FIXTURESのkind==="chair")があれば
 // **その椅子に実際に座る**、無ければ什器の手前に立つ。
 // 手前＝screen yが大きい側＝(w - l)が大きい側に置くことで、什器より後に描かれる＝
 // 什器の前に立って見える（Wave E-2で踏んだ「不透明な床/什器に埋もれる」問題の予防）。

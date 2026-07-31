@@ -106,7 +106,7 @@ function Upright({ color, cap, p }) {
   );
 }
 
-// 座り（右向き）。腰の高さ3.0単位＝4.5pxはClutter.jsxの椅子の座面高と一致させてある
+// 座り（右向き）。腰の高さ3.0単位＝4.5pxはFixtures.jsxの椅子の座面高と一致させてある
 // （椅子に腰が乗って見える）。腿を水平・すねを垂直に折るのが「座り」の読み取りの要。
 function Seated({ color, cap }) {
   const hipA = -0.5, hipB = 3.0;

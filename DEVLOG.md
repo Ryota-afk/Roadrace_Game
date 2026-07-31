@@ -941,6 +941,38 @@ v33系＝配合拡張4本→献身の運ゲー修正→進化3方向（A/B/C）�
   残っているため実質的な損失はない。直近かつ現行実装に直結するWave F（F-1〜F-3b）は
   詳細を残した。**146KB→約102KB**（約44KB削減）。
 
+- **Wave E-3a（什器の施設Lv連動・完了）**：Opusで設計方針を確認、ユーザーが「①主要什器のみ
+  Lv0で表示②クラス(B1/A/PRO)の格上げでトロフィー以外も変化③B1でmedical/scoutがLv1止まり
+  なのは仕様として許容、プラスその他購入要素も追加したい」を承認した設計図に基づき実装。
+  本弾はそのうち①（什器の段階解禁）を実装する。②（クラス格上げの内装演出）・③（新規購入枠
+  `equip.interior`/`equip.lounge`）はE-3b以降で継続。
+  **データ**：`BASE_VIEW_CLUTTER`を`BASE_VIEW_FIXTURES`へ改称（`git mv Clutter.jsx
+  Fixtures.jsx`で追従）。既存10種すべてに`minLevel`を付与し、新規9種
+  （training: rollerUnit/fan/monitor、mechanic: partsShelf/workbench2/wheelBuildStand、
+  medical: medCart/bed2、scout: archiveShelf）を追加した19種構成に拡張。`minLevel`は
+  `buildingLevels(g)`（`domain/season/baseViewLayout.js`）が返す部屋ごとのLv（training=
+  equip.facility、mechanic=max(frame,wheels)、medical=max(doctor,manager)、scout=scout）と
+  比較する。椅子(chair)2種は`minLevel:0`固定で常時表示のまま変更しない——`ACTIVITY_CTX`が
+  BaseView.jsxのモジュール読み込み時に一度だけ構築される設計（Wave F-3aの純関数activity
+  system）であり、`workSpotFor()`の椅子探索をgame state依存にすると崩れるため。廊下の
+  什器は`buildingLevels`に対応キーが無く`levels[f.room]`が`undefined`→`?? Infinity`で
+  常時表示になる（意図した挙動）。
+  **配置座標**：新規9種の配置は勘で決めず、Node製の総当たりグリッド探索スクリプトで
+  「既存什器・見出しバッジまでの最短距離」を最大化する候補点を出してから採用した（過去waveで
+  手計算により什器同士やバッジと重なるバグが繰り返し出た反省）。
+  **意匠**：`Fixtures.jsx`へ9種の描画関数を追加。既存什器と同じ「isoBox+影の土台、宙に浮く
+  要素を作らない」規律を踏襲（例：wheelBuildStandは箱を持たない2脚のトルーイングスタンド、
+  workbench2は箱＋小型wheelIconで別物と分かるよう意図的に描き分けた）。6倍プレビュー
+  （`src/preview.jsx`、確認後に削除）で造形を確認してからゲーム本体へ組み込んだ。
+  **フィルタ実装**：`BaseView.jsx`の描画で
+  `BASE_VIEW_FIXTURES.filter(f => (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity))`を
+  `fixtureItems()`へ渡すよう変更（既存の`const levels = buildingLevels(g)`を再利用）。
+  **検証**：既存スイートを新名称へ追従（`BASE_VIEW_CLUTTER`参照テストを`BASE_VIEW_FIXTURES`へ
+  改名・minLevel整合性検証を追加）した上で全PASS。Playwrightで低Lv/中間Lv/PRO最大Lvの3パターンを
+  実機確認し、SVG描画要素数がLvに比例して増加（543→701→798）、スクリーンショットで
+  training/mechanic/medical/scout各室に対応什器が段階的に追加され、宙に浮く/重なる要素が
+  無いことを目視確認した。
+
 **DEVLOG.mdのサイズについて**：本エントリ追加時点で約102KB。CLAUDE.md §4の目安
 「十数万バイト」をまだ超えているため、次に大きな機能追加が一段落した節目で再度サイズを
 確認すること。

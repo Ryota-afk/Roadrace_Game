@@ -87,28 +87,47 @@ export const BASE_VIEW_EMPTY_ROOMS = [
   { key: "spare2", room: "spare2", w: 9.875, l: 3.85, kind: "empty", icon: "📋", accent: "#9aa0a6" },
 ];
 
-// Wave F-2 redo 追補3：ユーザー指摘「そもそもの形状が単純な立方体・円+棒・長方形止まりで
-// デザインが足りない。浮いて見えるものもある」への対応。形状そのものを実物の特徴的な
-// シルエット（自転車の車輪＝タイヤ+リム+スポーク、椅子＝座面+背もたれ+4脚、ダンベル＝
-// バー+両端の円盤等）へcomponents/base/Clutter.jsxで作り直した。roomは対応する
-// BASE_VIEW_ROOMSのkey。座標は什器・バッジ位置（w5,l4.5）・出入り口の隙間
-// (BASE_VIEW_PARTITIONS)のいずれとも十分離してある（追補2で確立済みの検証項目を継続）。
-export const BASE_VIEW_CLUTTER = [
-  // トレーニング室：床置きのダンベル2個、ボトル&タオルを載せたテーブル
-  { key: "training-weights", room: "training", kind: "dumbbells", w: 5.6, l: -2.6 },
-  { key: "training-water", room: "training", kind: "waterTable", w: 7.6, l: -0.6 },
-  // メカニック室：壁に立てかけた予備の車輪2本、工具箱
-  { key: "mechanic-wheels", room: "mechanic", kind: "wheelsLeaning", w: 5.6, l: 1.0 },
-  { key: "mechanic-crate", room: "mechanic", kind: "toolbox", w: 5.7, l: 2.6 },
-  // メディカル室：薬品棚、待合の椅子
-  { key: "medical-cabinet", room: "medical", kind: "cabinet", w: 13.5, l: -0.6 },
-  { key: "medical-chair", room: "medical", kind: "chair", w: 10.9, l: -2.6 },
-  // スカウト室：机の脇のホワイトボード、来客用の椅子、選手ファイルの束
-  { key: "scout-whiteboard", room: "scout", kind: "whiteboard", w: 13.4, l: 3.0 },
-  { key: "scout-chair", room: "scout", kind: "chair", w: 12.6, l: 3.4 },
-  { key: "scout-folders", room: "scout", kind: "folders", w: 10.9, l: 1.0 },
-  // 廊下：玄関そばの靴棚
-  { key: "corridor-shoerack", room: "corridor", kind: "shoeRack", w: 9.5, l: -2.8 },
+// Wave E-3：什器を施設Lvに応じて段階的に増やす。ユーザー要望「E-3の設計」（DEVLOG参照）に
+// 基づき、旧`BASE_VIEW_CLUTTER`（Wave F-2 redo 追補3で意匠を作り直し済み）を土台に
+// `minLevel`を振り直し、各部屋へ新規什器を追加した（`git mv`で`Clutter.jsx`→
+// `Fixtures.jsx`へ改称）。`minLevel`は`domain/season/baseViewLayout.jsのbuildingLevels(g)`
+// が返す当該部屋のLv（training/mechanic/medical/scout）以下なら表示する
+// （`components/base/BaseView.jsx`側でフィルタ）。corridorはどの`buildingLevels`キーとも
+// 対応しないため、常時表示（minLevel:0のまま）。
+// 「椅子だけはLv0から常設」（ユーザー合意①A・E-3設計図参照）：選手の「座る」作業位置は
+// `domain/season/riderActivity.js`の`workSpotFor()`が椅子の有無で決めており、椅子をLv依存に
+// すると拠点画面の`ACTIVITY_CTX`（静的に一度だけ組み立てる）をゲーム状態依存にする必要が
+// 生じ、Wave F-3aの純関数設計に波及するため。
+// 座標は什器・バッジ位置（w5,l4.5）・出入り口の隙間(BASE_VIEW_PARTITIONS)・スタッフ
+// (BASE_VIEW_STAFF)のいずれとも十分離してある（Node単体テストで機械的に検算）。
+export const BASE_VIEW_FIXTURES = [
+  // トレーニング室（levelMax 5）：Lv1 ダンベル／Lv2 給水台／Lv3 増設ローラー／
+  // Lv4 大型ファン／Lv5 増設ローラー2台目+モニター
+  { key: "training-weights", room: "training", kind: "dumbbells", w: 5.6, l: -2.6, minLevel: 1 },
+  { key: "training-water", room: "training", kind: "waterTable", w: 7.6, l: -0.6, minLevel: 2 },
+  { key: "training-roller2", room: "training", kind: "rollerUnit", w: 5.75, l: -1.35, minLevel: 3 },
+  { key: "training-fan", room: "training", kind: "fan", w: 5.35, l: -0.15, minLevel: 4 },
+  { key: "training-roller3", room: "training", kind: "rollerUnit", w: 6.55, l: -0.15, minLevel: 5 },
+  { key: "training-monitor", room: "training", kind: "monitor", w: 6.55, l: -3.15, minLevel: 5 },
+  // メカニック室（levelMax 5）：Lv1 工具箱／Lv2 予備の車輪／Lv3 パーツ棚／
+  // Lv4 2台目の作業スタンド／Lv5 ホイール組み台
+  { key: "mechanic-crate", room: "mechanic", kind: "toolbox", w: 5.7, l: 2.6, minLevel: 1 },
+  { key: "mechanic-wheels", room: "mechanic", kind: "wheelsLeaning", w: 5.6, l: 1.0, minLevel: 2 },
+  { key: "mechanic-shelf", room: "mechanic", kind: "partsShelf", w: 6.75, l: 1.55, minLevel: 3 },
+  { key: "mechanic-stand2", room: "mechanic", kind: "workbench2", w: 7.65, l: 0.65, minLevel: 4 },
+  { key: "mechanic-wheelbuild", room: "mechanic", kind: "wheelBuildStand", w: 7.65, l: 4.05, minLevel: 5 },
+  // メディカル室（levelMax 3）：椅子は常設／Lv1 薬品棚／Lv2 処置ワゴン／Lv3 2台目のベッド
+  { key: "medical-chair", room: "medical", kind: "chair", w: 10.9, l: -2.6, minLevel: 0 },
+  { key: "medical-cabinet", room: "medical", kind: "cabinet", w: 13.5, l: -0.6, minLevel: 1 },
+  { key: "medical-cart", room: "medical", kind: "medCart", w: 10.85, l: -0.15, minLevel: 2 },
+  { key: "medical-bed2", room: "medical", kind: "bed2", w: 13.65, l: -3.15, minLevel: 3 },
+  // スカウト室（levelMax 3）：椅子は常設／Lv1 選手ファイル／Lv2 ホワイトボード／Lv3 資料棚
+  { key: "scout-chair", room: "scout", kind: "chair", w: 12.6, l: 3.4, minLevel: 0 },
+  { key: "scout-folders", room: "scout", kind: "folders", w: 10.9, l: 1.0, minLevel: 1 },
+  { key: "scout-whiteboard", room: "scout", kind: "whiteboard", w: 13.4, l: 3.0, minLevel: 2 },
+  { key: "scout-shelf", room: "scout", kind: "archiveShelf", w: 13.65, l: 0.65, minLevel: 3 },
+  // 廊下：常時表示（corridorはbuildingLevels()のキーに無いため常にminLevel:0扱い）
+  { key: "corridor-shoerack", room: "corridor", kind: "shoeRack", w: 9.5, l: -2.8, minLevel: 0 },
 ];
 
 // Wave F-3c：常駐スタッフ（動かない人）。対応するスタッフを雇っていれば
