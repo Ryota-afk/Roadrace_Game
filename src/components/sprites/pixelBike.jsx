@@ -313,15 +313,22 @@ export function bikeLegend(color) {
 
 // x,y: 接地点（車輪の下端中央）のワールド座標。color=チーム色（車体とジャージに使う）。
 // posture: "normal" | "dancing" | "sprint"、dir: "SE" | "NE"
-// flip: 画面左向きに進むとき true（鏡像反転）
+// flip: 画面左向きに進むとき true（activityFacesLeftの一般的な意味のまま）。
+//
+// 【注意】参考画像はSE/NEが独立した2枚の絵で、互いに鏡像の関係ではない。原本（矢印付きの
+// 1枚目）を見るとSEは既定で左向き（矢印↙）、NEは既定で右向き（矢印↗）に描かれている。
+// そのためNEはflip=trueのときだけ鏡像化すればよいが、SEは向きが逆なのでflip=falseの
+// ときに鏡像化する必要がある（実機で「進行方向と鏡像の向きが逆」というユーザー指摘により
+// 判明。SE/NEで反転条件を共通化していたのが原因だった）。
 export function PixelBike({ x, y, color, posture = "normal", dir = "SE", flip }) {
   const frame = BIKE[`${posture}_${dir}`] || BIKE.normal_SE;
   const inner = pixelSprite(frame, bikeLegend(color), BIKE_PX,
     frame[0].length / 2, frame.length, "b", "#161616", false);
+  const mirror = dir === "SE" ? !flip : !!flip;
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
       <ellipse cx="0" cy="0" rx="8.4" ry="2.2" fill="#000" opacity="0.22" />
-      {flip ? <g transform="scale(-1,1)">{inner}</g> : inner}
+      {mirror ? <g transform="scale(-1,1)">{inner}</g> : inner}
     </g>
   );
 }
