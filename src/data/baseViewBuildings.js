@@ -111,6 +111,22 @@ export const BASE_VIEW_CLUTTER = [
   { key: "corridor-shoerack", room: "corridor", kind: "shoeRack", w: 9.5, l: -2.8 },
 ];
 
+// Wave F-3c：常駐スタッフ（動かない人）。対応するスタッフを雇っていれば
+// （g.staff[staffKey] > 0）その持ち場に立つ。選手が誰も来ていない時間帯でも部屋が無人に
+// ならず、拠点が「人の居る場所」に見える。選手のジャージ色とは異なる配色にして、
+// 選手（走る人）とスタッフ（迎える人）が絵として区別できるようにしてある。
+// flipは向き：その部屋の什器のほうを向くようscreen x座標を比較して決めてある。
+export const BASE_VIEW_STAFF = [
+  { key: "trainer", staffKey: "trainer", room: "training", label: "トレーナー",
+    w: 7.6, l: -2.9, color: "#2f8f5c", cap: "#e9e2d4", flip: false },
+  { key: "doctor", staffKey: "doctor", room: "medical", label: "ドクター",
+    w: 12.7, l: -1.0, color: "#eef4f6", cap: "#c7d3d8", flip: true },
+  { key: "scout", staffKey: "scout", room: "scout", label: "スカウト",
+    w: 11.4, l: 2.2, color: "#c98bf0", cap: "#5c4a68", flip: false },
+  { key: "manager", staffKey: "manager", room: "corridor", label: "マネージャー",
+    w: 10.1, l: -3.0, color: "#3a4250", cap: "#c9a23c", flip: true },
+];
+
 // 練習コース（world原点中心）。クラブハウス（w:5〜14）と重ならない範囲に収めてある。
 export const BASE_VIEW_LOOP = { pathW: 3.6, pathL: 2.6, cornerR: 1.1, trackHalfWidth: 0.42 };
 

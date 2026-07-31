@@ -19,12 +19,15 @@ import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
   BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_PARTITION_HEIGHT,
-  BASE_VIEW_EMPTY_ROOMS, BASE_VIEW_CLUTTER,
+  BASE_VIEW_EMPTY_ROOMS, BASE_VIEW_CLUTTER, BASE_VIEW_STAFF,
 } from "../../data/baseViewBuildings.js";
 import {
-  isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf,
+  isoProject, buildingLevels, seasonOf,
   pointInQuad, roomFloorQuad, stationQuad,
 } from "../../domain/season/baseViewLayout.js";
+import {
+  riderActivityAt, activityFacesLeft, isIndoors, routeToStation, workSpotFor,
+} from "../../domain/season/riderActivity.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
 import { useIsoCamera } from "../../hooks/useIsoCamera.js";
 import { IsoRider, CAP_COLORS, riderWander } from "../RaceView.jsx";
@@ -35,6 +38,7 @@ import { Track } from "./Track.jsx";
 import { Ground } from "./Ground.jsx";
 import { propItems } from "./Props.jsx";
 import { clutterItems } from "./Clutter.jsx";
+import { Person } from "./Person.jsx";
 import { TYPES } from "../../data/abilities.js";
 
 const PROJ = BASE_VIEW_PROJ;
@@ -107,6 +111,30 @@ const CLUBHOUSE_QUAD = roomFloorQuad(BASE_VIEW_CLUBHOUSE, BASE_VIEW_PROJ);
 // Wave F-2 redo: 空き部屋はSTATION_QUADSに含めない＝タップ判定は従来通り床全体(clubhouse)
 // へフォールバックする（機能が無い部屋なので専用の遷移先を持たない）。
 
+// Wave F-3a: 選手の行動（周回⇔屋内の往復）を解くための静的な文脈。レイアウトは不変なので
+// モジュール読み込み時に一度だけ組み立てる。歩行ルートは壁データ(BASE_VIEW_PARTITIONS)の
+// 「壁が無い区間」＝扉から機械的に導出されるため、壁を通り抜ける経路が発生しない。
+const ACTIVITY_CTX = (() => {
+  const base = {
+    loop: BASE_VIEW_LOOP,
+    rack: BASE_VIEW_PROPS.bikeRack,
+    speed: RIDER_SPEED,
+    clubhouse: BASE_VIEW_CLUBHOUSE,
+    corridor: BASE_VIEW_ROOMS.find(r => r.key === "corridor"),
+    rooms: BASE_VIEW_ROOMS,
+    partitions: BASE_VIEW_PARTITIONS,
+    stations: BASE_VIEW_STATIONS,
+    clutter: BASE_VIEW_CLUTTER,
+  };
+  const roomKeys = BASE_VIEW_STATIONS.map(s => s.room);
+  const routes = {}, poses = {};
+  for (const k of roomKeys) {
+    routes[k] = routeToStation(base, k);
+    poses[k] = workSpotFor(k, BASE_VIEW_STATIONS.find(s => s.room === k), BASE_VIEW_CLUTTER).pose;
+  }
+  return { ...base, roomKeys, routes, poses };
+})();
+
 export function BaseView({ g, paused, onRoomTap }) {
   const elapsed = useElapsedSeconds(!!paused);
   const [viewRef, view] = useElementSize();
@@ -122,21 +150,37 @@ export function BaseView({ g, paused, onRoomTap }) {
   const levels = buildingLevels(g);
   const palette = BASE_VIEW_SEASON_PALETTE[seasonOf(g.month)];
   const snow = !!palette.snow;
-  const { pathW, pathL, cornerR } = BASE_VIEW_LOOP;
 
   const roster = (g.roster || []).slice(0, 12);
   const simple = roster.length > SIMPLE_THRESHOLD;
+  // Wave F-3a: 選手ごとの「今なにをしているか」を時刻の純関数として解く
+  // （周回／コース⇔ラックの移動／徒歩での往復／持ち場での作業）。
   const riderRows = roster.map(r => {
-    const { w, l } = riderLoopPoint(r.id, elapsed, RIDER_SPEED, pathW, pathL, cornerR);
-    const wob = riderWander(r.id, 7, elapsed, 0.5) * 0.10;
-    const p = isoProject(w, l + wob, 0, PROJ);
+    const act = riderActivityAt(r, elapsed, ACTIVITY_CTX);
+    // 周回中だけ左右のゆらぎを加える（歩行中は経路上をまっすぐ進ませる）
+    const wob = act.pose === "ride" ? riderWander(r.id, 7, elapsed, 0.5) * 0.10 : 0;
+    const p = isoProject(act.w, act.l + wob, 0, PROJ);
     return {
-      kind: "rider", r, x: p.x, y: p.y, sortY: p.y,
-      flip: riderFacesLeft(r.id, elapsed, RIDER_SPEED, pathW, pathL, cornerR, PROJ),
+      kind: "rider", r, act, x: p.x, y: p.y, sortY: p.y,
+      indoors: isIndoors(act.w, act.l, BASE_VIEW_CLUBHOUSE),
+      flip: activityFacesLeft(r, elapsed, ACTIVITY_CTX, PROJ),
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
       color: (TYPES[r.type] && TYPES[r.type].color) || C.yellow,
+      phase: riderHash01(r.id, 91) * 4, // 歩調が全員で揃わないようずらす
     };
   });
+  // 屋内の人物は不透明な床・什器の後に描かないと埋もれるため、クラブハウスのatomicな
+  // 描画グループへ入れる（Wave E-2で実際に踏んだ罠）。屋外の人物は通常どおり奥行きソート。
+  const outdoorRiders = riderRows.filter(x => !x.indoors);
+  const indoorRiders = riderRows.filter(x => x.indoors);
+  // Wave F-3c: 雇っているスタッフは持ち場に常駐する（動かない人）。
+  const staffRows = BASE_VIEW_STAFF
+    .filter(s => (g.staff && g.staff[s.staffKey]) > 0)
+    .map(s => {
+      const p = isoProject(s.w, s.l, 0, PROJ);
+      return { ...s, x: p.x, y: p.y, sortY: p.y };
+    });
+  const indoorPeople = [...indoorRiders, ...staffRows].sort((a, b) => a.sortY - b.sortY);
   // クラブハウス（床+壁）と持ち場（什器）は1つの描画ユニットとしてまとめる。
   // 什器は必ず部屋の床の「上」に乗る関係にあるが、それぞれ独立にsortYで奥行きソートすると
   // 部屋自体のsortY（footprintの最前面＝部屋の外周のうち最もカメラに近い点）が、内側に
@@ -150,7 +194,7 @@ export function BaseView({ g, paused, onRoomTap }) {
   const groundsLv = g.equip.grounds || 0;
   const unlockedDecor = BASE_VIEW_GROUNDS_DECOR.filter(d => groundsLv >= d.minLevel);
   const propRows = propItems(PROJ, { ...BASE_VIEW_PROPS, groundsDecor: unlockedDecor }, palette).map(item => ({ kind: "prop", ...item }));
-  const drawOrder = [clubhouseRow, ...propRows, ...riderRows].sort((a, b) => a.sortY - b.sortY);
+  const drawOrder = [clubhouseRow, ...propRows, ...outdoorRiders].sort((a, b) => a.sortY - b.sortY);
   const landQuad = LAND_QUAD_WORLD.map(p => isoProject(p.w, p.l, 0, PROJ));
 
   return (
@@ -175,9 +219,20 @@ export function BaseView({ g, paused, onRoomTap }) {
                     {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} />)}
                     {BASE_VIEW_EMPTY_ROOMS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} />)}
                     {clutterItems(PROJ, BASE_VIEW_CLUTTER)}
+                    {/* 屋内の人物（選手＋常駐スタッフ）は必ず床・壁・什器より後に描く */}
+                    {indoorPeople.map(pn => (
+                      <Person key={pn.r ? `ir${pn.r.id}` : `st${pn.key}`} x={pn.x} y={pn.y}
+                        pose={pn.r ? pn.act.pose : "stand"} t={elapsed}
+                        color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />
+                    ))}
                   </g>
                 );
                 if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
+                // 自転車に乗っていない選手（ラック〜玄関の屋外を歩く）は人型で描く
+                if (item.act.pose !== "ride") {
+                  return <Person key={`r${item.r.id}`} x={item.x} y={item.y} pose={item.act.pose} t={elapsed}
+                    color={item.color} cap={item.cap} flip={item.flip} phase={item.phase} />;
+                }
                 // 左へ進むときは x=item.x の垂直線でスプライトを鏡像反転する
                 const sprite = <IsoRider x={item.x} y={item.y} color={item.color} cap={item.cap} isPlayer={false} isAce={false} surging={false} simple={simple} />;
                 return item.flip
