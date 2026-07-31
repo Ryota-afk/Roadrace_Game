@@ -86,7 +86,10 @@ export function row(width, ...segments) {
 // マスを差し込む（先に縁取りを全部描いてから、実際の色を上に重ねる）。手作業で縁取り文字を
 // 置く方式は「後から重ねる別パーツに縁取りが隠れて消える」バグ(Wave G-1で発見)の温床になる
 // ため、シルエットから機械的に導出する方式に統一した。
-export function pixelSprite(rows, legend, px, originCol, originRow, key, outlineColor = OUTLINE) {
+// autoOutline: シルエットから縁取りを自動生成するか。ドット絵側が既に輪郭ドットを
+// 持っている場合（参考画像から抽出したデータ等）は false にする——true のままだと
+// 輪郭が二重になり、細部が黒く潰れて「塊」に見えてしまう。
+export function pixelSprite(rows, legend, px, originCol, originRow, key, outlineColor = OUTLINE, autoOutline = true) {
   const h = rows.length;
   const filled = (r, c) => r >= 0 && r < h && rows[r] && c >= 0 && c < rows[r].length && rows[r][c] !== ".";
   const cells = [];
@@ -96,6 +99,7 @@ export function pixelSprite(rows, legend, px, originCol, originRow, key, outline
     for (let c = 0; c < rows[r].length; c++) {
       if (!filled(r, c)) continue;
       cells.push({ r, c, ch: rows[r][c] });
+      if (!autoOutline) continue;
       for (const [nr, nc] of [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]]) {
         if (!filled(nr, nc)) outlineSet.add(`${nr},${nc}`);
       }
