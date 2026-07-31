@@ -87,20 +87,19 @@ export const BASE_VIEW_EMPTY_ROOMS = [
   { key: "spare2", room: "spare2", w: 9.875, l: 3.85, kind: "empty", icon: "📋", accent: "#9aa0a6" },
 ];
 
-// Wave F-2 redo 追補（再改良版）：ユーザー指摘「部屋の間取り的に人が生活してる感がない。
-// ショールームみたいに感じる」への対応。1回目（浮遊アイコン方式）は「それっぽく見えない、
-// レイヤーもミスってる」と再度却下された（実機確認で、支える箱の無い小物がクラブハウス
-// 全体の見出しバッジ＝奥角w5,l4.5付近と重なって浮いて見えていた）。
-// 全項目を「箱＋影」の土台を持つcomponents/base/Clutter.jsxの実装に作り直し、什器・
-// バッジ位置（w5,l4.5）・出入り口の隙間(BASE_VIEW_PARTITIONS)のいずれとも十分離す
-// 座標へ選定し直した。roomは対応するBASE_VIEW_ROOMSのkey。
+// Wave F-2 redo 追補3：ユーザー指摘「そもそもの形状が単純な立方体・円+棒・長方形止まりで
+// デザインが足りない。浮いて見えるものもある」への対応。形状そのものを実物の特徴的な
+// シルエット（自転車の車輪＝タイヤ+リム+スポーク、椅子＝座面+背もたれ+4脚、ダンベル＝
+// バー+両端の円盤等）へcomponents/base/Clutter.jsxで作り直した。roomは対応する
+// BASE_VIEW_ROOMSのkey。座標は什器・バッジ位置（w5,l4.5）・出入り口の隙間
+// (BASE_VIEW_PARTITIONS)のいずれとも十分離してある（追補2で確立済みの検証項目を継続）。
 export const BASE_VIEW_CLUTTER = [
-  // トレーニング室：予備ウェイトを載せた棚、ボトル&タオルを載せたテーブル
-  { key: "training-weights", room: "training", kind: "weightRack", w: 5.6, l: -2.6 },
+  // トレーニング室：床置きのダンベル2個、ボトル&タオルを載せたテーブル
+  { key: "training-weights", room: "training", kind: "dumbbells", w: 5.6, l: -2.6 },
   { key: "training-water", room: "training", kind: "waterTable", w: 7.6, l: -0.6 },
-  // メカニック室：予備ホイールを立てかけた置き台、パーツ用クレート
-  { key: "mechanic-wheels", room: "mechanic", kind: "wheelRack", w: 5.6, l: 1.0 },
-  { key: "mechanic-crate", room: "mechanic", kind: "partsCrate", w: 5.7, l: 2.6 },
+  // メカニック室：壁に立てかけた予備の車輪2本、工具箱
+  { key: "mechanic-wheels", room: "mechanic", kind: "wheelsLeaning", w: 5.6, l: 1.0 },
+  { key: "mechanic-crate", room: "mechanic", kind: "toolbox", w: 5.7, l: 2.6 },
   // メディカル室：薬品棚、待合の椅子
   { key: "medical-cabinet", room: "medical", kind: "cabinet", w: 13.5, l: -0.6 },
   { key: "medical-chair", room: "medical", kind: "chair", w: 10.9, l: -2.6 },
