@@ -1106,5 +1106,20 @@ Opus診断（`components/base/Person.jsx`・`components/sprites/IsoRider.jsx`を
   各コマで前後の脚が入れ替わっていること・表示が破綻していないことを確認した。
   **検証**：本番ビルド成功。プレビューでコマ送りを目視確認。
 
-**DEVLOG.mdのサイズについて**：本エントリ追加時点で約120KB。CLAUDE.md §4の目安
+- **BIKE_BのSE系フレームが左右逆だったバグの修正（完了）**：切り替え速度を上げた直後、
+  ユーザーから「SE Bについて、左右逆です」と指摘。目視だけでなく、各フレームの頭部
+  (S/s)の中心列オフセットを数値化して検証：BIKE(A)はnormal/dancing/sprintの全SEで
+  一貫して負値(＝左寄り)なのに対し、BIKE_Bはnormal_SE=+1.9・dancing_SE=+3.4・
+  sprint_SE=+6.3と全SEで符号が逆転(＝右寄り)していた。NE側はA/Bで符号が一致して
+  いた(例：normal_NE共に右寄り)ため、BIKE_Bの抽出元参考画像でSEの3ポーズだけが
+  左右反転して描かれていた（またはコマ切り出し時に取り違えた）ことが原因と特定。
+  `PixelBike`の反転式(`mirror = dir==="SE" ? !flip : !!flip`)自体は正しいままにし、
+  データ側（`BIKE_B.normal_SE`/`dancing_SE`/`sprint_SE`の3配列、NEは対象外）を
+  各行文字列ごと水平反転して向きをBIKE(A)側に揃えた（scratchpadの
+  `fix_seb_mirror.mjs`で機械的に実施、行数・幅は変更なし）。
+  **検証**：修正後は3ポーズ全てでBIKE(A)とBIKE_Bの頭部オフセット符号・絶対値が
+  ほぼ一致(例：normal_SE -3.1 vs -2.9)することを数値確認。SE/NE×flip×A/Bの
+  8パターンを並べたプレビューでA/B間の向きが揃ったことを目視確認。本番ビルド成功。
+
+**DEVLOG.mdのサイズについて**：本エントリ追加時点で約123KB。CLAUDE.md §4の目安
 「十数万バイト」に達しているため、次にユーザーへ報告する際にスリム化を提案すること。
