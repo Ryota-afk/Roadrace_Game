@@ -27,15 +27,37 @@ export const BASE_VIEW_CLUBHOUSE = {
 // domain/season/baseViewLayout.jsのbuildingLevels(g)が返すキーと対応する。
 // w/lはBASE_VIEW_CLUBHOUSEのfootprint（w:5〜14, l:-3.5〜4.5）内、壁際から
 // 十分離した位置に配置。
+// Wave F-2：col/rowはBASE_VIEW_ROOM_GRID（3列×2行）上のセル座標、floorTintはそのセルの
+// 床色。domain/season/baseViewLayout.jsのclubhouseRoomGrid(BASE_VIEW_CLUBHOUSE,3,2)が
+// 返すセル中心と一致するよう手で計算して直書きしてある（データ層はdomain層をimportしない
+// 方針のため。整合性はscratchpadのNode単体テストでclubhouseRoomGridの出力と突き合わせて
+// 検算している）。
 export const BASE_VIEW_STATIONS = [
   { key: "training", levelKey: "training", levelMax: 5, label: "トレーニング", icon: "💪",
-    w: 7.0, l: -1.8, kind: "roller", accent: "#2f8f5c" },
+    w: 7.0, l: -1.8, kind: "roller", accent: "#2f8f5c", col: 0, row: 0, floorTint: "#dcefd5" },
   { key: "mechanic", levelKey: "mechanic", levelMax: 5, label: "メカニック", icon: "🔧",
-    w: 7.0, l: 2.8, kind: "workbench", accent: "#c9a23c" },
+    w: 7.0, l: 2.8, kind: "workbench", accent: "#c9a23c", col: 0, row: 1, floorTint: "#f2e7c6" },
   { key: "medical", levelKey: "medical", levelMax: 3, label: "メディカル", icon: "⚕",
-    w: 12.0, l: -1.8, kind: "medical", accent: "#4f8fe8" },
+    w: 12.0, l: -1.8, kind: "medical", accent: "#4f8fe8", col: 2, row: 0, floorTint: "#dbe8f8" },
   { key: "scout", levelKey: "scout", levelMax: 3, label: "スカウト", icon: "🔍",
-    w: 12.0, l: 2.8, kind: "desk", accent: "#c98bf0" },
+    w: 12.0, l: 2.8, kind: "desk", accent: "#c98bf0", col: 2, row: 1, floorTint: "#ecdff8" },
+];
+
+// Wave F-2：クラブハウスの床を3列×2行=6部屋に分割する間取り。列(0〜2)はw軸、行(0〜1)は
+// l軸を機械的に三等分・二等分するだけ（domain/season/baseViewLayout.jsの
+// clubhouseRoomGrid/clubhousePartitions参照）。既存4持ち場は列0(w5〜8)と列2(w11〜14)に
+// 自然に収まっており、中央の列1(w8〜11)の2部屋がそのまま「空き部屋」になる（座標は
+// 一切動かしていない）。partitionHeightは外壁(wallHeight:40)より低い間仕切り壁の高さ
+// （上から中が見渡せる普通の間取りらしさを出すため）。
+export const BASE_VIEW_ROOM_GRID = { cols: 3, rows: 2, partitionHeight: 16 };
+
+// 「機能のない空き部屋」（後々の機能追加用に確保。ユーザー要望：バグに見えないよう最小限の
+// 仮置きの意匠を入れる）。中央列(col:1)の2部屋。既存の玄関（Room.jsxのdoor、クラブハウス
+// footprintの手前辺の中央付近）はちょうどこの列の手前(row:0)に開いているため、入って正面が
+// 空き部屋という自然な導線になる。
+export const BASE_VIEW_EMPTY_ROOMS = [
+  { key: "spare1", col: 1, row: 0, w: 9.5, l: -1.5, kind: "empty", icon: "🚧", accent: "#9aa0a6", floorTint: "#e6e3da" },
+  { key: "spare2", col: 1, row: 1, w: 9.5, l: 2.5, kind: "empty", icon: "📋", accent: "#9aa0a6", floorTint: "#e6e3da" },
 ];
 
 // 練習コース（world原点中心）。クラブハウス（w:5〜14）と重ならない範囲に収めてある。

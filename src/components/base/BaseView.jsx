@@ -18,7 +18,7 @@ import { C, FONT_M } from "../../data/theme.js";
 import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
-  BASE_VIEW_GROUNDS_DECOR,
+  BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_ROOM_GRID, BASE_VIEW_EMPTY_ROOMS,
 } from "../../data/baseViewBuildings.js";
 import {
   isoProject, riderLoopPoint, riderFacesLeft, buildingLevels, seasonOf,
@@ -102,6 +102,10 @@ function useElementSize() {
 // タップ当たり判定用の四角形。持ち場（小さい・優先）→部屋全体の床（大きい・フォールバック）の順。
 const STATION_QUADS = BASE_VIEW_STATIONS.map(s => ({ key: s.key, quad: stationQuad(s, STATION_HIT_SIZE, BASE_VIEW_PROJ) }));
 const CLUBHOUSE_QUAD = roomFloorQuad(BASE_VIEW_CLUBHOUSE, BASE_VIEW_PROJ);
+// Wave F-2: 部屋(セル)ごとの床色をRoom.jsxへ渡すためのcol/row→floorTintの一覧。
+// 空き部屋はSTATION_QUADSに含めない＝タップ判定は従来通り床全体(clubhouse)へフォール
+// バックする（機能が無い部屋なので専用の遷移先を持たない）。
+const ROOM_THEME = [...BASE_VIEW_STATIONS, ...BASE_VIEW_EMPTY_ROOMS];
 
 export function BaseView({ g, paused, onRoomTap }) {
   const elapsed = useElapsedSeconds(!!paused);
@@ -166,8 +170,10 @@ export function BaseView({ g, paused, onRoomTap }) {
               {drawOrder.map((item, i) => {
                 if (item.kind === "clubhouse") return (
                   <g key="clubhouse">
-                    <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"} />
+                    <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"}
+                      grid={BASE_VIEW_ROOM_GRID} rooms={ROOM_THEME} />
                     {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} />)}
+                    {BASE_VIEW_EMPTY_ROOMS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} />)}
                   </g>
                 );
                 if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;

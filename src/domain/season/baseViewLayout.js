@@ -78,6 +78,44 @@ export function pointInQuad(p, quad) {
   return true;
 }
 
+// クラブハウスの床をcols×rows個の均等なセルへ分割する（Wave F-2：部屋割り）。列はw軸・
+// 行はl軸を機械的に等分するだけの純粋計算。data/baseViewBuildings.jsのBASE_VIEW_STATIONS・
+// BASE_VIEW_EMPTY_ROOMSが持つw/l/col/rowは、この関数が返すセル中心と一致するよう直書き
+// してある（データ層はdomain層をimportしない方針のため関数を直接は使えない。整合性は
+// Node単体テストで機械的に検算する）。
+export function clubhouseRoomGrid(b, cols, rows) {
+  const w0 = b.w - b.hw, l0 = b.l - b.hl;
+  const cw = (2 * b.hw) / cols, cl = (2 * b.hl) / rows;
+  const cells = [];
+  for (let col = 0; col < cols; col++) {
+    for (let row = 0; row < rows; row++) {
+      cells.push({ col, row, w: w0 + cw * (col + 0.5), l: l0 + cl * (row + 0.5), hw: cw / 2, hl: cl / 2 });
+    }
+  }
+  return cells;
+}
+
+// 部屋を隔てる間仕切り壁の線分（[{w1,l1,w2,l2,axis}, ...]）。列の境界(cols-1本・l方向に
+// 伸びる縦線)と行の境界(rows-1本・w方向に伸びる横線)を機械的に求める。外壁
+// （backFacePairが選ぶ2面＝w=w-hwの辺とl=l+hlの辺）とは異なる位置（内部の境界線のみ）
+// になるため重ならない。
+export function clubhousePartitions(b, cols, rows) {
+  const w0 = b.w - b.hw, w1 = b.w + b.hw, l0 = b.l - b.hl, l1 = b.l + b.hl;
+  const cw = (w1 - w0) / cols, cl = (l1 - l0) / rows;
+  const lines = [];
+  for (let k = 1; k < cols; k++) lines.push({ w1: w0 + cw * k, l1: l0, w2: w0 + cw * k, l2: l1, axis: "w" });
+  for (let k = 1; k < rows; k++) lines.push({ w1: w0, l1: l0 + cl * k, w2: w1, l2: l0 + cl * k, axis: "l" });
+  return lines;
+}
+
+// 間仕切り壁1枚の描画用4点（下端2点・上端2点）。footprintの4頂点に縛られる外壁
+// （isoBoxFaces）とは異なり、任意の線分＋高さから壁面を作る汎用ヘルパー。
+export function wallPanel(w1, l1, w2, l2, height, proj) {
+  const botA = isoProject(w1, l1, 0, proj), botB = isoProject(w2, l2, 0, proj);
+  const topA = { x: botA.x, y: botA.y - height }, topB = { x: botB.x, y: botB.y - height };
+  return { botA, botB, topA, topB };
+}
+
 // 立方体（world座標のダイヤ形footprint＋高さ）の可視2面＋天面の頂点をまとめて返す共通関数。
 // 建物・チームカー・ベンチ・自転車ラックなど「箱状のもの」は全てこれを使って描くことで、
 // 必ずアイソメ格子に乗る（Wave Dでは小物をスクリーン座標の矩形で描いており、斜めの角度が

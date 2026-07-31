@@ -78,7 +78,21 @@ function DeskFurniture({ w, l, proj }) {
   );
 }
 
-const FURNITURE = { roller: RollerFurniture, workbench: WorkbenchFurniture, medical: MedicalFurniture, desk: DeskFurniture };
+// 空き部屋の仮置き（Wave F-2）：段ボール箱2つ＋養生テープ風の対角線。「バグで空っぽ」では
+// なく「後々の機能追加用に確保済み」だとひと目で分かるようにする最小限の意匠。
+function EmptyRoomFurniture({ w, l, proj }) {
+  const p = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  return (
+    <g opacity="0.85">
+      {shadow(w, l, 0.42, 0.34, proj)}
+      {tableBox(w - 0.16, l + 0.1, 0.22, 0.2, 6, proj, "#8a6a45", "#c9a876")}
+      {tableBox(w + 0.2, l - 0.12, 0.16, 0.16, 4, proj, "#7a5c3c", "#b89060")}
+      <line x1={p.x - 10} y1={p.y - 2} x2={p.x + 10} y2={p.y - 10} stroke="#c9a23c" strokeWidth="1.4" strokeDasharray="2,2" />
+    </g>
+  );
+}
+
+const FURNITURE = { roller: RollerFurniture, workbench: WorkbenchFurniture, medical: MedicalFurniture, desk: DeskFurniture, empty: EmptyRoomFurniture };
 
 export function Station({ s, proj, selected }) {
   const Furniture = FURNITURE[s.kind] || DeskFurniture;
