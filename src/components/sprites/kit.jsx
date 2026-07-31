@@ -66,3 +66,54 @@ export function tube(X, Y, a1, b1, a2, b2, wd, u, color, key) {
     </g>
   );
 }
+
+// 行×列の指定で1マスだけ塗る（下のrow()と組み合わせてグリッドの1行を組み立てる）。
+export function row(width, ...segments) {
+  const chars = Array(width).fill(".");
+  for (const [start, s] of segments) {
+    for (let i = 0; i < s.length; i++) chars[start + i] = s[i];
+  }
+  return chars.join("");
+}
+
+// ドット絵グリッドの描画（Wave G-1改：ベクター造形→本物のドット絵への切り替えで新設）。
+// rows: 1文字=1マスの文字列配列（"."=透明）。legend: 文字→色のマップ（呼び出し時に解決した
+// 実際の色を渡す。ジャージ色・個人色など動的な色もここで解決済みのものを渡す）。
+// px: 1マスの一辺の長さ（ワールド単位）。originCol/originRow: 全体をどこにアンカーするか
+// （例：足元中央を(0,0)に合わせたい場合は originCol=幅/2, originRow=高さ を渡す）。
+//
+// 縁取りは手で置かず自動生成する：塗られたマスの上下左右が透明なら、そこへ縁取り色の
+// マスを差し込む（先に縁取りを全部描いてから、実際の色を上に重ねる）。手作業で縁取り文字を
+// 置く方式は「後から重ねる別パーツに縁取りが隠れて消える」バグ(Wave G-1で発見)の温床になる
+// ため、シルエットから機械的に導出する方式に統一した。
+export function pixelSprite(rows, legend, px, originCol, originRow, key, outlineColor = OUTLINE) {
+  const h = rows.length;
+  const filled = (r, c) => r >= 0 && r < h && rows[r] && c >= 0 && c < rows[r].length && rows[r][c] !== ".";
+  const cells = [];
+  const outlineSet = new Set();
+  for (let r = 0; r < h; r++) {
+    if (!rows[r]) continue;
+    for (let c = 0; c < rows[r].length; c++) {
+      if (!filled(r, c)) continue;
+      cells.push({ r, c, ch: rows[r][c] });
+      for (const [nr, nc] of [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]]) {
+        if (!filled(nr, nc)) outlineSet.add(`${nr},${nc}`);
+      }
+    }
+  }
+  const ox = (c) => +((c - originCol) * px).toFixed(2);
+  const oy = (r) => +((r - originRow) * px).toFixed(2);
+  const p = +px.toFixed(2);
+  return (
+    <g key={key}>
+      {[...outlineSet].map((k) => {
+        const [r, c] = k.split(",").map(Number);
+        return <rect key={`o${k}`} x={ox(c)} y={oy(r)} width={p} height={p} fill={outlineColor} shapeRendering="crispEdges" />;
+      })}
+      {cells.map(({ r, c, ch }, i) => {
+        const fill = legend[ch];
+        return fill ? <rect key={`c${i}`} x={ox(c)} y={oy(r)} width={p} height={p} fill={fill} shapeRendering="crispEdges" /> : null;
+      })}
+    </g>
+  );
+}
