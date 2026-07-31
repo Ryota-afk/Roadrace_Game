@@ -20,7 +20,7 @@ const STAND = [
   ".....KKKKKKK....",
   "....KcCCCGGCK...",
   "...KcCCCCCCCcK..",
-  "..KcCCCcGGGGGGK.",
+  "..KcCCCCGGGGGGK.",
   "..KcCCKKKKKKKKKK",
   "..KjHHsSSSSSSK..",
   "..KHHHSSeSSeSK..",
@@ -41,7 +41,7 @@ const STAND = [
   "KsSSKjJJJjJJKsK.",
   "KsSSKBBBBBBBKsSK",
   "KsSSSKBBBBBBKsSK",
-  "KsSSKKBBBBKBKsSK",
+  "KsSSKKBBBBKKKSSK",
   ".KKKKBBBKKBBKKK.",
   "....KBBBKBBBK...",
   "....KBBBKBBBK...",
@@ -54,9 +54,143 @@ const STAND = [
   "....KDDDDDKDDDK.",
   "....KKKKKKKKKKK.",
 ];
+const WALK_A = [
+  ".......KKKKKKK......",
+  "......KcCCCGGCK.....",
+  ".....KcCCCCCCCcK....",
+  "....KcCCCCGGGGGGK...",
+  "....KcCCKKKKKKKKKK..",
+  "....KjHHsSSSSSSK....",
+  "....KHHHSSeSSeSK....",
+  "....KsSHSSeSSeSK....",
+  "....KsSsSSSSSSSK....",
+  ".....KHsSSSSSSSK....",
+  "......KsSSSssSSK....",
+  ".......KKSSSSSK.....",
+  "......KKJKKKKK......",
+  "....KKJJJJjjJK......",
+  "...KjJJJJJJjJJK.....",
+  "..KjJJJJJJJjJJJK....",
+  ".KsSJJKjJJJjJKJK....",
+  ".KSSSKKjJJJjJKJK....",
+  "KsSSK.KjJJJjJKsK....",
+  "KSSK.KKjJJJjJKssK...",
+  "KSSK.KKjJJJjJKsssKK.",
+  "KSSK.KjjjJJjJKKsssSK",
+  "KSSK.KBBBBBBKK.KssSK",
+  "KSSK.KBBBBBBKK..KKK.",
+  ".KK..KKBBBBBKK......",
+  "......KKBBBBBK......",
+  ".....KBBKBBBBBK.....",
+  ".....KBBBKBBBSK.....",
+  "....KssKBKKsSSK.....",
+  "...KssssK..KSSSK....",
+  ".KKssssK...KsSSK....",
+  "KDDssKK.....KSSSK...",
+  "KDDKK.......KsSSKKKK",
+  "KDDK.........KDDDDDK",
+  ".KDDK........KDDDKK.",
+  "..KKK........KKKK...",
+];
+const WALK_B = [
+  ".......KKKKKKK......",
+  "......KcCCCGGCK.....",
+  ".....KcCCCCCCCcK....",
+  "....KcCCCCGGGGGGK...",
+  "....KcCCKKKKKKKKKK..",
+  "....KjHHsSSSSSSK....",
+  "....KHHHSSeSSeSK....",
+  "....KsSHSSeSSeSK....",
+  "....KsSsSSSSSSSK....",
+  ".....KHsSSSSSSSK....",
+  "......KsSSSssSSK....",
+  ".......KKSSSSSK.....",
+  "......KKJKKKKK......",
+  "....KKJJJJjjJK......",
+  "...KjJJJJJJjJJK.....",
+  "..KJJJJJJJJjJJJK....",
+  ".KsSJJKjJJJjJKJK....",
+  ".KSSSKKjJJJjJKJK....",
+  "KsSSK.KjJJJjJKsK....",
+  "KSSK..KjJJJjJKssK...",
+  "KSSK..KjJJJjJKsssKK.",
+  "KSSK..KjjJJjJKKsssSK",
+  "KSSK..KBBBBBBK.KssSK",
+  ".KK...KBBBBBKK..KKK.",
+  "......KBBBBBKK......",
+  "......KKBBBBBK......",
+  ".....KBBKBBBBBK.....",
+  ".....KBBBKBBBSK.....",
+  "....KssBBKKsSSK.....",
+  "...KssssK..KSSSK....",
+  ".KKssssK...KsSSK....",
+  "KDDssKK.....KSSK....",
+  "KDDKK.......KsSSKKK.",
+  ".KDK.........KDDDDDK",
+  ".KDDK........KDDDKK.",
+  "..KKK........KKKK...",
+];
 
-export const PERSON_W = 16, PERSON_H = 36;
+// 座り。参考画像は椅子ごと描かれていたが、ゲーム内には椅子の什器(Fixtures.jsx)が別に
+// あるため、グレーの椅子と「椅子の輪郭にしか触れていない黒」をアルゴリズムで除去して
+// 人物だけを取り出した（scratchpadのstrip_chair）。除去後に余白を詰めてあるので、
+// 他コマとは幅・高さが異なる（38行ではなく下記の行数）。
+const SIT = [
+  "...KKKKKKK...........",
+  "..KcCCCGGCK..........",
+  ".KcCCCCCCCCK.........",
+  "KcCCCCGGGGGGK........",
+  "KcCCKKKKKKKKKK.......",
+  "KjHHsSSSSSSK.........",
+  "KHHHSSeSSeSK.........",
+  "KsSHSSeSSeSK.........",
+  "KsSsSSSSSSSK.........",
+  ".KKsSSSSSSSK.........",
+  "..KKsSSssSSK.........",
+  "...KKSSSSSK..........",
+  "..KKJKKKKK...........",
+  ".KjJJJJjjJK..........",
+  "KjJJJJJJjJJK.........",
+  "KjJJJJJJjJJJK........",
+  "KjJJKJJJjJJJK........",
+  "KjJJKKJJjJKJK........",
+  ".KjSSKJJjJK..........",
+  ".KsSSKJJjJKSK........",
+  "..KSSKJJjJKSKK.......",
+  "..KSSSKKjJKSSKK......",
+  ".KjKsSSSKKKsSSKK.....",
+  "..KKKssSSSSKKSSSK....",
+  ".KBBBKKKsSSKKKKKK....",
+  ".KBBBBBBKKKKKKSSK....",
+  ".KBBBBBBBBSSSKsSSK...",
+  "..KKBBBBBSSSSSKsSK...",
+  "....KKKKKKsSSSKsSK...",
+  "..........KsSSKsSK...",
+  "..........KsSSKsSK...",
+  "..........KsSSKsSK...",
+  "..........KsSSKsSK...",
+  "..........KsSSKDDDK..",
+  "..........KDDDKDDDDK.",
+  "..........KDDDDKKDDDK",
+  "..........KDDDDDKKKKK",
+  "..........KKKKKKK....",
+];
+
+// コマごとに幅が違う（歩行は脚を開くぶん横に広い）。参考画像のbboxはどのコマも
+// 「帽子の中心＝bboxの中心」に揃っていたので、立ち/歩行のアンカーは各コマの幅/2でよい。
+// 高さは立ち/歩行とも36マスで揃っており、originRow=36（足元）で接地が揃う。
+export const PERSON_H = 36;
 export const PERSON_PX = 0.49; // 1マスの実寸（ワールド単位）。36マス×0.49≈17.6＝旧ベクター版の全高相当
+
+// 座りは椅子を抜いたぶん幅が非対称なので、頭の中心を他コマと揃えるための専用アンカー。
+// SIT行0の帽子は cols 3-9（中心6）。立ちコマの帽子中心は幅16の中心8なので、
+// 「頭が同じ位置に来る」ようにoriginColを6とする。
+const SIT_ORIGIN_COL = 6;
+
+// 歩行は WALK_A → STAND → WALK_B → STAND の4コマ巡回にする。
+// 参考画像の歩行2コマは左右の脚が入れ替わった対の関係で、間に立ちポーズを挟むと
+// 「片脚を前に出す→揃う→反対の脚を前に出す」という自然な歩行サイクルになる。
+const WALK_CYCLE = [WALK_A, STAND, WALK_B, STAND];
 
 export function personLegend(color, cap) {
   return {
@@ -71,10 +205,16 @@ export function personLegend(color, cap) {
 }
 
 // x,y: 足元中央のワールド座標。color=ジャージ色(動的)、cap=帽子/個人識別色(動的)。
+// pose: "walk" | "stand" | "sit"
+// t: 経過秒。paused中はtが進まないので自然に静止する。phase: 個人ごとの位相ずらし。
 // flip: 進行方向が左向きのとき true（鏡像反転）。
-export function PixelPerson({ x, y, color, cap, flip }) {
-  const inner = pixelSprite(STAND, personLegend(color, cap), PERSON_PX,
-    PERSON_W / 2, PERSON_H, "stand", "#000000", false);
+export function PixelPerson({ x, y, color, cap, flip, pose = "stand", t = 0, phase = 0 }) {
+  const frame = pose === "sit" ? SIT
+    : pose === "walk" ? WALK_CYCLE[Math.floor(((t + phase) * 5.4) % WALK_CYCLE.length)] // 1歩約0.74秒＝4コマ
+    : STAND;
+  const originCol = pose === "sit" ? SIT_ORIGIN_COL : frame[0].length / 2;
+  const inner = pixelSprite(frame, personLegend(color, cap), PERSON_PX,
+    originCol, frame.length, "f", "#000000", false);
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
       <ellipse cx="0" cy="0" rx="3.6" ry="1.5" fill="#000" opacity="0.2" />
