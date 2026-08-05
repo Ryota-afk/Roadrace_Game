@@ -213,7 +213,7 @@ export function BaseView({ g, paused, onRoomTap }) {
             <g transform={camera.transform}>
               <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill={palette.grass} stroke={palette.plazaEdge} strokeWidth="1.5" opacity="0.9" />
               <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
-              <Track proj={PROJ} loop={BASE_VIEW_LOOP} />
+              <Track proj={PROJ} loop={BASE_VIEW_LOOP} rack={BASE_VIEW_PROPS.bikeRack} />
               {drawOrder.map((item, i) => {
                 if (item.kind === "clubhouse") return (
                   <g key="clubhouse">

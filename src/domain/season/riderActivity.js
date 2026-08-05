@@ -12,7 +12,7 @@
 // 歩行ルートは**壁データ(BASE_VIEW_PARTITIONS)の「壁が無い区間」＝扉から機械的に導出**する。
 // 間仕切りを動かせばルートも自動で追従し、壁を通り抜ける経路が原理的に発生しない。
 import { riderHash01, riderWander } from "../../sim/race.js";
-import { isoProject, riderLoopPoint, roundedLoopPoint, inWorldRect } from "./baseViewLayout.js";
+import { isoProject, riderLoopPoint, roundedLoopPoint, nearestLoopT, inWorldRect } from "./baseViewLayout.js";
 
 // 1サイクルの構成（秒）。周回に最も長く時間を割り当てることで、実行時のカウンタを持たずに
 // 「常に一定割合だけが屋内にいる」状態が自動的に生まれる（純関数のまま人数バランスが取れる）。
@@ -120,21 +120,6 @@ export function destinationFor(riderId, fatigue, cycleIndex, roomKeys) {
 }
 
 const lerpPt = (a, b, u) => ({ w: a.w + (b.w - a.w) * u, l: a.l + (b.l - a.l) * u });
-
-// ラックに最も近い周回路上の位置(t∈[0,1))を数値探索で求める。ラックは周回路の外側に
-// あるため、周回路上の任意の地点から直線で向かうと芝生を斜めに横切ってしまう
-// （実機で発覚したバグ）。一旦この最寄り点まで周回路沿いに進み、そこから短い距離だけ
-// ラックへ出入りするようにして、コースを外れる区間を最小化する。
-function nearestLoopT(pathW, pathL, cornerR, target) {
-  let best = 0, bestD = Infinity;
-  for (let i = 0; i < 200; i++) {
-    const t = i / 200;
-    const p = roundedLoopPoint(t, pathW, pathL, cornerR);
-    const d = (p.w - target.w) ** 2 + (p.l - target.l) ** 2;
-    if (d < bestD) { bestD = d; best = t; }
-  }
-  return best;
-}
 
 // 周回路パラメータ(t)を、mod 1で最短経路になる向きへ補間する（周回路沿いの移動に使う）。
 function lerpLoopT(ta, tb, u) {

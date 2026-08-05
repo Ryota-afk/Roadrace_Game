@@ -202,6 +202,23 @@ export function roundedLoopPoint(t, pathW, pathL, cornerR = 0) {
   return last.fn(1);
 }
 
+// 周回路上で指定した地点(target: {w,l})に最も近い位置(t∈[0,1))を数値探索で求める。
+// ラックは周回路の外側にあるため、周回路上の任意の地点から直線で向かうと芝生を斜めに
+// 横切ってしまう（実機で発覚したバグ）。riderActivity.jsのapproach/depart（一旦この
+// 最寄り点まで周回路沿いに進む）と、Track.jsxのスタート/フィニッシュ帯（ラック最寄り点に
+// 固定する）の両方から使う純粋なトラック形状の計算なので、riderActivity.js側ではなく
+// こちら（コース形状を扱う層）に置く。
+export function nearestLoopT(pathW, pathL, cornerR, target) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < 200; i++) {
+    const t = i / 200;
+    const p = roundedLoopPoint(t, pathW, pathL, cornerR);
+    const d = (p.w - target.w) ** 2 + (p.l - target.l) ** 2;
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best;
+}
+
 // 選手ごとに位相をずらした周回位置。riderHash01(id,41)で初期位相(0〜1)を決定論的に割り振り、
 // 経過秒数tSec×speedだけ進める。同じ選手構成なら常に同じ隊列間隔になる。
 export function riderLoopPoint(riderId, tSec, speed, pathW, pathL, cornerR = 0) {
