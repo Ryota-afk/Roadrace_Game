@@ -2,8 +2,12 @@
 // キー(section.key)はhub.jsxの各セクション関数（renderRidersSection等）と1:1で対応する
 // （Step13第1弾で作った6関数＋Step13第4弾で追加した"base"/"save"/"titleReturn"の3クイック
 // アクション）。"save"/"titleReturn"はhub.jsx側でフルスクリーン遷移ではなく即時アクションとして
-// 特別扱いされる（詳細はhub.jsxのhandleSelectSection参照）。
+// 特別扱いされる（詳細はhub.jsxのhandleSelectSection参照）。"base"はWave G-1改の続きで
+// 大ジャンル直下のリーフ項目へ格上げされ、その他(misc)からは削除した（下記参照）。
 export const SEASON_MENU_CATEGORIES = [
+  // sectionsを持たない大ジャンルは「小ジャンルへドリルダウンせず即座に選択される」リーフ項目
+  // （MenuShellが分岐）。ホームに戻るはワンタップで戻れることが重要なため先頭・リーフ化した。
+  { key: "base", icon: "🏠", label: "ホームに戻る" },
   { key: "riders", icon: "🚴", label: "選手", sections: [
     { key: "riders", label: "選手一覧・練習指定" },
   ] },
@@ -20,7 +24,6 @@ export const SEASON_MENU_CATEGORIES = [
     { key: "records", label: "通算成績・殿堂" },
   ] },
   { key: "misc", icon: "⚙️", label: "その他", sections: [
-    { key: "base", label: "🏠 拠点に戻る" },
     { key: "help", label: "ヘルプ" },
     { key: "save", label: "セーブ" },
     { key: "titleReturn", label: "タイトルに戻る" },

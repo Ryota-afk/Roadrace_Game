@@ -33,7 +33,7 @@ export function MenuShell({ categories, menuState, openMenu, closeMenu, selectCa
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
               {!activeCat && categories.map(c => (
-                <button key={c.key} onClick={() => selectCategory(c.key)}
+                <button key={c.key} onClick={() => c.sections ? selectCategory(c.key) : selectSection(c.key)}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
                     background: "none", border: "none", borderRadius: 8, padding: "12px 10px", marginBottom: 2,
