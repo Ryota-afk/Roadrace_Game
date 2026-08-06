@@ -82,11 +82,12 @@ export function renderMyLifeHubScreen(ctx) {
               const open = !!ml.uiAbilityDetailOpen;
               return (
                 <>
-                  <div style={{ display: "flex", justifyContent: "space-around", alignItems: "flex-start", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", justifyContent: "space-around", alignItems: "stretch", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
                     <div style={{ textAlign: "center" }}>
                       <div style={{ fontSize: 9.5, color: C.green, fontWeight: 700, marginBottom: 2 }}>⭐ 能力<span style={{ color: C.sub, fontWeight: 400 }}>（外周={Math.round(cap)}）</span></div>
                       <AbilityRadarChart r={r} cap={cap} size={148} color={C.green} />
                     </div>
+                    <div style={{ width: 1, background: C.line, margin: "12px 2px" }} />
                     <div style={{ textAlign: "center" }}>
                       <div style={{ fontSize: 9.5, color: C.blue, fontWeight: 700, marginBottom: 2 }}>🧬 素質<span style={{ color: C.sub, fontWeight: 400 }}>（生涯不変）</span></div>
                       <RiderRadarChart r={r} size={148} color={C.blue} />

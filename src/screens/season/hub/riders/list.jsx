@@ -2,6 +2,7 @@
 // 中身は一切変更していない（byte-for-byte照合済み）。
 import React from "react";
 import { AbilityGrid, CondFc, DisciplineGrid, FatigueBar, PersonaLine, SubStatLine, TraitLine } from "../../../../components/panels.jsx";
+import { AbilityRadarChart, RiderRadarChart } from "../../../../components/RadarChart.jsx";
 import { Btn } from "../../../../components/ui.jsx";
 import { overall } from "../../../../core/core.js";
 import { AB_KEYS, AB_LABEL, COND_ARROW, COND_COLOR, GROWTH, POW, TYPES } from "../../../../data/abilities.js";
@@ -13,7 +14,7 @@ import { PARTS, PART_SLOTS } from "../../../../sim/race.js";
 import { riderNickname } from "../../../../state/state.js";
 
 export function renderRidersListSection(ctx) {
-  const { askConfirm, availParts, expandedRiderId, g, growthCap, openRename, releaseRider, rosterMax, setCaptain, setExpandedRiderId, setFocus, setG, setPart, toggleFavorite, useSupp, useTune } = ctx;
+  const { askConfirm, availParts, expandedRiderId, g, growthCap, openRename, radarRiderId, releaseRider, rosterMax, setCaptain, setExpandedRiderId, setFocus, setG, setPart, setRadarRiderId, toggleFavorite, useSupp, useTune } = ctx;
   return (
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontSize: 12, color: C.sub }}>
@@ -67,6 +68,23 @@ export function renderRidersListSection(ctx) {
                 <SubStatLine r={r} />
                 <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>種目別適性</div>
                 <DisciplineGrid r={r} />
+                <button onClick={() => setRadarRiderId(radarRiderId === r.id ? null : r.id)}
+                  style={{ width: "100%", marginTop: 8, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, fontSize: 11, padding: "5px 8px", cursor: "pointer" }}>
+                  {radarRiderId === r.id ? "▲ レーダーを閉じる" : "▼ レーダーで見る（能力・素質）"}
+                </button>
+                {radarRiderId === r.id && (
+                  <div style={{ display: "flex", justifyContent: "space-around", alignItems: "stretch", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 9.5, color: C.green, fontWeight: 700, marginBottom: 2 }}>⭐ 能力<span style={{ color: C.sub, fontWeight: 400 }}>（外周={growthCap}）</span></div>
+                      <AbilityRadarChart r={r} cap={growthCap} size={140} color={C.green} />
+                    </div>
+                    <div style={{ width: 1, background: C.line, margin: "10px 2px" }} />
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 9.5, color: C.blue, fontWeight: 700, marginBottom: 2 }}>🧬 素質<span style={{ color: C.sub, fontWeight: 400 }}>（生涯不変）</span></div>
+                      <RiderRadarChart r={r} size={140} color={C.blue} />
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ fontSize: 11, color: C.sub }}>練習:</span>
                   <select value={r.focus} onChange={e => setFocus(r.id, e.target.value)}
