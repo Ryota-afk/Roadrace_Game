@@ -36,9 +36,10 @@ export function SubStatLine({ r }) {
       {item("加速", r.accel ?? 50)}
       <span style={{ fontSize: 10.5, color: C.sub }}>体格<span style={{ fontFamily: FONT_M, color: col(r.build ?? 50), marginLeft: 2, fontWeight: 700 }}>{Math.round(r.build ?? 50)}</span><span style={{ color: C.sub, marginLeft: 2 }}>({buildDesc(r.build ?? 50)})</span></span>
       {item("メンタル", r.mental ?? 50)}
-      {/* v43(マイライフ難易度調整Phase 1): 突破力・安定感（固定ステータス、buildと同じく非成長）をSeason/MyLife共通で表示 */}
+      {/* v43(マイライフ難易度調整Phase 1/2): 突破力・安定感・運（固定ステータス、buildと同じく非成長）をSeason/MyLife共通で表示 */}
       {item("突破力", r.breakthrough ?? 50)}
       {item("安定感", r.stability ?? 50)}
+      {item("運", r.luck ?? 50)}
     </div>
   );
 }

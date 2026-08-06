@@ -1,23 +1,41 @@
 // マイライフの私生活/イベント・レース後のライバル対話の状態遷移（純粋なreducer関数）。Step7第9弾。
 // main.jsxのApp()に生で残っていたクラスタの1つ。mlApplyEventEffects/eventEffectSummaryは
 // mlResolveEvent専用の内部ヘルパー（controllers/内に留め置く。単体テストのためexportはしておく）。
-import { AB_KEYS } from "../../data/abilities.js";
-import { ML_EVENTS, ML_PERSONALITY_EVENTS, ML_SPONSOR_GIGS } from "../../data/events.js";
-import { addAb, growSub, mlGrowthCap } from "../../logic/support.js";
+import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
+import { ML_SPONSOR_GIGS } from "../../data/events.js";
+import { addAb, bumpGrowthPow, growSub, mlGrowthCap, weightedPick } from "../../logic/support.js";
 import { mlAdvanceMonth } from "./month.js";
 
 // v14.2: 私生活・取材イベント（練習/休養以外の月次アクション）
 // v43: 第3引数はmlの状態そのもの（実績連動の成長キャップ計算に使う）。
+// v43(Phase 2): イベント拡充に伴い、能力個別ブースト(abKeyDelta)・新ステ増減
+// (breakthroughDelta/stabilityDelta/luckDelta)・覚醒級(growthPowBump/talentCapDelta)
+// に対応。abKeyDeltaは正なら既存のaddAb（伸びしろカーブ・成長上限に従う）、負なら
+// 直接減算（伸びを減らすわけではないので曲線を通さない）。新ステ3種は生まれつき固定だが、
+// 判断により「イベントという物語上の節目」だけは例外的に動かせる（成長キャップとは無関係の
+// 直接加減算、範囲は[5,100]）。
 export function mlApplyEventEffects(player0, effects, ml) {
   const player = { ...player0 };
   if (effects.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + effects.fatigueDelta));
   if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, mlGrowthCap(ml.year, player, ml)));
+  if (effects.abKeyDelta) {
+    const cap = mlGrowthCap(ml.year, player, ml);
+    Object.entries(effects.abKeyDelta).forEach(([k, v]) => {
+      if (v > 0) addAb(player, k, v, cap);
+      else player[k] = Math.max(20, (player[k] || 0) + v);
+    });
+  }
   // v27: 個人スポンサー依頼イベント用。人気度も増減させられるようにする
   if (effects.popularityDelta) player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + effects.popularityDelta));
   // v36(#8): 私生活イベントを有意義に。メンタル（フォーム安定・大舞台に効く副ステータス）を育てられる
   if (effects.mentalDelta) growSub(player, "mental", effects.mentalDelta);
   // v36(#8): フォーム（当日の仕上がり）を直接動かせる（気分転換で調子が上向く等）
   if (effects.formDelta) player.form = Math.max(0, Math.min(100, (player.form ?? 50) + effects.formDelta));
+  if (effects.breakthroughDelta) player.breakthrough = Math.max(5, Math.min(100, (player.breakthrough ?? 50) + effects.breakthroughDelta));
+  if (effects.stabilityDelta) player.stability = Math.max(5, Math.min(100, (player.stability ?? 50) + effects.stabilityDelta));
+  if (effects.luckDelta) player.luck = Math.max(5, Math.min(100, (player.luck ?? 50) + effects.luckDelta));
+  if (effects.growthPowBump) player.growthPow = bumpGrowthPow(player.growthPow, 1);
+  if (effects.talentCapDelta) player.talentCap = Math.max(0, (player.talentCap || 0) + effects.talentCapDelta);
   return player;
 }
 
@@ -29,18 +47,27 @@ export function eventEffectSummary(effects) {
   if (effects.managerEvalDelta) parts.push(`監督評価${effects.managerEvalDelta > 0 ? "+" : ""}${effects.managerEvalDelta}`);
   if (effects.mentalDelta) parts.push(`メンタル+${effects.mentalDelta}`);
   if (effects.abBoost) parts.push(`能力+${effects.abBoost}`);
+  if (effects.abKeyDelta) parts.push(Object.entries(effects.abKeyDelta).map(([k, v]) => `${AB_LABEL[k]}${v > 0 ? "+" : ""}${v}`).join("・"));
   if (effects.formDelta) parts.push(`フォーム${effects.formDelta > 0 ? "+" : ""}${effects.formDelta}`);
+  if (effects.breakthroughDelta) parts.push(`突破力${effects.breakthroughDelta > 0 ? "+" : ""}${effects.breakthroughDelta}`);
+  if (effects.stabilityDelta) parts.push(`安定感${effects.stabilityDelta > 0 ? "+" : ""}${effects.stabilityDelta}`);
+  if (effects.luckDelta) parts.push(`運${effects.luckDelta > 0 ? "+" : ""}${effects.luckDelta}`);
+  if (effects.growthPowBump) parts.push("成長力↑");
+  if (effects.talentCapDelta) parts.push(`才能キャップ${effects.talentCapDelta > 0 ? "+" : ""}${effects.talentCapDelta}`);
   if (effects.moneyDelta) parts.push(`+${effects.moneyDelta}万円`);
   if (effects.fatigueDelta) parts.push(`疲労${effects.fatigueDelta > 0 ? "+" : ""}${effects.fatigueDelta}`);
   return parts.length ? `（${parts.join("・")}）` : "";
 }
 
-export function mlTriggerEvent(s) {
-  // v36(#9): プレイヤーの性格に応じた私生活イベントを半々で差し込む（性格を持つ選手のみ）
-  const persPool = ML_PERSONALITY_EVENTS[s.player?.personality];
-  const usePers = persPool && persPool.length && Math.random() < 0.5;
-  const ev = usePers ? persPool[Math.floor(Math.random() * persPool.length)] : ML_EVENTS[Math.floor(Math.random() * ML_EVENTS.length)];
-  return { ...s, pendingEvent: ev, screen: "mylife_event" };
+// v43(Phase 2): ダイジョーブ博士系（賭け）イベント用。choice.outcomesがあれば
+// weight加重で1つ抽選し、そのeffects/resultを採用する（＝選んだ瞬間には結果が
+// 決まっておらず、賭けた後にどちらに転ぶか分かる）。無ければ従来通りchoice自体を使う。
+export function resolveChoiceOutcome(choice) {
+  if (choice.outcomes && choice.outcomes.length) {
+    const outcome = weightedPick(choice.outcomes);
+    return { effects: outcome.effects || {}, result: outcome.result };
+  }
+  return { effects: choice.effects || {}, result: choice.result };
 }
 
 // v27: 個人スポンサーの依頼イベント。現在の人気度に応じて報酬が大きくなる仕事を1件生成する
@@ -62,13 +89,18 @@ export function mlResolveEvent(s, choiceIdx) {
   const ev = s.pendingEvent;
   if (!ev) return s;
   const choice = ev.choices[choiceIdx];
-  const player = mlApplyEventEffects(s.player, choice.effects, s);
-  const managerEval = Math.max(0, Math.min(100, s.managerEval + (choice.effects.managerEvalDelta || 0)));
+  // v43(Phase 2): 賭けイベント（choice.outcomes）はここで初めて結果が確定する
+  const { effects, result } = resolveChoiceOutcome(choice);
+  const player = mlApplyEventEffects(s.player, effects, s);
+  const managerEval = Math.max(0, Math.min(100, s.managerEval + (effects.managerEvalDelta || 0)));
   // v27: スポンサー依頼イベントの報酬（お金）を即時反映する
-  const money = s.money + (choice.effects.moneyDelta || 0);
+  const money = s.money + (effects.moneyDelta || 0);
   // v36(#8): 得た成果を結果文に明示（手応えのないイベントにしない）
-  const resultText = choice.result + " " + eventEffectSummary(choice.effects);
-  return { ...s, player, money, managerEval, pendingEvent: null, eventResultText: resultText, screen: "mylife_event_result" };
+  const resultText = result + " " + eventEffectSummary(effects);
+  // v43(Phase 2): 受動発火した私生活イベント（ev.passive）は既に月が進んでいるため、
+  // 「翌月へ進む」ではなく弟子イベントと同じ「戻る」だけでmylife_mainへ戻す
+  return { ...s, player, money, managerEval, pendingEvent: null, eventResultText: resultText,
+    eventAdvanced: !!ev.passive, screen: "mylife_event_result" };
 }
 
 // v36(弟子深化): 弟子の指導イベントへの応答。選択に応じて弟子の絆(bond)・鍛錬(guideBonus)・

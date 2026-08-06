@@ -216,6 +216,227 @@ export const ML_EVENTS = [
       { label: "返事を書き、必ず勝つと誓う", result: "誰かの希望である責任が、静かな闘志となって胸に宿った。", effects: { mentalDelta: 4, popularityDelta: 3 } },
       { label: "そっと胸にしまい走りで応える", result: "言葉より走りで応えると決め、練習にも身が入った。", effects: { abBoost: 2, mentalDelta: 2, fatigueDelta: 5 } },
     ] },
+
+  // v43(マイライフ難易度調整Phase 2): イベント拡充第1弾。取材・私生活イベントの手動ボタンを
+  // 廃止し受動発火（controllers/mylife/month.js）へ移行したのに合わせ、内容も大幅拡充した。
+  // 「数百種類」という長期目標に向けた最初のバッチ（詳細はDEVLOG参照）。カテゴリ構成：
+  // ①個別能力ブースト(abKeyDelta) ②新ステ変動(breakthrough/stability/luckDelta)
+  // ③賭け（outcomes） ④覚醒級（weight低・growthPowBump/talentCapDelta） ⑤悪イベント(bad:true)。
+  // 今後さらに追加していく前提のため、新規カテゴリを増やす時もこの5分類のタグ付け方針
+  // （bad/weight/outcomes/abKeyDelta等）をそのまま踏襲すること。
+
+  // --- ①個別能力ブースト（abKeyDelta） ---
+  { title: "スプリントの感覚を掴んだ夜", text: "動画で自分のフォームを見返すうち、ラストの一漕ぎに無駄があると気づいた。",
+    choices: [
+      { label: "深夜のローラーで矯正する", result: "無駄な力みが抜け、鋭いキレを掴んだ手応えがあった。", effects: { abKeyDelta: { sprint: 6 }, fatigueDelta: 6 } },
+      { label: "翌朝のメニューに落とし込む", result: "焦らず翌日の練習に反映し、着実に体へ馴染ませた。", effects: { abKeyDelta: { sprint: 4 } } },
+    ] },
+  { title: "登坂の呼吸法を教わる", text: "ヒルクライムを得意とする先輩が、呼吸のリズムのコツをふと教えてくれた。",
+    choices: [
+      { label: "すぐさま坂で試す", result: "教わった呼吸法がハマり、登りの脚が一段軽くなった。", effects: { abKeyDelta: { climb: 6 }, fatigueDelta: 5 } },
+      { label: "ノートに書き留めて反芻する", result: "頭で整理してから体に落とし込み、着実にモノにした。", effects: { abKeyDelta: { climb: 4 }, mentalDelta: 2 } },
+    ] },
+  { title: "平坦巡航フォームの見直し", text: "風洞実験の映像を見て、自分の巡航姿勢のロスに気づいた。",
+    choices: [
+      { label: "空気抵抗を突き詰める", result: "姿勢を作り直し、巡航速度が明らかに変わった。", effects: { abKeyDelta: { flat: 6 }, fatigueDelta: 6 } },
+      { label: "無理のない範囲で微調整", result: "体に負担をかけない範囲で整え、無理なく地力を伸ばした。", effects: { abKeyDelta: { flat: 4 } } },
+    ] },
+  { title: "高地トレーニングの収穫", text: "短期の高地合宿から戻り、体の変化を感じている。",
+    choices: [
+      { label: "そのままの勢いで走り込む", result: "高地で鍛えた心肺の貯金を、平地でさらに伸ばした。", effects: { abKeyDelta: { stamina: 6 }, fatigueDelta: 8 } },
+      { label: "順応期間としっかり休む", result: "体を慣らしながら、無理なく高地の成果を定着させた。", effects: { abKeyDelta: { stamina: 4 }, fatigueDelta: -5 } },
+    ] },
+  { title: "独走のペース配分を掴む", text: "ひとりで長距離を走り込むうち、体内時計のようなペース感覚が掴めてきた。",
+    choices: [
+      { label: "限界までペースを刻んでみる", result: "均一なペースで押し切る感覚を体に叩き込んだ。", effects: { abKeyDelta: { solo: 6 }, fatigueDelta: 7 } },
+      { label: "余力を残して感覚を確かめる", result: "無理のない範囲で反復し、着実にペース感覚を磨いた。", effects: { abKeyDelta: { solo: 4 } } },
+    ] },
+  { title: "チームメイトとの実戦形式練習", text: "オフの日、有志で実戦さながらの追い込み練習をすることになった。",
+    choices: [
+      { label: "アタック役を買って出る", result: "本番さながらの緊張感で、登りとスプリントの両方が磨かれた。", effects: { abKeyDelta: { climb: 3, sprint: 3 }, fatigueDelta: 10 } },
+      { label: "牽引役に徹する", result: "淡々と牽くうち、平坦とスタミナの地力が底上げされた。", effects: { abKeyDelta: { flat: 3, stamina: 3 }, fatigueDelta: 8 } },
+    ] },
+  { title: "映像分析ミーティング", text: "スタッフとレース映像を見ながら、自分の展開パターンを洗い出した。",
+    choices: [
+      { label: "得意分野をさらに伸ばす方針にする", result: "強みを言語化できたことで、狙った能力が伸びやすくなった。", effects: { abBoost: 3, mentalDelta: 2 } },
+      { label: "弱点の底上げを優先する方針にする", result: "課題が明確になり、苦手分野の伸びしろに手が届いた。", effects: { abKeyDelta: { climb: 4, solo: 4 } } },
+    ] },
+  { title: "栄養士との面談", text: "チーム専属の栄養士から、食生活の見直しを提案された。",
+    choices: [
+      { label: "本格的に食事管理を始める", result: "体が軽くなった実感があり、練習の質そのものが上がった。", effects: { abBoost: 3, fatigueDelta: -6 } },
+      { label: "無理なく続けられる範囲で試す", result: "負担のない改善で、じわりと体調が上向いた。", effects: { fatigueDelta: -12, mentalDelta: 2 } },
+    ] },
+
+  // --- ②新ステ変動（breakthroughDelta/stabilityDelta/luckDelta） ---
+  { title: "壁を越えた感覚", text: "何度も跳ね返されていた課題を、ふとしたきっかけで初めて突破できた。",
+    choices: [
+      { label: "その勢いのまま追い込む", result: "限界の先にまだ伸びしろがあると体で知った。今後、能力が頭打ちになりにくくなった気がする。", effects: { breakthroughDelta: 5, fatigueDelta: 10 } },
+      { label: "この感覚を大切に持ち帰る", result: "焦らず感覚を反芻し、確かな手応えとして刻み込んだ。", effects: { breakthroughDelta: 3, mentalDelta: 2 } },
+    ] },
+  { title: "限界突破のヒント", text: "ベテラン選手から「壁は気持ちひとつで薄くなる」という言葉をもらった。",
+    choices: [
+      { label: "言葉の意味を体で確かめる", result: "限界だと思っていたラインの先に、まだ余地があると気づいた。", effects: { breakthroughDelta: 4 } },
+      { label: "心に留めて日々を過ごす", result: "焦らずその言葉を胸に、腐らず練習を積んだ。", effects: { breakthroughDelta: 2, mentalDelta: 2 } },
+    ] },
+  { title: "メンタルコーチとの対話", text: "チーム専属のメンタルコーチと、調子の波との付き合い方について話した。",
+    choices: [
+      { label: "波を受け入れるコツを学ぶ", result: "好不調の波そのものを穏やかに捉えられるようになった。", effects: { stabilityDelta: 5 } },
+      { label: "ルーティンを一緒に作る", result: "毎日決まった手順を踏むことで、調子が崩れにくくなった。", effects: { stabilityDelta: 4, formDelta: 3 } },
+    ] },
+  { title: "自分なりのルーティンの確立", text: "レース前に必ず行う一連の動作が、いつの間にか体に染みついていた。",
+    choices: [
+      { label: "さらに徹底して守り抜く", result: "決まった手順が心の支えとなり、調子が乱れにくくなった。", effects: { stabilityDelta: 5, fatigueDelta: 3 } },
+      { label: "肩の力を抜いて緩やかに続ける", result: "無理なく続けられる形に整え、じわりと安定感が増した。", effects: { stabilityDelta: 3, mentalDelta: 2 } },
+    ] },
+  { title: "小さなお守り", text: "応援してくれる人から、ささやかなお守りをもらった。ジンクスのように大切にしている。",
+    choices: [
+      { label: "肌身離さず持ち歩く", result: "根拠はなくとも、なぜか物事が上向く気がしてならない。", effects: { luckDelta: 5, mentalDelta: 2 } },
+      { label: "感謝を伝え、気持ちを新たにする", result: "支えてくれる人の存在に気づけたことが、何よりの財産になった。", effects: { luckDelta: 3, popularityDelta: 2 } },
+    ] },
+  { title: "縁のめぐり合わせ", text: "何気ない偶然の出会いが、思いがけず良い方向に転がり続けている。",
+    choices: [
+      { label: "この流れに素直に乗ってみる", result: "不思議と物事がうまく噛み合う日々が続いている。", effects: { luckDelta: 5 } },
+      { label: "浮かれず地に足つけて過ごす", result: "浮つかず淡々と過ごしたことが、かえって良い流れを呼んだ。", effects: { luckDelta: 3, mentalDelta: 2 } },
+    ] },
+
+  // --- ③賭け（outcomesによる確率分岐。選んだ瞬間には結果が決まっていない） ---
+  { title: "旅の行商人と謎の秘薬", text: "遠征先の路地裏で、怪しい行商人が「これを飲めば見違える」と謎の秘薬を差し出してきた。",
+    choices: [
+      { label: "断って立ち去る", result: "怪しさに勝てず、丁重に断った。", effects: { fatigueDelta: -2 } },
+      { label: "半信半疑で飲んでみる",
+        outcomes: [
+          { weight: 0.28, result: "体の奥から力が漲るのを感じた……まさか本物だったとは！", effects: { abBoost: 6, breakthroughDelta: 3 } },
+          { weight: 0.72, result: "ただ苦いだけの謎の液体だった。しばらく胃もたれが続いた。", effects: { fatigueDelta: 10, mentalDelta: -2 } },
+        ] },
+    ] },
+  { title: "自称・伝説の元プロによる特訓", text: "「儂の指導を受ければ生まれ変わる」。素性の知れない老人が特訓を持ちかけてきた。",
+    choices: [
+      { label: "丁重にお断りする", result: "得体が知れず、大人しく通常メニューをこなした。", effects: {} },
+      { label: "藁にもすがる思いで受けてみる",
+        outcomes: [
+          { weight: 0.25, result: "口だけではなかった。的確な指摘の連続で、目の覚めるような成長を遂げた。", effects: { abBoost: 8, fatigueDelta: 14 } },
+          { weight: 0.35, result: "自己流の精神論に終始し、疲れだけが残った。", effects: { fatigueDelta: 16, mentalDelta: -3 } },
+          { weight: 0.40, result: "無難に基礎の再確認ができた程度だった。", effects: { abBoost: 2, fatigueDelta: 8 } },
+        ] },
+    ] },
+  { title: "占い師のジンクス", text: "たまたま入った占いの館で、「今週のあなたの運勢」を占ってもらえることになった。",
+    choices: [
+      { label: "興味本位で聞いてみる",
+        outcomes: [
+          { weight: 0.3, result: "「大吉。今のあなたには何をしても弾みがつく」――言われてみると、本当にそんな気がしてきた。", effects: { luckDelta: 8, mentalDelta: 3 } },
+          { weight: 0.3, result: "「小凶。慎重に過ごしなさい」――妙に不安が残り、練習にも身が入らなかった。", effects: { luckDelta: -5, mentalDelta: -2 } },
+          { weight: 0.4, result: "当たり障りのない結果で、特に気にせず過ごした。", effects: {} },
+        ] },
+      { label: "占いなど信じないと聞き流す", result: "自分の力を信じ、いつも通り淡々と過ごした。", effects: { mentalDelta: 2 } },
+    ] },
+  { title: "峠の茶屋の謎かけ", text: "山岳ステージの下見中に立ち寄った茶屋の店主から、妙な謎かけを持ちかけられた。",
+    choices: [
+      { label: "受けて立つ",
+        outcomes: [
+          { weight: 0.3, result: "見事に答えを言い当てると、店主が「お前さんは大成する」と太鼓判を押してくれた。妙に自信がついた。", effects: { breakthroughDelta: 6, mentalDelta: 3 } },
+          { weight: 0.5, result: "答えられずに悔しい思いをした。少し落ち込みつつ峠を後にした。", effects: { mentalDelta: -3 } },
+          { weight: 0.2, result: "店主が上機嫌になり、名物の団子をご馳走してくれた。ただそれだけの一日だった。", effects: { fatigueDelta: -8 } },
+        ] },
+      { label: "苦笑いで受け流す", result: "謎かけには付き合わず、下見に集中した。", effects: {} },
+    ] },
+  { title: "海外遠征先の怪しいマッサージ師", text: "遠征先のホテルで、「疲労を根こそぎ取り除く」という触れ込みの施術師を紹介された。",
+    choices: [
+      { label: "断って自分のケアを続ける", result: "使い慣れたセルフケアで、無難に疲れを抜いた。", effects: { fatigueDelta: -10 } },
+      { label: "思い切って施術を受ける",
+        outcomes: [
+          { weight: 0.35, result: "驚くほど体が軽くなった。長年の張りまで取れたような感覚だ。", effects: { fatigueDelta: -30, formDelta: 6 } },
+          { weight: 0.35, result: "力加減が強すぎて、逆に体が張ってしまった。", effects: { fatigueDelta: 12, formDelta: -4 } },
+          { weight: 0.3, result: "可もなく不可もない、普通のマッサージだった。", effects: { fatigueDelta: -8 } },
+        ] },
+    ] },
+  { title: "深夜ジムの謎のトレーナー", text: "誰もいないはずの深夜のジムに、見知らぬトレーナーがいて「特別メニューをやってみないか」と誘われた。",
+    choices: [
+      { label: "怪しみつつも断る", result: "いつも通りのメニューをこなし、静かにジムを後にした。", effects: {} },
+      { label: "興味半分で付き合ってみる",
+        outcomes: [
+          { weight: 0.2, result: "常識外れの負荷設定だったが、終えてみると別人のような力が漲っていた。", effects: { abBoost: 5, breakthroughDelta: 4, fatigueDelta: 15 } },
+          { weight: 0.5, result: "無茶な内容についていけず、翌日まで疲労を引きずった。", effects: { fatigueDelta: 22, formDelta: -5 } },
+          { weight: 0.3, result: "翌朝には姿が無く、夢だったのかと首を傾げるだけの一夜だった。", effects: { fatigueDelta: 6 } },
+        ] },
+    ] },
+
+  // --- ④覚醒級（weightを低くし滅多に引かない。growthPowBump/talentCapDelta等） ---
+  { title: "才能が一気に開花した夜", text: "その日の練習は、これまでの自分とは何かが違っていた。体の隅々まで力が満ちていくのが分かる。",
+    weight: 0.15,
+    choices: [
+      { label: "この感覚を確かめ尽くす", result: "殻を破ったような手応え。周囲も「別人のようだ」と驚くほどの変化だった。", effects: { growthPowBump: true, fatigueDelta: 10 } },
+      { label: "静かに受け止め、次に備える", result: "興奮を抑えつつ、この覚醒を確かなものにするため冷静に体を休めた。", effects: { growthPowBump: true, fatigueDelta: -6, mentalDelta: 3 } },
+    ] },
+  { title: "限界そのものが押し広がる経験", text: "極限まで自分を追い込んだ末に、これまでの「限界」という概念そのものが塗り替わる感覚を味わった。",
+    weight: 0.15,
+    choices: [
+      { label: "この経験を体に刻み込む", result: "才能の天井そのものが、確かに一段押し上がったように感じる。", effects: { talentCapDelta: 4, breakthroughDelta: 5, fatigueDelta: 12 } },
+      { label: "無理をせず、じっくり定着させる", result: "焦らず時間をかけて、この飛躍をしっかり自分のものにした。", effects: { talentCapDelta: 3, fatigueDelta: -4 } },
+    ] },
+  { title: "会心のレース感覚", text: "練習中のもがきで、これまで届かなかった領域に手が届いた。体が勝手に動く、そんな感覚だった。",
+    weight: 0.2,
+    choices: [
+      { label: "この感覚のまま突き詰める", result: "会心の走りが、能力そのものを一段引き上げた。", effects: { abBoost: 10, breakthroughDelta: 4, fatigueDelta: 16 } },
+      { label: "冷静に言語化して持ち帰る", result: "感覚を分析し、再現できる形で体に刻み込んだ。", effects: { abBoost: 7, mentalDelta: 3, fatigueDelta: 8 } },
+    ] },
+  { title: "運命が味方した瞬間", text: "偶然が偶然を呼ぶような、出来過ぎた巡り合わせが立て続けに起きた一週間だった。",
+    weight: 0.15,
+    choices: [
+      { label: "この流れに全力で乗る", result: "何をやってもうまくいく感覚のまま、大きな飛躍を掴んだ。", effects: { luckDelta: 10, abBoost: 5, popularityDelta: 5 } },
+      { label: "浮かれすぎず、噛みしめる", result: "この巡り合わせに感謝しつつ、地に足つけて力に変えた。", effects: { luckDelta: 8, mentalDelta: 4 } },
+    ] },
+
+  // --- ⑤悪イベント（bad:true。luckが低いほど引きやすい。軽微なものから応相応に重いものまで） ---
+  { title: "SNSでの失言", text: "何気なく投稿した一言が、意図しない形で炎上してしまった。", bad: true,
+    choices: [
+      { label: "すぐに訂正・謝罪する", result: "早めの対応で被害は最小限に留まったが、後味の悪さが残った。", effects: { popularityDelta: -4, mentalDelta: -2 } },
+      { label: "静観して嵐が過ぎるのを待つ", result: "沈黙を貫いたが、その間じわじわと評判を落とした。", effects: { popularityDelta: -6 } },
+    ] },
+  { title: "寝坊で朝練を欠席", bad: true, text: "うっかり寝坊し、大事な朝練を欠席してしまった。",
+    choices: [
+      { label: "素直に反省し埋め合わせる", result: "反省してメニューを埋め合わせたが、リズムを崩してしまった。", effects: { formDelta: -4, fatigueDelta: 5 } },
+      { label: "気にせず切り替える", result: "引きずらないようにしたが、少しペースが狂った。", effects: { formDelta: -3 } },
+    ] },
+  { title: "チーム内の気まずい空気", bad: true, text: "ちょっとした行き違いから、チームメイトとの間に気まずい空気が流れてしまった。",
+    choices: [
+      { label: "すぐに話し合って解消する", result: "話し合って誤解は解けたが、モヤモヤは少し残った。", effects: { mentalDelta: -2, fatigueDelta: 3 } },
+      { label: "時間が解決するのを待つ", result: "気まずさを引きずったまま、練習に集中しづらい日々が続いた。", effects: { mentalDelta: -4 } },
+    ] },
+  { title: "原因不明のスランプ", bad: true, text: "特に思い当たる理由もないのに、練習の質が上がらない日が続いている。",
+    choices: [
+      { label: "基礎に立ち返って耐える", result: "焦らず基礎を固めたが、なかなか波を抜け出せなかった。", effects: { stabilityDelta: -5, fatigueDelta: 6 } },
+      { label: "気分転換を試みる", result: "気晴らしを挟んだが、不調の波は簡単には収まらなかった。", effects: { stabilityDelta: -4, mentalDelta: -2 } },
+    ] },
+  { title: "変な癖がついてしまった", bad: true, text: "自己流で試行錯誤するうち、フォームに良くない癖がついてしまったようだ。",
+    choices: [
+      { label: "自力で矯正を試みる", result: "手探りで直そうとしたが、思うように抜けきらなかった。", effects: { abKeyDelta: { flat: -5 } } },
+      { label: "そのまま様子を見る", result: "様子を見るうちに、癖はしばらく残ってしまった。", effects: { abKeyDelta: { sprint: -5 } } },
+    ] },
+  { title: "過信からの一歩手前", bad: true, text: "調子に乗って追い込みすぎ、怪我一歩手前のヒヤリとする場面があった。",
+    choices: [
+      { label: "すぐに練習を切り上げる", result: "大事には至らなかったが、疲労が深く残った。", effects: { fatigueDelta: 15, formDelta: -4 } },
+      { label: "だましだまし続ける", result: "無理を重ね、フォームも本調子には程遠くなった。", effects: { fatigueDelta: 20, formDelta: -6 } },
+    ] },
+  { title: "悪いフォームが染みついてしまった", bad: true, text: "長く自覚のないまま走り続けたことで、非効率なフォームがすっかり定着してしまっている。",
+    choices: [
+      { label: "一から矯正に取り組む", result: "時間はかかったが、少しずつ悪癖を洗い流していった。", effects: { abKeyDelta: { climb: -8 }, fatigueDelta: 10 } },
+      { label: "今の走りのまま突き進む", result: "根本の見直しを避けたことで、地力の伸びに影を落とした。", effects: { abKeyDelta: { solo: -8 } } },
+    ] },
+  { title: "燃え尽き気味の日々", bad: true, text: "目標を見失ったような、何をしても手応えの薄い時期が続いている。",
+    choices: [
+      { label: "無理に前を向こうとする", result: "空回りするばかりで、なかなか殻を破れなかった。", effects: { breakthroughDelta: -8, mentalDelta: -2 } },
+      { label: "しばらく休んで立て直す", result: "休養を優先したが、伸びしろの感覚は鈍ったままだった。", effects: { breakthroughDelta: -6, fatigueDelta: -10 } },
+    ] },
+  { title: "自信を失うスランプ", bad: true, text: "ちょっとした失敗が積み重なり、自分の走りに自信が持てなくなっている。",
+    choices: [
+      { label: "無理にでも気持ちを奮い立たせる", result: "空元気で乗り切ろうとしたが、心の乱れは収まらなかった。", effects: { stabilityDelta: -10, mentalDelta: -4 } },
+      { label: "誰かに相談してみる", result: "話を聞いてもらい多少は楽になったが、不安定さは残った。", effects: { stabilityDelta: -6, mentalDelta: -2 } },
+    ] },
+  { title: "忘れ物でリズムが崩れる", bad: true, text: "大事な装備を忘れてしまい、その日一日のリズムが狂ってしまった。",
+    choices: [
+      { label: "代替品でなんとか乗り切る", result: "急場をしのいだが、いつもの調子は出なかった。", effects: { formDelta: -5, fatigueDelta: 5 } },
+      { label: "取りに戻ってやり直す", result: "時間をロスした焦りが、そのまま体に出てしまった。", effects: { formDelta: -4, fatigueDelta: 8 } },
+    ] },
 ];
 
 // v36(#9): 性格ベースの私生活イベント（マイライフ）。プレイヤー自身の性格に応じた出来事が起き、
@@ -282,6 +503,15 @@ export const ML_PERSONALITY_EVENTS = {
       choices: [
         { label: "徹底的に戦術を練る", result: "無数の展開を頭に叩き込み、勝負勘と冷静さが研ぎ澄まされた。", effects: { mentalDelta: 4, formDelta: 2 } },
         { label: "机上より実走で試す", result: "理論を実戦で検証し、走力そのものを一段引き上げた。", effects: { abBoost: 3, fatigueDelta: 5 } },
+      ] },
+  ],
+  // v43(マイライフ難易度調整Phase 2): 「普通」だけ性格別プールが無く、性格を持つ選手の
+  // 半数（normal）が私生活イベントで個性を発揮できなかった抜けを埋めた。
+  normal: [
+    { title: "自分らしいペースを見つめ直す", text: "特別な癖や信条はない。それでも、自分なりのやり方は確かにあるはずだと感じている。",
+      choices: [
+        { label: "淡々といつも通りに過ごす", result: "気負わず積み重ねた日々が、確かな土台になっている。", effects: { abBoost: 3, mentalDelta: 2 } },
+        { label: "少しだけ新しいことに挑戦する", result: "小さな変化を取り入れたことで、新鮮な刺激を得られた。", effects: { formDelta: 4, fatigueDelta: 3 } },
       ] },
   ],
 };

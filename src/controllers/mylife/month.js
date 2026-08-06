@@ -10,7 +10,7 @@ import { MYLIFE_TEAMS, ageWorldRosters } from "../../state/state.js";
 import {
   GRADE_MUL, ML_AB_COACH_KEY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, computeWorldRank,
   growSub, growthPhase, mlGenDirective, mlGrowthCap, mlLivingCost, mlTeamTier, mlUpdateRiderStats,
-  mlWorldRaceLite, persMul, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
+  mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
 import { mlGenRace } from "../../domain/mylife/race.js";
 
@@ -361,6 +361,16 @@ export function mlAdvanceMonth(s, mode) {
   if (s.protege && Math.random() < 0.2) {
     const ev = ML_PROTEGE_EVENTS[Math.floor(Math.random() * ML_PROTEGE_EVENTS.length)];
     return { ...base, pendingProtegeEvent: ev, screen: "mylife_protege_event" };
+  }
+  // v43(マイライフ難易度調整Phase 2): 「🎤取材・私生活イベント」の手動ボタンを廃止し、
+  // 弟子イベントと同じ「月が終わるたびに確率で割り込む」形に統一した。月コストは既に
+  // baseの時点で確定済み（練習/レース等の効果は反映済み）のため、ここでの発火に
+  // 追加の月消費は発生しない（弟子イベントと排他＝ポップアップの多重発生を防ぐ）。
+  // 発火率は新ステータス「運」で0.5〜1.5倍に振れる（突破力/安定感と同じ揺らぎ式）。
+  const luck = player.luck ?? 50;
+  if (Math.random() < 0.28 * (0.5 + luck / 100)) {
+    const ev = pickMlEvent(player);
+    return { ...base, pendingEvent: { ...ev, passive: true }, screen: "mylife_event" };
   }
   return base;
 }

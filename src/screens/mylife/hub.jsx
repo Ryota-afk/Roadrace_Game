@@ -12,7 +12,7 @@ import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_ST
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 
 export function renderMyLifeHubScreen(ctx) {
-  const { ML_MILESTONE_LABEL, askConfirm, ml, mlAdvanceMonth, mlBecomeMentor, mlGenRace, mlSetFocus, mlStartLastRace, mlStartRace, mlTriggerEvent, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode } = ctx;
+  const { ML_MILESTONE_LABEL, askConfirm, ml, mlAdvanceMonth, mlBecomeMentor, mlGenRace, mlSetFocus, mlStartLastRace, mlStartRace, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_main" && ml.player) {
       const r = ml.player;
       const race = ml.races[0];
@@ -421,7 +421,8 @@ export function renderMyLifeHubScreen(ctx) {
               <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（focus中心）</Btn>
               <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("rest")} title="疲労を大きく回復し、脚がフレッシュに（フォームの下振れを消して微増）＋メンタルも整う。大レース前の仕上げに">😴 完全休養</Btn>
               <Btn small outline color={"#e8a13c"} onClick={() => mlAdvanceMonth("peak")}>🎯 ピーキング調整（フォームを上げる）</Btn>
-              <Btn small outline color={C.purple} onClick={mlTriggerEvent} title="人気（スポンサー収入）・メンタル（フォーム安定/大舞台）・監督評価・地力のいずれかを選んで伸ばす二択イベント">🎤 取材・私生活イベント</Btn>
+              {/* v43(Phase 2): 「🎤取材・私生活イベント」は手動ボタンを廃止し、月が終わるたびに
+                  運ステータスで確率が変わる受動発火へ移行した（controllers/mylife/month.js参照） */}
               {(ml.player.popularity || 0) >= 20 && (
                 <Btn small outline color={"#e8a13c"} onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事</Btn>
               )}

@@ -26,7 +26,7 @@ import {
 } from "../controllers/mylife/career.js";
 import {
   mlResolveProtegeEvent as meResolveProtegeEvent, mlResolveRivalScene as meResolveRivalScene,
-  mlRivalSceneContinue as meRivalSceneContinue, mlTriggerEvent as meTriggerEvent,
+  mlRivalSceneContinue as meRivalSceneContinue,
   mlTriggerSponsorGig as meTriggerSponsorGig, mlResolveEvent as meResolveEvent,
 } from "../controllers/mylife/event.js";
 
@@ -186,7 +186,8 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   const mlContinueAfterCrossroads = () => setMl(mcContinueAfterCrossroads);
   // v41(§Step7第9弾): 私生活・取材イベント／個人スポンサー依頼は controllers/mylife/event.js
   // の純関数に集約。main.jsx側はsetMlに接続する薄いラッパーのみを持つ。
-  const mlTriggerEvent = () => setMl(meTriggerEvent);
+  // v43(Phase 2): 私生活イベントの手動トリガーは廃止（月次アクション後に受動発火するため
+  // mlAdvanceMonth側で完結する）。mlTriggerSponsorGigは引き続き手動アクションとして残る。
   const mlTriggerSponsorGig = () => setMl(meTriggerSponsorGig);
   const mlResolveEvent = (choiceIdx) => setMl(s => meResolveEvent(s, choiceIdx));
   // v14.3: マイライフ専用ショップ（年俸で得た資金を使う）。パーツはPARTS/PART_SLOTSを
@@ -229,7 +230,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     mlStartRace, mlStartLastRace, mlLastRaceFinish, mlRaceFinish, mlAdvanceMonth,
     mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlRetireAdviceAccept,
     mlChooseTeam, mlResolveOffseason, mlContinueAfterOffseason, mlResolveCrossroads, mlContinueAfterCrossroads,
-    mlTriggerEvent, mlTriggerSponsorGig, mlResolveEvent,
+    mlTriggerSponsorGig, mlResolveEvent,
     mlBuyPart, mlSetPart, mlBuyGear, mlBuyStock, mlUseStock, mlUseStockConfirm,
     mlPrivateCamp, mlBuyCar, mlBuyHouse, mlBuyGrowthPowUp, mlBuyGrowthShift, mlGenRace,
   };

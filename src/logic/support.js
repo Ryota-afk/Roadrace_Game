@@ -979,6 +979,33 @@ export function mlGrowthCap(year, player, ml) {
   return Math.min(140, 90 + timeComponent + achievementBonus * diffMul + talent);
 }
 
+// v43(マイライフ難易度調整Phase 2・イベント受動発火): item.weight（既定1）に応じた加重抽選。
+// レア度の高いイベント（覚醒級等）に小さいweightを与えると滅多に出ないようにできる。
+export function weightedPick(items) {
+  const total = items.reduce((sum, it) => sum + (it.weight ?? 1), 0);
+  let roll = Math.random() * total;
+  for (const it of items) {
+    const w = it.weight ?? 1;
+    if (roll < w) return it;
+    roll -= w;
+  }
+  return items[items.length - 1];
+}
+
+// v43(マイライフ難易度調整Phase 2): 私生活イベントの抽選。新ステータス「運」が高いほど
+// 「悪いイベント」（`bad:true`タグ）を引きにくくなる（0.4〜1.6倍でクランプ・luck=50で等倍、
+// 突破力/安定感と同じ揺らぎ式）。性格別イベントは悪イベントを持たないため、「悪いイベントを
+// 引く」判定に外れた回だけ半々で差し込む（旧mlTriggerEventと同じ配分を踏襲）。
+export function pickMlEvent(player) {
+  const luck = player?.luck ?? 50;
+  const badMul = Math.max(0.4, Math.min(1.6, 1 - (luck - 50) / 100));
+  const wantBad = Math.random() < 0.30 * badMul;
+  const persPool = ML_PERSONALITY_EVENTS[player?.personality];
+  if (!wantBad && persPool && persPool.length && Math.random() < 0.5) return weightedPick(persPool);
+  const pool = ML_EVENTS.filter(e => !!e.bad === wantBad);
+  return weightedPick(pool.length ? pool : ML_EVENTS);
+}
+
 // v43(マイライフ難易度調整Phase 1・成長力マスク化): 成長力(growthPow)はリセマラ・引き直しでの
 // 「Sが出るまで粘る」を防ぐため、デビュー直後（3年目未満）は選手本人にも非公開にする。
 // 3年目（year>=3）になった時点で判明する。判断⑫（ユーザー承認済み）。

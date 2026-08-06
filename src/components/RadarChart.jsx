@@ -63,8 +63,9 @@ export function AbilityRadarChart({ r, cap = 88, size = 168, color = C.green }) 
   return <RadarChart axes={axes} size={size} color={color} showValues />;
 }
 
-// 選手のサブステータス5軸（加速力・体格・メンタル・突破力・安定感）を表示する専用ラッパー。
-// スピリット・運が実装される将来フェーズでは、axesを7つに増やすだけでこの呼び出し側は無改修で対応できる。
+// 選手のサブステータス6軸（加速力・体格・メンタル・突破力・安定感・運）を表示する専用ラッパー。
+// v43(Phase 2): 運を追加し6角形化。スピリットが実装される将来フェーズ（Phase 3）でも、
+// axesを7つに増やすだけでこの呼び出し側は無改修で対応できる（可変軸設計の狙い通り）。
 export function RiderRadarChart({ r, size = 168, color = C.blue, showValues = true }) {
   if (!r) return null;
   const axes = [
@@ -73,6 +74,7 @@ export function RiderRadarChart({ r, size = 168, color = C.blue, showValues = tr
     { label: "メンタル", value: r.mental ?? 50, max: 100 },
     { label: "突破力", value: r.breakthrough ?? 50, max: 100 },
     { label: "安定感", value: r.stability ?? 50, max: 100 },
+    { label: "運", value: r.luck ?? 50, max: 100 },
   ];
   return <RadarChart axes={axes} size={size} color={color} showValues={showValues} />;
 }

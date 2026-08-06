@@ -181,6 +181,9 @@ export function genSubStats(type, rng, opts = {}) {
     mental: cl(48 + (rng() - 0.5) * 40 + persM + boost),
     breakthrough: cl(breakthroughBase + j()),
     stability: cl(stabilityBase + j()),
+    // v43(マイライフ難易度調整Phase 2): 新ステータス「運」。脚質と運の間に論理的な関連が
+    // 無いため、breakthrough/stabilityと違い脚質差はつけずbase50±ジッターのみ。
+    luck: cl(50 + j()),
   };
 }
 

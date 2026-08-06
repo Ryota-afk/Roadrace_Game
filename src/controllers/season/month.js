@@ -313,7 +313,12 @@ export function advanceMonth(s, raceInfo) {
   }
   // v8: 月替わりでランダムに選択肢付きイベントが発生（春先の解禁月は除く）
   // v36(#9): 半々で「性格ベースのチームイベント」（ロースターの誰かの個性にスポットを当てる）を差し込む
-  if (month !== 0 && Math.random() < EVENT_CHANCE) {
+  // v43(マイライフ難易度調整Phase 2): 新ステータス「運」をシーズンにも軽く適用。ロースター平均の
+  // luckでEVENT_CHANCEを0.5〜1.5倍に補正する（突破力/安定感と同じ揺らぎ式）。マイライフと違い
+  // 良/悪の質までは踏み込まず、頻度のみに留める（詳細はDEVLOG参照）。
+  const avgLuck = roster.length ? roster.reduce((sum, r) => sum + (r.luck ?? 50), 0) / roster.length : 50;
+  const eventChance = EVENT_CHANCE * (0.5 + avgLuck / 100);
+  if (month !== 0 && Math.random() < eventChance) {
     const pe = Math.random() < 0.5 ? seasonPersonalityEvent(roster) : null;
     const ev = pe || EVENTS[Math.floor(Math.random() * EVENTS.length)];
     return { ...base, pendingEvent: ev, screen: "event" };
