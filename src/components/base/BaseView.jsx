@@ -28,6 +28,7 @@ import {
 import {
   riderActivityAt, activityFacesLeft, activityDir, activityWobble, isIndoors, routeToStation, workSpotFor,
 } from "../../domain/season/riderActivity.js";
+import { pickChatters } from "../../domain/season/riderChatter.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
 import { useIsoCamera } from "../../hooks/useIsoCamera.js";
 import { CAP_COLORS } from "../sprites/IsoRider.jsx";
@@ -40,7 +41,15 @@ import { Ground } from "./Ground.jsx";
 import { propItems } from "./Props.jsx";
 import { fixtureItems } from "./Fixtures.jsx";
 import { PixelPerson } from "../sprites/pixelPerson.jsx";
+import { SpeechBubble } from "./SpeechBubble.jsx";
 import { TYPES } from "../../data/abilities.js";
+
+// 吹き出しの頭上オフセット（scene単位）。人物・自転車スプライトどちらも1マス0.49単位・
+// 概ね36行前後で組んでおり、全高はおよそ17〜18単位（脚を原点にして上へ伸びる）。
+// そこへ小さな隙間を足した値を経験的に採用している（ズレても致命的ではない演出要素のため
+// ピクセル単位の追い込みはしない）。
+const CHATTER_Y_OFFSET_STAND = -19;
+const CHATTER_Y_OFFSET_RIDE = -21;
 
 const PROJ = BASE_VIEW_PROJ;
 const RIDER_SPEED = 0.035; // 周回速度（t/秒）
@@ -172,6 +181,12 @@ export function BaseView({ g, paused, onRoomTap }) {
         && Math.sin(elapsed * (0.24 + riderHash01(r.id, 37) * 0.12) + riderHash01(r.id, 61) * 6.28) > 0.72,
     };
   });
+  // Wave H-1: 拠点の吹き出し。riderActivityAt由来のact(mode/roomKey)と選手の性格・状態
+  // だけから決まる純関数（domain/season/riderChatter.js）。移動中(walk/approach/depart)は
+  // 喋らない設計のため、riderRows全体を渡してもfor周回中(ride)/持ち場作業中(work)の選手だけが
+  // 選ばれる。同時表示は最大2人に絞られる（画面が文字だらけにならないように）。
+  const chatters = pickChatters(riderRows, elapsed);
+
   // 屋内の人物は不透明な床・什器の後に描かないと埋もれるため、クラブハウスのatomicな
   // 描画グループへ入れる（Wave E-2で実際に踏んだ罠）。屋外の人物は通常どおり奥行きソート。
   const outdoorRiders = riderRows.filter(x => !x.indoors);
@@ -244,6 +259,14 @@ export function BaseView({ g, paused, onRoomTap }) {
                   posture={item.dancing ? "dancing" : "normal"} dir={item.dir} flip={item.flip}
                   t={elapsed} phase={item.phase} />;
               })}
+              {/* Wave H-1: 吹き出しは全レイヤの最後（屋内外どちらの人物より手前）にまとめて描き、
+                  什器や他の選手に隠れることが原理的に起きないようにする。scale(1/k)で
+                  カメラ倍率を打ち消し、ズーム位置に関わらず画面上では常に同じ読めるサイズを保つ。 */}
+              {chatters.map(c => (
+                <SpeechBubble key={`chat${c.r.id}`} x={c.x}
+                  y={c.y + (c.act.pose === "ride" ? CHATTER_Y_OFFSET_RIDE : CHATTER_Y_OFFSET_STAND)}
+                  text={c.text} scale={camera.zoom ? 1 / camera.zoom : 1} />
+              ))}
             </g>
           )}
         </svg>
