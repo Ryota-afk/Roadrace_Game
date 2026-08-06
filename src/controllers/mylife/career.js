@@ -91,7 +91,7 @@ export function mlResolveOffseason(s, choiceIdx) {
   const po = s.pendingOffseason;
   if (!po) return s;
   const choice = ML_OFFSEASON_CHOICES[choiceIdx];
-  const player = choice.apply(po.player, po.year);
+  const player = choice.apply(po.player, po.year, po);
   return {
     ...s,
     pendingOffseason: { ...po, player },

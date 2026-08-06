@@ -7,7 +7,7 @@ import { fmtRelTime, overall } from "../../core/core.js";
 import { ABILITIES, AB_LABEL, POW, TYPES } from "../../data/abilities.js";
 import { DIFFICULTIES } from "../../data/progression.js";
 import { C, FONT_D, FONT_M } from "../../data/theme.js";
-import { MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGradeColor, mlTalentRank } from "../../logic/support.js";
+import { MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGradeColor, mlGrowthPowRevealed, mlTalentRank } from "../../logic/support.js";
 import { loadMyLifeGame, myLifeSaveInfo } from "../../state/state.js";
 
 export function renderMyLifeCreateScreens(ctx) {
@@ -225,7 +225,10 @@ export function renderMyLifeCreateScreens(ctx) {
     // 気に入るまで「引き直す」できる（確定するまでセーブされない）。
     if (ml.screen === "mylife_scout" && ml.player) {
       const r = ml.player;
-      const tr = mlTalentRank(r);
+      // v43(マイライフ難易度調整Phase 1・成長力マスク化): 成長力は3年目まで非公開。
+      // 素質診断はこの時点(year=1)では常に非公開側で採点する（成長力込みのSSを狙うリセマラ潰し）。
+      const powRevealed = mlGrowthPowRevealed(ml);
+      const tr = mlTalentRank(r, powRevealed);
       const pw = POW[r.growthPow];
       const persLabel = tr.parts?.persLabel || "普通";
       return mlWrap(
@@ -241,7 +244,9 @@ export function renderMyLifeCreateScreens(ctx) {
                 <div style={{ fontFamily: FONT_D, fontSize: 17, color: C.text }}>{r.name}<span style={{ marginLeft: 6, fontSize: 11, color: TYPES[r.type].color }}>{TYPES[r.type].label}</span></div>
                 <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{r.age}歳・{ML_BACKGROUNDS[r.background]?.label} ／ OVR <b style={{ color: C.yellow, fontFamily: FONT_M }}>{overall(r)}</b></div>
                 <div style={{ fontSize: 11.5, marginTop: 2 }}>
-                  <span style={{ color: pw?.color || C.text, fontWeight: 700 }}>成長力 {r.growthPow}</span>
+                  {powRevealed
+                    ? <span style={{ color: pw?.color || C.text, fontWeight: 700 }}>成長力 {r.growthPow}</span>
+                    : <span style={{ color: C.sub, fontWeight: 700 }}>成長力 🔒???</span>}
                   <span style={{ color: C.sub }}> ・ 性格 </span><span style={{ color: r.personality === "genius" ? C.yellow : C.text }}>{persLabel}</span>
                 </div>
               </div>
@@ -258,7 +263,8 @@ export function renderMyLifeCreateScreens(ctx) {
           <Btn onClick={mlConfirmCandidate}>この素質でデビュー →</Btn>
           <Btn outline color={C.blue} onClick={mlRerollCandidate}>🎲 素質を引き直す（リセマラ）</Btn>
           <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", lineHeight: 1.6 }}>
-            成長力・性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓（金特）」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。
+            性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓（金特）」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。<br />
+            <span style={{ color: "#e8a13c" }}>成長力（伸びやすさ）はデビュー3年目まで本人にも分かりません。</span>
           </div>
         </div>
       );

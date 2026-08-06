@@ -32,10 +32,21 @@ export const ML_STOCK_ITEMS = {
   drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
   supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },
   tune:  { label: "フォーム調整剤", desc: "フォームを+12（レース前の仕上げに）", price: 20, formDelta: 12 },
-  // v15フェーズ2: 成長力・成長タイプを底上げする消耗品
-  growthPowUp: { label: "才能開花プログラム", desc: "成長力を1段階アップ（C→B→A→S）", price: 180, growthPowUp: true },
-  growthShift: { label: "晩成型トレーニング理論", desc: "成長タイプを1段階「晩成」寄りに変更（早熟→普通→晩成→超晩成）", price: 150, growthShiftUp: true },
 };
+
+// v43(マイライフ難易度調整Phase 1・柱0-b): 成長力・成長タイプを底上げするアイテムは、従来
+// 「安価・繰り返し購入可」だったため、誰でもリセマラ抜きで最速450万円ちょっとで
+// 「超晩成×成長力S」という一極集中ビルドを確定入手できてしまっていた
+// （実測はDEVLOGの該当ウェーブ参照）。ML_STOCK_ITEMS（在庫を貯めて後で使う消耗品）から
+// 切り離し、mlBuyCar/mlBuyHouseと同じ「買った瞬間に即適用される買い切り」に変更した
+// （在庫を貯めてから安い時点のレートで大量purchaseする抜け道を構造的に塞ぐため）。
+//
+// 才能開花プログラム：現在の成長力(C/B/A/S)ごとに価格が跳ね上がる累進制（Sには次が無く購入不可）。
+export const ML_GROWTH_POW_UP_PRICE = { C: 400, B: 1200, A: 3000 };
+// 成長タイプ変更：キャリアを通じて1回限り（早熟寄り／晩成寄りいずれか一方向のみ選べる）。
+// 「タダ同然で晩成側に矯正する」ではなく「一度きりの選び直し」として機能させるため
+// 双方向を1つの権利として共有し、高額にした。
+export const ML_GROWTH_SHIFT_PRICE = 900;
 
 export const ML_SPECIAL_TRAINING = {
   altitude: { label: "🏔 高地合宿", keys: ["stamina", "solo"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "スタミナ・独走を集中的に鍛える（疲労大）" },

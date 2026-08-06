@@ -15,7 +15,7 @@ import { mlRaceFinish as mrRaceFinish, mlLastRaceFinish as mrLastRaceFinish } fr
 import {
   mlBuyPart as mshBuyPart, mlSetPart as mshSetPart, mlBuyGear as mshBuyGear, mlBuyStock as mshBuyStock,
   mlUseStock as mshUseStock, mlPrivateCamp as mshPrivateCamp, mlBuyCar as mshBuyCar, mlBuyHouse as mshBuyHouse,
-  mlSetFocus as mshSetFocus,
+  mlSetFocus as mshSetFocus, mlBuyGrowthPowUp as mshBuyGrowthPowUp, mlBuyGrowthShift as mshBuyGrowthShift,
 } from "../controllers/mylife/shop.js";
 import {
   mlBecomeMentor as mcBecomeMentor, mlChooseTeam as mcChooseTeam,
@@ -217,6 +217,10 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   const mlPrivateCamp = () => setMl(mshPrivateCamp);
   const mlBuyCar = () => setMl(mshBuyCar);
   const mlBuyHouse = () => setMl(mshBuyHouse);
+  // v43(マイライフ難易度調整Phase 1・柱0-b): 成長力アップ／成長タイプ変更は在庫消耗品から
+  // 買い切り（mlBuyCar/mlBuyHouseと同型）に変更したための新規ラッパー。
+  const mlBuyGrowthPowUp = () => setMl(mshBuyGrowthPowUp);
+  const mlBuyGrowthShift = (dir) => setMl(s => mshBuyGrowthShift(s, dir));
 
   return {
     ml, setMl, mlCreateArgsRef, ML_MILESTONE_LABEL,
@@ -227,6 +231,6 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     mlChooseTeam, mlResolveOffseason, mlContinueAfterOffseason, mlResolveCrossroads, mlContinueAfterCrossroads,
     mlTriggerEvent, mlTriggerSponsorGig, mlResolveEvent,
     mlBuyPart, mlSetPart, mlBuyGear, mlBuyStock, mlUseStock, mlUseStockConfirm,
-    mlPrivateCamp, mlBuyCar, mlBuyHouse, mlGenRace,
+    mlPrivateCamp, mlBuyCar, mlBuyHouse, mlBuyGrowthPowUp, mlBuyGrowthShift, mlGenRace,
   };
 }

@@ -20,14 +20,21 @@ export const AB_LABEL = { flat: "平坦", climb: "登坂", sprint: "ｽﾌﾟﾘ
 
 export const AB_COLOR = { flat: C.blue, climb: C.red, sprint: C.green, stamina: "#c9a13c", solo: C.purple };
 
+// v43(マイライフ難易度調整Phase 1・柱0): gainMulはlogic/support.jsのgrowthPhase()が
+// 返すgain（練習・出走経験の伸び倍率）に掛かるタイプ別係数。従来は成長期・全盛期・
+// 衰え期の長さ（peak）だけが違い、伸び速度は全タイプ共通1.0だったため、ピークが遅い
+// ほど「成長期が長い＝総成長量が多い」だけの一方的な優劣になっていた（晩成・超晩成が
+// 早熟・普通の完全上位互換）。ここに速度側の逆補正を掛けて、「早く強くなるが総量は
+// 少ない（早熟）」⇔「総量は多いが遅い（晩成）」という本来のトレードオフに戻す。
+// season/mylife両方がgrowthPhase()を共有するため、この係数は両モードへ自動的に効く。
 export const GROWTH = {
-  early: { label: "早熟", peak: [21, 25] },
-  normal: { label: "普通", peak: [24, 29] },
-  late: { label: "晩成", peak: [28, 33] },
+  early: { label: "早熟", peak: [21, 25], gainMul: 1.7 },
+  normal: { label: "普通", peak: [24, 29], gainMul: 1.25 },
+  late: { label: "晩成", peak: [28, 33], gainMul: 1.0 },
   // v19: 早熟・晩成それぞれの極端形。superEarly/超晩成は通常の3タイプよりさらに
   // ピークが偏っており、ごく稀にしか出現しない（newRiderの生成時に低確率で抽選）
-  super_early: { label: "超早熟", peak: [18, 21] },
-  super_late: { label: "超晩成", peak: [32, 38] },
+  super_early: { label: "超早熟", peak: [18, 21], gainMul: 2.4 },
+  super_late: { label: "超晩成", peak: [32, 38], gainMul: 0.85 },
 };
 
 export const POW = {

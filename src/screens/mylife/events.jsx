@@ -2,14 +2,15 @@
 import React from "react";
 import { FatigueBar } from "../../components/panels.jsx";
 import { Btn, Eyebrow } from "../../components/ui.jsx";
-import { AB_LABEL, TYPES } from "../../data/abilities.js";
-import { CLASSES } from "../../data/progression.js";
+import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
+import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
+import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE } from "../../data/gear.js";
 import { C, FONT_D, FONT_M } from "../../data/theme.js";
-import { CLASS_TIER_COLOR, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
+import { CLASS_TIER_COLOR, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
 import { PARTS, PART_SLOTS } from "../../sim/race.js";
 
 export function renderMyLifeEventScreens(ctx) {
-  const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUseStockConfirm, mlWrap, setMl } = ctx;
+  const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyGrowthPowUp, mlBuyGrowthShift, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUseStockConfirm, mlWrap, setMl } = ctx;
     if (ml.screen === "mylife_shop" && ml.player) {
       const r = ml.player;
       const availPartsMl = (pid) => (ml.partsInv[pid] || 0) - (Object.values(r.parts || {}).includes(pid) ? 1 : 0);
@@ -134,6 +135,44 @@ export function renderMyLifeEventScreens(ctx) {
                   {ml.houseLv >= i ? null : <Btn small color={C.red} disabled={ml.money < h.price || ml.houseLv !== i - 1} onClick={mlBuyHouse}>{h.price}万</Btn>}
                 </div>
               ))}
+            </div>
+          </section>)}
+          {shopCat === "perm" && (<section>
+            <Eyebrow color={C.yellow}>才能開花プログラム（成長力を1段階アップ・買い切り）</Eyebrow>
+            {mlGrowthPowRevealed(ml)
+              ? <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <div>
+                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>現在の成長力：<span style={{ fontFamily: FONT_M }}>{r.growthPow}</span></div>
+                    <div style={{ color: C.sub, fontSize: 11 }}>現在の段階に応じて価格が上がる、後戻りできない買い切り強化</div>
+                  </div>
+                  {GROWTHPOW_ORDER.indexOf(r.growthPow) >= GROWTHPOW_ORDER.length - 1
+                    ? <span style={{ fontSize: 11, color: C.yellow, whiteSpace: "nowrap" }}>✔ 最高段階</span>
+                    : <Btn small color={C.yellow} disabled={ml.money < ML_GROWTH_POW_UP_PRICE[r.growthPow]} onClick={mlBuyGrowthPowUp}>{ML_GROWTH_POW_UP_PRICE[r.growthPow]}万</Btn>}
+                </div>
+              : <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, marginTop: 6, opacity: 0.7 }}>
+                  <div style={{ color: C.sub, fontSize: 13.5, fontWeight: 700 }}>🔒 成長力 ???</div>
+                  <div style={{ color: C.sub, fontSize: 11 }}>デビュー3年目に成長力が判明してから購入できます</div>
+                </div>}
+          </section>)}
+          {shopCat === "perm" && (<section>
+            <Eyebrow color={C.blue}>成長タイプ変更（キャリア通じて1回限り）</Eyebrow>
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>現在の成長タイプ：<span style={{ fontFamily: FONT_M }}>{GROWTH[r.growth]?.label ?? r.growth}</span></div>
+                <div style={{ color: C.sub, fontSize: 11 }}>早熟寄り・晩成寄りのどちらか一方向のみ、キャリアで1回だけ選び直せる</div>
+              </div>
+              {ml.player.growthShiftUsed
+                ? <span style={{ fontSize: 11, color: C.blue, whiteSpace: "nowrap" }}>✔ 使用済み</span>
+                : (() => {
+                    const gIdx = GROWTH_ORDER.indexOf(r.growth);
+                    const affordable = ml.money >= ML_GROWTH_SHIFT_PRICE;
+                    return (
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <Btn small outline color={C.blue} disabled={!affordable || gIdx <= 0} onClick={() => mlBuyGrowthShift(-1)}>早熟寄りへ（{ML_GROWTH_SHIFT_PRICE}万）</Btn>
+                        <Btn small color={C.blue} disabled={!affordable || gIdx < 0 || gIdx >= GROWTH_ORDER.length - 1} onClick={() => mlBuyGrowthShift(1)}>晩成寄りへ（{ML_GROWTH_SHIFT_PRICE}万）</Btn>
+                      </div>
+                    );
+                  })()}
             </div>
           </section>)}
           <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>

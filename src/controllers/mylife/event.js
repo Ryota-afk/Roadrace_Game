@@ -7,10 +7,11 @@ import { addAb, growSub, mlGrowthCap } from "../../logic/support.js";
 import { mlAdvanceMonth } from "./month.js";
 
 // v14.2: 私生活・取材イベント（練習/休養以外の月次アクション）
-export function mlApplyEventEffects(player0, effects, year) {
+// v43: 第3引数はmlの状態そのもの（実績連動の成長キャップ計算に使う）。
+export function mlApplyEventEffects(player0, effects, ml) {
   const player = { ...player0 };
   if (effects.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + effects.fatigueDelta));
-  if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, mlGrowthCap(year)));
+  if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, mlGrowthCap(ml.year, player, ml)));
   // v27: 個人スポンサー依頼イベント用。人気度も増減させられるようにする
   if (effects.popularityDelta) player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + effects.popularityDelta));
   // v36(#8): 私生活イベントを有意義に。メンタル（フォーム安定・大舞台に効く副ステータス）を育てられる
@@ -61,7 +62,7 @@ export function mlResolveEvent(s, choiceIdx) {
   const ev = s.pendingEvent;
   if (!ev) return s;
   const choice = ev.choices[choiceIdx];
-  const player = mlApplyEventEffects(s.player, choice.effects, s.year);
+  const player = mlApplyEventEffects(s.player, choice.effects, s);
   const managerEval = Math.max(0, Math.min(100, s.managerEval + (choice.effects.managerEvalDelta || 0)));
   // v27: スポンサー依頼イベントの報酬（お金）を即時反映する
   const money = s.money + (choice.effects.moneyDelta || 0);
@@ -84,7 +85,7 @@ export function mlResolveProtegeEvent(s, choiceIdx) {
     ovrBonus: (s.protege.ovrBonus || 0) + (pd.ovrBonus || 0),
   };
   let player = s.player;
-  if (md.abBoost) { const cap = mlGrowthCap(s.year, player); player = { ...player }; AB_KEYS.forEach(k => { player[k] = Math.min(cap, (player[k] || 0) + md.abBoost); }); }
+  if (md.abBoost) { const cap = mlGrowthCap(s.year, player, s); player = { ...player }; AB_KEYS.forEach(k => { player[k] = Math.min(cap, (player[k] || 0) + md.abBoost); }); }
   const fatigue = Math.max(0, Math.min(100, (player.fatigue || 0) + (md.fatigueDelta || 0)));
   player = { ...player, fatigue };
   const managerEval = Math.max(0, Math.min(100, s.managerEval + (md.evalDelta || 0)));

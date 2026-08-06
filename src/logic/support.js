@@ -17,7 +17,7 @@ import { ML_AB_COACH_KEY, ML_CARS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_S
 import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_COLOR, DIFFICULTIES, DISCIPLINES, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL } from "../data/progression.js";
 import { C } from "../data/theme.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "../sim/race.js";
-import { ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, mlAmbitionMetricValue } from "../state/state.js";
+import { ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, mlAmbitionMetricValue, mlFirstUnmetRung } from "../state/state.js";
 import { mlWorldStarsForYear } from "../world/world.js";
 import { riderFlavorText } from "../view/flavor.js";
 import { mlNewspaper, mlWorldNews, rivalNews } from "../view/news.js";
@@ -111,28 +111,37 @@ export function noteAbilityDiscovery(riders) {
 
 export const persMul = (r, k) => (PERSONALITIES[r.personality]?.mul[k]) || 1;
 
-export const softFactor = (v, cap = 88) => (v < cap ? 1 : Math.exp(-(v - cap) / 4));
+// v43(マイライフ難易度調整Phase 1): 突破力(breakthrough)をgrowthFactorと同じ考え方で反映。
+// breakthrough=50（既定・旧セーブ互換）のとき0.5+50/100=1で従来のexp(-(v-cap)/4)と完全一致する。
+export const softFactor = (v, cap = 88, breakthrough = 50) => (v < cap ? 1 : Math.exp(-(v - cap) / (GROWTH_DECAY_DIV * (0.5 + breakthrough / 100))));
 
 // v39.14(バランス): 能力成長の逓減カーブ。従来のsoftFactorは「capまで減速ゼロ→capで壁」だったため、
 // 伸びが一直線に上限へ張り付き、2年ほどでカンスト＝以降の成長に手応えが無くなっていた。
 // 上限の手前TAPERから徐々に鈍らせ、「最後の20点は簡単には埋まらない」育成カーブにする。
 export const GROWTH_TAPER = 42;
 export const GROWTH_AT_CAP = 0.2;                  // 上限到達時点の伸び倍率（ここから先はさらに急減衰）
-export const growthFactor = (v, cap = 88) => {
+export const GROWTH_DECAY_DIV = 4;                 // 上限超過後の減衰の緩さ（大きいほど緩やかに減衰）
+// v43(マイライフ難易度調整Phase 1): 新ステータス「突破力」(breakthrough, 1〜100・既定50)。
+// 上限到達時点の伸び倍率(atCap)と減衰の緩さ(decayDiv)の両方を、既定値(50)を中心に
+// ±50%の範囲で動かす（breakthrough=50のとき従来どおりGROWTH_AT_CAP/GROWTH_DECAY_DIVと
+// 完全一致する連続式にしてあるため、突破力を持たない旧セーブの選手・NPCも挙動が変わらない）。
+export const growthFactor = (v, cap = 88, breakthrough = 50) => {
+  const atCap = GROWTH_AT_CAP * (0.5 + breakthrough / 100);
+  const decayDiv = GROWTH_DECAY_DIV * (0.5 + breakthrough / 100);
   // 上限超過は急減衰。上限ぴったりで倍率が跳ね上がらないよう、逓減カーブの終端値から連続させる
-  if (v >= cap) return GROWTH_AT_CAP * Math.exp(-(v - cap) / 4);
+  if (v >= cap) return atCap * Math.exp(-(v - cap) / decayDiv);
   const t = Math.max(0, Math.min(1, (v - (cap - GROWTH_TAPER)) / GROWTH_TAPER));
-  return 1 - (1 - GROWTH_AT_CAP) * t * t;
+  return 1 - (1 - atCap) * t * t;
 };
 
-export const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * growthFactor(r[k], cap); };
+export const addAb = (r, k, amount, cap) => { r[k] = r[k] + amount * growthFactor(r[k], cap, r.breakthrough ?? 50); };
 
 // v38(改善): 副ステ（加速力/体格/メンタル）の上限を 94→110、フル成長域を 88→100 に拡張。
 // 従来はメンタルが数年で94にカンストして「大舞台の経験で育つ」意味が消えていた。天井を上げ、
 // 高域はソフトキャップで緩やかに伸ばす＝キャリアを通じて育て続けられる長期ステータスにする。
 export function growSub(r, key, amount) {
   const v = r[key] ?? 50;
-  r[key] = Math.min(110, v + amount * softFactor(v, 100));
+  r[key] = Math.min(110, v + amount * softFactor(v, 100, r.breakthrough ?? 50));
 }
 
 export function rollCondDir() {
@@ -862,10 +871,10 @@ export function mlRollCrossroads(s, player) {
 export const ML_OFFSEASON_CHOICES = [
   { key: "domestic", label: "国内で自主トレーニングに励む", desc: "堅実に基礎を積む。伸びは控えめだが安全",
     result: "オフシーズンは国内で黙々と走り込み、着実に地力を蓄えた。",
-    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, mlGrowthCap(year, p))); return p; } },
+    apply: (player, year, ml) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, mlGrowthCap(year, p, ml))); return p; } },
   { key: "overseas", label: "海外武者修行に出る", desc: "レベルの高い環境に飛び込む。伸びは大きいが疲労が残る",
     result: "海外の強豪選手たちに揉まれ、大きく成長する手応えを掴んだ。ただし疲労が抜けきらないまま新シーズンを迎えることになった。",
-    apply: (player, year) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, mlGrowthCap(year, p))); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
+    apply: (player, year, ml) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, mlGrowthCap(year, p, ml))); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
   { key: "rest", label: "心身をしっかり休める", desc: "疲労を大きくリセットして万全の状態で新シーズンへ",
     result: "オフシーズンをゆっくり過ごし、心身ともにリフレッシュして新シーズンを迎える。",
     apply: (player) => ({ ...player, fatigue: Math.max(0, player.fatigue - 40) }) },
@@ -942,10 +951,39 @@ export function managerEvalTier(v) {
 
 
 
-export function mlGrowthCap(year, player) {
+// v43(マイライフ難易度調整Phase 1・柱1): 経過年数だけで誰でも同じペースでカンストしていた
+// （難易度を問わず年9〜10でキャップに到達、実測はDEVLOG該当ウェーブ参照）ことへの対処。
+// 時間経過による底上げは+10年分（+20）で頭打ちにし、それ以降の伸びしろは「実績」（大望の道の
+// 踏破・大舞台タイトル・通算勝利）でしか広がらないようにする。難易度が上がるほど実績1つあたりの
+// 価値を下げる（鬼は0.5倍）ことで、"難易度=キャップの伸ばしにくさ"という手応えを作る。
+const ML_GROWTHCAP_DIFF_MUL = { easy: 1.3, normal: 1.0, hard: 0.75, oni: 0.5 };
+
+// 実績ボーナス：現在選んでいる大望の道でクリア済みのはしご数(0-5)×3、大舞台タイトル×4、
+// 通算勝利5勝ごとに+1（この項だけで+10まで）。mlはml状態そのもの（year/careerWins/careerTitles/
+// ambitionPath/player.raceLog等）を想定。無ければ0を返す（呼び出し側でmlが渡せない箇所への配慮）。
+export function mlAchievementBonus(ml) {
+  if (!ml) return 0;
+  const rungs = mlFirstUnmetRung(ml, ml.ambitionPath || "victory");
+  const majors = ml.careerTitles || 0;
+  const winsBonus = Math.min(10, Math.floor((ml.careerWins || 0) / 5));
+  return rungs * 3 + majors * 4 + winsBonus;
+}
+
+export function mlGrowthCap(year, player, ml) {
   // v33: 配合の才能キャップ（talentCap）は選手固有の限界突破分。生まれ持った素質で天井が上がる
   const talent = (player && player.talentCap) ? player.talentCap : 0;
-  return Math.min(140, 90 + Math.floor(Math.max(0, (year || 1) - 1)) * 2 + talent);
+  // v43: 経過年数の効果は+10年分で頭打ち（従来は無制限に伸び続けていた）
+  const timeComponent = Math.min(10, Math.floor(Math.max(0, (year || 1) - 1))) * 2;
+  const achievementBonus = mlAchievementBonus(ml);
+  const diffMul = ML_GROWTHCAP_DIFF_MUL[(ml && ml.difficulty) || "normal"] ?? 1.0;
+  return Math.min(140, 90 + timeComponent + achievementBonus * diffMul + talent);
+}
+
+// v43(マイライフ難易度調整Phase 1・成長力マスク化): 成長力(growthPow)はリセマラ・引き直しでの
+// 「Sが出るまで粘る」を防ぐため、デビュー直後（3年目未満）は選手本人にも非公開にする。
+// 3年目（year>=3）になった時点で判明する。判断⑫（ユーザー承認済み）。
+export function mlGrowthPowRevealed(ml) {
+  return ((ml && ml.year) || 1) >= 3;
 }
 
 export function mlLivingCost(s) {
@@ -1114,16 +1152,23 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
   return { sim, aiTeams: aiTeamsUsed };
 }
 
+// v43(マイライフ難易度調整Phase 1・柱0): GROWTH[r.growth].gainMulを乗算し、成長タイプごとの
+// 伸び速度に差をつける（詳細はdata/abilities.jsのGROWTH定義コメント参照）。season/mylife
+// 両方がこの関数を共有するため、係数は両モードへ自動的に効く。
 export function growthPhase(r) {
-  const [ps, pe] = GROWTH[r.growth].peak;
-  if (r.age < ps) return { gain: 1.0, dec: 0, tag: "成長期" };
-  if (r.age <= pe) return { gain: 0.5, dec: 0, tag: "全盛期" };
-  return { gain: 0.1, dec: Math.min(1.2, 0.25 * (r.age - pe)), tag: "衰え期" };
+  const def = GROWTH[r.growth];
+  const [ps, pe] = def.peak;
+  const mul = def.gainMul ?? 1.0;
+  if (r.age < ps) return { gain: 1.0 * mul, dec: 0, tag: "成長期" };
+  if (r.age <= pe) return { gain: 0.5 * mul, dec: 0, tag: "全盛期" };
+  return { gain: 0.1 * mul, dec: Math.min(1.2, 0.25 * (r.age - pe)), tag: "衰え期" };
 }
 
-export function potentialHint(r) {
+// v43(マイライフ難易度調整Phase 1・成長力マスク化): revealPow=falseの間はpowScoreを除外する
+// （マイライフの成長力非公開期間中、この「伸びしろ」ヒントから逆算されないようにするため）。
+export function potentialHint(r, revealPow = true) {
   const phase = growthPhase(r).tag;
-  const powScore = { S: 3, A: 2, B: 1, C: 0 }[r.growthPow] ?? 1;
+  const powScore = revealPow ? ({ S: 3, A: 2, B: 1, C: 0 }[r.growthPow] ?? 1) : 0;
   let score = powScore;
   if (phase === "成長期") score += 2;
   else if (phase === "全盛期") score += 1;
@@ -1386,9 +1431,13 @@ export function protegeState(protege, year) {
 
 // v36(#5リセマラ): デビュー時の「素質ランク」を算出する純関数。成長力・性格・特殊能力（金特/良特/悪特）・
 // 爆発力（配合の伸びしろ）を総合し SS〜D で格付け。リセマラで狙う目標をひと目で示す。
-export function mlTalentRank(player) {
+// v43(マイライフ難易度調整Phase 1・成長力マスク化): 成長力(growthPow)自体は3年目まで非公開にするが、
+// この素質ランクは成長力に最も重く（他の項目の2倍以上）依存しているため、成長力を隠したまま
+// 素質ランクだけ見せると「Sランクが出るまで粘る」というリセマラの実質が温存されてしまう。
+// revealPow=falseの間はpowScore項を丸ごと除外し、素質ランクからも成長力を推測できないようにする。
+export function mlTalentRank(player, revealPow = true) {
   if (!player) return { rank: "C", color: "#9aa3b5", score: 0 };
-  const powScore = { S: 3, A: 2, B: 1, C: 0 }[player.growthPow] ?? 1;
+  const powScore = revealPow ? ({ S: 3, A: 2, B: 1, C: 0 }[player.growthPow] ?? 1) : 0;
   const pers = PERSONALITIES[player.personality];
   const persScore = player.personality === "genius" ? 2.2 : (player.personality === "normal" ? 0 : 0.5);
   const abils = player.abilities || [];

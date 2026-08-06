@@ -168,10 +168,19 @@ export function genSubStats(type, rng, opts = {}) {
   const persM = { genius: 8, smart: 5, seeker: 4, artisan: 2 }[opts.personality] ?? 0;
   const boost = opts.forceProdigy ? 10 : 0;
   const cl = (v) => Math.max(20, Math.min(95, Math.round(v)));
+  // v43(マイライフ難易度調整Phase 1): 新ステータス「突破力」「安定感」。buildと同じく
+  // 生まれつき固定・才能とは無関係（逸材補正なし）。判断⑳「ゆるやかに脚質差をつける
+  // 程度」に基づき、buildのタイプ差(34〜68点)より狭い幅(44〜58点)に留めている。
+  // 突破力：山岳・独走系（じっくり型）がやや高め、スプリンター（瞬発型）がやや低め。
+  // 安定感：独走・平坦系（淡々と走る）がやや高め、スプリンター（爆発力型）がやや低め。
+  const breakthroughBase = { CLM: 58, TT: 56, RUL: 52, PUN: 50, SPR: 44 }[type] ?? 50;
+  const stabilityBase = { TT: 58, RUL: 56, PUN: 50, CLM: 48, SPR: 44 }[type] ?? 50;
   return {
     accel: cl(accelBase + j() + boost),
     build: cl(buildBase + j()), // 体格は才能とは無関係なので逸材補正なし
     mental: cl(48 + (rng() - 0.5) * 40 + persM + boost),
+    breakthrough: cl(breakthroughBase + j()),
+    stability: cl(stabilityBase + j()),
   };
 }
 

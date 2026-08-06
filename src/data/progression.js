@@ -47,7 +47,8 @@ export const DISCIPLINE_KEYS = Object.keys(DISCIPLINES);
 
 export const FAVORS_TO_DISCIPLINE = { SPR: "sprint", CLM: "climb", PUN: "hill", TT: "solo" };
 
-export const SUB_STAT_LABEL = { accel: "加速力", build: "体格", mental: "メンタル" };
+// v43(マイライフ難易度調整Phase 1): 突破力・安定感を追加（新ステータス。生成はcore/core.jsのgenSubStats参照）
+export const SUB_STAT_LABEL = { accel: "加速力", build: "体格", mental: "メンタル", breakthrough: "突破力", stability: "安定感" };
 
 export const CHEMISTRY_TIERS = [
   { min: 30, label: "鉄壁の絆", mul: 0.92 },

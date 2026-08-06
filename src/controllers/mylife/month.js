@@ -30,11 +30,10 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
   const carLv = ctx ? ctx.carLv : -1;
   const houseLv = ctx ? ctx.houseLv : -1;
   const flags = (ctx && ctx.flags) || {};
-  // v39.14(バランス): 難易度で成長上限を変える。従来は難易度がAIの強さにしか効かず、どの難易度でも
-  // 2年ほどでカンストして「成長の楽しみ」が消えていた。上位難易度ほど天井が低く、伸ばし切るには
-  // 長いキャリアと良い育成（活力・コーチ・特能）が要る＝難易度が育成そのものの手応えに直結する。
-  const diffCapAdj = ({ easy: 4, normal: 0, hard: -5, oni: -10 })[(ctx && ctx.difficulty) || "easy"] ?? 0;
-  const growthCap = mlGrowthCap(ctx && ctx.year, player) + diffCapAdj;
+  // v43(マイライフ難易度調整Phase 1・柱1): 難易度による成長上限の調整は、mlGrowthCap内部の
+  // 実績ボーナス×難易度倍率（easy1.3〜oni0.5）に一本化した（旧diffCapAdjの一律加減算は廃止）。
+  // ctx.mlStateはmlAdvanceMonth側で渡す実績連動計算用のml状態スナップショット。
+  const growthCap = mlGrowthCap(ctx && ctx.year, player, ctx && ctx.mlState);
   // v35(バランス): マイライフには選手本人の故障システムが無く、「ガラスの体」（危険度＝濃い配合の代償）が
   // 完全に無効化されていた（＝インブリードがノーリスクで爆発力を得られる抜け穴）。故障システムを新設せず、
   // 脆い体を「疲労が溜まりやすく抜けにくい」形で表現し、健康管理（休養の頻度）に実コストを課す。
@@ -157,8 +156,11 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
   // 固定して能力への二重補正を止め、月々の好不調の波・予報・ピーキングをすべてフォームに集約する。
   player.cond = 3;
   const mentalSteady = Math.max(0.6, Math.min(1.4, 1 - ((player.mental ?? 50) - 50) / 250));
+  // v43(マイライフ難易度調整Phase 1・判断19a): 新ステータス「安定感」で変動幅を追加で狭める。
+  // stability=50（既定・旧セーブ互換）のとき倍率1で従来と完全一致する。
+  const stabilitySteady = Math.max(0.5, Math.min(1.3, 1 - ((player.stability ?? 50) - 50) / 150));
   // 毎月の波の大きさ（moodyは激しく、精密機械/steady_spは小さく、メンタルが高いほど安定）
-  const swingMag = (hasAbility(player, "moody") ? 10 : hasAbility(player, "steady_sp") ? 3 : 6) * mentalSteady;
+  const swingMag = (hasAbility(player, "moody") ? 10 : hasAbility(player, "steady_sp") ? 3 : 6) * mentalSteady * stabilitySteady;
   const dir = (player.formForecast != null) ? player.formForecast : rollCondDir();
   const curForm = player.form ?? 50;
   // ピーキング調整の月はフォームが大きく上がる。それ以外は基準値(48)へ戻りつつ月々の波が乗る
@@ -182,7 +184,7 @@ export function mlAdvanceMonth(s, mode) {
     ? [...new Set(s.result.course.segs.map(seg => SEG_AB[seg.type]))] : [];
   const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
   const raceWeather = (mode === "race" && s.resultInfo) ? s.resultInfo.race.weather : null;
-  const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather };
+  const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather, mlState: s };
   // v38(改善:育成の手応え): 月次アクション前の能力・OVR・活力を控えておき、後で「今月の成長」を可視化する
   const _preAb = {}; AB_KEYS.forEach(k => { _preAb[k] = s.player[k] || 0; });
   const _preSub = { accel: s.player.accel || 0, mental: s.player.mental || 0 };

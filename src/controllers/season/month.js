@@ -125,7 +125,10 @@ export function monthlyUpdate(state, raceInfo) {
     if (hasAbility(n, "recover")) n.fatigue = Math.max(0, n.fatigue - 15);
     if (hasAbility(n, "recover2")) n.fatigue = Math.max(0, n.fatigue - 25); // v37(第2弾): 超回復
     // v27: コンディション予報。前月に予報した向きを実際の変動として適用し、翌月の予報を新たに引く
-    const swing = hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1;
+    // v43(マイライフ難易度調整Phase 1・判断19a): 新ステータス「安定感」で変動幅そのものを狭める。
+    // stability=50（既定・旧セーブ互換）のとき倍率1で従来と完全一致する。
+    const stabilitySteady = Math.max(0.5, Math.min(1.3, 1 - ((n.stability ?? 50) - 50) / 150));
+    const swing = (hasAbility(n, "moody") ? 2 : hasAbility(n, "steady_sp") ? 0.5 : 1) * stabilitySteady;
     const dir = (n.condForecast != null) ? n.condForecast : rollCondDir();
     n.cond = Math.max(1, Math.min(5, n.cond + dir * swing));
     n.condForecast = rollCondDir();

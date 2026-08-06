@@ -2,7 +2,7 @@
 // controllers/season/shop.js の対（マイライフ側は setMl への薄い接続）。
 import { MONTHS } from "../../data/course.js";
 import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
-import { ML_CARS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS } from "../../data/gear.js";
+import { ML_CARS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE } from "../../data/gear.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PARTS } from "../../sim/race.js";
 import { addAb, mlGrowthCap, mlPrivateCampCost } from "../../logic/support.js";
@@ -35,16 +35,28 @@ export function mlUseStock(s, k) {
   const player = { ...s.player };
   if (it.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + it.fatigueDelta));
   if (it.formDelta) player.form = Math.max(0, Math.min(100, (player.form ?? 50) + it.formDelta));
-  // v15フェーズ2: 成長力・成長タイプを1段階アップさせる消耗品
-  if (it.growthPowUp) {
-    const idx = GROWTHPOW_ORDER.indexOf(player.growthPow);
-    if (idx >= 0 && idx < GROWTHPOW_ORDER.length - 1) player.growthPow = GROWTHPOW_ORDER[idx + 1];
-  }
-  if (it.growthShiftUp) {
-    const idx = GROWTH_ORDER.indexOf(player.growth);
-    if (idx >= 0 && idx < GROWTH_ORDER.length - 1) player.growth = GROWTH_ORDER[idx + 1];
-  }
   return { ...s, player, stock: { ...s.stock, [k]: s.stock[k] - 1 } };
+}
+
+// v43(マイライフ難易度調整Phase 1・柱0-b): 成長力アップは在庫消耗品ではなく買った瞬間に
+// 即適用される買い切り（mlBuyCar/mlBuyHouseと同じ形）。現在の成長力ごとに価格が
+// 累進するため、在庫を安値のうちに買い貯めてあとで使う抜け道が構造的に塞がれる。
+export function mlBuyGrowthPowUp(s) {
+  const player = s.player;
+  const price = ML_GROWTH_POW_UP_PRICE[player.growthPow];
+  const idx = GROWTHPOW_ORDER.indexOf(player.growthPow);
+  if (price == null || idx < 0 || idx >= GROWTHPOW_ORDER.length - 1 || s.money < price) return s;
+  return { ...s, money: s.money - price, player: { ...player, growthPow: GROWTHPOW_ORDER[idx + 1] } };
+}
+
+// 成長タイプ変更：キャリア通じて1回限り（dir=+1で晩成寄り、dir=-1で早熟寄り）。
+export function mlBuyGrowthShift(s, dir) {
+  const player = s.player;
+  if (player.growthShiftUsed || s.money < ML_GROWTH_SHIFT_PRICE) return s;
+  const idx = GROWTH_ORDER.indexOf(player.growth);
+  const nextIdx = idx + dir;
+  if (idx < 0 || nextIdx < 0 || nextIdx >= GROWTH_ORDER.length) return s;
+  return { ...s, money: s.money - ML_GROWTH_SHIFT_PRICE, player: { ...player, growth: GROWTH_ORDER[nextIdx], growthShiftUsed: true } };
 }
 
 // v27: 私設強化合宿。潤沢な資金を注ぎ込んで狙った能力（focus）を一気に引き上げる、
@@ -53,7 +65,7 @@ export function mlUseStock(s, k) {
 export function mlPrivateCamp(s) {
   const cost = mlPrivateCampCost(s);
   if (s.money < cost) return s;
-  const growthCap = mlGrowthCap(s.year, s.player);
+  const growthCap = mlGrowthCap(s.year, s.player, s);
   const player = { ...s.player };
   const before = player[player.focus];
   addAb(player, player.focus, 6, growthCap);
