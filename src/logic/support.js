@@ -10,6 +10,7 @@ import { ABILITIES, AB_KEYS, GROWTH, PERSONALITIES, TYPES } from "../data/abilit
 import { BREED_NICKS } from "../data/breeding.js";
 import { VENUE_REGION, UNLOCK_TEMPLATES } from "../data/course.js";
 import { EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_META, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER } from "../data/economy.js";
+import { ROOM_GRADE_MAX, ROOM_UPGRADE_KEYS } from "../data/roomUpgrade.js";
 import { EVENTS, ML_BACKGROUNDS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_SPONSOR_GIGS } from "../data/events.js";
 import { MANAGER_DIRECTIVES, SEASON_OBJECTIVES } from "../data/directives.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS } from "../data/gear.js";
@@ -893,6 +894,10 @@ export const SEASON_ACHIEVEMENTS = [
     check: (g) => !!g.captainId },
   { id: "jersey", icon: "🎽", label: "副次タイトル獲得", desc: "グランツールでポイント賞・山岳賞・新人賞のいずれかを獲得する", reward: { money: 60, cp: 1 },
     check: (g) => { const j = g.jerseyWinCounts; return !!j && (j.points > 0 || j.mountains > 0 || j.youth > 0); } },
+  // Wave H-2: 内装グレードは能力値に影響しない見た目のみの購入軸のため、実績報酬で
+  // 購入動機を補う（判断⑤a+c：効果は付けず、実績連動のみ）。
+  { id: "room_full_grade", icon: "🏡", label: "拠点フル改装", desc: "4つの持ち場すべての内装を最高グレードにする", reward: { money: 80, cp: 1 },
+    check: (g) => ROOM_UPGRADE_KEYS.every(k => (((g.roomLv || {})[k]) || 0) >= ROOM_GRADE_MAX) },
 ];
 
 // v41(§Step5): SEASON_ACHIEVEMENTSのchemistry_max判定がteamChemistryTier（本ファイル内）を呼ぶため、

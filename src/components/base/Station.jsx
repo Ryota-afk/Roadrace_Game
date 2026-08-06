@@ -159,13 +159,17 @@ function EmptyRoomFurniture({ w, l, proj }) {
 
 const FURNITURE = { roller: RollerFurniture, workbench: WorkbenchFurniture, medical: MedicalFurniture, desk: DeskFurniture, empty: EmptyRoomFurniture };
 
-export function Station({ s, proj, selected }) {
+// grade(0〜3)はWave H-2の内装グレード。G3のみバッジに金枠を追加する
+// （domain/season/baseViewLayout.jsのroomGrade参照。判断⑤a+c＝効果は無いが実績連動）。
+export function Station({ s, proj, selected, grade = 0 }) {
   const Furniture = FURNITURE[s.kind] || DeskFurniture;
   const label = isoBoxFaces(s.w, s.l, 0, 0, 0, proj).corners.N;
+  const goldBadge = grade >= 3;
   return (
     <g opacity={selected ? 1 : 0.98}>
       <Furniture w={s.w} l={s.l} proj={proj} />
       <g transform={`translate(${label.x.toFixed(1)},${(label.y - 24).toFixed(1)})`}>
+        {goldBadge && <rect x="-9.5" y="-10.5" width="19" height="17" rx="4" fill="none" stroke="#f5d98a" strokeWidth="1.4" />}
         <rect x="-8" y="-9" width="16" height="14" rx="3" fill={s.accent} opacity="0.92" />
         <text x="0" y="1.5" textAnchor="middle" fontSize="9" style={{ pointerEvents: "none" }}>{s.icon}</text>
       </g>

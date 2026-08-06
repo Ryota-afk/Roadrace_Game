@@ -160,6 +160,22 @@ export function buildingLevels(g) {
   };
 }
 
+// Wave H-2: 部屋の「内装グレード」(0〜3・見た目のみ・能力値への影響なし)を導出する。
+// buildingLevels(g)の「設備Lv」（実効果あり）とは独立した別軸。
+// - 4つの持ち場(training/mechanic/medical/scout)：g.roomLvへの購入(controllers/season/
+//   shop.jsのbuyRoomUpgrade)で0〜3が決まる。旧セーブにroomLv自体が存在しないケースに
+//   備え、Wave F-1のgrounds(equip.grounds)と同じ`|| 0`ガードを踏襲する。
+// - 廊下・納戸(corridor/spare1/spare2)：購入対象ではなく、クラブハウスのクラス(classIdx)
+//   に連動して自動で上がる（0〜2の3段階＝クラス数と一致）。「昇格するほど拠点全体が
+//   格上げされる」という体験にするため。
+export function roomGrade(g, roomKey) {
+  if (roomKey === "corridor" || roomKey === "spare1" || roomKey === "spare2") {
+    return Math.max(0, Math.min(2, g.classIdx || 0));
+  }
+  const lv = ((g.roomLv || {})[roomKey]) || 0;
+  return Math.max(0, Math.min(3, lv));
+}
+
 // 月(MONTHSのindex 0=4月〜11=3月)から四季を導出する。3ヶ月ごとに均等分割：
 // 0-2(4,5,6月)=春／3-5(7,8,9月)=夏／6-8(10,11,12月)=秋／9-11(1,2,3月)=冬。
 export function seasonOf(month) {

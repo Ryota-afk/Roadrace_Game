@@ -23,6 +23,7 @@ export const SEASON_MENU_CATEGORIES = [
     { key: "facility_equip", label: "施設状況・機材強化" },
     { key: "facility_staff", label: "スタッフ雇用" },
     { key: "facility_ob", label: "OBコーチ" },
+    { key: "facility_room", label: "内装・改装" },
   ] },
   { key: "market", icon: "🛒", label: "市場", sections: [
     { key: "market_scout", label: "新人スカウト・FA移籍" },

@@ -16,6 +16,7 @@ import { renderRidersYouthSection } from "./hub/riders/youth.jsx";
 import { renderFacilityEquipSection } from "./hub/facility/equip.jsx";
 import { renderFacilityStaffSection } from "./hub/facility/staff.jsx";
 import { renderFacilityObSection } from "./hub/facility/ob.jsx";
+import { renderFacilityRoomSection } from "./hub/facility/room.jsx";
 import { renderMarketScoutSection } from "./hub/market/scout.jsx";
 import { renderMarketTransferSection } from "./hub/market/transfer.jsx";
 import { renderMarketShopSection } from "./hub/market/shop.jsx";
@@ -38,6 +39,7 @@ const SECTION_RENDERERS = {
   facility_equip: renderFacilityEquipSection,
   facility_staff: renderFacilityStaffSection,
   facility_ob: renderFacilityObSection,
+  facility_room: renderFacilityRoomSection,
   market_scout: renderMarketScoutSection,
   market_transfer: renderMarketTransferSection,
   market_shop: renderMarketShopSection,

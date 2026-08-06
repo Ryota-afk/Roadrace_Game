@@ -13,6 +13,7 @@ import {
 } from "../controllers/season/transfer.js";
 import {
   buyItem as shBuyItem, buyPart as shBuyPart, setPart as shSetPart, buyEquip as shBuyEquip,
+  buyRoomUpgrade as shBuyRoomUpgrade,
   hireStaff as shHireStaff, hireObCoach as shHireObCoach, dismissObCoach as shDismissObCoach,
 } from "../controllers/season/shop.js";
 import {
@@ -255,6 +256,7 @@ export function useSeasonGame() {
   const buyPart = (pid) => setG(s => shBuyPart(s, pid));
   const setPart = (rid, slot, pid) => setG(s => shSetPart(s, rid, slot, pid));
   const buyEquip = (k) => setG(s => shBuyEquip(s, k));
+  const buyRoomUpgrade = (k) => setG(s => shBuyRoomUpgrade(s, k));
   const hireStaff = (k) => setG(s => shHireStaff(s, k));
   const hireObCoach = (hof) => setG(s => shHireObCoach(s, hof));
   const dismissObCoach = () => setG(shDismissObCoach);
@@ -279,7 +281,7 @@ export function useSeasonGame() {
     cls, healthy, equipMax, rosterMax, staffMax, growthCap, availParts,
     advanceMonth, retainRider, grantTransferRequest, poachRetain, poachAccept, poachSign, resolveEvent,
     startRace, startNextStage, finishRace, finishTeamTT, finishStage, raceFinishHandler,
-    buyItem, buyPart, setPart, buyEquip, hireStaff, hireObCoach, dismissObCoach,
+    buyItem, buyPart, setPart, buyEquip, buyRoomUpgrade, hireStaff, hireObCoach, dismissObCoach,
     signScout, signFa, useSupp, useTune, setFocus, useCamp, toggleFavorite, setCaptain,
     releaseRider, signYouthProspect, signBredYouth, acceptTrade, declineTrade,
   };

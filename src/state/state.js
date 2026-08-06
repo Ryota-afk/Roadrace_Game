@@ -279,6 +279,8 @@ export function initGame() {
     rivalRosters,
     equip: { frame: 0, wheels: 0, facility: 0, grounds: 0 },
     staff: { manager: 0, trainer: 0, doctor: 0, scout: 0 },
+    // Wave H-2: 部屋の内装グレード（見た目のみ・能力値への影響なし）。equipとは独立の軸。
+    roomLv: { training: 0, mechanic: 0, medical: 0, scout: 0 },
     inv: { wheel: 0, suit: 0, supp: 0, tune: 0, camp: 0 },
     partsInv: {},
     camp: false,

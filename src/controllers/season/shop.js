@@ -6,6 +6,7 @@ import { MONTHS } from "../../data/course.js";
 import { STAFF_MAX_BY_CLASS } from "../../data/economy.js";
 import { AB_LABEL } from "../../data/abilities.js";
 import { EQUIP_COST, ITEMS } from "../../data/items.js";
+import { ROOM_GRADE_MAX, ROOM_UPGRADE_COST, ROOM_UPGRADE_KEYS } from "../../data/roomUpgrade.js";
 import { OB_COACH_SALARY, TYPE_COACH_ABILITY } from "../../logic/support.js";
 import { PARTS } from "../../sim/race.js";
 
@@ -31,6 +32,16 @@ export function buyEquip(s, k) {
   const equipMax = 3 + s.classIdx;
   if (lv >= equipMax || s.budget < EQUIP_COST[lv]) return s;
   return { ...s, budget: s.budget - EQUIP_COST[lv], equip: { ...s.equip, [k]: lv + 1 } };
+}
+
+// Wave H-2: 部屋の内装グレードを1段階上げる。buyEquipと同型（買い切り・即時支払い）だが、
+// 能力値には一切効かない見た目のみの購入軸で、equipMaxのようなクラス連動の上限は持たない
+// （判断⑦：クラス昇格によるゲートは掛けない。B1のうちから拠点を綺麗にできる）。
+export function buyRoomUpgrade(s, k) {
+  if (!ROOM_UPGRADE_KEYS.includes(k)) return s;
+  const lv = ((s.roomLv || {})[k]) || 0;
+  if (lv >= ROOM_GRADE_MAX || s.budget < ROOM_UPGRADE_COST[lv]) return s;
+  return { ...s, budget: s.budget - ROOM_UPGRADE_COST[lv], roomLv: { ...(s.roomLv || {}), [k]: lv + 1 } };
 }
 
 // v11: スタッフは買い切りではなく月給制。レベルを上げると翌月から月給が増える（即時の費用はない）

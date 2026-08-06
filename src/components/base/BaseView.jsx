@@ -22,7 +22,7 @@ import {
   BASE_VIEW_EMPTY_ROOMS, BASE_VIEW_FIXTURES, BASE_VIEW_STAFF,
 } from "../../data/baseViewBuildings.js";
 import {
-  isoProject, buildingLevels, seasonOf,
+  isoProject, buildingLevels, roomGrade, seasonOf,
   pointInQuad, roomFloorQuad, stationQuad,
 } from "../../domain/season/baseViewLayout.js";
 import {
@@ -155,6 +155,10 @@ export function BaseView({ g, paused, onRoomTap }) {
   };
   const camera = useIsoCamera({ bounds: SCENE_BOUNDS, viewW: view.w, viewH: view.h, onTap: handleTap });
   const levels = buildingLevels(g);
+  // Wave H-2: 内装グレード（見た目のみ・設備Lvとは独立の軸）。BASE_VIEW_ROOMSの7部屋
+  // 全キー分をここでまとめて解決し、Room.jsx（床の目地/ラグ/照明）とStation.jsx
+  // （持ち場バッジの金枠）の両方へ配る。
+  const roomGrades = Object.fromEntries(BASE_VIEW_ROOMS.map(r => [r.key, roomGrade(g, r.key)]));
   const palette = BASE_VIEW_SEASON_PALETTE[seasonOf(g.month)];
   const snow = !!palette.snow;
 
@@ -233,9 +237,9 @@ export function BaseView({ g, paused, onRoomTap }) {
                 if (item.kind === "clubhouse") return (
                   <g key="clubhouse">
                     <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"}
-                      rooms={BASE_VIEW_ROOMS} partitions={BASE_VIEW_PARTITIONS} partitionHeight={BASE_VIEW_PARTITION_HEIGHT} />
-                    {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} />)}
-                    {BASE_VIEW_EMPTY_ROOMS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} />)}
+                      rooms={BASE_VIEW_ROOMS} partitions={BASE_VIEW_PARTITIONS} partitionHeight={BASE_VIEW_PARTITION_HEIGHT} grades={roomGrades} />
+                    {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} grade={roomGrades[s.room]} />)}
+                    {BASE_VIEW_EMPTY_ROOMS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} grade={roomGrades[s.room]} />)}
                     {fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity)))}
                     {/* 屋内の人物（選手＋常駐スタッフ）は必ず床・壁・什器より後に描く */}
                     {indoorPeople.map(pn => (
