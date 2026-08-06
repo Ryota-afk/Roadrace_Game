@@ -1,7 +1,14 @@
-// 自転車に乗った選手のスプライト。元は`components/RaceView.jsx`に定義されていたものを、
-// Step13 Wave F-3bで独立モジュールへ切り出した（RaceView.jsxが1448行と突出して大きく、
-// しかも拠点画面(BaseView)が「レース画面」からスプライトをimportするという構造のねじれが
-// あったため。CLAUDE.md §5。RaceView.jsxからは互換のため再exportしている）。
+// 自転車に乗った選手のスプライト（ベクター版）。元は`components/RaceView.jsx`に
+// 定義されていたものを、Step13 Wave F-3bで独立モジュールへ切り出した。
+//
+// 【Wave H-4時点で未使用（アーカイブ候補）】唯一の呼び出し元だったRaceView.jsxの
+// FinalSprintCinematicがドット絵(components/sprites/pixelBike.jsxのPixelBikeSymbolDefs/
+// PixelBikeUse)へ置き換わったため、本ファイルの`IsoRider`コンポーネント自体は
+// どこからもimportされていない（`grep -rn "IsoRider(" src`で確認）。同ファイル内の
+// `CAP_COLORS`（帽子色パレット。純粋なデータ）だけは引き続きBaseView.jsx/RaceView.jsxから
+// 使われているため、ファイルごとの削除はまだ見送っている。CLAUDE.md §5に基づき、
+// 次にこのファイルへ触れる機会（または構造整理のタイミング）でCAP_COLORSをdata層へ
+// 移し、`IsoRider`本体はarchive/へgit mvすることを検討する。
 //
 // Wave F-3bでの作り直し（ユーザー指摘を受けて）：
 //  - **ハンドル位置が低すぎた**：旧実装はバーがb=4.9、サドルがb=7.4で、実車ではありえない

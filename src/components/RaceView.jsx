@@ -309,8 +309,13 @@ export const cycMod = (v, m) => ((v % m) + m) % m;
 // `components/sprites/IsoRider.jsx` へ切り出した（本ファイルが1448行と突出して大きく、
 // かつ拠点画面(BaseView)が「レース画面」からスプライトをimportする構造のねじれがあったため。
 // CLAUDE.md §5）。既存の呼び出し側を書き換えずに済むよう、ここから再exportしている。
-import { IsoRider, CAP_COLORS } from "./sprites/IsoRider.jsx";
-export { IsoRider, CAP_COLORS };
+import { CAP_COLORS } from "./sprites/IsoRider.jsx";
+export { CAP_COLORS };
+// Wave H-4: 最終スプリント演出はIsoRider（ベクター）からPixelBikeSymbolDefs/PixelBikeUse
+// （ドット絵・<defs>+<use>方式）へ置き換えた。IsoRider自体はこのファイル以外から
+// importされておらず（`grep -rn "IsoRider" src`で確認済み）、以後未使用のまま残っている。
+// CAP_COLORSは引き続きsprites/IsoRider.jsxから取る（帽子色パレットのデータ部分のみ流用）。
+import { PixelBikeSymbolDefs, PixelBikeUse } from "./sprites/pixelBike.jsx";
 
 // v39.7: バンプ関数（x=0で0、x=Wbで最大1、その先は減衰）。ごぼう抜き/リードアウトの一過性の前後移動に使う。
 function sprintBump(x, Wb) { return x > 0 ? (x / Wb) * Math.exp(1 - x / Wb) : 0; }
@@ -319,6 +324,12 @@ export function FinalSprintCinematic({ contenders }) {
   const [now, setNow] = useState(() => performance.now());
   const startRef = useRef(performance.now());
   const camRef = useRef(null); // v39.6: 追走カメラの平滑化用（先頭交代時のカメラ移動をなめらかに）
+  // Wave H-4: <symbol>定義は「色×姿勢(normal/sprint)」の組み合わせだけ用意すればよく、
+  // contenders（このシネマティックの間ずっと同じ顔ぶれ）が変わらない限り再計算不要。
+  const bikeCombos = useMemo(() => {
+    const colors = [...new Set(contenders.map(c => c.color))];
+    return colors.flatMap(color => [{ color, posture: "normal" }, { color, posture: "sprint" }]);
+  }, [contenders]);
   // v39.14(残像対策): 毎フレーム全選手のSVG（1人あたり十数ノード）を再構築すると端末によっては
   // 描画が追いつかず残像・尾を引いて見える。約30fpsに間引いて1フレームあたりの再構築量を半減させる。
   useEffect(() => {
@@ -413,12 +424,26 @@ export function FinalSprintCinematic({ contenders }) {
   const finLanes = [-2, -1, 0, 1, 2].map(b => b * laneStep).filter(l => Math.abs(l) <= roadHL + 0.01);
   const gBaseL = S(0, -(roadHL + 0.12)), gBaseR = S(0, roadHL + 0.12);
   const gTopL = { x: gBaseL.x, y: gBaseL.y - 30 }, gTopR = { x: gBaseR.x, y: gBaseR.y - 30 };
-  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), cap: CAP_COLORS[Math.floor(riderHash01(c.id, 17) * CAP_COLORS.length) % CAP_COLORS.length], surging: (c.kick || 0) > 0.2 && (gEff(c) - vt) > 0.15 && (gEff(c) - vt) < 1.8 }))
+  // Wave H-4: capは廃止（旧IsoRiderのヘルメット色による個体識別）。ドット絵は帽子色の
+  // スロットを持たないため、識別は下の順位表（判断④）に一本化した。
+  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), surging: (c.kick || 0) > 0.2 && (gEff(c) - vt) > 0.15 && (gEff(c) - vt) < 1.8 }))
     .filter(r => r.x > -30 && r.x < W + 30 && r.y < H + 40 && r.y > -40)
     .sort((a, b) => (a.y - b.y) || (a.c.isPlayer ? 1 : -1)); // 奥(上)→手前(下)、自分は最前面
+  // Wave H-4（判断④）: capによるヘルメット色での個体識別を廃止した代わりに、現在の
+  // 並び順を名前付きでリアルタイム表示する。withW（画面外にいる選手も含む全員）を
+  // wの降順（ゴールに近い順）で並べ、色スウォッチ＋名前で「どの色のジャージが誰か」を
+  // 常に確認できるようにした。場所を取りすぎないよう上位6名＋自分の行（7位以下のときだけ）
+  // に絞る。
+  const standings = [...withW].sort((a, b) => b.w - a.w).map((o, i) => ({ ...o, rank: i + 1 }));
+  const playerIdx = standings.findIndex(o => o.c.isPlayer);
+  const standingsShown = (playerIdx >= 0 && playerIdx >= 6) ? [...standings.slice(0, 6), standings[playerIdx]] : standings.slice(0, 6);
   return (
     <div style={{ position: "relative" }}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${W} / ${H}`, borderRadius: 8, display: "block", background: "#2b3a30" }}>
+        {/* Wave H-4: 色×姿勢の組み合わせぶんだけ<symbol>を1回だけ定義（<defs>は非表示要素なので
+            このフレームに登場しない組み合わせを含めても描画コストが発生しない）。各選手は
+            下のPixelBikeUseで<use>1個として参照するだけになる（詳細はpixelBike.jsx冒頭）。 */}
+        <PixelBikeSymbolDefs combos={bikeCombos} />
         {/* 地面タイル */}
         {tiles.map(t => {
           const dark = (t.a + t.b) & 1;
@@ -441,16 +466,49 @@ export function FinalSprintCinematic({ contenders }) {
           const bw = Math.abs(gTopR.x - gTopL.x) / 10 + 0.6;
           return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#14171d"} />;
         })}
-        {/* 選手（立ったスプライト） */}
+        {/* 選手（ドット絵スプライト。Wave H-4） */}
         {/* Wave F-3b: アタック中の選手は下ハンドルを握るスプリント姿勢、そうでない選手は
             通常姿勢。同じ集団の中に姿勢差が生まれ、誰が踏んでいるのかが絵で分かる。
-            phaseは選手ごとにずらしてペダリングが揃わないようにする。 */}
-        {rows.map(r => <IsoRider key={r.c.id} x={r.x} y={r.y} color={r.c.color} cap={r.cap} isPlayer={r.c.isPlayer} isAce={r.c.isAce} surging={r.surging || !approaching} simple={n > 10 && !r.c.isPlayer && !r.c.isAce} posture={r.surging ? "sprint" : "normal"} phase={el * 1.6 + riderHash01(r.c.id, 23)} />)}
+            phaseは選手ごとにずらしてペダリングが揃わないようにする（BaseView.jsxと同様、
+            tに経過秒・phaseに小さな個人差だけを渡す＝IsoRider時代のphase運用とは意味が違う）。
+            エースは旧実装の1.14倍拡大（ドット絵では滲みの原因になるため廃止）ではなく
+            頭上の★マーカーで示す（判断⑤）。cap（ヘルメット色）による個体識別は廃止し、
+            代わりに下の順位表（判断④）で名前を確認できるようにした。 */}
+        {rows.map(r => (
+          <g key={r.c.id}>
+            <PixelBikeUse x={r.x} y={r.y} color={r.c.color} posture={r.surging ? "sprint" : "normal"}
+              flip={false} t={el} phase={riderHash01(r.c.id, 23) * 4} />
+            {/* 黄色ジャージ＝エース標準色と星の金色が被って見えづらかったため、頭上へさらに
+                離して芝の上に置き、黒縁取りでどんな背景でも視認できるようにした（実機確認）。 */}
+            {r.c.isAce && <text x={r.x} y={r.y - 19} textAnchor="middle" fontSize="8.5" fill="#ffd23c"
+              stroke="#14171d" strokeWidth="2" paintOrder="stroke" style={{ pointerEvents: "none" }}>★</text>}
+            {r.c.isPlayer && <ellipse cx={r.x} cy={r.y - 9} rx="10" ry="10" fill="none" stroke="#27d3ff" strokeWidth="1.4" />}
+          </g>
+        ))}
       </svg>
       {fade > 0.01 && <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />}
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
         {soloWin ? "🏁 独走フィニッシュ" : n > 1 ? (bunch ? `🏁 大集団のゴールスプリント（${n}名）` : "🏁 ゴールスプリント") : "🏁 単独ゴール"}{close && approaching ? " — スロー再生" : ""}
       </div>
+      {/* Wave H-4（判断④）: リアルタイム順位表。色スウォッチが画面内の各選手のジャージ色と
+          対応する。自分は水色枠、エースは★で強調（画面上のマーカーと共通）。 */}
+      {n > 1 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", marginTop: 5 }}>
+          {standingsShown.map(o => (
+            <div key={o.c.id} style={{
+              display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 6,
+              background: o.c.isPlayer ? "rgba(39,211,255,0.15)" : C.panel2,
+              border: `1px solid ${o.c.isPlayer ? "#27d3ff" : "transparent"}`,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: o.c.color, flexShrink: 0 }} />
+              <span style={{ fontFamily: FONT_M, fontSize: 9.5, color: C.sub }}>{o.rank}</span>
+              <span style={{ fontSize: 10, color: C.text, maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {o.c.isAce ? "★" : ""}{o.c.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

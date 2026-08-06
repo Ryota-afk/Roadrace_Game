@@ -661,3 +661,55 @@ export function PixelBike({ x, y, color, posture = "normal", dir = "SE", flip, t
     </g>
   );
 }
+
+// Wave H-4（レース最終スプリントのドット絵化）：多人数(最大22名)を同時に毎フレーム
+// 再描画する場面向けの<defs>+<use>版。PixelBikeは1体あたり塗りピクセル数≒900の<rect>を
+// 持ち（実測。参考画像を粗い粒度で描き直した経緯はファイル冒頭コメント参照）、これを
+// BaseView同様に選手ごと・毎フレーム再構築すると数万ノードになり描画が破綻する。
+// 「色×姿勢×クランク位相」の組み合わせだけ<symbol>を1回だけ定義し、各選手は<use>1個
+// （transform+href切替のみ）で参照する。SVGの<symbol>は非表示要素なので、その瞬間の
+// フレームに登場しない組み合わせを定義に含めておいても描画コストは発生しない。
+//
+// dir="SE"固定：最終スプリント演出はカメラが選手の背後から追走する固定視点で、
+// 全選手が常に同じ画面方向（右下）へ進む。IsoRider（旧実装）も方向の概念を持たない
+// 固定ジオメトリだったため、この簡略化で見た目は変わらない。
+
+// 記号IDに使えない文字（#や非16進の混入に備え）を除去する。colorは基本的に
+// data/abilities.jsのTYPES[...].color等の#RRGGBB文字列。
+const sanitizeForId = (s) => String(s).replace(/[^a-zA-Z0-9]/g, "");
+
+export function bikeSymbolId(color, posture, tableIdx) {
+  return `bikesym-${posture}-${tableIdx}-${sanitizeForId(color)}`;
+}
+
+// combos: [{ color, posture }, ...]（重複があってもOK。内部で色×姿勢×クランク位相2通りに展開）
+export function PixelBikeSymbolDefs({ combos }) {
+  const seen = new Set();
+  const symbols = [];
+  for (const { color, posture } of combos) {
+    for (const tableIdx of [0, 1]) {
+      const id = bikeSymbolId(color, posture, tableIdx);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const table = tableIdx === 0 ? BIKE : BIKE_B;
+      const frame = table[`${posture}_SE`] || table.normal_SE;
+      const inner = pixelSprite(frame, bikeLegend(color), BIKE_PX,
+        frame[0].length / 2, frame.length, `${id}-b`, "#161616", false);
+      symbols.push(<symbol key={id} id={id} overflow="visible">{inner}</symbol>);
+    }
+  }
+  return <defs>{symbols}</defs>;
+}
+
+// PixelBikeと同じ見た目・同じ引数（dirは常にSE固定なので持たない）を、<use>参照で描く。
+export function PixelBikeUse({ x, y, color, posture = "normal", flip, t = 0, phase = 0 }) {
+  const tableIdx = Math.floor((t + phase) * 9.0) % 2 === 0 ? 0 : 1;
+  const id = bikeSymbolId(color, posture, tableIdx);
+  const mirror = !flip; // dir="SE"固定なので PixelBike の `dir==="SE" ? !flip : !!flip` と同じ式になる
+  return (
+    <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
+      <ellipse cx="0" cy="0" rx="8.4" ry="2.2" fill="#000" opacity="0.22" />
+      {mirror ? <g transform="scale(-1,1)"><use href={`#${id}`} /></g> : <use href={`#${id}`} />}
+    </g>
+  );
+}
