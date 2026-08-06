@@ -2,7 +2,7 @@
 import React from "react";
 import { mlRecordLegend } from "../../breeding/breeding.js";
 import { AbilityFileList, AbilityGrid, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, SubStatLine, TitlesPanel, TraitLine } from "../../components/panels.jsx";
-import { RiderRadarChart } from "../../components/RadarChart.jsx";
+import { AbilityRadarChart, RiderRadarChart } from "../../components/RadarChart.jsx";
 import { Btn, Eyebrow } from "../../components/ui.jsx";
 import { overall } from "../../core/core.js";
 import { AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../../data/abilities.js";
@@ -73,16 +73,41 @@ export function renderMyLifeHubScreen(ctx) {
                 </div>
               );
             })()}
-            <AbilityGrid r={r} cap={mlGrowthCap(ml.year, r, ml)} />
-            <SubStatLine r={r} />
-            <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{mlGrowthCap(ml.year, r, ml)}以上＝限界突破（バーの薄い帯＝上限までの伸びしろ・数字の小さな+も伸びしろ）{r.talentCap ? `／才能キャップ+${r.talentCap}` : ""}</div>
-            {/* v43(マイライフ難易度調整Phase 1・可変軸レーダーチャート): 加速力・体格・メンタル・突破力・
-                安定感の5角形。将来スピリット/運の追加時はRiderRadarChart側にaxesを足すだけで7角形に拡張できる */}
-            <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
-              <RiderRadarChart r={r} size={150} color={C.blue} />
-            </div>
-            <div style={{ fontSize: 9.5, color: C.sub, marginTop: 6 }}>コース適性 S〜G（種目別の総合地力／★＝今月のレースが有利とする種目）</div>
-            <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
+            {/* v43(UI): 選手カードは「5項目ブロックが4つ縦積み」で冗長だったため、主役の基礎能力と
+                生まれつきの素質をレーダー2枚の横並びに集約した。基礎能力側は軸の最大値に成長上限(cap)を
+                取ることで「外周＝天井／外周との隙間＝伸びしろ」を表し、AbilityGridの薄い伸びしろ帯と
+                同じ情報を担う。数値・パーツ補正・コース適性など詰めたい時だけ要る情報は下の折りたたみへ。 */}
+            {(() => {
+              const cap = mlGrowthCap(ml.year, r, ml);
+              const open = !!ml.uiAbilityDetailOpen;
+              return (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-around", alignItems: "flex-start", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 9.5, color: C.green, fontWeight: 700, marginBottom: 2 }}>⭐ 能力<span style={{ color: C.sub, fontWeight: 400 }}>（外周={Math.round(cap)}）</span></div>
+                      <AbilityRadarChart r={r} cap={cap} size={148} color={C.green} />
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 9.5, color: C.blue, fontWeight: 700, marginBottom: 2 }}>🧬 素質<span style={{ color: C.sub, fontWeight: 400 }}>（生涯不変）</span></div>
+                      <RiderRadarChart r={r} size={148} color={C.blue} />
+                    </div>
+                  </div>
+                  <button onClick={() => setMl(s => ({ ...s, uiAbilityDetailOpen: !s.uiAbilityDetailOpen }))}
+                    style={{ width: "100%", marginTop: 10, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, fontSize: 11, padding: "5px 8px", cursor: "pointer" }}>
+                    {open ? "▲ 数値・伸びしろ・コース適性を閉じる" : "▼ 数値・伸びしろ・コース適性を見る"}
+                  </button>
+                  {open && (
+                    <div style={{ marginTop: 6 }}>
+                      <AbilityGrid r={r} cap={cap} />
+                      <SubStatLine r={r} />
+                      <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{Math.round(cap)}以上＝限界突破（バーの薄い帯＝上限までの伸びしろ・数字の小さな+も伸びしろ）{r.talentCap ? `／才能キャップ+${r.talentCap}` : ""}</div>
+                      <div style={{ fontSize: 9.5, color: C.sub, marginTop: 6 }}>コース適性 S〜G（種目別の総合地力／★＝今月のレースが有利とする種目）</div>
+                      <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             {/* v30: フレーバーテキストは特能と能力値の間に挟まって視認性を損ねていたため、
                 カード末尾の独立したプロフィール欄（区切り線付き）に移動した */}
             <div style={{ fontSize: 11, color: C.sub, fontStyle: "italic", marginTop: 8, paddingTop: 6, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>{riderFlavorText(r)}</div>
