@@ -55,12 +55,19 @@ export function doorFor(room, corridor, partitions, clubhouse) {
 }
 
 // 持ち場での立ち位置とポーズ。同じ部屋に椅子(BASE_VIEW_FIXTURESのkind==="chair")があれば
-// **その椅子に実際に座る**、無ければ什器の手前に立つ。
-// 手前＝screen yが大きい側＝(w - l)が大きい側に置くことで、什器より後に描かれる＝
-// 什器の前に立って見える（Wave E-2で踏んだ「不透明な床/什器に埋もれる」問題の予防）。
+// **その椅子に実際に座る**、トレーニング室ならローラー台に跨がって漕ぐ、それ以外は
+// 什器の手前に立つ（メカニック室はこの「棒立ち」のまま——ドット絵化ウェーブでの
+// 作業ポーズ追加に合わせて解消する予定。ユーザー判断①）。
+// 立つ場合の手前＝screen yが大きい側＝(w - l)が大きい側に置くことで、什器より後に
+// 描かれる＝什器の前に立って見える（Wave E-2で踏んだ「不透明な床/什器に埋もれる」問題の予防）。
 export function workSpotFor(roomKey, station, clutter) {
   const chair = (clutter || []).find(c => c.room === roomKey && c.kind === "chair");
   if (chair) return { w: chair.w, l: chair.l, pose: "sit" };
+  // Wave H-3: 「ぼっ立ち」修正の第1弾。トレーニング室の主要什器はローラー台そのものなので、
+  // 実際のロード選手と同じく自転車ごとローラーに乗せる（新規ドット絵不要でPixelBikeを流用）。
+  // 什器の座標そのものを使う（「手前」オフセットは徒歩の人物が什器の前に立つための調整で、
+  // 自転車が什器に重なるのはむしろ正しい絵になるため付けない）。
+  if (roomKey === "training") return { w: station.w, l: station.l, pose: "roller" };
   return { w: station.w, l: station.l - 0.6, pose: "stand" };
 }
 

@@ -180,8 +180,9 @@ export function BaseView({ g, paused, onRoomTap }) {
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
       color: (TYPES[r.type] && TYPES[r.type].color) || C.yellow,
       phase: riderHash01(r.id, 91) * 4, // 歩調・ペダリングが全員で揃わないようずらす
-      // 立ち漕ぎ：選手ごとに違う周期で断続的に立つ（決定論的・Math.random不使用）
-      dancing: act.pose === "ride"
+      // 立ち漕ぎ：選手ごとに違う周期で断続的に立つ（決定論的・Math.random不使用）。
+      // Wave H-3（判断②）：ローラー台上(roomKey==="roller")でも周回中と同じく立ち漕ぎさせる。
+      dancing: (act.pose === "ride" || act.pose === "roller")
         && Math.sin(elapsed * (0.24 + riderHash01(r.id, 37) * 0.12) + riderHash01(r.id, 61) * 6.28) > 0.72,
     };
   });
@@ -241,11 +242,17 @@ export function BaseView({ g, paused, onRoomTap }) {
                     {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} grade={roomGrades[s.room]} />)}
                     {BASE_VIEW_EMPTY_ROOMS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} grade={roomGrades[s.room]} />)}
                     {fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity)))}
-                    {/* 屋内の人物（選手＋常駐スタッフ）は必ず床・壁・什器より後に描く */}
+                    {/* 屋内の人物（選手＋常駐スタッフ）は必ず床・壁・什器より後に描く。
+                        Wave H-3：トレーニング室（pose==="roller"）だけは自転車ごとローラー台に
+                        乗せるため、新規ドット絵を描かずにPixelBikeを流用する（設計①）。 */}
                     {indoorPeople.map(pn => (
-                      <PixelPerson key={pn.r ? `ir${pn.r.id}` : `st${pn.key}`} x={pn.x} y={pn.y}
-                        pose={pn.r ? pn.act.pose : "stand"} t={elapsed}
-                        color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />
+                      pn.r && pn.act.pose === "roller"
+                        ? <PixelBike key={`ir${pn.r.id}`} x={pn.x} y={pn.y} color={pn.color}
+                            posture={pn.dancing ? "dancing" : "normal"} dir={pn.dir} flip={pn.flip}
+                            t={elapsed} phase={pn.phase || 0} />
+                        : <PixelPerson key={pn.r ? `ir${pn.r.id}` : `st${pn.key}`} x={pn.x} y={pn.y}
+                            pose={pn.r ? pn.act.pose : "stand"} t={elapsed}
+                            color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />
                     ))}
                   </g>
                 );
