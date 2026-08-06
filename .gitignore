@@ -14,6 +14,9 @@
 # --- アーカイブ（v5〜v11の単一ファイル版・旧設計メモ。src/から未参照・履歴保存用）---
 !archive/
 !archive/**
+# --- 開発補助スクリプト（ビルドには不要。ドット絵の書き出し等）---
+!tools/
+!tools/**
 # node_modules/ dist/ は allowlist しない＝ふつうに無視される
 # 検証用オフラインハーネス（vendor版React/import除去済み）は本番ではないため追跡しない
 roadrace_v12_test.html
