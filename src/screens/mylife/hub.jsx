@@ -2,7 +2,7 @@
 import React from "react";
 import { mlRecordLegend } from "../../breeding/breeding.js";
 import { AbilityFileList, AbilityGrid, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, SubStatLine, TitlesPanel, TraitLine } from "../../components/panels.jsx";
-import { AbilityRadarChart, RiderRadarChart } from "../../components/RadarChart.jsx";
+import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { Btn, Eyebrow } from "../../components/ui.jsx";
 import { overall } from "../../core/core.js";
 import { AB_KEYS, AB_LABEL, GROWTH, POW, TYPES } from "../../data/abilities.js";
@@ -82,17 +82,7 @@ export function renderMyLifeHubScreen(ctx) {
               const open = !!ml.uiAbilityDetailOpen;
               return (
                 <>
-                  <div style={{ display: "flex", justifyContent: "space-around", alignItems: "stretch", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 9.5, color: C.green, fontWeight: 700, marginBottom: 2 }}>⭐ 能力<span style={{ color: C.sub, fontWeight: 400 }}>（外周={Math.round(cap)}）</span></div>
-                      <AbilityRadarChart r={r} cap={cap} size={148} color={C.green} />
-                    </div>
-                    <div style={{ width: 1, background: C.line, margin: "12px 2px" }} />
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 9.5, color: C.blue, fontWeight: 700, marginBottom: 2 }}>🧬 素質<span style={{ color: C.sub, fontWeight: 400 }}>（生涯不変）</span></div>
-                      <RiderRadarChart r={r} size={148} color={C.blue} />
-                    </div>
-                  </div>
+                  <AbilitySoshitsuRadarPair r={r} cap={cap} size={148} />
                   <button onClick={() => setMl(s => ({ ...s, uiAbilityDetailOpen: !s.uiAbilityDetailOpen }))}
                     style={{ width: "100%", marginTop: 10, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, fontSize: 11, padding: "5px 8px", cursor: "pointer" }}>
                     {open ? "▲ 数値・伸びしろ・コース適性を閉じる" : "▼ 数値・伸びしろ・コース適性を見る"}
@@ -101,7 +91,7 @@ export function renderMyLifeHubScreen(ctx) {
                     <div style={{ marginTop: 6 }}>
                       <AbilityGrid r={r} cap={cap} />
                       <SubStatLine r={r} />
-                      <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{Math.round(cap)}以上＝限界突破（バーの薄い帯＝上限までの伸びしろ・数字の小さな+も伸びしろ）{r.talentCap ? `／才能キャップ+${r.talentCap}` : ""}</div>
+                      <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{Math.round(cap)}以上＝限界突破（バーの薄い帯＝上限までの伸びしろ・数字の小さな+も伸びしろ）{r.talentCap ? `／才能で上限+${r.talentCap}` : ""}</div>
                       <div style={{ fontSize: 9.5, color: C.sub, marginTop: 6 }}>コース適性 S〜G（種目別の総合地力／★＝今月のレースが有利とする種目）</div>
                       <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
                     </div>
@@ -418,7 +408,10 @@ export function renderMyLifeHubScreen(ctx) {
             </div>
             <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（focus中心）</Btn>
+              {/* v46(UI): ラベルが「練習（focus中心）」と変数名を生で出していた（CLAUDE.md §7(b)）。
+                  すぐ上の練習メニューでは「登坂強化」等と日本語で選ばせているので、実際に選ばれて
+                  いる能力名をそのまま出す。 */}
+              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（{AB_LABEL[r.focus] || "バランス"}中心）</Btn>
               <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("rest")} title="疲労を大きく回復し、脚がフレッシュに（フォームの下振れを消して微増）＋メンタルも整う。大レース前の仕上げに">😴 完全休養</Btn>
               <Btn small outline color={"#e8a13c"} onClick={() => mlAdvanceMonth("peak")}>🎯 ピーキング調整（フォームを上げる）</Btn>
               {/* v43(Phase 2): 「🎤取材・私生活イベント」は手動ボタンを廃止し、月が終わるたびに

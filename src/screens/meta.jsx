@@ -14,8 +14,10 @@ function renderModeSelect(ctx) {
   return wrap(
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
-        <Eyebrow>MODE SELECT — v14</Eyebrow>
-        <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 21, margin: "6px 0 10px" }}>プレイモードを選んでください</h2>
+        {/* v46(UI): 「MODE SELECT — v14」というバージョン番号入りの開発用見出しを撤去
+            （CLAUDE.md §7(b)・次のアクション#10）。説明文の書き直しと自チーム情報の
+            非表示は#10の残りとして別途対応する。 */}
+        <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 21, margin: "0 0 10px" }}>プレイモードを選んでください</h2>
         <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.7, margin: 0 }}>
           シーズンモードは6名のロースターを率いるチーム運営、マイライフモードは選手1人のキャリアをB1から歩む新モードです。
         </p>
@@ -103,7 +105,7 @@ function renderPrestige(ctx) {
           <Btn small outline color={"#e56cc8"} onClick={() => setSuperMode("dynasty_factors")}>🧬 因子図鑑</Btn>
         </div>
       </div>
-      <Btn color={C.yellow} onClick={() => setSuperMode("cpshop")}>🛒 CPショップで解禁を購入する</Btn>
+      <Btn color={C.yellow} onClick={() => setSuperMode("cpshop")}>🛒 クリアポイント交換所へ</Btn>
       <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
     </div>
   );
@@ -141,8 +143,8 @@ function renderCpShop(ctx) {
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ background: "linear-gradient(180deg, rgba(255,210,63,0.10), #201e26)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}`, textAlign: "center" }}>
         <div style={{ fontSize: 30 }}>🛒</div>
-        <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 20, margin: "4px 0" }}>CPショップ</h2>
-        <div style={{ fontSize: 12, color: C.sub }}>使えるCP残高</div>
+        <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 20, margin: "4px 0" }}>クリアポイント交換所</h2>
+        <div style={{ fontSize: 12, color: C.sub }}>使えるクリアポイント</div>
         <div style={{ fontFamily: FONT_M, fontSize: 26, color: C.yellow, fontWeight: 800 }}>{bal}<span style={{ fontSize: 13 }}>pt</span></div>
         <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>生涯獲得 {meta.totalEarnedCP}pt ／ 使用済み {meta.cpSpent || 0}pt。購入は恒久で、次のシーズン/新人に反映されます</div>
       </div>

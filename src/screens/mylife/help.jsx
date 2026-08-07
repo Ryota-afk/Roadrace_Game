@@ -26,7 +26,7 @@ export function renderMyLifeHelpScreens(ctx) {
 
           <Section color={"#c0a2e0"} title="難易度（キャラ作成時に選択）">
             <Card>マイライフはキャラ作成時に<b style={{ color: "#c0a2e0" }}>イージー／ノーマル／ハード／鬼</b>の4難易度を選べます。難易度が上がるほど相手チーム（AI選手）が強くなり、その能力上限も上がります（<span style={{ color: C.text }}>易92／並96／難102／鬼112</span>）。能力を極めても鬼なら歯応えが残ります。</Card>
-            <Card>難易度は<b style={{ color: C.green }}>クリアポイント(CP)の獲得倍率</b>にも直結します（<span style={{ color: C.text }}>易×0.7／並×1.0／難×1.5／鬼×2.2</span>）。挑戦するほどCPが多く貯まり、次のキャリアの新人強化やショップ解禁が進みます。腕に自信がついたら難しい難易度で走るのがおすすめです。</Card>
+            <Card>難易度は<b style={{ color: C.green }}>クリアポイントの獲得倍率</b>にも直結します（<span style={{ color: C.text }}>易×0.7／並×1.0／難×1.5／鬼×2.2</span>）。挑戦するほどクリアポイントが多く貯まり、次のキャリアの新人強化やショップ解禁が進みます。腕に自信がついたら難しい難易度で走るのがおすすめです。</Card>
           </Section>
 
           <Section color={C.yellow} title="成長・練習の仕組み">
@@ -112,9 +112,9 @@ export function renderMyLifeHelpScreens(ctx) {
             <Card>0〜3個の特殊能力を保有し、条件を満たすと保有能力が金特に強化されたり、新しい能力を後天的に習得したりします。発見済みの能力は特殊能力図鑑で内容を確認できます。</Card>
           </Section>
 
-          <Section color={"#e8a13c"} title="クリアポイント(CP)・メタ進行">
-            <Card><b style={{ color: "#e8a13c" }}>CP（クリアポイント）</b>は、キャリアをまたいで貯まる"周回の勲章"です。引退時に通算成績・タイトル・世界ランク・現役年数から算出され、<span style={{ color: C.text }}>難易度が高いほど多く</span>もらえます（易×0.7〜鬼×2.2）。</Card>
-            <Card>貯めたCPは、<span style={{ color: C.text }}>次にデビューする新人の支度金・人気・成長力抽選・当たり特能率</span>を強化する自動ミルストーン（生涯評価画面で確認）と、<span style={{ color: C.text }}>選んで買う🛒CPショップ</span>の両方に使えます。高CP帯の解禁も用意されているので、周回するほど新人が有利になっていきます。</Card>
+          <Section color={"#e8a13c"} title="クリアポイント・メタ進行">
+            <Card><b style={{ color: "#e8a13c" }}>クリアポイント</b>は、キャリアをまたいで貯まる"周回の勲章"です。引退時に通算成績・タイトル・世界ランク・現役年数から算出され、<span style={{ color: C.text }}>難易度が高いほど多く</span>もらえます（易×0.7〜鬼×2.2）。</Card>
+            <Card>貯めたクリアポイントは、<span style={{ color: C.text }}>次にデビューする新人の支度金・人気・成長力抽選・当たり特能率</span>を強化する自動ミルストーン（生涯評価画面で確認）と、<span style={{ color: C.text }}>選んで買う🛒クリアポイント交換所</span>の両方に使えます。高ポイント帯の解禁も用意されているので、周回するほど新人が有利になっていきます。</Card>
           </Section>
 
           <Section color={C.sub} title="実績・殿堂入り">

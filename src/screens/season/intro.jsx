@@ -15,8 +15,10 @@ export function renderSeasonIntroScreens(ctx) {
   if (g.screen === "intro") return wrap(
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
-        <Eyebrow>SEASON MODE v12</Eyebrow>
-        <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 23, margin: "6px 0 10px" }}>B1からPROの頂点へ</h2>
+        {/* v46(UI): 「SEASON MODE v12」というバージョン番号入りの開発用見出しを撤去
+            （CLAUDE.md §7(b)。meta.jsxの「MODE SELECT — v14」と同型の不具合）。
+            すぐ下の見出しだけで何の画面かは伝わるので、情報としても不要。 */}
+        <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 23, margin: "0 0 10px" }}>B1からPROの頂点へ</h2>
         <p style={{ color: C.sub, fontSize: 13.5, lineHeight: 1.8, margin: 0 }}>
           1年＝1シーズン、出場は月1回。3月のチャンピオンシップ3位以内で昇格。PROクラスのみ年3戦のグランツール
           （春・夏・秋）が開催され、その全戦制覇がグランファイナルへの出場条件。グランファイナル優勝でクリア。
@@ -135,7 +137,7 @@ export function renderSeasonIntroScreens(ctx) {
           {nextMilestone && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 6 }}>次のボーナスまであと{nextMilestone.cp - meta.totalEarnedCP}pt</div>}
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
-          <Eyebrow color={C.green}>🏁 解禁コンテンツ（累計CPで新コース種別が出現）</Eyebrow>
+          <Eyebrow color={C.green}>🏁 解禁コンテンツ（累計クリアポイントで新コース種別が出現）</Eyebrow>
           <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
             {UNLOCK_TEMPLATES.map(t => {
               const unlocked = meta.totalEarnedCP >= t.unlockCP;

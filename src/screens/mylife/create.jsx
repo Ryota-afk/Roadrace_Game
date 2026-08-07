@@ -79,7 +79,7 @@ export function renderMyLifeCreateScreens(ctx) {
                       background: sel ? "rgba(255,210,63,0.12)" : C.panel, border: `1.5px solid ${sel ? C.yellow : C.line}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{d.label}</span>
-                      <span style={{ fontSize: 11, color: cpMul > 1 ? C.green : C.sub }}>CP ×{cpMul}</span>
+                      <span style={{ fontSize: 11, color: cpMul > 1 ? C.green : C.sub }}>クリアポイント ×{cpMul}</span>
                     </div>
                     <div style={{ fontSize: 11, color: C.sub, marginTop: 2, lineHeight: 1.5 }}>{d.desc}</div>
                   </button>

@@ -67,7 +67,7 @@ export function renderMyLifeCareerScreens(ctx) {
               <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4, lineHeight: 1.6 }}>
                 {ml.awardedCP.parts.map((p, i) => `${p.label} +${p.cp}`).join("　")}
               </div>
-              <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>CPは次にデビューする新人の支度金・人気・成長力抽選などに還元されます（生涯評価画面で確認）。</div>
+              <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>クリアポイントは次にデビューする新人の支度金・人気・成長力抽選などに還元されます（生涯評価画面で確認）。</div>
             </div>
           )}
           {/* v35(逆メンター): 弟子への継承。育てた若手が後を継ぐ物語の締めくくり */}
