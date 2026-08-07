@@ -11,19 +11,26 @@ import { cpUnlockRows, mlFactorCollection, mlLineageForest } from "../logic/supp
 
 function renderModeSelect(ctx) {
   const { setSuperMode, wrap } = ctx;
+  // v46(UI): 次のアクション#10。①「MODE SELECT — v14」は既に撤去済み（過去のUI波）。
+  // ②説明文が両モードを1文に詰め込んでおり「新モード」という開発時期の名残の表現も
+  // 混じっていたため、モードごとの説明を各ボタン直下へ分離し、この画面がそもそも
+  // 何のゲームか（自転車ロードレース）を最初に一言示す構成に書き直した。
   return wrap(
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
-        {/* v46(UI): 「MODE SELECT — v14」というバージョン番号入りの開発用見出しを撤去
-            （CLAUDE.md §7(b)・次のアクション#10）。説明文の書き直しと自チーム情報の
-            非表示は#10の残りとして別途対応する。 */}
-        <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 21, margin: "0 0 10px" }}>プレイモードを選んでください</h2>
-        <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.7, margin: 0 }}>
-          シーズンモードは6名のロースターを率いるチーム運営、マイライフモードは選手1人のキャリアをB1から歩む新モードです。
+        <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 21, margin: "0 0 8px" }}>プレイモードを選んでください</h2>
+        <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.8, margin: 0 }}>
+          自転車ロードレースのチームを率いて世界の頂点を目指す、運営・育成ゲームです。
         </p>
       </div>
-      <Btn onClick={() => setSuperMode("season")}>🏢 シーズンモード（チーム運営）</Btn>
-      <Btn outline onClick={() => setSuperMode("mylife")}>🚴 マイライフモード（選手キャリア）</Btn>
+      <div>
+        <Btn onClick={() => setSuperMode("season")}>🏢 シーズンモード（チーム運営）</Btn>
+        <div style={{ fontSize: 11, color: C.sub, margin: "4px 2px 0" }}>6名のロースターを率い、B1からPROクラスの頂点へ昇格を目指します。</div>
+      </div>
+      <div>
+        <Btn outline onClick={() => setSuperMode("mylife")}>🚴 マイライフモード（選手キャリア）</Btn>
+        <div style={{ fontSize: 11, color: C.sub, margin: "4px 2px 0" }}>選手1人のキャリアを、デビューから引退までひとつの人生として歩みます。</div>
+      </div>
       <Btn outline color={"#e8a13c"} onClick={() => setSuperMode("prestige")}>🏆 生涯評価を見る</Btn>
     </div>
   );

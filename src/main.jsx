@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import React from "react";
 
 import { initGame } from "./state/state.js";
-import { makeWrap, makeMlWrap } from "./components/chrome.jsx";
+import { makeWrap, makeMlWrap, makeMetaWrap } from "./components/chrome.jsx";
 import { renderMetaScreens } from "./screens/meta.jsx";
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -33,9 +33,12 @@ function App() {
   const modal = { renameState, setRenameState, confirmDialog, setConfirmDialog };
   const wrap = makeWrap({ g, setG, ...modal });
   const mlWrap = makeMlWrap({ ml, ...modal });
+  const metaWrap = makeMetaWrap({ ...modal });
 
   // ================= メタ画面（モード選択・生涯評価・系譜・因子・CPショップ） =================
-  const metaScreen = renderMetaScreens({ superMode, setSuperMode, buyCpItem, wrap });
+  // v46(UI): season用wrap()ではなくmetaWrap()を渡す（モード非依存の画面にシーズンの
+  // 自チーム情報が漏れる不具合の修正。詳細はcomponents/chrome.jsxのmakeMetaWrap参照）。
+  const metaScreen = renderMetaScreens({ superMode, setSuperMode, buyCpItem, wrap: metaWrap });
   if (metaScreen) return metaScreen;
 
   // v41(§Step7第10弾): ctx（旧・88メンバーの手組みオブジェクト）を season/mylife に分割した。

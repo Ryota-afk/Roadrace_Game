@@ -19,8 +19,12 @@ export function renderMyLifeCreateScreens(ctx) {
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
             <Eyebrow>キャラクター作成</Eyebrow>
-            <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.7, margin: "6px 0 0" }}>
-              脚質と経歴を選んでB1のいずれかのチームに新人選手として加入します。
+            {/* v46(UI): 次のアクション#10。シーズン側の導入（「B1からPROの頂点へ」＋昇格条件の
+                説明）に対し、こちらは直後の入力手順しか案内しておらず、マイライフが
+                「デビューから引退までの一人のキャリア」だという全体像が最初に示されていなかった
+                非対称を解消。 */}
+            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.8, margin: "6px 0 0" }}>
+              一人の選手としてB1からデビューし、引退までのキャリアを歩みます。まずは脚質と経歴を選んでください。
             </p>
           </div>
           {hasMyLifeSave() && (() => {

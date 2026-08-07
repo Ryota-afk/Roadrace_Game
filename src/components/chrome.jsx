@@ -96,6 +96,23 @@ export function makeWrap({ g, renameState, setRenameState, confirmDialog, setCon
   );
 }
 
+// v46(UI): 次のアクション#10。モード選択・生涯評価・系譜ツリー・因子図鑑・CPショップは
+// season/mylifeどちらの状態にも属さない「モード非依存」の画面のはずなのに、season用の
+// makeWrap()を共用していたため、まだモードを選んでいない起動一発目の画面にまで
+// シーズンの自チーム情報（クラスB1・あなたのチーム・予算等）が意図せず表示されていた。
+// SeasonHeaderを持たない専用のwrapを新設し、renderMetaScreens側だけに配線する。
+export function makeMetaWrap({ renameState, setRenameState, confirmDialog, setConfirmDialog }) {
+  return (children) => (
+    <div style={{ minHeight: "100svh", background: C.bg, fontFamily: FONT_B }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", width: "100%", boxSizing: "border-box", padding: "6px 14px 40px" }}>
+        {children}
+      </div>
+      <RenameModal renameState={renameState} setRenameState={setRenameState} />
+      <ConfirmDialog confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
+    </div>
+  );
+}
+
 // ================= v14: モード選択（タイトル） =================
 export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
   return (children) => (
