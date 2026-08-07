@@ -1,7 +1,7 @@
 // hub/riders.jsxより分割（Step13第7弾）：選手カード一覧（能力・練習指定・パーツ・戦績）。
 // 中身は一切変更していない（byte-for-byte照合済み）。
 import React from "react";
-import { AbilityGrid, CondFc, DisciplineGrid, FatigueBar, PersonaLine, SubStatLine, TraitLine } from "../../../../components/panels.jsx";
+import { CondFc, DisciplineGrid, FatigueBar, PersonaLine, TraitLine } from "../../../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../../../components/RadarChart.jsx";
 import { Btn } from "../../../../components/ui.jsx";
 import { overall } from "../../../../core/core.js";
@@ -14,7 +14,7 @@ import { PARTS, PART_SLOTS } from "../../../../sim/race.js";
 import { riderNickname } from "../../../../state/state.js";
 
 export function renderRidersListSection(ctx) {
-  const { askConfirm, availParts, expandedRiderId, g, growthCap, openRename, radarRiderId, releaseRider, rosterMax, setCaptain, setExpandedRiderId, setFocus, setG, setPart, setRadarRiderId, toggleFavorite, useSupp, useTune } = ctx;
+  const { askConfirm, availParts, expandedRiderId, g, growthCap, openRename, releaseRider, rosterMax, setCaptain, setExpandedRiderId, setFocus, setG, setPart, toggleFavorite, useSupp, useTune } = ctx;
   return (
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontSize: 12, color: C.sub }}>
@@ -64,17 +64,11 @@ export function renderRidersListSection(ctx) {
                 </div>
                 <div style={{ fontSize: 10.5, color: C.sub }}>疲労</div>
                 <FatigueBar v={r.fatigue} />
-                <AbilityGrid r={r} cap={growthCap} />
-                <SubStatLine r={r} />
-                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>種目別適性</div>
+                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>コース適性</div>
                 <DisciplineGrid r={r} />
-                <button onClick={() => setRadarRiderId(radarRiderId === r.id ? null : r.id)}
-                  style={{ width: "100%", marginTop: 8, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, fontSize: 11, padding: "5px 8px", cursor: "pointer" }}>
-                  {radarRiderId === r.id ? "▲ レーダーを閉じる" : "▼ レーダーで見る（能力・素質）"}
-                </button>
-                {radarRiderId === r.id && (
+                <div style={{ marginTop: 8 }}>
                   <AbilitySoshitsuRadarPair r={r} cap={growthCap} size={140} />
-                )}
+                </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ fontSize: 11, color: C.sub }}>練習:</span>
                   <select value={r.focus} onChange={e => setFocus(r.id, e.target.value)}

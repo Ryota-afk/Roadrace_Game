@@ -36,9 +36,6 @@ export function useSeasonGame() {
   const clearAwardedRef = useRef(false);
   // v13: 選手名鑑（戦績一覧）の展開状態。選手カードのトグルボタンで開閉する
   const [expandedRiderId, setExpandedRiderId] = useState(null);
-  // v43(UI): 選手カードのレーダー表示（能力/素質）の展開状態。戦績展開とは独立したトグル
-  // （6人ロースターを縦に並べる都合上、既定は非表示にして必要な選手だけ広げる）
-  const [radarRiderId, setRadarRiderId] = useState(null);
   // v31.1: シーズンモードの血統ユース（配合）の選択状態（null=閉じている／{a,b}=親のindex）
   const [breedYouthSel, setBreedYouthSel] = useState(null);
   const cls = CLASSES[g.classIdx];
@@ -280,7 +277,7 @@ export function useSeasonGame() {
 
   return {
     g, setG, teamNameChoice, setTeamNameChoice, diffChoice, setDiffChoice,
-    expandedRiderId, setExpandedRiderId, radarRiderId, setRadarRiderId, breedYouthSel, setBreedYouthSel,
+    expandedRiderId, setExpandedRiderId, breedYouthSel, setBreedYouthSel,
     cls, healthy, equipMax, rosterMax, staffMax, growthCap, availParts,
     advanceMonth, retainRider, grantTransferRequest, poachRetain, poachAccept, poachSign, resolveEvent,
     startRace, startNextStage, finishRace, finishTeamTT, finishStage, raceFinishHandler,

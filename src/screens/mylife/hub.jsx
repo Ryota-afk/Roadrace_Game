@@ -2,7 +2,7 @@
 import React from "react";
 import { mlRecordLegend } from "../../breeding/breeding.js";
 import { mlNextAction } from "../../domain/mylife/nextAction.js";
-import { AbilityFileList, AbilityGrid, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, SubStatLine, TitlesPanel, TraitLine } from "../../components/panels.jsx";
+import { AbilityFileList, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, TitlesPanel, TraitLine } from "../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { Btn, Eyebrow } from "../../components/ui.jsx";
 import { overall } from "../../core/core.js";
@@ -92,29 +92,20 @@ export function renderMyLifeHubScreen(ctx) {
                 </div>
               );
             })()}
-            {/* v43(UI): 選手カードは「5項目ブロックが4つ縦積み」で冗長だったため、主役の基礎能力と
-                生まれつきの素質をレーダー2枚の横並びに集約した。基礎能力側は軸の最大値に成長上限(cap)を
-                取ることで「外周＝天井／外周との隙間＝伸びしろ」を表し、AbilityGridの薄い伸びしろ帯と
-                同じ情報を担う。数値・パーツ補正・コース適性など詰めたい時だけ要る情報は下の折りたたみへ。 */}
+            {/* v46(UI): 能力棒グラフ(AbilityGrid)とレーダー(AbilitySoshitsuRadarPair)が同じ5項目を
+                二重に説明していた（素質6項目もSubStatLineとレーダーで二重）ため棒グラフ側を廃止。
+                コース適性（旧「種目別適性」とシーズン側で表記ゆれがあったため統一）を上、
+                能力・素質のレーダー2枚を下に常時表示する構成に一本化した。 */}
             {(() => {
               const cap = mlGrowthCap(ml.year, r, ml);
-              const open = !!ml.uiAbilityDetailOpen;
               return (
                 <>
-                  <AbilitySoshitsuRadarPair r={r} cap={cap} size={148} />
-                  <button onClick={() => setMl(s => ({ ...s, uiAbilityDetailOpen: !s.uiAbilityDetailOpen }))}
-                    style={{ width: "100%", marginTop: 10, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, fontSize: 11, padding: "5px 8px", cursor: "pointer" }}>
-                    {open ? "▲ 数値・伸びしろ・コース適性を閉じる" : "▼ 数値・伸びしろ・コース適性を見る"}
-                  </button>
-                  {open && (
-                    <div style={{ marginTop: 6 }}>
-                      <AbilityGrid r={r} cap={cap} />
-                      <SubStatLine r={r} />
-                      {r.talentCap ? <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>才能で上限+{r.talentCap}</div> : null}
-                      <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>コース適性</div>
-                      <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
-                    </div>
-                  )}
+                  <div style={{ fontSize: 10.5, color: C.sub, marginTop: 8 }}>コース適性</div>
+                  <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
+                  <div style={{ marginTop: 10 }}>
+                    <AbilitySoshitsuRadarPair r={r} cap={cap} size={148} />
+                  </div>
+                  {r.talentCap ? <div style={{ fontSize: 10, color: C.sub, marginTop: 4, textAlign: "center" }}>才能で上限+{r.talentCap}</div> : null}
                 </>
               );
             })()}
