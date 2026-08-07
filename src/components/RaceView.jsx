@@ -316,6 +316,7 @@ export { CAP_COLORS };
 // importされておらず（`grep -rn "IsoRider" src`で確認済み）、以後未使用のまま残っている。
 // CAP_COLORSは引き続きsprites/IsoRider.jsxから取る（帽子色パレットのデータ部分のみ流用）。
 import { PixelBikeSymbolDefs, PixelBikeUse } from "./sprites/pixelBike.jsx";
+import { SPRINT_POSTURES, pickDancerIds, sprintPosture } from "../domain/shared/sprintPosture.js";
 
 // v39.7: バンプ関数（x=0で0、x=Wbで最大1、その先は減衰）。ごぼう抜き/リードアウトの一過性の前後移動に使う。
 function sprintBump(x, Wb) { return x > 0 ? (x / Wb) * Math.exp(1 - x / Wb) : 0; }
@@ -324,12 +325,16 @@ export function FinalSprintCinematic({ contenders }) {
   const [now, setNow] = useState(() => performance.now());
   const startRef = useRef(performance.now());
   const camRef = useRef(null); // v39.6: 追走カメラの平滑化用（先頭交代時のカメラ移動をなめらかに）
-  // Wave H-4: <symbol>定義は「色×姿勢(normal/sprint)」の組み合わせだけ用意すればよく、
+  // Wave H-4: <symbol>定義は「色×姿勢」の組み合わせだけ用意すればよく、
   // contenders（このシネマティックの間ずっと同じ顔ぶれ）が変わらない限り再計算不要。
+  // v43: 姿勢の一覧は SPRINT_POSTURES から作る。sprintPosture() が返しうる姿勢が
+  // <symbol>に無いと参照先が存在せず選手が丸ごと消えるため、両者を同じ定数から導出して
+  // 作り忘れを構造的に防いでいる。
   const bikeCombos = useMemo(() => {
     const colors = [...new Set(contenders.map(c => c.color))];
-    return colors.flatMap(color => [{ color, posture: "normal" }, { color, posture: "sprint" }]);
+    return colors.flatMap(color => SPRINT_POSTURES.map(posture => ({ color, posture })));
   }, [contenders]);
+  const dancerIds = useMemo(() => pickDancerIds(contenders), [contenders]);
   // v39.14(残像対策): 毎フレーム全選手のSVG（1人あたり十数ノード）を再構築すると端末によっては
   // 描画が追いつかず残像・尾を引いて見える。約30fpsに間引いて1フレームあたりの再構築量を半減させる。
   useEffect(() => {
@@ -426,7 +431,8 @@ export function FinalSprintCinematic({ contenders }) {
   const gTopL = { x: gBaseL.x, y: gBaseL.y - 30 }, gTopR = { x: gBaseR.x, y: gBaseR.y - 30 };
   // Wave H-4: capは廃止（旧IsoRiderのヘルメット色による個体識別）。ドット絵は帽子色の
   // スロットを持たないため、識別は下の順位表（判断④）に一本化した。
-  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), surging: (c.kick || 0) > 0.2 && (gEff(c) - vt) > 0.15 && (gEff(c) - vt) < 1.8 }))
+  // v43: 姿勢の決定は domain/shared/sprintPosture.js の純関数へ切り出した（詳細はそちら）。
+  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), posture: sprintPosture(gEff(c) - vt, dancerIds.has(c.id)) }))
     .filter(r => r.x > -30 && r.x < W + 30 && r.y < H + 40 && r.y > -40)
     .sort((a, b) => (a.y - b.y) || (a.c.isPlayer ? 1 : -1)); // 奥(上)→手前(下)、自分は最前面
   // Wave H-4（判断④）: capによるヘルメット色での個体識別を廃止した代わりに、現在の
@@ -467,8 +473,8 @@ export function FinalSprintCinematic({ contenders }) {
           return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#14171d"} />;
         })}
         {/* 選手（ドット絵スプライト。Wave H-4） */}
-        {/* Wave F-3b: アタック中の選手は下ハンドルを握るスプリント姿勢、そうでない選手は
-            通常姿勢。同じ集団の中に姿勢差が生まれ、誰が踏んでいるのかが絵で分かる。
+        {/* v43: 姿勢は postureOf で決まる（既定=sprint／仕掛けている数名=dancing／
+            ゴール通過後=normal）。同じ集団の中に姿勢差が生まれ、誰が踏んでいるのかが絵で分かる。
             phaseは選手ごとにずらしてペダリングが揃わないようにする（BaseView.jsxと同様、
             tに経過秒・phaseに小さな個人差だけを渡す＝IsoRider時代のphase運用とは意味が違う）。
             エースは旧実装の1.14倍拡大（ドット絵では滲みの原因になるため廃止）ではなく
@@ -476,7 +482,7 @@ export function FinalSprintCinematic({ contenders }) {
             代わりに下の順位表（判断④）で名前を確認できるようにした。 */}
         {rows.map(r => (
           <g key={r.c.id}>
-            <PixelBikeUse x={r.x} y={r.y} color={r.c.color} posture={r.surging ? "sprint" : "normal"}
+            <PixelBikeUse x={r.x} y={r.y} color={r.c.color} posture={r.posture}
               flip={false} t={el} phase={riderHash01(r.c.id, 23) * 4} />
             {/* 黄色ジャージ＝エース標準色と星の金色が被って見えづらかったため、頭上へさらに
                 離して芝の上に置き、黒縁取りでどんな背景でも視認できるようにした（実機確認）。 */}
