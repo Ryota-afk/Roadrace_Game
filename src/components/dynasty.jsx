@@ -25,7 +25,7 @@ export function LineageForestView({ forest, totalLeg, variant, footer }) {
         {v.headingAsH2
           ? <h2 style={{ fontFamily: FONT_D, color: C.green, fontSize: 20, margin: "0 0 4px" }}>🌳 系譜ツリー</h2>
           : <Eyebrow color={C.green}>🌳 系譜ツリー</Eyebrow>}
-        <div style={{ fontSize: 12, color: C.sub, marginTop: v.descMarginTop, lineHeight: 1.6 }}>歴代選手（{totalLeg}名）を系統（血の流れ）ごとにまとめました。配合を重ねると世代（🧬N代目）が進み、系統が「確立→名門→大系統」へ育ちます。</div>
+        <div style={{ fontSize: 12, color: C.sub, marginTop: v.descMarginTop, lineHeight: 1.6 }}>歴代選手{totalLeg}名を、血の流れごとにまとめました。</div>
       </div>
       {totalLeg === 0 && <div style={{ fontSize: 12.5, color: C.sub, padding: 10 }}>{v.emptyText}</div>}
       {forest.map(g => (
@@ -64,7 +64,7 @@ export function FactorCollectionView({ cats, totalLeg, variant, footer }) {
         {v.headingAsH2
           ? <h2 style={{ fontFamily: FONT_D, color: "#e56cc8", fontSize: 20, margin: "0 0 4px" }}>🧬 因子図鑑</h2>
           : <Eyebrow color={"#e56cc8"}>🧬 因子図鑑</Eyebrow>}
-        <div style={{ fontSize: 12, color: C.sub, marginTop: v.descMarginTop, lineHeight: 1.6 }}>歴代の殿堂選手（{totalLeg}名）が残した「因子」の集まりです。★＝その因子を持つ選手の数。周回を重ねるほど因子が貯まり、系統{variant === "mylife" ? "（血統）" : ""}を通じて配合・弟子継承に受け継がれます。</div>
+        <div style={{ fontSize: 12, color: C.sub, marginTop: v.descMarginTop, lineHeight: 1.6 }}>殿堂選手{totalLeg}名が残した「因子」。★＝その因子を持つ選手の数。</div>
       </div>
       {totalLeg === 0 && <div style={{ fontSize: 12.5, color: C.sub, padding: 10 }}>{v.emptyText}</div>}
       {cats.map(cat => (
