@@ -111,9 +111,24 @@ export function noteAbilityDiscovery(riders) {
 
 export const persMul = (r, k) => (PERSONALITIES[r.personality]?.mul[k]) || 1;
 
+// v46(能力上限の収束是正): 「極めると全員同じステータスになる」というユーザー指摘への対応。
+// mlGrowthCap/DIFFICULTIES.growthCapという共有の天井そのものは変えず（growthPowは引き続き
+// 到達速度のみに影響）、代わりに個体差である突破力(breakthrough)の効きを強めることで、
+// 上限を超えてどこまで伸ばせるかに恒久的な差をつける。旧感度式(0.5+breakthrough/100)は、
+// 実際に生成される突破力のレンジ(p10≈41〜p90≈63)に対して感度が低すぎ、キャリア終盤の
+// 最終到達値の差が実測でわずか+2.2点しか無かった（ユーザーの「差があるとしても2、3ぐらい」
+// という指摘と一致）。breakthrough=50（既定・旧セーブ互換）で係数1.0という性質は保ったまま
+// 傾きだけを強め、同じp10/p90レンジで最終値の差が目安+15〜20点になるよう較正した
+// （BREAKTHROUGH_SENSITIVITY=0.08、200ティックのシミュレーションで実測+17.4点。
+// scratchpad/breakthrough_calib.mjs参照）。growthFactor/softFactorはseason/mylife共通の
+// ため、シーズンモードにも選手ごとの差別化が自動的に及ぶ（difficultyのgrowthCap自体は
+// 難易度別の固定値のまま・個体差はbreakthrough経由でのみ生じる設計）。
+export const BREAKTHROUGH_SENSITIVITY = 0.08;
+export const breakthroughMul = (breakthrough = 50) => Math.max(0.05, 1.0 + BREAKTHROUGH_SENSITIVITY * (breakthrough - 50));
+
 // v43(マイライフ難易度調整Phase 1): 突破力(breakthrough)をgrowthFactorと同じ考え方で反映。
-// breakthrough=50（既定・旧セーブ互換）のとき0.5+50/100=1で従来のexp(-(v-cap)/4)と完全一致する。
-export const softFactor = (v, cap = 88, breakthrough = 50) => (v < cap ? 1 : Math.exp(-(v - cap) / (GROWTH_DECAY_DIV * (0.5 + breakthrough / 100))));
+// breakthrough=50（既定・旧セーブ互換）のとき係数1.0で従来のexp(-(v-cap)/4)と完全一致する。
+export const softFactor = (v, cap = 88, breakthrough = 50) => (v < cap ? 1 : Math.exp(-(v - cap) / (GROWTH_DECAY_DIV * breakthroughMul(breakthrough))));
 
 // v39.14(バランス): 能力成長の逓減カーブ。従来のsoftFactorは「capまで減速ゼロ→capで壁」だったため、
 // 伸びが一直線に上限へ張り付き、2年ほどでカンスト＝以降の成長に手応えが無くなっていた。
@@ -122,12 +137,13 @@ export const GROWTH_TAPER = 42;
 export const GROWTH_AT_CAP = 0.2;                  // 上限到達時点の伸び倍率（ここから先はさらに急減衰）
 export const GROWTH_DECAY_DIV = 4;                 // 上限超過後の減衰の緩さ（大きいほど緩やかに減衰）
 // v43(マイライフ難易度調整Phase 1): 新ステータス「突破力」(breakthrough, 1〜100・既定50)。
-// 上限到達時点の伸び倍率(atCap)と減衰の緩さ(decayDiv)の両方を、既定値(50)を中心に
-// ±50%の範囲で動かす（breakthrough=50のとき従来どおりGROWTH_AT_CAP/GROWTH_DECAY_DIVと
-// 完全一致する連続式にしてあるため、突破力を持たない旧セーブの選手・NPCも挙動が変わらない）。
+// 上限到達時点の伸び倍率(atCap)と減衰の緩さ(decayDiv)の両方をbreakthroughMul()で動かす
+// （breakthrough=50のとき従来どおりGROWTH_AT_CAP/GROWTH_DECAY_DIVと完全一致する連続式に
+// してあるため、突破力を持たない旧セーブの選手・NPCも挙動が変わらない）。
 export const growthFactor = (v, cap = 88, breakthrough = 50) => {
-  const atCap = GROWTH_AT_CAP * (0.5 + breakthrough / 100);
-  const decayDiv = GROWTH_DECAY_DIV * (0.5 + breakthrough / 100);
+  const mul = breakthroughMul(breakthrough);
+  const atCap = GROWTH_AT_CAP * mul;
+  const decayDiv = GROWTH_DECAY_DIV * mul;
   // 上限超過は急減衰。上限ぴったりで倍率が跳ね上がらないよう、逓減カーブの終端値から連続させる
   if (v >= cap) return atCap * Math.exp(-(v - cap) / decayDiv);
   const t = Math.max(0, Math.min(1, (v - (cap - GROWTH_TAPER)) / GROWTH_TAPER));
