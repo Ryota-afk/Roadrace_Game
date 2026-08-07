@@ -6,7 +6,7 @@ import { CLASSES } from "../../data/progression.js";
 import { MANAGER_DIRECTIVES } from "../../data/directives.js";
 import { mulberry, overall, pickRiderName, ridState, rollAbilities } from "../../core/core.js";
 import { mlGenTeammates } from "../../state/state.js";
-import { ML_CROSSROADS, ML_OFFSEASON_CHOICES, mlGenDirective, mlRollCrossroads } from "../../logic/support.js";
+import { ML_CROSSROADS, ML_OFFSEASON_CHOICES, abilityDeltaSummary, mlGenDirective, mlRollCrossroads } from "../../logic/support.js";
 import { mlGenRace } from "../../domain/mylife/race.js";
 
 // v18: シーズンモードのキャプテン制度に対応するマイライフ側の役割。30歳以降、
@@ -91,11 +91,20 @@ export function mlResolveOffseason(s, choiceIdx) {
   const po = s.pendingOffseason;
   if (!po) return s;
   const choice = ML_OFFSEASON_CHOICES[choiceIdx];
-  const player = choice.apply(po.player, po.year, po);
+  const prevPlayer = po.player;
+  const player = choice.apply(prevPlayer, po.year, po);
+  // v45: 能力の増減はaddAb()が成長キャップで頭打ちすることがあるため、choice側の
+  // 静的な表記より確実なbefore/after差分を使う（疲労はAB_KEYS外なので別途diffする）。
+  const parts = [];
+  const abDiff = abilityDeltaSummary(player, prevPlayer);
+  if (abDiff) parts.push(abDiff.slice(1, -1));
+  const fatigueDiff = Math.round((player.fatigue || 0) - (prevPlayer.fatigue || 0));
+  if (fatigueDiff !== 0) parts.push(`疲労${fatigueDiff > 0 ? "+" : ""}${fatigueDiff}`);
+  const summary = parts.length ? `（${parts.join("・")}）` : "";
   return {
     ...s,
     pendingOffseason: { ...po, player },
-    offseasonResultText: choice.result,
+    offseasonResultText: choice.result + (summary ? " " + summary : ""),
     screen: "mylife_offseason_result",
   };
 }
@@ -121,11 +130,14 @@ export function mlResolveCrossroads(s, choiceIdx) {
   const choice = cr.choices[choiceIdx];
   const prevPlayer = pc.resolvedState.player;
   const { player, flags } = choice.apply(prevPlayer, s.flags || {});
+  // v45: 能力値の増減はchoice側の記述に頼らず、before/afterの機械比較で必ず明示する
+  const diff = abilityDeltaSummary(player, prevPlayer);
   const note = choice.resultNote ? choice.resultNote(player, prevPlayer) : "";
+  const resultText = choice.result + (diff ? ` ${diff}` : "") + (note ? `\n\n${note}` : "");
   return {
     ...s,
     pendingCrossroads: { ...pc, resolvedState: { ...pc.resolvedState, player, flags } },
-    crossroadsResultText: note ? `${choice.result}\n\n${note}` : choice.result,
+    crossroadsResultText: resultText,
     screen: "mylife_crossroads_result",
   };
 }

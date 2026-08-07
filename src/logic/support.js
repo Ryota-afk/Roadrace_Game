@@ -6,7 +6,7 @@
 // 揃えれば、このファイルの再エクスポート行は削除できる）。
 import { legendBloodId, loadMlLegends, saveMlLegends, loadBloodlines, mlBloodlineTier } from "../breeding/breeding.js";
 import { ASSIST_ROLES, GOLD_CONDITIONS, countRoleUses, countWins, hasAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "../core/core.js";
-import { ABILITIES, AB_KEYS, GROWTH, PERSONALITIES, TYPES } from "../data/abilities.js";
+import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, PERSONALITIES, TYPES } from "../data/abilities.js";
 import { BREED_NICKS } from "../data/breeding.js";
 import { VENUE_REGION, UNLOCK_TEMPLATES } from "../data/course.js";
 import { EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_META, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER } from "../data/economy.js";
@@ -759,6 +759,20 @@ export function rivalDialogue({ rival, beat, gapSec, heatAfter, playerName, seed
 
 
 
+// v45: ユーザー指摘「イベントで起きた能力変化などは必ず明示したほうがいい」への対応。
+// ML_CROSSROADSの各choice.applyは能力値を直接書き換えるが、resultは物語文のみで数値を
+// 一切示していなかった（例：怪我イベントで能力-1〜-5されても本文に数値が出ない）。
+// before/afterのAB_KEYSを機械的に比較して差分だけ拾うので、choice側の記述漏れが起きない。
+export function abilityDeltaSummary(player, prevPlayer) {
+  if (!player || !prevPlayer) return "";
+  const parts = [];
+  AB_KEYS.forEach(k => {
+    const d = Math.round((player[k] || 0) - (prevPlayer[k] || 0));
+    if (d !== 0) parts.push(`${AB_LABEL[k]}${d > 0 ? "+" : ""}${d}`);
+  });
+  return parts.length ? `（${parts.join("・")}）` : "";
+}
+
 export const ML_CROSSROADS = {
   marriage: {
     key: "marriage", title: "人生の岐路 — 結婚",
@@ -868,6 +882,10 @@ export function mlRollCrossroads(s, player) {
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
+// v45: ユーザー指摘「イベントで起きた能力変化などは必ず明示したほうがいい」への対応。
+// 各選択はresult（フレーバー文）だけで実際の増減値（全能力+2〜4・疲労±）を一切示して
+// いなかった。mlResolveOffseason側でbefore/after差分を機械的に計算して必ず併記する
+// （addAb()は成長キャップで頭打ちすることがあるため、ここに静的な数値は持たせない）。
 export const ML_OFFSEASON_CHOICES = [
   { key: "domestic", label: "国内で自主トレーニングに励む", desc: "堅実に基礎を積む。伸びは控えめだが安全",
     result: "オフシーズンは国内で黙々と走り込み、着実に地力を蓄えた。",

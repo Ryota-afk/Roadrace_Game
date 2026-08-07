@@ -59,6 +59,22 @@ export function eventEffectSummary(effects) {
   return parts.length ? `（${parts.join("・")}）` : "";
 }
 
+// v45: ユーザー指摘「イベントで起きた能力変化などは必ず明示したほうがいい」。
+// 弟子の指導イベントは結果文(ch.result)がフレーバーのみで、実際に動いた数値
+// （弟子の絆・鍛錬・地力、師＝プレイヤー自身の能力・疲労・監督評価）が一切
+// 表示されずに反映されていた。eventEffectSummaryと同じ「（〜・〜）」形式で
+// 弟子側／師側の変化をまとめて明示する。
+export function protegeEffectSummary(pd, md) {
+  const parts = [];
+  if (pd.bond) parts.push(`弟子の絆${pd.bond > 0 ? "+" : ""}${pd.bond}`);
+  if (pd.guideBonus) parts.push("弟子の鍛錬↑");
+  if (pd.ovrBonus) parts.push(`弟子の地力${pd.ovrBonus > 0 ? "+" : ""}${pd.ovrBonus}`);
+  if (md.abBoost) parts.push(`自分の能力+${md.abBoost}`);
+  if (md.fatigueDelta) parts.push(`疲労${md.fatigueDelta > 0 ? "+" : ""}${md.fatigueDelta}`);
+  if (md.evalDelta) parts.push(`監督評価${md.evalDelta > 0 ? "+" : ""}${md.evalDelta}`);
+  return parts.length ? `（${parts.join("・")}）` : "";
+}
+
 // v43(Phase 2): ダイジョーブ博士系（賭け）イベント用。choice.outcomesがあれば
 // weight加重で1つ抽選し、そのeffects/resultを採用する（＝選んだ瞬間には結果が
 // 決まっておらず、賭けた後にどちらに転ぶか分かる）。無ければ従来通りchoice自体を使う。
@@ -122,7 +138,7 @@ export function mlResolveProtegeEvent(s, choiceIdx) {
   player = { ...player, fatigue };
   const managerEval = Math.max(0, Math.min(100, s.managerEval + (md.evalDelta || 0)));
   return { ...s, protege, player, managerEval, pendingProtegeEvent: null,
-    eventResultText: ch.result, eventAdvanced: true,
+    eventResultText: ch.result + " " + protegeEffectSummary(pd, md), eventAdvanced: true,
     screen: "mylife_event_result" };
 }
 
