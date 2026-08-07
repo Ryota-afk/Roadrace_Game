@@ -65,7 +65,9 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     } else if (br < 0.26) {
       const before = player.growthPow;
       player.growthPow = bumpGrowthPow(player.growthPow, 1);
-      if (player.growthPow !== before) debutBoon = { label: "🌱 才能の片鱗", note: `秘めた伸びしろを感じさせる（成長力${before}→${player.growthPow}）` };
+      // v43(成長力マスク化との整合): 成長力は3年目まで🔒???表示のため、この一言も
+      // before→afterの具体的な等級を書いてはいけない（デビュー画面で実質バレてしまう）。
+      if (player.growthPow !== before) debutBoon = { label: "🌱 才能の片鱗", note: "秘めた伸びしろを感じさせる（成長力が上がった。詳細は3年目に判明する）" };
     }
   }
   if (debutBoon) player.debutBoon = debutBoon;

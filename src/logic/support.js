@@ -1211,6 +1211,11 @@ export function growthPhase(r) {
 
 // v43(マイライフ難易度調整Phase 1・成長力マスク化): revealPow=falseの間はpowScoreを除外する
 // （マイライフの成長力非公開期間中、この「伸びしろ」ヒントから逆算されないようにするため）。
+// v46(素質ランク圧縮修正): powScoreを単純にゼロ化すると、公開時基準のしきい値(5/3)のままでは
+// 「伸びしろ大」が非公開中は理論上到達不能になり常に中/小しか出ない（デビュー時の年齢×成長型
+// 8万通りを実測：最大でも視認可能スコアは3どまり）。非公開時専用のしきい値を用意し、
+// 視認可能スコアの取りうる値(1〜3がほぼ均等)全体に大/中/小を割り当てるよう較正した
+// （scratchpad/potentialhint_calib.mjs）。
 export function potentialHint(r, revealPow = true) {
   const phase = growthPhase(r).tag;
   const powScore = revealPow ? ({ S: 3, A: 2, B: 1, C: 0 }[r.growthPow] ?? 1) : 0;
@@ -1219,8 +1224,9 @@ export function potentialHint(r, revealPow = true) {
   else if (phase === "全盛期") score += 1;
   const [ps] = GROWTH[r.growth].peak;
   if (r.age < ps - 3) score += 1;
-  if (score >= 5) return { label: "伸びしろ大", color: "#ffd23f" };
-  if (score >= 3) return { label: "伸びしろ中", color: "#35c07e" };
+  const T = revealPow ? { big: 5, mid: 3 } : { big: 3, mid: 2 };
+  if (score >= T.big) return { label: "伸びしろ大", color: "#ffd23f" };
+  if (score >= T.mid) return { label: "伸びしろ中", color: "#35c07e" };
   return { label: "伸びしろ小", color: "#9aa3b5" };
 }
 
@@ -1480,6 +1486,12 @@ export function protegeState(protege, year) {
 // この素質ランクは成長力に最も重く（他の項目の2倍以上）依存しているため、成長力を隠したまま
 // 素質ランクだけ見せると「Sランクが出るまで粘る」というリセマラの実質が温存されてしまう。
 // revealPow=falseの間はpowScore項を丸ごと除外し、素質ランクからも成長力を推測できないようにする。
+// v46(素質ランク圧縮修正): revealPow=false時はpowScoreが常に0になるため、公開時と同じ
+// しきい値(2.5/5.8/8.5/11.5)のままだと分布が潰れる。実測（3経歴×5脚質・8万体）：
+// 公開時 C45%/B44%/A11%/S0.4% に対し、非公開時に旧しきい値を使うとC96%/B4%/A0%/S0%まで
+// 圧縮され、デビュー画面の「素質を引き直す」がほぼ常にCしか出ず機能しなくなっていた。
+// 非公開スコア（=powScoreを除いた視認可能要素のみの合計）の分位点が、公開時の各ランク比率と
+// 一致するよう専用しきい値を較正した（scratchpad/talentrank_calib.mjs）。
 export function mlTalentRank(player, revealPow = true) {
   if (!player) return { rank: "C", color: "#9aa3b5", score: 0 };
   const powScore = revealPow ? ({ S: 3, A: 2, B: 1, C: 0 }[player.growthPow] ?? 1) : 0;
@@ -1493,11 +1505,14 @@ export function mlTalentRank(player, revealPow = true) {
   const growthRare = (player.growth === "super_late" || player.growth === "super_early") ? 1 : 0;
   const score = powScore * 2 + persScore + goodCount * 0.8 + goldCount * 1.7
     + (player.talentCap || 0) * 0.25 + (player.bakuhatsu || 0) * 0.15 + growthRare - badCount * 0.9;
+  const T = revealPow
+    ? { SS: 11.5, S: 8.5, A: 5.8, B: 2.5 }
+    : { SS: 4.8, S: 3.8, A: 2.1, B: 0.5 };
   let rank, color;
-  if (score >= 11.5) { rank = "SS"; color = "#ff7ac0"; }
-  else if (score >= 8.5) { rank = "S"; color = "#ffd23f"; }
-  else if (score >= 5.8) { rank = "A"; color = "#35c07e"; }
-  else if (score >= 2.5) { rank = "B"; color = "#4f8fe8"; }
+  if (score >= T.SS) { rank = "SS"; color = "#ff7ac0"; }
+  else if (score >= T.S) { rank = "S"; color = "#ffd23f"; }
+  else if (score >= T.A) { rank = "A"; color = "#35c07e"; }
+  else if (score >= T.B) { rank = "B"; color = "#4f8fe8"; }
   else { rank = "C"; color = "#9aa3b5"; }
   return { rank, color, score: Number(score.toFixed(1)),
     parts: { powScore, persLabel: pers?.label || "普通", goodCount, badCount, goldCount } };
