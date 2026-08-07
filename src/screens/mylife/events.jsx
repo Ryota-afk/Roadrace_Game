@@ -18,7 +18,7 @@ export function renderMyLifeEventScreens(ctx) {
       return mlWrap(
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-            <Eyebrow color={C.green}>SHOP — 所持金 {ml.money}万円</Eyebrow>
+            <Eyebrow color={C.green}>ショップ — 所持金 {ml.money}万円</Eyebrow>
             <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます・生活費/税 -{mlLivingCost(ml)}万/月）</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
               <span style={{ fontSize: 11, color: C.sub }}>現在の疲労</span>
@@ -185,7 +185,7 @@ export function renderMyLifeEventScreens(ctx) {
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "12px 14px" }}>
-            <Eyebrow color={C.purple}>LIFE EVENT — {ev.title}</Eyebrow>
+            <Eyebrow color={C.purple}>できごと — {ev.title}</Eyebrow>
             <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0" }}>{ev.text}</p>
           </div>
           {ev.choices.map((c, i) => (

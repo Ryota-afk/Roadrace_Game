@@ -14,7 +14,7 @@ export function renderSeasonTransferEventScreens(ctx) {
     return wrap(
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: "#2b2436", borderRadius: 12, padding: 18, borderTop: `4px solid ${C.purple}` }}>
-          <Eyebrow color={C.purple}>TEAM EVENT — {MONTHS[g.month]}</Eyebrow>
+          <Eyebrow color={C.purple}>チームの出来事 — {MONTHS[g.month]}</Eyebrow>
           <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 20, margin: "6px 0 10px" }}>{ev.title}</h2>
           <p style={{ color: C.sub, fontSize: 13.5, lineHeight: 1.8, margin: 0 }}>{ev.text}</p>
         </div>

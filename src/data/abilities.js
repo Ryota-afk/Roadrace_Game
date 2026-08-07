@@ -109,15 +109,15 @@ export const ABILITIES = {
 export const PERSONALITIES = {
   normal:   { label: "普通", desc: "クセなし", mul: {} },
   genius:   { label: "天才", desc: "全能力が伸びやすい", mul: { flat: 1.25, climb: 1.25, sprint: 1.25, stamina: 1.25, solo: 1.25 } },
-  hotblood: { label: "熱血", desc: "ｽﾌﾟﾘﾝﾄ↑ 登坂↓", mul: { sprint: 1.4, climb: 0.7 } },
-  seeker:   { label: "求道者", desc: "登坂↑ ｽﾌﾟﾘﾝﾄ↓", mul: { climb: 1.4, sprint: 0.7 } },
-  artisan:  { label: "職人", desc: "ｽﾀﾐﾅ↑ 独走↑ ｽﾌﾟﾘﾝﾄ↓", mul: { stamina: 1.35, solo: 1.15, sprint: 0.85 } },
-  free:     { label: "自由人", desc: "独走↑ ｽﾀﾐﾅ↓", mul: { solo: 1.4, stamina: 0.7 } },
+  hotblood: { label: "熱血", desc: "スプリント↑ 登坂↓", mul: { sprint: 1.4, climb: 0.7 } },
+  seeker:   { label: "求道者", desc: "登坂↑ スプリント↓", mul: { climb: 1.4, sprint: 0.7 } },
+  artisan:  { label: "職人", desc: "スタミナ↑ 独走↑ スプリント↓", mul: { stamina: 1.35, solo: 1.15, sprint: 0.85 } },
+  free:     { label: "自由人", desc: "独走↑ スタミナ↓", mul: { solo: 1.4, stamina: 0.7 } },
   smart:    { label: "秀才", desc: "平坦↑ 登坂↓", mul: { flat: 1.3, climb: 0.9 } },
   // v37: パーソナリティ拡充（ウマーソナリティ参考）
   maverick: { label: "一匹狼", desc: "独走↑↑ 平坦↓", mul: { solo: 1.45, flat: 0.85 } },
-  showman:  { label: "目立ちたがり", desc: "ｽﾌﾟﾘﾝﾄ↑↑ ｽﾀﾐﾅ↓", mul: { sprint: 1.4, stamina: 0.85 } },
-  tactician:{ label: "策士", desc: "平坦↑ 独走↑ ｽﾌﾟﾘﾝﾄ↓", mul: { flat: 1.25, solo: 1.2, sprint: 0.85 } },
+  showman:  { label: "目立ちたがり", desc: "スプリント↑↑ スタミナ↓", mul: { sprint: 1.4, stamina: 0.85 } },
+  tactician:{ label: "策士", desc: "平坦↑ 独走↑ スプリント↓", mul: { flat: 1.25, solo: 1.2, sprint: 0.85 } },
 };
 
 export const COND_ARROW = ["↓↓", "↘", "→", "↗", "↑↑"];

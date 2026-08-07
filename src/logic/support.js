@@ -188,23 +188,23 @@ export const addProdigyRookie = (state) => {
 
 export const CP_MILESTONES = [
   { cp: 5, label: "開幕資金 +100万円", desc: "初期資金+100万円", apply: s => ({ ...s, budget: s.budget + 100 }) },
-  { cp: 10, label: "★ 初期選手 全員能力+8", desc: "初期ロースター全員の能力値+8してスタート（大幅強化）", apply: s => bumpRosterAbAll(s, 8) },
+  { cp: 10, label: "★ 初期選手 全員能力+8", desc: "初期ロースター全員の能力値+8してスタート", apply: s => bumpRosterAbAll(s, 8) },
   { cp: 15, label: "チーム設備 Lv1底上げ", desc: "フレーム・ホイールの強化レベルが+1された状態でスタート", apply: s => bumpEquipLv(s, 1) },
-  { cp: 25, label: "★ 開幕資金 +400万円", desc: "初期資金にさらに+400万円（大幅強化）", apply: s => ({ ...s, budget: s.budget + 400 }) },
+  { cp: 25, label: "★ 開幕資金 +400万円", desc: "初期資金にさらに+400万円", apply: s => ({ ...s, budget: s.budget + 400 }) },
   { cp: 35, label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持", apply: s => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + 2, suit: s.inv.suit + 2, supp: s.inv.supp + 2, tune: s.inv.tune + 2 } }) },
-  { cp: 50, label: "★★ 逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入（大幅強化）", apply: s => addProdigyRookie(s) },
+  { cp: 50, label: "★★ 逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入", apply: s => addProdigyRookie(s) },
   { cp: 65, label: "初期選手 全員能力+5", desc: "初期ロースター全員の能力値がさらに+5", apply: s => bumpRosterAbAll(s, 5) },
-  { cp: 75, label: "★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2（大幅強化）", apply: s => bumpEquipLv(s, 2) },
+  { cp: 75, label: "★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2", apply: s => bumpEquipLv(s, 2) },
   { cp: 90, label: "開幕資金 +300万円", desc: "初期資金にさらに+300万円", apply: s => ({ ...s, budget: s.budget + 300 }) },
-  { cp: 100, label: "★★★ 逸材新人をもう1名確保＋全員能力+10", desc: "成長ランクS確定の逸材がもう1名加入し、ロースター全員の能力値も+10（集大成）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 10) },
+  { cp: 100, label: "★★★ 逸材新人をもう1名確保＋全員能力+10", desc: "成長ランクS確定の逸材がもう1名加入し、ロースター全員の能力値も+10", apply: s => bumpRosterAbAll(addProdigyRookie(s), 10) },
   // v37: 高CP帯の拡張（周回を重ねたプレイヤーへのさらなる開幕強化）
   { cp: 130, label: "開幕資金 +600万円", desc: "初期資金にさらに+600万円", apply: s => ({ ...s, budget: s.budget + 600 }) },
-  { cp: 160, label: "★★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2（計Lv5相当）", apply: s => bumpEquipLv(s, 2) },
-  { cp: 200, label: "★★★★ 逸材新人をもう1名＋全員能力+12", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+12（頂点）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 12) },
+  { cp: 160, label: "★★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2", apply: s => bumpEquipLv(s, 2) },
+  { cp: 200, label: "★★★★ 逸材新人をもう1名＋全員能力+12", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+12", apply: s => bumpRosterAbAll(addProdigyRookie(s), 12) },
   // v38(#5): 200pt頭打ちの解消。さらに上のCP帯を追加し、周回の到達目標を延伸する。
   { cp: 250, label: "開幕資金 +1000万円", desc: "初期資金にさらに+1000万円", apply: s => ({ ...s, budget: s.budget + 1000 }) },
   { cp: 320, label: "★★★★ チーム設備 Lv3底上げ", desc: "フレーム・ホイールの強化レベルがさらに+3", apply: s => bumpEquipLv(s, 3) },
-  { cp: 400, label: "★★★★★ 逸材新人をもう1名＋全員能力+15（極致）", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+15（メタ進行の極致）", apply: s => bumpRosterAbAll(addProdigyRookie(s), 15) },
+  { cp: 400, label: "★★★★★ 逸材新人をもう1名＋全員能力+15", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+15", apply: s => bumpRosterAbAll(addProdigyRookie(s), 15) },
 ];
 
 export function applyCpMilestones(state, totalEarnedCP) {

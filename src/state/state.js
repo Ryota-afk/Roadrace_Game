@@ -891,16 +891,16 @@ export const CP_SHOP = [
   { id: "m_gold", cost: 60, category: "マイライフ", label: "デビュー時 特殊能力を金で確定", desc: "新人が必ず特殊能力を1つ、金の状態でデビューする", mylife: { debutGold: true } },
   { id: "m_growth", cost: 45, category: "マイライフ", label: "初期成長力 +1段 確定", desc: "デビュー時、成長力が確定で1段階アップ", mylife: { growthUp: true } },
   { id: "m_money", cost: 25, category: "マイライフ", label: "支度金 +300万円", desc: "デビュー時の所持金が+300万円", mylife: { money: 300 } },
-  { id: "m_reroll", cost: 35, category: "マイライフ", label: "リセマラ当たり率 大幅UP", desc: "デビュー当たり特能（天啓/天賦の才）の抽選が大きく上がる", mylife: { boonBonus: 0.25 } },
-  { id: "x_boost", cost: 70, category: "特別", label: "英才教育：初期能力ブースト", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6でスタート", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
+  { id: "m_reroll", cost: 35, category: "マイライフ", label: "リセマラ当たり率 大幅アップ", desc: "デビュー当たり特能（天啓/天賦の才）の抽選が大きく上がる", mylife: { boonBonus: 0.25 } },
+  { id: "x_boost", cost: 70, category: "特別", label: "初期能力 大幅ブースト", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6でスタート", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
   // v38(#5): 高CP帯の使い道を拡充（200ptで頭打ちの解消）。既存perk枠を再利用し、周回で貯めたCPを
   // 長く注ぎ込める上位枠を用意。全買いに約1000CP必要になり、CPが「貯まりきる」感覚を解消する。
   { id: "s_rookie2", cost: 100, category: "シーズン", label: "エース級新人 確定枠（2人目）", desc: "シーズン開始時、成長ランクS確定の逸材がさらに1名加入（計2名）", season: { prodigyRookie: 1 } },
   { id: "s_equip2", cost: 95, category: "シーズン", label: "全設備 Lv+3（さらに）", desc: "フレーム・ホイールの強化レベルがさらに+3された状態でスタート", season: { equipLv: 3 } },
   { id: "s_budget2", cost: 60, category: "シーズン", label: "開幕資金 +1500万円", desc: "シーズン開始時の資金がさらに+1500万円", season: { budget: 1500 } },
-  { id: "m_reroll2", cost: 80, category: "マイライフ", label: "リセマラ当たり率 特大UP", desc: "デビュー当たり特能（天啓/天賦の才）の抽選がさらに大きく上がる", mylife: { boonBonus: 0.30 } },
+  { id: "m_reroll2", cost: 80, category: "マイライフ", label: "リセマラ当たり率 特大アップ", desc: "デビュー当たり特能（天啓/天賦の才）の抽選がさらに大きく上がる", mylife: { boonBonus: 0.30 } },
   { id: "m_money2", cost: 55, category: "マイライフ", label: "支度金 +700万円", desc: "デビュー時の所持金がさらに+700万円", mylife: { money: 700 } },
-  { id: "x_boost2", cost: 120, category: "特別", label: "頂点の英才教育：能力ブースト（さらに）", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6（x_boostと重複可）", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
+  { id: "x_boost2", cost: 120, category: "特別", label: "初期能力 特大ブースト", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6（初期能力ブーストと重複購入可・合計+12）", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
 ];
 export function cpOwned(meta, id) { return (meta.cpUnlocks || []).includes(id); }
 export function cpBuy(meta, id) {

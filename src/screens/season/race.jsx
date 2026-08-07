@@ -345,7 +345,7 @@ export function renderSeasonRaceScreens(ctx) {
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
-          <Eyebrow color={C.purple}>STAGE {stageNo} 完了 — {g.gc.race.name}</Eyebrow>
+          <Eyebrow color={C.purple}>第{stageNo}日 完了 — {g.gc.race.name}</Eyebrow>
           <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>{stageNo}日目 自チーム最高位：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestIdx + 1}位</span></div>
           <div style={{ fontSize: 13.5, color: C.text, marginTop: 3 }}>
             総合成績（{stageNo}日目終了時点）：自チーム最高
@@ -493,7 +493,7 @@ export function renderSeasonRaceScreens(ctx) {
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
-          <Eyebrow>GC FINAL — {g.gc.race.name}</Eyebrow>
+          <Eyebrow>総合順位確定 — {g.gc.race.name}</Eyebrow>
           <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>
             総合成績：自チーム最高位 <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestRank}位</span>
             {bestEntry && (

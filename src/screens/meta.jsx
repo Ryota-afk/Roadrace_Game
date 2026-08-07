@@ -32,6 +32,11 @@ function renderModeSelect(ctx) {
         <div style={{ fontSize: 11, color: C.sub, margin: "4px 2px 0" }}>選手1人のキャリアを、デビューから引退までひとつの人生として歩みます。</div>
       </div>
       <Btn outline color={"#e8a13c"} onClick={() => setSuperMode("prestige")}>🏆 生涯評価を見る</Btn>
+      {/* v46(UI): クリアポイント交換所への導線が「生涯評価を見る」の奥に隠れており分かり
+          づらいとの指摘。タイトル画面から直接開けるようボタンを追加した（生涯評価画面からの
+          導線もそのまま残す）。 */}
+      <Btn outline color={C.yellow} onClick={() => setSuperMode("cpshop")}>🛒 クリアポイント交換所</Btn>
+      <div style={{ fontSize: 11, color: C.sub, margin: "4px 2px 0" }}>過去のプレイで貯めたクリアポイントで、次回以降のスタート特典と交換できます。</div>
     </div>
   );
 }
@@ -142,7 +147,7 @@ function renderDynastyFactors(ctx) {
 
 // v37: CPショップ。貯めたCP残高で恒久解禁を購入する（自動ミルストーンとは別のプレミアム枠）。
 function renderCpShop(ctx) {
-  const { setSuperMode, buyCpItem, wrap } = ctx;
+  const { setSuperMode, buyCpItem, resetCpProgress, askConfirm, wrap } = ctx;
   const meta = loadMeta();
   const bal = cpBalance(meta);
   const catColor = { "シーズン": C.blue, "マイライフ": C.red, "特別": C.yellow };
@@ -173,7 +178,19 @@ function renderCpShop(ctx) {
           </div>
         );
       })}
-      <Btn outline color={C.sub} onClick={() => setSuperMode("prestige")}>← 生涯評価に戻る</Btn>
+      {/* v46(UI): クリアポイントのリセットは元々シーズンの新規設定画面にしかなく、
+          マイライフ専業プレイヤーには手段が無かった上、CP交換所と離れた場所にあり
+          分かりづらかった。両モード共通のこの画面へ移設した。 */}
+      <Btn role="danger" onClick={() => {
+        askConfirm(
+          `累計クリアポイント（${meta.totalEarnedCP}pt）と、それに紐づく永続ボーナス・購入済みの交換所アイテムをすべて消去します。この操作は取り消せません。よろしいですか？`,
+          () => askConfirm(
+            "本当によろしいですか？もう一度確認します。クリアポイントは元に戻せません。",
+            () => resetCpProgress()
+          )
+        );
+      }}>クリアポイントをリセット（累計{meta.totalEarnedCP}pt消去）</Btn>
+      <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
     </div>
   );
 }

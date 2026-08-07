@@ -13,7 +13,7 @@ export function renderSeasonYearEndScreens(ctx) {
     return wrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 18, borderTop: `4px solid ${info.promoted ? C.green : info.relegated ? C.red : C.yellow}` }}>
-          <Eyebrow>YEAR END — {g.year - 1}年目終了</Eyebrow>
+          <Eyebrow>{g.year - 1}年目 終了</Eyebrow>
           <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 22, margin: "6px 0 10px" }}>
             {info.promoted ? `🎉 ${cls.label} へ昇格！` : info.relegated ? "😞 降格…" : "残留 — 来季へ"}
           </h2>

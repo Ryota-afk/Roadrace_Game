@@ -14,7 +14,7 @@ export function renderMarketScoutSection(ctx) {
     <div style={{ display: "grid", gap: 14 }}>
           {g.month === 0 && (
             <section>
-              <Eyebrow color={C.green}>APRIL DRAFT — 新人スカウト（方針：{SCOUT_POLICIES[g.scoutPolicy].label}）</Eyebrow>
+              <Eyebrow color={C.green}>新人スカウト（方針：{SCOUT_POLICIES[g.scoutPolicy].label}）</Eyebrow>
               <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>能力は推定値。契約するまで正確には分かりません。</div>
               <div style={{ display: "grid", gap: 8 }}>
                 {g.scouts.length === 0 && <div style={{ fontSize: 13, color: C.sub }}>今年の候補は全員契約済み、または見送りました。</div>}

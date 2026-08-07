@@ -9,6 +9,10 @@ export function useAppShell() {
   const [superMode, setSuperMode] = useState(null);
   const [uiTick, setUiTick] = useState(0); // v37: CPショップ購入後の再描画トリガー
   const buyCpItem = (id) => { const meta = loadMeta(); const next = cpBuy(meta, id); if (next !== meta) { saveMeta(next); setUiTick(t => t + 1); } };
+  // v46(UI): 次のアクション（CP関連の導線整理）。クリアポイントのリセットは元々シーズンの
+  // 新規設定画面にしかなく、マイライフ専業プレイヤーには手段が無かった。CP交換所（両モード
+  // 共通のメタ画面）へ移設するため、season専用状態(diffChoice等)に依存しない形でここに置く。
+  const resetCpProgress = () => { saveMeta({ totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] }); setUiTick(t => t + 1); };
   // v12バグ修正: window.confirm()はモバイル端末（特にホーム画面追加時のPWA表示や
   // 一部のアプリ内ブラウザ）で表示されない・即falseを返すことがあり、その場合
   // 「最初から」等のボタンを押しても確認ダイアログがブロックされて何も起きない
@@ -21,7 +25,7 @@ export function useAppShell() {
   const openRename = (title, current, onCommit) => setRenameState({ title, value: current || "", onCommit });
 
   return {
-    superMode, setSuperMode, uiTick, buyCpItem,
+    superMode, setSuperMode, uiTick, buyCpItem, resetCpProgress,
     confirmDialog, setConfirmDialog, askConfirm,
     renameState, setRenameState, openRename,
   };

@@ -105,7 +105,7 @@ export function renderRaceStatusSection(ctx) {
           })()}
           {g.log.length > 0 && (
             <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 12px" }}>
-              <Eyebrow color={C.sub}>TEAM LOG</Eyebrow>
+              <Eyebrow color={C.sub}>チームの記録</Eyebrow>
               {g.log.slice(-4).map((l, i) => <div key={i} style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>{l}</div>)}
             </div>
           )}

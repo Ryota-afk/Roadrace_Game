@@ -19,7 +19,7 @@ import { useSeasonMenu } from "./hooks/useSeasonMenu.js";
 // ---------- メインアプリ ----------
 function App() {
   const shell = useAppShell();
-  const { superMode, setSuperMode, buyCpItem, confirmDialog, setConfirmDialog, askConfirm, renameState, setRenameState, openRename } = shell;
+  const { superMode, setSuperMode, buyCpItem, resetCpProgress, confirmDialog, setConfirmDialog, askConfirm, renameState, setRenameState, openRename } = shell;
   const season = useSeasonGame();
   const { g, setG } = season;
   const mylife = useMyLifeGame({ superMode, askConfirm });
@@ -38,7 +38,7 @@ function App() {
   // ================= メタ画面（モード選択・生涯評価・系譜・因子・CPショップ） =================
   // v46(UI): season用wrap()ではなくmetaWrap()を渡す（モード非依存の画面にシーズンの
   // 自チーム情報が漏れる不具合の修正。詳細はcomponents/chrome.jsxのmakeMetaWrap参照）。
-  const metaScreen = renderMetaScreens({ superMode, setSuperMode, buyCpItem, wrap: metaWrap });
+  const metaScreen = renderMetaScreens({ superMode, setSuperMode, buyCpItem, resetCpProgress, askConfirm, wrap: metaWrap });
   if (metaScreen) return metaScreen;
 
   // v41(§Step7第10弾): ctx（旧・88メンバーの手組みオブジェクト）を season/mylife に分割した。
@@ -48,7 +48,9 @@ function App() {
   if (superMode === "mylife") return renderMyLifeScreens({ ...shellForScreens, ...mylife, mlWrap, becomeManager });
 
   // ================= 画面（シーズンモード） =================
-  return renderSeasonScreens({ ...shellForScreens, ...season, wrap, seasonMenu });
+  // v46(UI): metaWrapもseason ctxへ渡す（新規設定前のオンボーディング画面がまだ実在しない
+  // チーム情報を表示しないようscreens/season/intro.jsx側で使い分けるため）。
+  return renderSeasonScreens({ ...shellForScreens, ...season, wrap, metaWrap, seasonMenu });
 }
 
 

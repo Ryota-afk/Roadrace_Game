@@ -8,16 +8,19 @@ import { MONTHS, UNLOCK_TEMPLATES } from "../../data/course.js";
 import { DIFFICULTIES } from "../../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../../data/theme.js";
 import { CP_MILESTONES, SCOUT_POLICIES, applyCpMilestones, addProdigyRookie, bumpEquipLv, bumpRosterAbAll, clearSaveGame, hasSaveGame, pickMandateMonths, genSeasonObjective, objectiveStatusText } from "../../logic/support.js";
-import { cpShopSeasonPerks, genScouts, initGame, legendToSeasonRider, loadGame, loadMeta, saveGameInfo, saveMeta } from "../../state/state.js";
+import { cpShopSeasonPerks, genScouts, initGame, legendToSeasonRider, loadGame, loadMeta, saveGameInfo } from "../../state/state.js";
 
 export function renderSeasonIntroScreens(ctx) {
-  const { askConfirm, diffChoice, g, setDiffChoice, setG, setTeamNameChoice, teamNameChoice, wrap } = ctx;
-  if (g.screen === "intro") return wrap(
+  const { askConfirm, diffChoice, g, metaWrap, setDiffChoice, setG, setSuperMode, setTeamNameChoice, teamNameChoice, wrap } = ctx;
+  // v46(UI): 次のアクション（導線整理）。「intro」「newgame_setup」はまだ実在のチームが
+  // 存在しない段階なのに、season専用のwrap()経由でSeasonHeader（クラスB1・あなたのチーム・
+  // 予算等の初期化直後の仮値）が表示されてしまっていた。実際のチーム情報が確定するのは
+  // 「この内容でゲーム開始」を押した後（scoutpolicy_initial以降）なので、それより前の
+  // 2画面だけヘッダーの無いmetaWrapを使う。あわせてモード選択へ戻るボタンも追加した
+  // （マイライフのcreate.jsxには元々あり、シーズン側だけ欠けていた非対称の解消）。
+  if (g.screen === "intro") return metaWrap(
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
-        {/* v46(UI): 「SEASON MODE v12」というバージョン番号入りの開発用見出しを撤去
-            （CLAUDE.md §7(b)。meta.jsxの「MODE SELECT — v14」と同型の不具合）。
-            すぐ下の見出しだけで何の画面かは伝わるので、情報としても不要。 */}
         <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 23, margin: "0 0 10px" }}>B1からPROの頂点へ</h2>
         <p style={{ color: C.sub, fontSize: 13.5, lineHeight: 1.8, margin: 0 }}>
           1年＝1シーズン、出場は月1回。3月のチャンピオンシップ3位以内で昇格。PROクラスのみ年3戦のグランツール
@@ -40,13 +43,14 @@ export function renderSeasonIntroScreens(ctx) {
       }}>
         {hasSaveGame() ? "最初から（保存データは消えます）" : "スカウト方針の確認へ"}
       </Btn>
+      <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
     </div>
   );
 
   if (g.screen === "newgame_setup") {
     const meta = loadMeta();
     const nextMilestone = CP_MILESTONES.find(m => meta.totalEarnedCP < m.cp);
-    return wrap(
+    return metaWrap(
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
           <Eyebrow color={C.yellow}>累計クリアポイント：{meta.totalEarnedCP}pt</Eyebrow>
@@ -153,7 +157,11 @@ export function renderSeasonIntroScreens(ctx) {
         </div>
         <Btn onClick={() => {
           const name = teamNameChoice.trim();
-          let base = applyCpMilestones({ ...initGame(), difficulty: diffChoice, teamName: name || "あなたのチーム" }, meta.totalEarnedCP);
+          // v46(UI): クリアポイントのリセットがCP交換所へ移設されたため、選択中の難易度が
+          // （そちらでリセットされた等の理由で）既にロック済みになっているケースを開始直前に
+          // 再検証し、その場合はeasyへ安全に倒す（ロック済み難易度のまま開始してしまう事故防止）。
+          const safeDiff = DIFFICULTIES.find(d => d.id === diffChoice && meta.totalEarnedCP >= d.needCP) ? diffChoice : "easy";
+          let base = applyCpMilestones({ ...initGame(), difficulty: safeDiff, teamName: name || "あなたのチーム" }, meta.totalEarnedCP);
           // v37: CPショップで購入済みのシーズン特典を適用
           const shop = cpShopSeasonPerks(meta);
           for (let i = 0; i < shop.prodigyRookie; i++) base = addProdigyRookie(base);
@@ -169,16 +177,7 @@ export function renderSeasonIntroScreens(ctx) {
           }
           setG({ ...base, legendRecruitIdx: null, screen: "scoutpolicy_initial" });
         }}>この内容でゲーム開始 →</Btn>
-        <Btn outline color={C.red} onClick={() => {
-          // v14.11: 生涯合計値の消去は取り消せないため、二重確認（2段階の確認モーダル）を挟む
-          askConfirm(
-            `累計クリアポイント（${meta.totalEarnedCP}pt）と、それに紐づく永続ボーナス・難易度解禁をすべて消去します。この操作は取り消せません。よろしいですか？`,
-            () => askConfirm(
-              "本当によろしいですか？もう一度確認します。クリアポイントは元に戻せません。",
-              () => { saveMeta({ totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] }); setDiffChoice("easy"); setG(s => ({ ...s })); }
-            )
-          );
-        }}>クリアポイントをリセット（累計{meta.totalEarnedCP}pt消去）</Btn>
+        <Btn outline color={C.sub} onClick={() => setSuperMode(null)}>← モード選択に戻る</Btn>
       </div>
     );
   }

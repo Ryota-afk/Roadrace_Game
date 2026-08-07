@@ -3,16 +3,16 @@
 // v37: マイライフ用CP特典。生涯CPに応じてデビュー時の支度金・人気・監督評価・成長力抽選・
 // 当たり特能抽選が強化される（＝CPがマイライフでも意味を持つ／周回で新人が有利になる）。
 export const ML_CP_MILESTONES = [
-  { cp: 10, label: "マイライフ:支度金 +50万円", perk: { money: 50 } },
-  { cp: 20, label: "マイライフ:初期人気 +10", perk: { pop: 10 } },
-  { cp: 40, label: "マイライフ:初期監督評価 +8", perk: { eval: 8 } },
-  { cp: 60, label: "マイライフ:成長力アップ抽選 +15%", perk: { growthLottery: 0.15 } },
-  { cp: 85, label: "マイライフ:デビュー当たり特能の抽選 +10%", perk: { boonBonus: 0.10 } },
-  { cp: 120, label: "マイライフ:支度金 +150万＆初期人気 +15", perk: { money: 150, pop: 15 } },
+  { cp: 10, label: "支度金 +50万円", perk: { money: 50 } },
+  { cp: 20, label: "初期人気 +10", perk: { pop: 10 } },
+  { cp: 40, label: "初期監督評価 +8", perk: { eval: 8 } },
+  { cp: 60, label: "成長力アップ抽選 +15%", perk: { growthLottery: 0.15 } },
+  { cp: 85, label: "デビュー当たり特能の抽選 +10%", perk: { boonBonus: 0.10 } },
+  { cp: 120, label: "支度金 +150万＆初期人気 +15", perk: { money: 150, pop: 15 } },
   // v38(#5): 高CP帯のマイライフ特典を延伸
-  { cp: 170, label: "マイライフ:初期監督評価 +12＆成長力抽選 +15%", perk: { eval: 12, growthLottery: 0.15 } },
-  { cp: 240, label: "マイライフ:デビュー当たり特能の抽選 +15%＆支度金 +300万", perk: { boonBonus: 0.15, money: 300 } },
-  { cp: 330, label: "マイライフ:初期人気 +25＆監督評価 +12（頂点）", perk: { pop: 25, eval: 12 } },
+  { cp: 170, label: "初期監督評価 +12＆成長力抽選 +15%", perk: { eval: 12, growthLottery: 0.15 } },
+  { cp: 240, label: "デビュー当たり特能の抽選 +15%＆支度金 +300万", perk: { boonBonus: 0.15, money: 300 } },
+  { cp: 330, label: "初期人気 +25＆監督評価 +12", perk: { pop: 25, eval: 12 } },
 ];
 
 export const MLCP_DIFF_MUL = { easy: 0.7, normal: 1.0, hard: 1.5, oni: 2.2 };

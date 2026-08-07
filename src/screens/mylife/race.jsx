@@ -21,7 +21,7 @@ export function renderMyLifeRaceScreens(ctx) {
     );
     if (ml.screen === "mylife_race" && ml.result) return mlWrap(
       <div>
-        <div style={{ marginBottom: 8 }}><Eyebrow color={ml.inLastRace ? "#e8a13c" : C.red}>{ml.inLastRace ? "🏁 LAST RACE — " : "LIVE — "}{ml.result.raceMeta.name}</Eyebrow></div>
+        <div style={{ marginBottom: 8 }}><Eyebrow color={ml.inLastRace ? "#e8a13c" : C.red}>{ml.inLastRace ? "🏁 ラストレース — " : "LIVE — "}{ml.result.raceMeta.name}</Eyebrow></div>
         <RaceErrorBoundary onRecover={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish}>
           <RaceView sim={ml.result} onFinish={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish} />
         </RaceErrorBoundary>
@@ -35,7 +35,7 @@ export function renderMyLifeRaceScreens(ctx) {
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: "#2b2436", borderRadius: 12, padding: 16, borderTop: `4px solid ${teamRank === 1 ? C.yellow : teamRank <= 3 ? "#e8a13c" : C.blue}` }}>
-            <Eyebrow color={C.blue}>🚴‍♂️🚴‍♂️ チームタイムトライアル 結果</Eyebrow>
+            <Eyebrow color={C.blue}>🚴‍♂️ チームタイムトライアル 結果</Eyebrow>
             <div style={{ fontFamily: FONT_D, fontSize: 22, color: C.text, margin: "6px 0 2px" }}>チーム {teamRank}位 <span style={{ fontSize: 13, color: C.sub }}>/ {totalTeams}チーム</span></div>
             <div style={{ fontSize: 12, color: C.sub }}>ポイント +{pts} ／ 賞金 +{prize}万円{wpGain ? ` ／ 世界ランクpt +${wpGain}` : ""}</div>
             {worldRankPrev != null && worldRank != null && worldRank !== worldRankPrev && (
