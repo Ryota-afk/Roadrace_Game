@@ -386,6 +386,16 @@ export function FinalSprintCinematic({ contenders }) {
   }
   else { const u = Math.min(1, (el - t1) / t2); vt = vtCross + (exitVt - vtCross) * u; approaching = false; }
   const fade = Math.max(0, 1 - el * 3.2);
+  // v44: ユーザー指摘「ゴール前でスローになるのに選手の動き（ペダリング）はスローに
+  // なっていない」。従来はPixelBikeUseへ実経過秒(el)をそのまま渡していたため、カメラ・
+  // 選手の位置(vt)がイーズアウトで減速しても脚の回転だけは常に実時間ペースで回り続けて
+  // いた。ペダル回転は本来「進んだ距離」に比例するもの（車輪と同じ）なので、実時間ではなく
+  // vtの進み具合からペダル用の仮想時間を作る。これによりスロー区間では脚も自然に遅くなり、
+  // 演出が完全に静止した後（vtが固定された後）は脚も静止する。
+  // PEDAL_Kは「最も速い瞬間（接近開始直後）」でおおよそ従来の実時間ケイデンスに一致するよう
+  // 較正した値（イーズアウト曲線の初速×PEDAL_K≒1）。
+  const PEDAL_K = 0.085;
+  const pedalT = (vt - vtStart) * PEDAL_K;
   // 各選手の道沿い位置 w（大＝前方/ゴール通過側）と lane（道幅内の位置）。ゴールは w=0。
   const gEff = (c) => c.gapSec * COMPRESS;
   const wOf = (c) => (vt - gEff(c)) - (c.kick || 0) * 1.5 * sprintBump(gEff(c) - vt, 1.9)
@@ -487,7 +497,7 @@ export function FinalSprintCinematic({ contenders }) {
         {rows.map(r => (
           <g key={r.c.id}>
             <PixelBikeUse x={r.x} y={r.y} color={r.c.color} posture={r.posture}
-              flip={false} t={el} phase={riderHash01(r.c.id, 23) * 4} />
+              flip={false} t={pedalT} phase={riderHash01(r.c.id, 23) * 4} />
             {/* 黄色ジャージ＝エース標準色と星の金色が被って見えづらかったため、頭上へさらに
                 離して芝の上に置き、黒縁取りでどんな背景でも視認できるようにした（実機確認）。 */}
             {r.c.isAce && <text x={r.x} y={r.y - 19} textAnchor="middle" fontSize="8.5" fill="#ffd23c"
