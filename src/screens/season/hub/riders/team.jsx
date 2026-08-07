@@ -47,7 +47,7 @@ export function renderRidersTeamSection(ctx) {
               </div>
             );
           })()}
-          <div style={{ fontSize: 11, color: C.sub }}>🎖 各選手カードのマークで主将を1名任命できます。主将より2歳以上若い選手は練習効果+10%になります。</div>
+          <div style={{ fontSize: 11, color: C.sub }}>🎖 主将より2歳以上若い選手は練習効果+10%。任命は各選手カードの🎖から。</div>
           {g.inv.camp > 0 && !g.camp && <Btn small outline color={C.purple} onClick={() => askConfirm("キャンプを実施しますか？今月の練習効果が×2になりますが、選手全員の疲労が+25されます（連発すると故障リスクが高まります）。", useCamp)}>⛺ キャンプ券を使う（今月の練習効果×2・全員疲労+25）</Btn>}
           {g.camp && <div style={{ fontSize: 12, color: C.purple }}>⛺ 今月はトレーニングキャンプ実施中（練習効果×2）</div>}
         </div>

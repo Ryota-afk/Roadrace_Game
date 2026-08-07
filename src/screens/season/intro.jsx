@@ -57,7 +57,7 @@ export function renderSeasonIntroScreens(ctx) {
           <input type="text" value={teamNameChoice} maxLength={16} placeholder="あなたのチーム"
             onChange={e => setTeamNameChoice(e.target.value)}
             style={{ width: "100%", boxSizing: "border-box", marginTop: 6, background: C.panel2, color: C.text, border: `1.5px solid ${C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
-          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>レース・順位表・記録に表示されます（未入力なら「あなたのチーム」・後からショップで変更可）。</div>
+          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>後から変更できます。</div>
         </div>
         <div>
           <Eyebrow>難易度を選択</Eyebrow>
@@ -90,7 +90,7 @@ export function renderSeasonIntroScreens(ctx) {
           return (
             <div>
               <Eyebrow color={"#e56cc8"}>🌳 レジェンド招聘（マイライフで育てた名選手を1名迎える）</Eyebrow>
-              <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px", lineHeight: 1.5 }}>あなたが選手として育て上げ引退した英雄を、監督として率いるチームの創設メンバーに迎えられます（全盛期をやや過ぎたベテランとして加入・任意）。</div>
+              <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px", lineHeight: 1.5 }}>マイライフで育て上げ引退した英雄を、創設メンバーに迎えられます（ベテランとして加入・任意）。</div>
               <div style={{ display: "grid", gap: 5, maxHeight: 210, overflowY: "auto" }}>
                 {legends.map((leg, i) => {
                   const sel = selIdx === i;
@@ -149,7 +149,7 @@ export function renderSeasonIntroScreens(ctx) {
               );
             })}
           </div>
-          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>解禁するとシーズン・マイライフ両モードのカレンダーに登場します。</div>
+          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>解禁すると両モードのカレンダーに登場します。</div>
         </div>
         <Btn onClick={() => {
           const name = teamNameChoice.trim();
@@ -186,7 +186,7 @@ export function renderSeasonIntroScreens(ctx) {
   if (g.screen === "scoutpolicy_initial") return wrap(
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ background: "#1f2b26", border: `1px solid ${C.green}`, borderRadius: 10, padding: "10px 14px" }}>
-        <Eyebrow color={C.green}>SCOUT POLICY — 初年度（4月）のスカウト方針</Eyebrow>
+        <Eyebrow color={C.green}>初年度のスカウト方針</Eyebrow>
         <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>4月に提示される新人候補5名の傾向を決めます。方針は毎年3月にも見直せます。</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -210,7 +210,7 @@ export function renderSeasonIntroScreens(ctx) {
   if (g.screen === "sponsor") return wrap(
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.green}` }}>
-        <Eyebrow color={C.green}>SPONSOR — 今季のメインスポンサーを選択</Eyebrow>
+        <Eyebrow color={C.green}>今季のメインスポンサー</Eyebrow>
         <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>毎月の契約金＋ノルマ達成で年度末ボーナス。<span style={{ color: C.red }}>未達なら違約金</span>、<span style={{ color: C.red }}>指定レースを見送るとさらに違約金</span>が加算されます。</div>
       </div>
       {g.sponsorOffers.map((sp, i) => {

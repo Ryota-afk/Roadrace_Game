@@ -1501,11 +1501,17 @@ export function RaceView({ sim, onFinish }) {
               })}
             </svg>
           </div>
+          {/* v46(UI): 凡例が10px・10項目に膨れ、マップ上に既にテキストで出ている情報まで
+              文章で二重に説明していた（CLAUDE.md §7(c)）。「牽引中」「次に牽引」「発射！」等の
+              役割は選手のすぐ下に役割バッジとして描かれているので凡例からは削除。集団の
+              振る舞いを説明する一文も、見れば分かる内容なので削除した。残したのは
+              「どの印が誰か」という、絵だけでは決して分からない対応関係だけ。 */}
           <div style={{ fontSize: 10, color: C.sub, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <span>● 黄色＝エース</span><span>○ 白＝自チームのアシスト</span><span style={{ color: "#27d3ff" }}>◎ 水色リング＝あなた</span><span>白縁＝牽引中</span><span style={{ color: C.red }}>◎ 赤丸＝アタック中</span>
-            <span style={{ color: C.yellow }}>点線＝次に牽引予定</span><span style={{ color: C.green }}>◎ 緑丸＝カメラで追跡中の選手</span>
-            <span style={{ color: C.yellow }}>黄線＝アシストがエースを牽引中</span><span style={{ color: C.yellow }}>点滅リング＝エース発射</span>
-            <span>選手はそれぞれ独立して集団内を漂う（巡航時は団子状、高強度区間ほど縦に伸びる）／中心から離れて動かなくなったら千切れかけ</span>
+            <span><span style={{ color: C.yellow }}>●</span> エース</span>
+            <span>○ 自チーム</span>
+            <span style={{ color: "#27d3ff" }}>◎ あなた</span>
+            <span style={{ color: C.red }}>◎ アタック中</span>
+            <span style={{ color: C.green }}>◎ カメラ追跡中</span>
           </div>
         </>
       )}

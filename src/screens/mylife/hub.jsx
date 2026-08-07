@@ -46,7 +46,7 @@ export function renderMyLifeHubScreen(ctx) {
               {(() => { const pot = potentialHint(r, powRevealed); return <span style={{ color: pot.color }}>{pot.label}</span>; })()}
               {ml.flags?.married && <span style={{ color: C.purple }}>💍 既婚</span>}
             </div>
-            <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク・60未満なら急いで回復させる必要はありません）</div>
+            <div style={{ fontSize: 10.5, color: C.sub }}>疲労</div>
             <FatigueBar v={r.fatigue} />
             {(() => {
               const form = r.form ?? 50;
@@ -54,7 +54,7 @@ export function renderMyLifeHubScreen(ctx) {
               const fl = form >= 80 ? "ピーク" : form >= 62 ? "好調" : form >= 40 ? "平常" : "低調";
               return (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 10.5, color: C.sub }}>フォーム（好不調）<CondFc dir={r.formForecast} /></span>
+                  <span style={{ fontSize: 10.5, color: C.sub }}>フォーム<CondFc dir={r.formForecast} /></span>
                   <div style={{ flex: 1, height: 5, background: C.line, borderRadius: 3 }}><div style={{ width: `${form}%`, height: 5, background: fc, borderRadius: 3 }} /></div>
                   <span style={{ fontFamily: FONT_M, fontSize: 11, color: fc, width: 58, textAlign: "right" }}>{Math.round(form)}・{fl}</span>
                 </div>
@@ -67,7 +67,7 @@ export function renderMyLifeHubScreen(ctx) {
               const vl = vit >= 70 ? "充実" : vit >= 40 ? "やや消耗" : "枯渇気味";
               return (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <span style={{ fontSize: 10.5, color: C.sub }}>活力（伸びしろの芯）</span>
+                  <span style={{ fontSize: 10.5, color: C.sub }}>活力</span>
                   <div style={{ flex: 1, height: 5, background: C.line, borderRadius: 3 }}><div style={{ width: `${vit}%`, height: 5, background: vc, borderRadius: 3 }} /></div>
                   <span style={{ fontFamily: FONT_M, fontSize: 11, color: vc, width: 58, textAlign: "right" }}>{Math.round(vit)}・{vl}</span>
                 </div>
@@ -91,8 +91,8 @@ export function renderMyLifeHubScreen(ctx) {
                     <div style={{ marginTop: 6 }}>
                       <AbilityGrid r={r} cap={cap} />
                       <SubStatLine r={r} />
-                      <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>能力{Math.round(cap)}以上＝限界突破（バーの薄い帯＝上限までの伸びしろ・数字の小さな+も伸びしろ）{r.talentCap ? `／才能で上限+${r.talentCap}` : ""}</div>
-                      <div style={{ fontSize: 9.5, color: C.sub, marginTop: 6 }}>コース適性 S〜G（種目別の総合地力／★＝今月のレースが有利とする種目）</div>
+                      {r.talentCap ? <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>才能で上限+{r.talentCap}</div> : null}
+                      <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>コース適性</div>
                       <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
                     </div>
                   )}
@@ -132,7 +132,7 @@ export function renderMyLifeHubScreen(ctx) {
                       <span key={"s" + i} style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub, background: C.panel2, borderRadius: 6, padding: "2px 8px" }}>{d.label} +{d.up}</span>
                     ))}
                   </div>
-                ) : <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5 }}>この能力帯では伸びが緩やか。練習の焦点や活力・休養を見直すと伸びやすくなります。</div>}
+                ) : <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5 }}>伸びが頭打ち。休養で活力を戻すと伸びやすくなります。</div>}
                 {gr.vitAfter !== gr.vitBefore && <div style={{ fontSize: 10, color: gr.vitAfter > gr.vitBefore ? C.green : "#c86", marginTop: 5 }}>💚 活力 {gr.vitBefore}→{gr.vitAfter}{gr.vitAfter > gr.vitBefore ? "（休養で回復）" : "（走り込みで消耗）"}</div>}
               </div>
             );
@@ -344,7 +344,7 @@ export function renderMyLifeHubScreen(ctx) {
             {race.weather && race.weather !== "clear" && (
               <div style={{ fontSize: 11.5, color: race.weather === "rain" ? C.blue : C.red, marginTop: 2 }}>
                 {WEATHER[race.weather].icon} 天候：{WEATHER[race.weather].label}
-                {race.weather === "rain" ? "（悪天候巧者がないと能力低下・落車リスク増）" : "（出走後の疲労蓄積が増える）"}
+                {race.weather === "rain" ? "（能力低下・落車リスク）" : "（疲労が増える）"}
               </div>
             )}
             {race.milestone && <div style={{ fontSize: 11, color: ML_MILESTONE_LABEL[race.milestone].color, marginTop: 3 }}>代表選出！一生に何度もない大舞台での一戦だ。</div>}
@@ -376,7 +376,7 @@ export function renderMyLifeHubScreen(ctx) {
           {/* v28: 縦積みになりすぎたボタン群を「今月のアクション（月を消費）」「メニュー（画面表示）」
               「その他・キャリア管理」の3グループに整理。二次的なものは折り返す小ボタンにまとめる */}
           <div style={{ display: "grid", gap: 8 }}>
-            <Eyebrow color={C.green}>🎬 今月のアクション（1つ選ぶと1ヶ月進みます）</Eyebrow>
+            <Eyebrow color={C.green}>🎬 今月のアクション — 1つ選ぶと翌月へ</Eyebrow>
             {/* v31.2: アクションが下部にあり疲労・調子を確認しながら選べないという指摘に対応。
                 行動選択の直前に、判断材料（疲労・調子・フォーム・OVR）の要約を再掲する */}
             <div style={{ background: C.panel2, borderRadius: 8, padding: "6px 10px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 11 }}>
@@ -387,7 +387,7 @@ export function renderMyLifeHubScreen(ctx) {
             </div>
             {/* v32（条件付き作戦＝ノーリスク無線）：出走前に作戦を選ぶと、結果に実際に反映される */}
             <div style={{ background: C.panel2, borderRadius: 8, padding: "7px 10px" }}>
-              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>📻 レース作戦（結果に反映されます）</div>
+              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>📻 レース作戦</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                 {Object.entries(ML_TACTICS).map(([k, t]) => (
                   <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
@@ -421,7 +421,7 @@ export function renderMyLifeHubScreen(ctx) {
               )}
             </div>
             <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 10px" }}>
-              <Eyebrow color={C.blue}>🎯 専門トレーニング（狙いを絞って強化・1ヶ月消費）</Eyebrow>
+              <Eyebrow color={C.blue}>🎯 専門トレーニング</Eyebrow>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                 {Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
                   <Btn key={k} small outline color={C.blue} onClick={() => mlAdvanceMonth(k)} title={sp.desc}>{sp.label}</Btn>
@@ -430,7 +430,7 @@ export function renderMyLifeHubScreen(ctx) {
             </div>
           </div>
           <div>
-            <Eyebrow color={C.sub}>📂 メニュー（開くだけ・月は進みません）</Eyebrow>
+            <Eyebrow color={C.sub}>📂 メニュー（月は進みません）</Eyebrow>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
               <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップ</Btn>
               <Btn small outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>🏆 実績 {computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}</Btn>
@@ -508,7 +508,7 @@ export function renderMyLifeHubScreen(ctx) {
       return mlWrap(
         <div style={{ display: "grid", gap: 10 }}>
           <Eyebrow color={C.red}>📊 選手成績 — {ml.year}年目 時点</Eyebrow>
-          <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>あなた・ライバル・チームメイトの成績を、同じレースで走った記録から集計しています（今季／通算）。</div>
+          <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>同じレースを走った相手との成績（今季／通算）。</div>
           <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, overflow: "hidden" }}>
             <div style={{ display: "flex", gap: 6, padding: "6px 10px", fontSize: 10, color: C.sub, borderBottom: `1px solid ${C.line}`, background: C.panel2 }}>
               <span style={{ flex: 1 }}>選手</span>
@@ -546,7 +546,7 @@ export function renderMyLifeHubScreen(ctx) {
       return mlWrap(
         <div style={{ display: "grid", gap: 10 }}>
           <Eyebrow color={C.green}>🌍 全チーム名鑑・成績 — {ml.year}年目</Eyebrow>
-          <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>各チームの選手団と、これまで同じレースで走った成績（通算 勝/表彰台、今季）。同じ選手が毎レース登場します。</div>
+          <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>各チームの選手団と、対戦成績（通算 勝/表彰台、今季）。</div>
           {teams.length === 0 && <div style={{ fontSize: 12, color: C.sub, padding: 12 }}>まだデータがありません（旧セーブは新規キャラから反映されます）。</div>}
           {teams.map((t) => (
             <div key={t.teamName} style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${t.color}`, overflow: "hidden" }}>

@@ -10,12 +10,18 @@ import { C, FONT_D, FONT_M } from "../data/theme.js";
 import { PARTS, PART_SLOTS, generateCourse } from "../sim/race.js";
 import { loadTitles, totalTitleCount } from "../state/state.js";
 
+// v46(UI): このバーは元々「60/90で色が変わる」「90に赤い目盛りがある」という形で
+// しきい値を表現できていたのに、呼び出し側が「疲労（90超で故障リスク・60未満なら急いで
+// 回復させる必要はありません）」という注釈を添えて同じことを文章で二重に説明していた
+// （CLAUDE.md §7(c)）。注釈は削除し、代わりに90以上を薄い赤の危険域として塗って
+// 「目盛りの右側＝危ない領域」が一目で分かるようにした。文章ではなく図で伝える。
 export function FatigueBar({ v }) {
   const col = v >= 90 ? C.red : v >= 60 ? "#e8a13c" : C.green;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <div style={{ flex: 1, height: 5, background: C.line, borderRadius: 3, position: "relative" }}>
-        <div style={{ width: `${v}%`, height: 5, background: col, borderRadius: 3 }} />
+        <div style={{ position: "absolute", left: "90%", right: 0, top: 0, height: 5, background: C.red, opacity: 0.28, borderRadius: "0 3px 3px 0" }} />
+        <div style={{ width: `${v}%`, height: 5, background: col, borderRadius: 3, position: "relative" }} />
         <div style={{ position: "absolute", left: "90%", top: -2, width: 1.5, height: 9, background: C.red }} />
       </div>
       <span style={{ fontFamily: FONT_M, fontSize: 11, color: col, width: 26, textAlign: "right" }}>{Math.round(v)}</span>
@@ -115,7 +121,7 @@ export function TraitLine({ abilities, goldAbilities }) {
             <span style={{ color: col, border: `1px solid ${col}`, borderRadius: 4, padding: "0px 5px", marginRight: 5, fontWeight: isGold ? 700 : 400 }}>
               {isGold ? "★" : ""}{t.label}
             </span>
-            {t.desc}{isGold ? "（金特・効果2倍）" : ""}
+            {t.desc}{isGold ? "（★効果2倍）" : ""}
           </div>
         );
       })}
@@ -128,7 +134,7 @@ export function TitlesPanel() {
   const total = totalTitleCount();
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.7 }}>これまでの全プレイ・両モードで自分（自チーム）が獲得した主要タイトルの通算数です。</div>
+      <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.7 }}>全プレイ・両モードを通じた通算です。</div>
       <div style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", textAlign: "center", border: `1px solid ${total > 0 ? "#e8a13c" : C.line}` }}>
         <div style={{ fontSize: 11, color: C.sub }}>通算タイトル</div>
         <div style={{ fontFamily: FONT_M, fontSize: 28, color: "#e8a13c", fontWeight: 700 }}>{total}</div>
@@ -189,7 +195,7 @@ export function AbilityFileList({ file }) {
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ background: C.panel, borderRadius: 12, padding: 14, borderTop: `4px solid ${C.purple}` }}>
         <div style={{ fontFamily: FONT_D, fontSize: 18, color: C.text }}>{discoveredCount} / {allIds.length} 発見済み</div>
-        <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>該当する特殊能力を持つ選手を保有すると解禁されます（シーズンモード・マイライフ通算）。</div>
+        <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>その能力を持つ選手を保有すると解禁されます。</div>
       </div>
       {ABILITY_CATEGORY_ORDER.map(cat => {
         const ids = allIds.filter(id => ABILITIES[id].category === cat);
@@ -218,7 +224,7 @@ export function AbilityFileList({ file }) {
                         <span style={{
                           fontSize: 9.5, color: gold ? C.yellow : C.sub, border: `1px solid ${gold ? C.yellow : C.line}`,
                           borderRadius: 4, padding: "0 4px",
-                        }}>{gold ? "★ 金特入手済" : "金特あり"}</span>
+                        }}>{gold ? "★ 金あり" : "金に進化する"}</span>
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: C.sub, marginTop: 3 }}>

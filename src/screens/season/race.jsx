@@ -70,7 +70,7 @@ export function renderSeasonRaceScreens(ctx) {
           <div style={{ fontSize: 11.5, color: C.sub }}>{race.stageRace && race.stageTmpls ? "日替わりコース" : race.tmpl.kind}・<span style={{ color: C.yellow }}>出走{N}名</span>・{TYPES[race.tmpl.favors].label}有利</div>
           {squadChoices.length > 1 && (
             <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>出走人数（少人数ほど手持ちの疲労を温存できるが、ローテーションや逃げの選択肢は減る）</div>
+              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>出走人数（少ないほど疲労を温存でき、多いほど作戦の幅が広がる）</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                 {squadChoices.map(n => {
                   const dis = healthy.length < n;
@@ -251,7 +251,7 @@ export function renderSeasonRaceScreens(ctx) {
               </div>
             );
           })()}
-          <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと連携（ケミストリー）が効きます。</div>
+          <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと、チームの連携が効きます。</div>
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px" }}>
           {teamTT.map((t) => (
@@ -400,7 +400,7 @@ export function renderSeasonRaceScreens(ctx) {
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.purple}` }}>
           <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{nextStageNo}日目に向けて作戦変更</div>
-          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>コース性格に合わせて、エース・役割をこの日だけ変更できます（出走メンバー自体は変更できません）。</div>
+          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>この日だけエース・役割を変更できます（メンバーは変更不可）。</div>
           <div style={{ display: "flex", gap: 3, margin: "8px 0 3px" }}>
             {dayTmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
           </div>

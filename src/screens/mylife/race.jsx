@@ -25,7 +25,7 @@ export function renderMyLifeRaceScreens(ctx) {
         <RaceErrorBoundary onRecover={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish}>
           <RaceView sim={ml.result} onFinish={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish} />
         </RaceErrorBoundary>
-        <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>● 印＝あなた。位置が近い選手同士が自然にグループを作ります。</div>
+        <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>● 印＝あなた</div>
       </div>
     );
 

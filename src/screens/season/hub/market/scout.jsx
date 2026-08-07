@@ -15,7 +15,7 @@ export function renderMarketScoutSection(ctx) {
           {g.month === 0 && (
             <section>
               <Eyebrow color={C.green}>APRIL DRAFT — 新人スカウト（方針：{SCOUT_POLICIES[g.scoutPolicy].label}）</Eyebrow>
-              <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>能力は推定レンジ表示。契約するまで真の値は分かりません。</div>
+              <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>能力は推定値。契約するまで正確には分かりません。</div>
               <div style={{ display: "grid", gap: 8 }}>
                 {g.scouts.length === 0 && <div style={{ fontSize: 13, color: C.sub }}>今年の候補は全員契約済み、または見送りました。</div>}
                 {g.scouts.map(sc => {
@@ -48,7 +48,7 @@ export function renderMarketScoutSection(ctx) {
           )}
           <section>
             <Eyebrow color={C.green}>FA移籍市場（能力は公開済み・即決購入）</Eyebrow>
-            <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>新人スカウトと違い、既に実績のある選手を能力そのままで獲得できます。毎月全入れ替え。</div>
+            <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>実績のある選手を能力を確認したうえで獲得できます。候補は毎月入れ替わります。</div>
             <div style={{ display: "grid", gap: 8 }}>
               {g.faMarket.length === 0 && <div style={{ fontSize: 13, color: C.sub }}>今月の候補は全員契約済みです。</div>}
               {g.faMarket.map(fa => {

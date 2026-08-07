@@ -18,9 +18,9 @@ export function renderRidersListSection(ctx) {
   return (
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontSize: 12, color: C.sub }}>
-            所属 {g.roster.length}/{rosterMax}名。<span style={{ color: C.yellow }}>能力{growthCap}以上＝限界突破</span>（金色表示・成長が大幅に鈍化。難易度「{(DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label}」の成長上限）。練習指定能力の伸びはトレードオフ（×0.9）で指定外に一部融通されます。
+            所属 {g.roster.length}/{rosterMax}名　／　成長上限 <span style={{ color: C.yellow }}>{growthCap}</span>（難易度「{(DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label}」）
           </div>
-          {g.month === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>4月は選手の解雇が可能です（各選手カードの「解雇」ボタン）。</div>}
+          {g.month === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>4月は選手を解雇できます。</div>}
           {g.roster.map(r => {
             const t = TYPES[r.type], ph = growthPhase(r);
             return (
@@ -62,7 +62,7 @@ export function renderRidersListSection(ctx) {
                   {r.streak > 0 && <span style={{ color: r.streak >= 2 ? C.red : "#e8a13c" }}>連闘{r.streak}{r.streak >= 2 ? "（次で故障！）" : ""}</span>}
                   {r.injury > 0 && <span style={{ color: C.red }}>🏥 故障 残{r.injury}ヶ月</span>}
                 </div>
-                <div style={{ fontSize: 10.5, color: C.sub }}>疲労（90超で故障リスク）</div>
+                <div style={{ fontSize: 10.5, color: C.sub }}>疲労</div>
                 <FatigueBar v={r.fatigue} />
                 <AbilityGrid r={r} cap={growthCap} />
                 <SubStatLine r={r} />

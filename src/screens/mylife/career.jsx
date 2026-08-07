@@ -67,7 +67,7 @@ export function renderMyLifeCareerScreens(ctx) {
               <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4, lineHeight: 1.6 }}>
                 {ml.awardedCP.parts.map((p, i) => `${p.label} +${p.cp}`).join("　")}
               </div>
-              <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>クリアポイントは次にデビューする新人の支度金・人気・成長力抽選などに還元されます（生涯評価画面で確認）。</div>
+              <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>次にデビューする新人の強化に使われます。</div>
             </div>
           )}
           {/* v35(逆メンター): 弟子への継承。育てた若手が後を継ぐ物語の締めくくり */}
@@ -223,7 +223,7 @@ export function renderMyLifeCareerScreens(ctx) {
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.blue}` }}>
             <Eyebrow color={C.blue}>📈 キャリアグラフ</Eyebrow>
-            <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>年ごとのOVRと世界ランクの推移。年度をまたぐごとに記録されます。</div>
+            <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>年ごとのOVRと世界ランクの推移。</div>
           </div>
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 6px", border: `1px solid ${C.line}` }}>
             <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}>
@@ -291,7 +291,7 @@ export function renderMyLifeCareerScreens(ctx) {
               あなたは 世界{ml.worldRank == null ? "ランク外" : `${ml.worldRank}位`}
             </div>
             <div style={{ fontSize: 12, color: C.sub }}>{tier.label}／{Math.round(ml.worldPoints || 0)}pt{ml.worldRankBest != null ? `／自己最高 ${ml.worldRankBest}位` : ""}</div>
-            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4 }}>成績（着順×グレード）でポイントを獲得。年ごとに一部減衰し、世界1位の基準点は年々上がります。</div>
+            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4 }}>着順とグレードでポイントを獲得。基準点は年々上がります。</div>
           </div>
           {worldNews.length > 0 && (
             <div style={{ background: "linear-gradient(180deg,#20283a,#1b2230)", borderRadius: 10, padding: "8px 11px", border: `1px solid ${C.blue}` }}>
@@ -366,7 +366,7 @@ export function renderMyLifeCareerScreens(ctx) {
                     <span style={{ color: C.sub, flex: 1 }}>{r.label}{r.ability && ABILITIES[r.ability] ? `（${ABILITIES[r.ability].label}）` : ""}</span>
                   </div>
                 ))}
-                <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>※ 表以外の組み合わせは △（標準）。同じ祖先を持つ親同士を配合すると「血の濃さ（インブリード）」で更に強くなります。</div>
+                <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>表にない組み合わせは △（標準）。同じ祖先を持つ親同士なら「血の濃さ」でさらに強くなります。</div>
               </div>
             )}
           </div>

@@ -39,7 +39,7 @@ function renderPrestige(ctx) {
         <div style={{ fontSize: 40 }}>🏆</div>
         <h2 style={{ fontFamily: FONT_D, color: "#e8a13c", fontSize: 26, margin: "8px 0" }}>生涯評価スコア</h2>
         <div style={{ fontFamily: FONT_M, fontSize: 32, color: C.text, fontWeight: 700 }}>{p.score.toLocaleString()}</div>
-        <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>シーズンモード・マイライフモード両方のプレイ履歴から算出されます</div>
+        <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>両モードのプレイ履歴から算出されます</div>
       </div>
       <div>
         <Eyebrow color={"#e8a13c"}>通算タイトル</Eyebrow>
@@ -99,7 +99,7 @@ function renderPrestige(ctx) {
           <Eyebrow color={C.green}>🌳 あなたのダイナスティ</Eyebrow>
           <span style={{ fontSize: 11, color: C.green, fontFamily: FONT_M }}>🌍 世界 {loadWorldMeta().year} 年目</span>
         </div>
-        <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 8px", lineHeight: 1.6 }}>歴代の名選手・確立した系統・集めた因子、そして世界のペロトンは、シーズンとマイライフの両方＆全周回で受け継がれる<b style={{ color: C.green }}>1つの世界</b>の資産です。世界はあなたが年を進めるたびに歳を取り、世代交代していきます。</div>
+        <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 8px", lineHeight: 1.6 }}>歴代の名選手・系統・因子は<b style={{ color: C.green }}>1つの世界</b>として、両モード・全周回で受け継がれます。</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn small outline color={C.green} onClick={() => setSuperMode("dynasty_lineage")}>🌳 系譜ツリー</Btn>
           <Btn small outline color={"#e56cc8"} onClick={() => setSuperMode("dynasty_factors")}>🧬 因子図鑑</Btn>

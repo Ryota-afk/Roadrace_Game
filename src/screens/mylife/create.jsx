@@ -18,7 +18,7 @@ export function renderMyLifeCreateScreens(ctx) {
       return mlWrap(
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 18, border: `1px solid ${C.line}` }}>
-            <Eyebrow>MY LIFE — キャラクター作成</Eyebrow>
+            <Eyebrow>キャラクター作成</Eyebrow>
             <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.7, margin: "6px 0 0" }}>
               脚質と経歴を選んでB1のいずれかのチームに新人選手として加入します。
             </p>
@@ -96,7 +96,7 @@ export function renderMyLifeCreateScreens(ctx) {
             return (
               <div>
                 <Eyebrow color={C.purple}>師匠（歴代の名選手に師事・任意）</Eyebrow>
-                <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px" }}>過去に殿堂入りした選手の教え子としてデビューできます。師の得意能力や特殊能力・成長力の一部を受け継ぎます。</div>
+                <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px" }}>殿堂入り選手の教え子としてデビューし、師の力を一部受け継ぎます。</div>
                 <div style={{ display: "grid", gap: 8 }}>
                   <button onClick={() => setMl(s => ({ ...s, masterIdx: -1 }))}
                     style={{ textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
@@ -137,7 +137,7 @@ export function renderMyLifeCreateScreens(ctx) {
                   return (
                     <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${C.line}` }}>
                       <Eyebrow color={"#e56cc8"}>🧬 配合相手（もう一人の親・任意）</Eyebrow>
-                      <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px" }}>師匠に加えて2人目の親を選ぶと「配合」になり、両方の血を引く逸材が生まれます。脚質の相性（ニック◎○△）、共通の祖先による血の濃さ（インブリード）、代を重ねるほど蓄積する+値が乗ります。</div>
+                      <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px" }}>2人目の親を選ぶと「配合」になり、両方の血を引く逸材が生まれます。</div>
                       <div style={{ display: "grid", gap: 6 }}>
                         <button onClick={() => setMl(s => ({ ...s, partnerIdx: -1 }))}
                           style={{ textAlign: "left", padding: "8px 12px", borderRadius: 10, cursor: "pointer",
@@ -186,7 +186,7 @@ export function renderMyLifeCreateScreens(ctx) {
                             {breed.extraAbilities.length > 0 ? breed.extraAbilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・") : "—"}
                           </div>
                           {breed.goldInherit && breed.goldInherit.length > 0 && (
-                            <div style={{ color: C.yellow, fontWeight: 700 }}>✨ 金特クロス：{breed.goldInherit.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}（最初から金特！）</div>
+                            <div style={{ color: C.yellow, fontWeight: 700 }}>✨ 金の特殊能力：{breed.goldInherit.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}（最初から金です！）</div>
                           )}
                           {breed.exclusive && breed.exclusive.length > 0 && (
                             <div style={{ color: "#e56cc8", fontWeight: 700 }}>🩸 配合限定特能：{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</div>
@@ -263,7 +263,7 @@ export function renderMyLifeCreateScreens(ctx) {
           <Btn onClick={mlConfirmCandidate}>この素質でデビュー →</Btn>
           <Btn outline color={C.blue} onClick={mlRerollCandidate}>🎲 素質を引き直す（リセマラ）</Btn>
           <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", lineHeight: 1.6 }}>
-            性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓（金特）」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。<br />
+            性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。<br />
             <span style={{ color: "#e8a13c" }}>成長力（伸びやすさ）はデビュー3年目まで本人にも分かりません。</span>
           </div>
         </div>

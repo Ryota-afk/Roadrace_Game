@@ -12,7 +12,7 @@ export function renderFacilityObSection(ctx) {
     <div style={{ display: "grid", gap: 14 }}>
           <section>
             <Eyebrow color={"#e8a13c"}>OBコーチ（引退選手の登用・月給{OB_COACH_SALARY}万）</Eyebrow>
-            <div style={{ fontSize: 11, color: C.sub, marginTop: 4, lineHeight: 1.6 }}>殿堂入りしたOBを専属コーチに迎えると、その選手の脚質に対応する能力の練習効果が全選手+25%になります（1名まで）。</div>
+            <div style={{ fontSize: 11, color: C.sub, marginTop: 4, lineHeight: 1.6 }}>OBコーチを1名雇うと、その脚質に対応する能力の練習効果が全選手+25%。</div>
             {g.obCoach && (
               <div style={{ background: "rgba(232,161,60,0.1)", borderRadius: 10, padding: "10px 12px", border: `1.5px solid #e8a13c`, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>

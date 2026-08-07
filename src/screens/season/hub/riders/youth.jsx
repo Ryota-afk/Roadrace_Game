@@ -12,7 +12,7 @@ export function renderRidersYouthSection(ctx) {
   return (
         <div style={{ display: "grid", gap: 10 }}>
           {!g.youthUsed && g.roster.length < rosterMax && g.budget >= 15 && (
-            <Btn small outline color={C.green} onClick={() => askConfirm("ユース候補を1名確保しますか？契約金15万円。現在の能力は控えめですが、成長力（growthPow A以上）が保証された若手（16〜17歳）です。", signYouthProspect)}>
+            <Btn small outline color={C.green} onClick={() => askConfirm("ユース候補を1名確保しますか？契約金15万円。現在の能力は控えめですが、成長力A以上が保証された16〜17歳の若手です。", signYouthProspect)}>
               🌱 ユース選手を獲得する（契約金15万円・年1回限り）
             </Btn>
           )}
@@ -30,7 +30,7 @@ export function renderRidersYouthSection(ctx) {
                   <span style={{ fontFamily: FONT_D, fontSize: 12.5, fontWeight: 700, color: "#e56cc8" }}>🧬 血統ユース（配合・契約金40万）</span>
                   <Btn small outline color={"#e56cc8"} onClick={() => setBreedYouthSel(sel ? null : { a: 0, b: legends.length > 1 ? 1 : 0 })}>{sel ? "閉じる" : "親を選ぶ"}</Btn>
                 </div>
-                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>マイライフ殿堂の名選手2名を親に配合の原石を確保。相性・血の濃さ・累代+値・金特クロスの恩恵が乗ります。</div>
+                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>マイライフの殿堂選手2名を親に選び、その血を引く原石を確保します。</div>
                 {sel && (
                   <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
                     {[["a", "親A"], ["b", "親B"]].map(([key, lbl]) => (
@@ -54,7 +54,7 @@ export function renderRidersYouthSection(ctx) {
                         {breed.special && <div style={{ color: breed.special.color, fontWeight: 800 }}>🌟 特殊配合『{breed.special.title}』</div>}
                         {breed.danger > 0 && <div style={{ color: breed.danger >= 38 ? C.red : "#e8a13c", fontSize: 10.5 }}>⚠️ 危険度 {breed.dangerLabel}（約{breed.danger}%）ガラスの体リスク{breed.healthMit > 0 ? "（健康な血で軽減）" : ""}</div>}
                         <div>相性 <span style={{ color: breed.nick.rank === "◎" ? C.yellow : breed.nick.rank === "○" ? C.green : C.sub, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
-                        <div>累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>{breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}</span>}{breed.goldInherit && breed.goldInherit.length > 0 && <span style={{ color: C.yellow }}>・✨金特クロス</span>}{breed.exclusive && breed.exclusive.length > 0 && <span style={{ color: "#e56cc8" }}>・🩸{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</span>}</div>
+                        <div>累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>{breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}</span>}{breed.goldInherit && breed.goldInherit.length > 0 && <span style={{ color: C.yellow }}>・✨金の特殊能力</span>}{breed.exclusive && breed.exclusive.length > 0 && <span style={{ color: "#e56cc8" }}>・🩸{breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")}</span>}</div>
                         <div style={{ color: C.sub }}>継承特能：{breed.extraAbilities.length ? breed.extraAbilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・") : "—"}</div>
                         {breed.archNotes && breed.archNotes.length > 0 && <div style={{ color: "#e8a13c" }}>血の格：{breed.archNotes.join("・")}</div>}
                       </div>

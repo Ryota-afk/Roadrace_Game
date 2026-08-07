@@ -23,7 +23,7 @@ export function renderMarketTransferSection(ctx) {
           </section>
           <section>
             <Eyebrow color={"#e8a13c"}>選手間トレード（毎月入れ替え）</Eyebrow>
-            <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>ライバルチームが自チームの選手に興味を示し、代わりの選手を提示してきています。受け入れると1対1で入れ替わります。</div>
+            <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>他チームからの1対1の交換提案です。</div>
             <div style={{ display: "grid", gap: 8 }}>
               {(g.tradeOffers || []).length === 0 && <div style={{ fontSize: 13, color: C.sub }}>今月のトレードオファーはありません。</div>}
               {(g.tradeOffers || []).map(offer => {
