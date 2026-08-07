@@ -1,4 +1,10 @@
-"""AIが出力した自転車ドット絵JSONを検査・プレビュー・JSX変換する。
+"""自転車ドット絵JSONを検査・プレビュー・JSX変換する。
+
+【経緯】当初は「AIに12コマを新規に描かせる」ための検査ツールとして作ったが、その方式は
+破棄した（AIに白紙から描かせると形が崩れる。詳細はDEVLOGの該当項目）。ただし本ツールが
+検査する規約（SE=前輪左/NE=前輪右の向き、下余白1行=接地、A/Bで車輪不動、行長の一致）は
+スプライトの出所を問わず有効なので、参考画像から抽出した新データの検査用に残してある。
+CANVAS/CONTENT定数は破棄した仕様の数値なので、新しいデータに合わせて更新してから使うこと。
 
     python3 tools/bike_sprites.py validate candidate.json   # 全ルールを機械検査
     python3 tools/bike_sprites.py preview  candidate.json   # PNG化して目視確認
