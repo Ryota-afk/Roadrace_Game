@@ -369,10 +369,14 @@ export function FinalSprintCinematic({ contenders }) {
   // 「速い→スロー＆ズーム」の落差でゴール前を引き立てる。
   // v39.17: ゴール前のやりとり（差し・リードアウト・抜きつ抜かれつ）を見せる時間を確保するため接近を
   // 長く取り、同時に距離も伸ばしてスピード感を維持する（時間だけ延ばすと遅く見えてしまうため）。
-  const vtStart = -26;
+  // v44: ユーザー指摘「ゴールスプリントの時間を長くして」。時間だけ延ばすと速度感が失われるため、
+  // 接近距離(vtStart)・退出距離(exitVtの加算分)も同じ倍率でスケールし、速度プロファイルは
+  // 維持したまま尺だけ約1.4倍に延ばした（＝仕掛け合い・ダンシング姿勢を見せる時間も比例して延びる）。
+  const CINE_STRETCH = 1.4;
+  const vtStart = -26 * CINE_STRETCH;
   const vtCross = 0.05;                             // v39.13: 先頭がライン（前輪）を通過する瞬間をスローの底に
-  const exitVt = spanGap * COMPRESS + 6.5;
-  const t1 = close ? 6.2 : 5.2, t2 = 1.9;
+  const exitVt = spanGap * COMPRESS + 6.5 * CINE_STRETCH;
+  const t1 = (close ? 6.2 : 5.2) * CINE_STRETCH, t2 = 1.9 * CINE_STRETCH;
   const el = (now - startRef.current) / 1000;
   let vt, approaching;
   if (el <= t1) {
