@@ -321,6 +321,65 @@ import { SPRINT_POSTURES, pickDancerIds, sprintPosture } from "../domain/shared/
 // v39.7: バンプ関数（x=0で0、x=Wbで最大1、その先は減衰）。ごぼう抜き/リードアウトの一過性の前後移動に使う。
 function sprintBump(x, Wb) { return x > 0 ? (x / Wb) * Math.exp(1 - x / Wb) : 0; }
 
+// v45: ユーザー指摘「星マーカーと水色の丸が選手の顔と被る」への対応。従来は最終スプリント
+// 演出のみ★（エース）と水色の丸（自分）を顔の高さに直接重ねていたため、密集時に顔にも
+// お互いにも被って読みづらかった。俯瞰マップの名前ラベルとスタイルを統一し、選手の頭上
+// 斜めへ短い引き出し線を伸ばした先に名前タグを置く方式へ変更（添付いただいた手描き案の
+// 「本体から線を引き出し、離れた場所に名前を置く」という考え方を両画面に共通導入）。
+// 対象は自分・エース・自チーム（isMyTeam）のみ（全選手に付けると密集時にごちゃつくため、
+// それ以外は既存の色スウォッチ付き順位表／マップ名簿で識別する）。
+export function riderTagKind(r) {
+  if (r.isPlayer && r.isAce) return "selfAce";
+  if (r.isPlayer) return "self";
+  if (r.isAce) return "ace";
+  if (r.isMyTeam) return "mate";
+  return null;
+}
+// 自分＝水色／エース＝黄色／自チーム＝青、という既存の配色（俯瞰マップの凡例・マーカー色）を
+// そのまま踏襲。自分がエースを兼ねる場合は「水色地に黄色い縁取り」で両方を一つのタグに表す。
+// rival/legend/otherは俯瞰マップ側（先頭選手・ライバル・殿堂選手）で使う
+// （演出側は自分/エース/自チームのみ）。legendはユーザー呼称「転生ライバル」＝殿堂選手
+// （引退後に衰えて後年に再登場する歴代選手）。ライバルと紛らわしくないよう同じ赤系だが
+// 別トーン＋🏛アイコンで区別する。
+const RIDER_TAG_STYLE = {
+  selfAce: { fill: "#27d3ff", border: "#ffd23c", text: "#0c2430" },
+  self: { fill: "#14171d", border: "#27d3ff", text: "#27d3ff" },
+  ace: { fill: "#14171d", border: "#ffd23c", text: "#ffd23c" },
+  mate: { fill: "#14171d", border: "#7db8ff", text: "#7db8ff" },
+  rival: { fill: "#14171d", border: "#ff6b6b", text: "#ff6b6b" },
+  legend: { fill: "#14171d", border: "#e0637a", text: "#e0637a" },
+  other: { fill: "#14171d", border: "#8a8f98", text: "#eef0f5" },
+};
+// 俯瞰マップの名前ラベル用（先頭3名・ライバル・殿堂選手も対象に含む点が演出側と異なる）。
+export function mapTagKind(r) {
+  if (r.isPlayer && r.isAce) return "selfAce";
+  if (r.isPlayer) return "self";
+  if (r.isRival) return "rival";
+  if (r.isLegend) return "legend";
+  if (r.isMyTeam && r.isAce) return "ace";
+  if (r.isMyTeam) return "mate";
+  return "other";
+}
+// タグ内の名前に添える小アイコン（自分=🚴／ライバル=🔥／殿堂選手=🏛／自チームエース=★）。
+export function riderTagIcon(kind) {
+  return kind === "self" || kind === "selfAce" ? "🚴" : kind === "rival" ? "🔥" : kind === "legend" ? "🏛" : kind === "ace" ? "★" : "";
+}
+// x,y: 選手本体の基準点。dx,dy: タグの中心をどれだけずらすか（斜め上方向を想定）。
+// scaleでキャンバスのサイズ差（演出=340幅／マップ=660幅）を吸収する。
+export function RiderNameTag({ x, y, dx, dy, kind, label, scale = 1 }) {
+  const style = RIDER_TAG_STYLE[kind];
+  if (!style) return null;
+  const lx = x + dx, ly = y + dy;
+  const w = (label.length * 6.6 + 10) * scale, h = 11.5 * scale;
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      <line x1={x} y1={y} x2={lx} y2={ly} stroke={style.border} strokeWidth={1.1 * scale} opacity="0.8" />
+      <rect x={lx - w / 2} y={ly - h / 2} width={w} height={h} rx={h / 2} fill={style.fill} stroke={style.border} strokeWidth={1.1 * scale} />
+      <text x={lx} y={ly + 3.1 * scale} textAnchor="middle" fontSize={7.6 * scale} fontWeight="700" fill={style.text}>{label}</text>
+    </g>
+  );
+}
+
 export function FinalSprintCinematic({ contenders }) {
   const [now, setNow] = useState(() => performance.now());
   const startRef = useRef(performance.now());
@@ -491,20 +550,24 @@ export function FinalSprintCinematic({ contenders }) {
             ゴール通過後=normal）。同じ集団の中に姿勢差が生まれ、誰が踏んでいるのかが絵で分かる。
             phaseは選手ごとにずらしてペダリングが揃わないようにする（BaseView.jsxと同様、
             tに経過秒・phaseに小さな個人差だけを渡す＝IsoRider時代のphase運用とは意味が違う）。
-            エースは旧実装の1.14倍拡大（ドット絵では滲みの原因になるため廃止）ではなく
-            頭上の★マーカーで示す（判断⑤）。cap（ヘルメット色）による個体識別は廃止し、
-            代わりに下の順位表（判断④）で名前を確認できるようにした。 */}
+            cap（ヘルメット色）による個体識別は廃止し、代わりに下の順位表（判断④）と
+            引き出し線タグ（v45・下記）で名前を確認できるようにした。 */}
         {rows.map(r => (
-          <g key={r.c.id}>
-            <PixelBikeUse x={r.x} y={r.y} color={r.c.color} posture={r.posture}
-              flip={false} t={pedalT} phase={riderHash01(r.c.id, 23) * 4} />
-            {/* 黄色ジャージ＝エース標準色と星の金色が被って見えづらかったため、頭上へさらに
-                離して芝の上に置き、黒縁取りでどんな背景でも視認できるようにした（実機確認）。 */}
-            {r.c.isAce && <text x={r.x} y={r.y - 19} textAnchor="middle" fontSize="8.5" fill="#ffd23c"
-              stroke="#14171d" strokeWidth="2" paintOrder="stroke" style={{ pointerEvents: "none" }}>★</text>}
-            {r.c.isPlayer && <ellipse cx={r.x} cy={r.y - 9} rx="10" ry="10" fill="none" stroke="#27d3ff" strokeWidth="1.4" />}
-          </g>
+          <PixelBikeUse key={r.c.id} x={r.x} y={r.y} color={r.c.color} posture={r.posture}
+            flip={false} t={pedalT} phase={riderHash01(r.c.id, 23) * 4} />
         ))}
+        {/* v45: 従来は★（エース）・水色の丸（自分）を顔の高さに直接重ねており、密集時に
+            顔にもお互いにも被って読みづらかった。俯瞰マップと同じ「頭上斜めへ引き出し線＋
+            名前タグ」方式に統一。全選手ではなく自分・エース・自チームのみ対象（過剰表示を
+            避ける）。スプライトを描き終えた後に別パスで重ね描きし、隣の選手のスプライトに
+            タグが隠れないようにする。 */}
+        {rows.filter(r => riderTagKind(r.c)).map(r => {
+          const dx = 12 + (riderHash01(r.c.id, 41) - 0.5) * 5;
+          const dy = -24 - riderHash01(r.c.id, 43) * 9;
+          const kind = riderTagKind(r.c);
+          return <RiderNameTag key={"tag" + r.c.id} x={r.x} y={r.y - 9} dx={dx} dy={dy}
+            kind={kind} label={riderTagIcon(kind) + r.c.name.split(" ")[0]} />;
+        })}
       </svg>
       {fade > 0.01 && <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />}
       <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
@@ -739,7 +802,7 @@ export function RaceView({ sim, onFinish }) {
   const labelIds = (() => {
     const set = new Set();
     [...ridersUi].sort((a, b) => b.frac - a.frac).slice(0, 3).forEach(r => set.add(r.id));
-    ridersUi.forEach(r => { if (r.isPlayer || r.isRival || (r.isMyTeam && r.isAce)) set.add(r.id); });
+    ridersUi.forEach(r => { if (r.isPlayer || r.isRival || r.isLegend || (r.isMyTeam && r.isAce)) set.add(r.id); });
     return set;
   })();
 
@@ -1018,7 +1081,7 @@ export function RaceView({ sim, onFinish }) {
               if (r.e.isAssisting || r.e.leadoutFor != null) kick = -0.9;
               else if (hasAbility(r.e, "finisher") || hasAbility(r.e, "kicker")) kick = 1;
               else kick = Math.max(-0.5, Math.min(0.9, (sp - 72) / 24));
-              return { id: r.e.id, name: r.e.name, color: r.color, isAce: r.e.isAce, isPlayer: isAvatar(r.e), gapSec: r.e.finishTime - winnerTime, kick };
+              return { id: r.e.id, name: r.e.name, color: r.color, isAce: r.e.isAce, isPlayer: isAvatar(r.e), isMyTeam: r.e.team === "PLAYER", gapSec: r.e.finishTime - winnerTime, kick };
             });
           setCinematic({ contenders });
         }
@@ -1028,7 +1091,8 @@ export function RaceView({ sim, onFinish }) {
         gid: r.gid, slot: r.slot, tag: r.tag, dropStreak: r.dropStreak, attackStreak: r.attackStreak, biasX: r.biasX,
         elong: r.elong, tilt: r.tilt,
         // v37: 観戦マップに名前ラベルを出すため、選手名と識別フラグを持たせる
-        name: r.e.name, isRival: !!(r.e.isRival || r.e.isRival2), isMyTeam: r.e.team === "PLAYER",
+        // v45: 殿堂選手（isLegend＝引退後に衰えて後年に再登場する歴代選手）もタグ対象に追加
+        name: r.e.name, isRival: !!(r.e.isRival || r.e.isRival2), isMyTeam: r.e.team === "PLAYER", isLegend: !!r.e.isLegend,
       })));
       if (now - lastHud > 300 || clock >= PLAY_DUR) {
         lastHud = now;
@@ -1379,13 +1443,11 @@ export function RaceView({ sim, onFinish }) {
                         </g>
                       );
                     })()}
-                    {/* v37: 観戦マップの名前ラベル（先頭・自分・ライバル・自チームエースのみ） */}
+                    {/* v37: 観戦マップの名前ラベル（先頭・自分・ライバル・自チームエースのみ）。
+                        v45: 最終スプリント演出と同じ「引き出し線＋タグ」方式に統一（判断⑤参照）。 */}
                     {labelIds.has(r.id) && (
-                      <text y={-9} textAnchor="middle" fontSize="9" paintOrder="stroke" stroke="#14171d" strokeWidth="2.4"
-                        fill={r.isPlayer ? C.yellow : r.isRival ? "#ff6b6b" : r.isMyTeam ? "#7db8ff" : "#eef0f5"}
-                        style={{ fontWeight: r.isPlayer ? 800 : 600 }}>
-                        {(r.isPlayer ? "🚴" : r.isRival ? "🔥" : "") + (r.name ? r.name.split(" ")[0] : "")}
-                      </text>
+                      <RiderNameTag x={0} y={-9} dx={13 + (riderHash01(r.id, 41) - 0.5) * 5} dy={-14 - riderHash01(r.id, 43) * 8}
+                        kind={mapTagKind(r)} label={riderTagIcon(mapTagKind(r)) + (r.name ? r.name.split(" ")[0] : "")} scale={1.1} />
                     )}
                   </g>
                 );
@@ -1429,6 +1491,11 @@ export function RaceView({ sim, onFinish }) {
                     {r.isPlayer && <circle r={r.isAce ? 7 : 5.5} fill="none" stroke="#27d3ff" strokeWidth="1.6" />}
                     <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
                     {r.isPlayer && <circle r="1.5" fill="#14171d" />}
+                    {/* v45: 側面マップにも上と同じ引き出し線タグを追加（従来はラベル自体が無かった） */}
+                    {labelIds.has(r.id) && (
+                      <RiderNameTag x={0} y={0} dx={13 + (riderHash01(r.id, 41) - 0.5) * 5} dy={-16 - riderHash01(r.id, 43) * 8}
+                        kind={mapTagKind(r)} label={riderTagIcon(mapTagKind(r)) + (r.name ? r.name.split(" ")[0] : "")} scale={1.1} />
+                    )}
                   </g>
                 );
               })}
