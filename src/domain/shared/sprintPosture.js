@@ -20,9 +20,13 @@ export function pickDancerIds(contenders) {
 
 // rem: ゴールまでの残り（演出内の単位。0以下＝通過済み）。
 // 最終直線は全員がもがいている場面なので既定は sprint（下ハンドル）。
-// 仕掛けている数名だけが dancing、ゴールを通過したら身体を起こして normal に戻る。
+// 仕掛けている数名だけが dancing、ゴールを通過してしばらく経ってから身体を起こして normal に戻る。
+// v45.4: 旧しきい値は rem<=0.05（＝通過した瞬間）だったため、ゴールした直後に選手が
+// 即座に体を起こして見えた（ユーザー指摘）。POST_FINISH_HOLD分だけ通過後もsprint/dancing
+// 姿勢を保持し、しばらく走り抜けてから自然に立ち上がるようにする。
+const POST_FINISH_HOLD = 1.5;
 export function sprintPosture(rem, isDancer) {
-  if (rem <= 0.05) return "normal";
+  if (rem <= -POST_FINISH_HOLD) return "normal";
   if (isDancer && rem < 2.6) return "dancing";
   return "sprint";
 }

@@ -468,16 +468,14 @@ export function FinalSprintCinematic({ contenders }) {
     return Math.max(-1.25, Math.min(1.25, base * conv + weave + passLat));
   };
   const withW = contenders.map(c => ({ c, w: wOf(c) }));
-  // v39.10: 勝者(gap最小＝先頭)がゴールを通過するまでは先頭を追走。通過後はゴール(w=0)にカメラを固定し、
-  // 後続が固定ゴールを越えていくのを見せる。
-  const winnerW = withW.reduce((a, b) => (b.c.gapSec < a.c.gapSec ? b : a), withW[0]).w;
-  let camWTarget;
-  if (winnerW < 0.05) {
-    const cand = withW.filter(o => o.w <= 0.12);      // まだゴールを越えていない選手の中で最も前
-    camWTarget = cand.length ? Math.max(...cand.map(o => o.w)) : 0;
-  } else {
-    camWTarget = 0;                                    // 勝者ゴール後はゴール位置に固定
-  }
+  // v45.2: 従来は「まだ0.12を通過していない候補の中の最先頭」を追走し、勝者通過後はゴール(0)に
+  // 固定、という2分岐だった。追走対象の候補プールが毎フレーム0.12の境界で入れ替わるため、
+  // 直前まで追っていた選手がそのラインを越えて候補から外れた瞬間、カメラの目標が後方の選手へ
+  // 引き戻されてガクつく（ユーザー指摘の原因）。常に「最も進んでいる選手」を素直に追い、
+  // ゴール(w=0)より先へは進ませないようclampするだけにすると、追走対象の入れ替わりも
+  // 目標値のジャンプも起きず、連続的にゴールで頭打ちになる。
+  const leaderW = Math.max(...withW.map(o => o.w));
+  let camWTarget = Math.min(leaderW, 0);
   // v39.19(演出): 導入。最初はゴール手前の路面を映しておき、集団が画面奥（左上）から入ってくるのを
   // 見せてから先頭にフォーカスを移す＝「いきなり選手が現れる」違和感を解消する。
   const introT = 1.5;
@@ -497,6 +495,15 @@ export function FinalSprintCinematic({ contenders }) {
   }
   const diamond = (w, l, hw = 0.5, hl = laneStep / 2) => {
     const p1 = S(w - hw, l), p2 = S(w, l + hl), p3 = S(w + hw, l), p4 = S(w, l - hl);
+    return `${p1.x.toFixed(1)},${p1.y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)} ${p3.x.toFixed(1)},${p3.y.toFixed(1)} ${p4.x.toFixed(1)},${p4.y.toFixed(1)}`;
+  };
+  // v45.3: diamond()は地面タイルのように(a,b)両方向へ敷き詰めて初めて隙間なく繋がる形状
+  // （菱形の頂点同士でしか隣接しない）。ゴールラインはレーン方向にしか並べない1本の帯なので
+  // 同じdiamond()を流用すると隣接セルが頂点1点でしか触れ合わず、「連続した線」ではなく
+  // 「散らばった菱形」に見えていた（ユーザー指摘の原因）。帯は矩形の四隅をそのまま投影した
+  // 平行四辺形セルを敷き詰めれば、隣接セルが辺全体で密着し連続した帯に見える。
+  const finBand = (l, hl, hw = 0.4) => {
+    const p1 = S(-hw, l - hl), p2 = S(-hw, l + hl), p3 = S(hw, l + hl), p4 = S(hw, l - hl);
     return `${p1.x.toFixed(1)},${p1.y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)} ${p3.x.toFixed(1)},${p3.y.toFixed(1)} ${p4.x.toFixed(1)},${p4.y.toFixed(1)}`;
   };
   const finLanes = [-2, -1, 0, 1, 2].map(b => b * laneStep).filter(l => Math.abs(l) <= roadHL + 0.01);
@@ -537,7 +544,7 @@ export function FinalSprintCinematic({ contenders }) {
           return <g key={"fc" + i}><rect x={l.x - 1.1} y={l.y - 7} width="2.2" height="7" fill={col} /><rect x={r.x - 1.1} y={r.y - 7} width="2.2" height="7" fill={col} /></g>;
         })}
         {/* ゴール：路面の市松ライン＋門＋市松バナー */}
-        {finLanes.map((l, i) => <polygon key={"fin" + i} points={diamond(0, l)} fill={i % 2 ? "#e9ecef" : "#14171d"} opacity="0.92" />)}
+        {finLanes.map((l, i) => <polygon key={"fin" + i} points={finBand(l, laneStep / 2)} fill={i % 2 ? "#e9ecef" : "#14171d"} opacity="0.92" />)}
         <line x1={gBaseL.x} y1={gBaseL.y} x2={gTopL.x} y2={gTopL.y} stroke="#8a8f98" strokeWidth="2.4" />
         <line x1={gBaseR.x} y1={gBaseR.y} x2={gTopR.x} y2={gTopR.y} stroke="#8a8f98" strokeWidth="2.4" />
         {Array.from({ length: 11 }, (_, i) => {
@@ -1206,7 +1213,15 @@ export function RaceView({ sim, onFinish }) {
           {hud.gap && <div style={{ fontFamily: FONT_M, fontSize: 10.5, color: C.green, marginTop: 2 }}>{hud.gap}</div>}
         </div>
         <div style={{ background: C.panel2, borderRadius: 6, padding: "6px 10px", minWidth: 165 }}>
-          {hud.top.map((r, i) => (
+          {/* v45.1: 最終スプリント演出中はhud.top（進行率frac差からの秒換算）が使えない。
+              終盤に集団がfracでほぼ収束し、差がゼロ＝fmtGap(0)で全員「TOP」になってしまうため。
+              cinematicは既にfinishTime確定後のgapSecを持つスナップショットなので、演出中は
+              そちらへ丸ごと差し替える（シミュレーション・順位表ロジック自体には手を入れない）。 */}
+          {(cinematic
+            ? [...cinematic.contenders].sort((a, b) => a.gapSec - b.gapSec).slice(0, 5)
+                .map(c => ({ name: c.name, isPlayer: c.isPlayer, team: c.isMyTeam ? "PLAYER" : undefined, gap: c.gapSec }))
+            : hud.top
+          ).map((r, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
               <span style={{ color: r.isPlayer ? C.yellow : (r.team === "PLAYER" ? "#bfe3ff" : C.text) }}>{i + 1}. {r.name}{r.isPlayer ? " 🚴" : (r.team === "PLAYER" ? " ●" : "")}</span>
               <span style={{ fontFamily: FONT_M, color: r.isPlayer ? C.yellow : C.sub }}>{fmtGap(r.gap)}</span>
