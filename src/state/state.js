@@ -11,7 +11,7 @@ import { AB_KEYS, TYPES } from "../data/abilities.js";
 import { TYPE_ABKEYS } from "../data/breeding.js";
 import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, UNLOCK_TEMPLATES, VENUES } from "../data/course.js";
 import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "../data/progression.js";
-import { RIVAL_TEAMS, MYLIFE_TEAMS } from "../data/teams.js";
+import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE } from "../data/teams.js";
 import { C } from "../data/theme.js";
 import { SUB_STAT_KEYS, hasAbility, hasGoldAbility, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
@@ -140,10 +140,47 @@ export function ageWorldRosters(prevRosters, rng, year, teams = MYLIFE_TEAMS) {
         out.push({ ...r, age, baseline });
       }
     });
+    // v46(#23): 引き抜き等で定員（WORLD_ROSTER_SIZE）を割り込んでいたら新人で埋め直す。
+    // 引退時の1:1置換とは別枠＝「引き抜かれた年は手薄なまま、翌年に補充される」という
+    // 戦略的な間合いは保ちつつ、恒久的に欠員が残ることは無くす。
+    for (let i = out.length; i < WORLD_ROSTER_SIZE; i++) {
+      const rookie = genOneWorldRider(rng, d.spec, banned, {
+        age: 20 + Math.floor(rng() * 3),
+        baseline: Math.round(rng() * 6 - 3),
+        joinYear: year,
+      });
+      banned.add(rookie.name);
+      debuted.push({ team: d.name, name: rookie.name, age: rookie.age });
+      out.push(rookie);
+    }
     out.sort((a, b) => b.baseline - a.baseline); // エースが先頭に再ソート
     next[d.name] = out;
   });
   return { worldRosters: next, retired, debuted };
+}
+
+// v46(#23): 定員（WORLD_ROSTER_SIZE）に満たないチームへ、末尾に新人を追記するだけの関数。
+// 既存メンバーの並び順・identityには一切触れない（sharedWorldRosters()が「同じseedなら
+// 同じ顔ぶれ」であり続けるという不変条件を壊さないため、genWorldRosters()のcountを
+// 直接引き上げることはしない＝実測でcountを変えると生成列そのものがずれ全チームの
+// 顔ぶれが変わることを確認済み）。追記された新人は控え選手として温存され、ロースターが
+// 摩耗した際（主に引き抜き後）に繰り上がる。
+export function topUpWorldRosters(rosters, rng, teams = MYLIFE_TEAMS) {
+  const next = { ...rosters };
+  const banned = new Set();
+  Object.values(rosters || {}).forEach(list => (list || []).forEach(r => banned.add(r.name)));
+  teams.forEach(d => {
+    const cur = next[d.name] || [];
+    if (cur.length >= WORLD_ROSTER_SIZE) return;
+    const added = [...cur];
+    for (let i = cur.length; i < WORLD_ROSTER_SIZE; i++) {
+      const r = genOneWorldRider(rng, d.spec, banned, { baseline: Math.round(rng() * 6 - 3) });
+      banned.add(r.name);
+      added.push(r);
+    }
+    next[d.name] = added;
+  });
+  return next;
 }
 
 // v38(#9 A-3): 共有ワールド。シーズンとマイライフ、そして全周回で「1つの世界」を共有する。
@@ -170,6 +207,10 @@ export function advanceWorldYear() {
 export function sharedWorldRosters(teams = MYLIFE_TEAMS) {
   const m = loadWorldMeta();
   let rosters = genWorldRosters(mulberry(m.seed), 6, MYLIFE_TEAMS);
+  // v46(#23): 初期定員(6名)を8名まで拡張。genWorldRosters自体のcountを直接8にすると
+  // 生成列がずれて既存セーブの顔ぶれが総入れ替わりになる（実測で確認済み）ため、
+  // 独立したrngストリームで追記するtopUpWorldRosters()を使う。
+  rosters = topUpWorldRosters(rosters, mulberry((m.seed ^ 0x5bd1e995) >>> 0), MYLIFE_TEAMS);
   for (let y = 2; y <= m.year; y++) {
     rosters = ageWorldRosters(rosters, mulberry((y * 2246822519) >>> 0), y, MYLIFE_TEAMS).worldRosters;
   }
@@ -677,10 +718,14 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
   }
   let assistedAceRef = null; // v33.8: アシスト宣言時に献身で押し上げた自チームのエース
+  // v46(#23): 出走人数の下限を3へ引き上げ（従来1〜5でチームごとに大きく揺れていた）。
+  // squadMin===squadMaxのレース（個人TT=1名固定・チームTT=4〜6名）はこの下限の対象外。
+  const aiMinFloor = squadMin === squadMax ? squadMin : Math.min(squadMax, Math.max(squadMin, 3));
   MYLIFE_TEAMS.forEach(d => {
     const isMyTeam = d.name === myTeamName;
-    const aiSquadN = squadMin === squadMax ? squadMin : squadMin + Math.floor(rng() * (squadMax - squadMin + 1));
+    const aiSquadNRaw = squadMin === squadMax ? squadMin : aiMinFloor + Math.floor(rng() * (squadMax - aiMinFloor + 1));
     const members = [];
+    let aiSquadN = aiSquadNRaw;
     // v32（固定チームメイト）：自分のチームは、保存済みの固定メンバーを現在の地力で登場させる
     if (isMyTeam && teammates && teammates.length) {
       // v38(#3): 弟子（プロテジェ）を自チームの1枠として実際にレースへ出す。従来は数値が育つだけで
@@ -712,8 +757,12 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     } else if (worldRosters && worldRosters[d.name] && worldRosters[d.name].length) {
       // v37: 永続ワールドロースターから同じ顔ぶれを出走させる（identityは固定・stats は文脈スケール）。
       // 各選手の stats は id＋year でシードして年内は安定、年が進むと power の上昇で強くなる。
+      // v46(#23): 出走人数をロースターの実在人数まで絞る。旧来はここで埋まらない枠を毎レース
+      // 使い捨ての新規選手で埋めていたため、引き抜き等で欠員が出ると「毎回別人が現れる」
+      // 不具合になっていた（seasonのbuildSimと同根・同時に修正）。
       const roster = worldRosters[d.name];
-      roster.slice(0, Math.min(aiSquadN, roster.length)).forEach(wr => {
+      aiSquadN = Math.min(aiSquadNRaw, roster.length);
+      roster.slice(0, aiSquadN).forEach(wr => {
         const wrng = mulberry(((wr.id * 2654435761) ^ ((year || 1) * 40503)) >>> 0);
         const st = newRider(power + (wr.baseline || 0), wrng, { type: wr.type, cap: aiCap, banned: nameBanned });
         st.id = wr.id; st.name = wr.name; st.type = wr.type; st.personality = wr.personality || st.personality;
@@ -722,7 +771,6 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         st.growthPow = wr.growthPow || st.growthPow;
         members.push(st);
       });
-      for (let i = members.length; i < aiSquadN; i++) members.push(newRider(power, rng, { banned: nameBanned, cap: aiCap }));
     } else {
       for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap }));
     }
