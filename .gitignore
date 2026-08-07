@@ -23,3 +23,6 @@ roadrace_v12_test.html
 # ビルド生成物・依存
 node_modules/
 dist/
+# Python のキャッシュ（tools/ を allowlist した副作用で拾われるため明示的に除外）
+__pycache__/
+*.pyc
