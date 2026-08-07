@@ -6,7 +6,7 @@ import { Btn, Eyebrow } from "../../../../components/ui.jsx";
 import { ROOM_GRADE_MAX, ROOM_UPGRADE_COST, ROOM_UPGRADE_KEYS, ROOM_UPGRADE_LABEL } from "../../../../data/roomUpgrade.js";
 import { C, FONT_M } from "../../../../data/theme.js";
 
-const GRADE_LABEL = ["素", "標準", "上級", "最高級"];
+const GRADE_LABEL = ["未改装", "標準", "上級", "最高級"];
 
 export function renderFacilityRoomSection(ctx) {
   const { buyRoomUpgrade, g } = ctx;
@@ -30,7 +30,7 @@ export function renderFacilityRoomSection(ctx) {
                   <div style={{ color: C.sub, fontSize: 11.5 }}>{lv >= ROOM_GRADE_MAX ? "最高グレードです" : `次：${GRADE_LABEL[lv + 1]}`}</div>
                 </div>
                 <Btn small color={"#e8a13c"} disabled={lv >= ROOM_GRADE_MAX || g.budget < cost} onClick={() => buyRoomUpgrade(k)}>
-                  {lv >= ROOM_GRADE_MAX ? "MAX" : `${cost}万`}
+                  {lv >= ROOM_GRADE_MAX ? "上限" : `${cost}万`}
                 </Btn>
               </div>
             );

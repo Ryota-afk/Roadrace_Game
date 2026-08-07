@@ -9,7 +9,7 @@ export function renderRecordsStandingsSection(ctx) {
   const { setG } = ctx;
   return (
         <div style={{ display: "grid", gap: 10 }}>
-          <Eyebrow color={C.sub}>年間プログラム・順位表・トロフィールーム</Eyebrow>
+          <Eyebrow color={C.sub}>記録を見る</Eyebrow>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Btn small outline color={C.blue} onClick={() => setG(s => ({ ...s, screen: "program" }))}>📅 年間プログラム</Btn>
             <Btn small outline color={C.purple} onClick={() => setG(s => ({ ...s, screen: "standings" }))}>📊 順位表</Btn>

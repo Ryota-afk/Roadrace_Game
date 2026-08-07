@@ -37,7 +37,7 @@ export function renderMarketScoutSection(ctx) {
                       <SubStatLine r={r} />
                       <div style={{ marginTop: 8 }}>
                         <Btn small color={C.green} disabled={g.budget < sc.price || g.roster.length >= rosterMax} onClick={() => signScout(sc)}>
-                          {g.roster.length >= rosterMax ? "ロースター満員" : `${sc.price}万円で契約`}
+                          {g.roster.length >= rosterMax ? "所属枠が満員" : `${sc.price}万円で契約`}
                         </Btn>
                       </div>
                     </div>
@@ -69,7 +69,7 @@ export function renderMarketScoutSection(ctx) {
                     <AbilityGrid r={r} cap={growthCap} />
                     <div style={{ marginTop: 8 }}>
                       <Btn small color={C.green} disabled={g.budget < fa.price || full} onClick={() => signFa(fa)}>
-                        {full ? "ロースター満員（4月に解雇で空き作成）" : `${fa.price}万円で獲得`}
+                        {full ? "所属枠が満員（4月に解雇で空き作成）" : `${fa.price}万円で獲得`}
                       </Btn>
                     </div>
                   </div>

@@ -629,7 +629,7 @@ export function mlGenTeammates(rng, teamName, count, bannedNames, year) {
 export const ML_TACTICS = {
   balanced:   { label: "🚩 標準（流れに任せる）",       tag: "無難", tagColor: "#9aa3b5", chaseMode: "normal", aceEarly: false, desc: "特別な仕掛けはせず、脚質と展開に任せる。迷ったらまずこれ" },
   wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", tag: "堅実・平坦向き", tagColor: "#4fbf6b", chaseMode: "push",   aceEarly: false, desc: "逃げを潰して集団を保ち、ゴールスプリントで勝負。スプリント型・平坦/クリテで最も安定して上位に入る" },
-  early:      { label: "💨 早めに逃げる",               tag: "博打・起伏向き", tagColor: "#e8734a", chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "ハイリスク＝多くは吸収され平均着順は落ちる。だが集団スプリントで勝てない脚質が“一発”を狙える唯一の手。平坦より起伏・山岳の方が逃げ切りやすい" },
+  early:      { label: "💨 早めに逃げる",               tag: "博打・起伏向き", tagColor: "#e8734a", chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "ハイリスクな作戦で、多くは吸収されて平均着順は落ちる。だが集団スプリントで勝てない脚質が「一発」を狙える唯一の手。平坦より起伏・山岳の方が逃げ切りやすい" },
   aggressive: { label: "⚔ 積極的に仕掛ける",            tag: "非スプリント型向き", tagColor: "#e8a13c", chaseMode: "normal", aceEarly: true,  desc: "終盤にエース自ら加速して先着を狙う。集団ゴールで分が悪い登坂・独走・パンチャー型向き。スプリント型は末脚を消すので不利" },
   assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを押し上げる献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
@@ -886,21 +886,21 @@ export function cpBalance(meta) { return Math.max(0, (meta.totalEarnedCP || 0) -
 // 購入式の恒久解禁カタログ（従来の自動ミルストーンとは別の"選んで買う"プレミアム枠）。
 export const CP_SHOP = [
   { id: "s_rookie", cost: 45, category: "シーズン", label: "エース級新人 確定枠", desc: "シーズン開始時、成長ランクS確定の逸材が1名追加加入", season: { prodigyRookie: 1 } },
-  { id: "s_budget", cost: 30, category: "シーズン", label: "開幕資金 +800万円", desc: "シーズン開始時の資金が+800万円", season: { budget: 800 } },
+  { id: "s_budget", cost: 30, category: "シーズン", label: "開幕資金 +800万円", desc: "毎シーズン開始時の所持資金へ自動加算される", season: { budget: 800 } },
   { id: "s_equip", cost: 55, category: "シーズン", label: "全設備 Lv+3", desc: "フレーム・ホイールの強化レベルが+3された状態でスタート", season: { equipLv: 3 } },
   { id: "m_gold", cost: 60, category: "マイライフ", label: "デビュー時 特殊能力を金で確定", desc: "新人が必ず特殊能力を1つ、金の状態でデビューする", mylife: { debutGold: true } },
   { id: "m_growth", cost: 45, category: "マイライフ", label: "初期成長力 +1段 確定", desc: "デビュー時、成長力が確定で1段階アップ", mylife: { growthUp: true } },
-  { id: "m_money", cost: 25, category: "マイライフ", label: "支度金 +300万円", desc: "デビュー時の所持金が+300万円", mylife: { money: 300 } },
-  { id: "m_reroll", cost: 35, category: "マイライフ", label: "リセマラ当たり率 大幅アップ", desc: "デビュー当たり特能（天啓/天賦の才）の抽選が大きく上がる", mylife: { boonBonus: 0.25 } },
-  { id: "x_boost", cost: 70, category: "特別", label: "初期能力 大幅ブースト", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6でスタート", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
+  { id: "m_money", cost: 25, category: "マイライフ", label: "支度金 +300万円", desc: "デビュー時の所持金へ自動加算される", mylife: { money: 300 } },
+  { id: "m_reroll", cost: 35, category: "マイライフ", label: "デビュー特能運 大幅アップ（リセマラ）", desc: "デビュー当たり特能（天啓/天賦の才）の抽選が大きく上がる", mylife: { boonBonus: 0.25 } },
+  { id: "x_boost", cost: 70, category: "特別", label: "初期能力 大幅ブースト", desc: "シーズンでは全選手の能力+6、マイライフではデビュー時の能力+6でスタートする", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
   // v38(#5): 高CP帯の使い道を拡充（200ptで頭打ちの解消）。既存perk枠を再利用し、周回で貯めたCPを
   // 長く注ぎ込める上位枠を用意。全買いに約1000CP必要になり、CPが「貯まりきる」感覚を解消する。
   { id: "s_rookie2", cost: 100, category: "シーズン", label: "エース級新人 確定枠（2人目）", desc: "シーズン開始時、成長ランクS確定の逸材がさらに1名加入（計2名）", season: { prodigyRookie: 1 } },
   { id: "s_equip2", cost: 95, category: "シーズン", label: "全設備 Lv+3（さらに）", desc: "フレーム・ホイールの強化レベルがさらに+3された状態でスタート", season: { equipLv: 3 } },
-  { id: "s_budget2", cost: 60, category: "シーズン", label: "開幕資金 +1500万円", desc: "シーズン開始時の資金がさらに+1500万円", season: { budget: 1500 } },
-  { id: "m_reroll2", cost: 80, category: "マイライフ", label: "リセマラ当たり率 特大アップ", desc: "デビュー当たり特能（天啓/天賦の才）の抽選がさらに大きく上がる", mylife: { boonBonus: 0.30 } },
-  { id: "m_money2", cost: 55, category: "マイライフ", label: "支度金 +700万円", desc: "デビュー時の所持金がさらに+700万円", mylife: { money: 700 } },
-  { id: "x_boost2", cost: 120, category: "特別", label: "初期能力 特大ブースト", desc: "シーズン＝全選手の能力+6／マイライフ＝デビュー時の能力+6（初期能力ブーストと重複購入可・合計+12）", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
+  { id: "s_budget2", cost: 60, category: "シーズン", label: "開幕資金 +1500万円", desc: "毎シーズン開始時の所持資金へ自動加算される", season: { budget: 1500 } },
+  { id: "m_reroll2", cost: 80, category: "マイライフ", label: "デビュー特能運 特大アップ（リセマラ）", desc: "デビュー当たり特能（天啓/天賦の才）の抽選がさらに大きく上がる", mylife: { boonBonus: 0.30 } },
+  { id: "m_money2", cost: 55, category: "マイライフ", label: "支度金 +700万円", desc: "デビュー時の所持金へ自動加算される", mylife: { money: 700 } },
+  { id: "x_boost2", cost: 120, category: "特別", label: "初期能力 特大ブースト", desc: "シーズンでは全選手の能力+6、マイライフではデビュー時の能力+6でスタート（初期能力ブーストと重複購入可・合計+12）", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
 ];
 export function cpOwned(meta, id) { return (meta.cpUnlocks || []).includes(id); }
 export function cpBuy(meta, id) {

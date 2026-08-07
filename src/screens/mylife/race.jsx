@@ -124,7 +124,7 @@ export function renderMyLifeRaceScreens(ctx) {
             )}
             {courseRecord && courseRecord.isNew && (
               <div style={{ fontSize: 12, color: courseRecord.isPlayer ? C.yellow : C.text, marginTop: 4, fontWeight: 700 }}>
-                🏅 {courseRecord.kind}のコースレコード更新！（指数{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・あなた" : ""}）
+                🏅 {courseRecord.kind}のコースレコード更新！（記録値{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・あなた" : ""}）
               </div>
             )}
             {/* v30: 世界ランキングの増減 */}

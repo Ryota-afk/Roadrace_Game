@@ -291,7 +291,7 @@ export function renderSeasonRaceScreens(ctx) {
           <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>出走経験：{expKeys.map(k => AB_LABEL[k]).join("・")}が成長</div>
           {courseRecord && courseRecord.isNew && (
             <div style={{ fontSize: 12.5, color: courseRecord.isPlayer ? C.yellow : C.text, marginTop: 4, fontWeight: 700 }}>
-              🏅 {courseRecord.kind}のコースレコード更新！（指数{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・自チーム" : ""}）
+              🏅 {courseRecord.kind}のコースレコード更新！（記録値{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・自チーム" : ""}）
             </div>
           )}
           {race.championship && (
@@ -518,7 +518,7 @@ export function renderSeasonRaceScreens(ctx) {
         </div>
         {jerseyInfo && (
           <div style={{ background: C.panel, borderRadius: 12, padding: 14, borderTop: `4px solid ${"#e8a13c"}` }}>
-            <Eyebrow color={"#e8a13c"}>副次クラシフィケーション</Eyebrow>
+            <Eyebrow color={"#e8a13c"}>副次タイトル</Eyebrow>
             <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
               <div style={{ fontSize: 12.5, color: jerseyInfo.pointsLeaderIsPlayer ? C.yellow : C.text }}>
                 🟢 ポイント賞：{jerseyInfo.pointsLeaderName || "—"}{jerseyInfo.pointsLeaderIsPlayer && " （自チーム！+50万円）"}

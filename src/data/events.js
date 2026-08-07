@@ -457,7 +457,7 @@ export const ML_PERSONALITY_EVENTS = {
       ] },
   ],
   artisan: [
-    { title: "細部への こだわり", text: "職人肌のあなたは、ペダリングと機材の詰めが気になって仕方がない。",
+    { title: "細部へのこだわり", text: "職人肌のあなたは、ペダリングと機材の詰めが気になって仕方がない。",
       choices: [
         { label: "納得いくまで突き詰める", result: "無駄のない動きが仕上がり、当日の仕上がりが一段上がった。", effects: { formDelta: 7, fatigueDelta: 4 } },
         { label: "実戦感覚を優先する", result: "机上より実走を選び、地力を確かに伸ばした。", effects: { abBoost: 3 } },

@@ -39,7 +39,7 @@ export function SubStatLine({ r }) {
   );
   return (
     <div style={{ display: "flex", gap: 10, marginTop: 2, flexWrap: "wrap", alignItems: "center" }}>
-      {item("加速", r.accel ?? 50)}
+      {item("加速力", r.accel ?? 50)}
       <span style={{ fontSize: 10.5, color: C.sub }}>体格<span style={{ fontFamily: FONT_M, color: col(r.build ?? 50), marginLeft: 2, fontWeight: 700 }}>{Math.round(r.build ?? 50)}</span><span style={{ color: C.sub, marginLeft: 2 }}>({buildDesc(r.build ?? 50)})</span></span>
       {item("メンタル", r.mental ?? 50)}
       {/* v43(マイライフ難易度調整Phase 1/2): 突破力・安定感・運（固定ステータス、buildと同じく非成長）をSeason/MyLife共通で表示 */}
@@ -69,7 +69,7 @@ export function StartListPanel({ entrants, favors }) {
       {hasForecast && (
         <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}` }}>
           <div style={{ fontSize: 11.5, color: C.sub }}>
-            📊 下馬評（このコースの地力予想）：
+            📊 下馬評：
             <span style={{ color: "#ffd23f", fontWeight: 700, marginLeft: 4 }}>◎本命</span>{" "}
             <span style={{ color: "#4f8fe8", fontWeight: 700 }}>○対抗</span>{" "}
             <span style={{ color: "#35c07e", fontWeight: 700 }}>▲注目</span>
@@ -88,7 +88,7 @@ export function StartListPanel({ entrants, favors }) {
         const isPlayerTeam = t.list.some(e => e.team === "PLAYER");
         return (
           <div key={tn} style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", borderLeft: `3px solid ${t.color}` }}>
-            <div style={{ fontFamily: FONT_D, fontWeight: 700, color: isPlayerTeam ? C.yellow : C.text, fontSize: 13 }}>{tn}{isPlayerTeam ? "（自チーム）" : ""}</div>
+            <div style={{ fontFamily: FONT_D, fontWeight: 700, color: isPlayerTeam ? C.yellow : C.text, fontSize: 13 }}>{tn}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 3 }}>
               {t.list.map((e, i) => {
                 const fc = forecast.get(e);

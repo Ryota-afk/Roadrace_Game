@@ -158,7 +158,7 @@ function renderCpShop(ctx) {
         <h2 style={{ fontFamily: FONT_D, color: C.yellow, fontSize: 20, margin: "4px 0" }}>クリアポイント交換所</h2>
         <div style={{ fontSize: 12, color: C.sub }}>使えるクリアポイント</div>
         <div style={{ fontFamily: FONT_M, fontSize: 26, color: C.yellow, fontWeight: 800 }}>{bal}<span style={{ fontSize: 13 }}>pt</span></div>
-        <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>生涯獲得 {meta.totalEarnedCP}pt ／ 使用済み {meta.cpSpent || 0}pt。購入は恒久で、次のシーズン/新人に反映されます</div>
+        <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>生涯獲得 {meta.totalEarnedCP}pt ／ 使用済み {meta.cpSpent || 0}pt。購入は恒久で、次のシーズン／新人に反映されます</div>
       </div>
       {CP_SHOP.map((it) => {
         const owned = cpOwned(meta, it.id);

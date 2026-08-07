@@ -182,7 +182,7 @@ export function renderMyLifeCreateScreens(ctx) {
                           )}
                           <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>配合相性：</span><span style={{ color: nickColor, fontWeight: 700 }}>{breed.nick.rank} {breed.nick.label}</span></div>
                           <div><span style={{ fontWeight: 700, color: "#e56cc8" }}>血統ボーナス：</span>
-                            累代+値 <span style={{ color: C.yellow }}>+{breed.plusPer}</span>
+                            累代ボーナス <span style={{ color: C.yellow }}>+{breed.plusPer}</span>
                             {breed.inbreed.count > 0 && <span style={{ color: C.red }}>・🩸インブリード×{breed.inbreed.count}（血が濃い！）</span>}
                             {breed.generation > 1 && `・${breed.generation}代目`}
                           </div>
@@ -267,8 +267,7 @@ export function renderMyLifeCreateScreens(ctx) {
           <Btn onClick={mlConfirmCandidate}>この素質でデビュー →</Btn>
           <Btn outline color={C.blue} onClick={mlRerollCandidate}>🎲 素質を引き直す（リセマラ）</Btn>
           <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", lineHeight: 1.6 }}>
-            性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。<br />
-            <span style={{ color: "#e8a13c" }}>成長力（伸びやすさ）はデビュー3年目まで本人にも分かりません。</span>
+            性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。
           </div>
         </div>
       );

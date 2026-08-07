@@ -40,7 +40,7 @@ export function renderFacilityEquipSection(ctx) {
             {g.obCoach && <div style={{ fontSize: 11, color: "#e8a13c", marginTop: 6 }}>🎓 OBコーチ {g.obCoach.name}：{AB_LABEL[g.obCoach.ab]}の練習効果+25%</div>}
           </section>
           <section>
-            <Eyebrow color={C.red}>チーム機材（Lv上限：{cls.id}＝{equipMax}）</Eyebrow>
+            <Eyebrow color={C.red}>チーム機材（{cls.label}の上限はLv{equipMax}）</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
               {Object.entries(EQUIPS).map(([k, eq]) => {
                 const lv = g.equip[k], cost = lv >= equipMax ? null : EQUIP_COST[lv];
@@ -51,7 +51,7 @@ export function renderFacilityEquipSection(ctx) {
                       <div style={{ color: C.sub, fontSize: 11.5 }}>{eq.desc}</div>
                     </div>
                     <Btn small color={C.red} disabled={lv >= equipMax || g.budget < cost} onClick={() => buyEquip(k)}>
-                      {lv >= equipMax ? (g.classIdx < 2 ? "昇格で解禁" : "MAX") : `${cost}万`}
+                      {lv >= equipMax ? (g.classIdx < 2 ? "昇格で解禁" : "上限") : `${cost}万`}
                     </Btn>
                   </div>
                 );

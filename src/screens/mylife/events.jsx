@@ -43,7 +43,7 @@ export function renderMyLifeEventScreens(ctx) {
                       <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>
                         {p.label} <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.purple }}>所持{ml.partsInv[pid] || 0}（空き{Math.max(0, availPartsMl(pid))}）</span>
                       </div>
-                      <div style={{ color: C.sub, fontSize: 11 }}>[{SLOT_LABEL[p.slot]}] {Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}</div>
+                      <div style={{ color: C.sub, fontSize: 11 }}>（{SLOT_LABEL[p.slot]}）{Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}</div>
                     </div>
                     {lockedByClass
                       ? <span style={{ fontSize: 11, color: C.red, whiteSpace: "nowrap" }}>🔒 {CLASSES[p.tier - 1].id}で解禁</span>
@@ -280,7 +280,7 @@ export function renderMyLifeEventScreens(ctx) {
     if (ml.screen === "mylife_contract" && ml.contractOffers) return mlWrap(
       <div style={{ display: "grid", gap: 12 }}>
         <div style={{ background: ml.biddingWar ? "#3a2a12" : "#2b2436", border: `1px solid ${ml.biddingWar ? "#e8a13c" : C.purple}`, borderRadius: 10, padding: "10px 14px" }}>
-          <Eyebrow color={ml.biddingWar ? "#e8a13c" : C.purple}>{ml.biddingWar ? "🔥 CONTRACT — 争奪戦！" : "CONTRACT — 移籍オファー"}</Eyebrow>
+          <Eyebrow color={ml.biddingWar ? "#e8a13c" : C.purple}>{ml.biddingWar ? "🔥 争奪戦！ — 移籍オファー" : "契約 — 移籍オファー"}</Eyebrow>
           <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>
             {ml.biddingWar
               ? "圧倒的な成績にチーム間で争奪戦が勃発！各チームが競って年俸・契約金・エース確約を吊り上げてきています。最高の条件を選び取りましょう。"

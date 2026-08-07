@@ -4,7 +4,7 @@ import { C } from "./theme.js";
 export const CLASSES = [
   { id: "B1", label: "クラス B1", prizeMul: 1.0, need: 45, scout: 58 },
   { id: "A",  label: "クラス A",  prizeMul: 2.0, need: 50, scout: 66 },
-  { id: "PRO", label: "PRO", prizeMul: 3.5, need: 60, scout: 74 },
+  { id: "PRO", label: "クラス PRO", prizeMul: 3.5, need: 60, scout: 74 },
 ];
 
 // v35(バランス): abilCap＝AI選手の能力値上限。newRiderは従来どこでも一律94で頭打ちだったため、
@@ -39,7 +39,7 @@ export const DISCIPLINES = {
   flat:   { label: "平坦",      calc: r => r.flat * 0.6 + r.solo * 0.25 + r.stamina * 0.15 },
   climb:  { label: "山岳",      calc: r => r.climb * 0.7 + r.stamina * 0.3 },
   sprint: { label: "スプリント", calc: r => r.sprint * 0.7 + r.flat * 0.2 + r.stamina * 0.1 },
-  solo:   { label: "独走(TT)",  calc: r => r.solo * 0.7 + r.stamina * 0.3 },
+  solo:   { label: "独走（TT）", calc: r => r.solo * 0.7 + r.stamina * 0.3 },
   hill:   { label: "丘陵",      calc: r => r.climb * 0.4 + r.sprint * 0.4 + r.stamina * 0.2 },
 };
 
@@ -57,7 +57,7 @@ export const CHEMISTRY_TIERS = [
   { min: 0,  label: "新体制", mul: 1 },
 ];
 
-export const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長"];
+export const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長", "配合限定"];
 
 export const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world", "ironman", "stardom"];
 

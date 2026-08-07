@@ -46,7 +46,8 @@ export function renderSeasonScheduleBoardScreens(ctx) {
         </div>
         <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}`, fontSize: 11, color: C.sub, lineHeight: 1.7 }}>
           🏆 <span style={{ color: C.text, fontWeight: 700 }}>最終順位ボーナス</span>：1位 +{standingsRankReward(1, g.classIdx)}万／2位 +{standingsRankReward(2, g.classIdx)}万／3位 +{standingsRankReward(3, g.classIdx)}万<br />
-          🎯 <span style={{ color: C.text, fontWeight: 700 }}>昇格ボーダー緩和</span>：シーズン1位＝本番<span style={{ color: "#e8a13c" }}>5位以内</span>／2位＝<span style={{ color: "#e8a13c" }}>4位以内</span>／3位以下＝3位以内でチャンピオンシップ昇格（PROは対象外）
+          🎯 <span style={{ color: C.text, fontWeight: 700 }}>昇格ボーダー緩和</span>（PROは対象外）：シーズン順位が高いほど、チャンピオンシップでの昇格ラインが緩みます。<br />
+          シーズン1位ならチャンピオンシップ<span style={{ color: "#e8a13c" }}>5位以内</span>、2位なら<span style={{ color: "#e8a13c" }}>4位以内</span>、3位以下は3位以内で昇格
         </div>
         <div style={{ background: C.panel, borderRadius: 12, padding: "6px 10px", display: "grid", gap: 2 }}>
           {rows.map((row, i) => (
@@ -67,7 +68,7 @@ export function renderSeasonScheduleBoardScreens(ctx) {
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 11, color: C.sub }}>昇格の最終判定は3月のチャンピオンシップ（本番）で決まりますが、その必要着順はこのシーズン順位で緩和されます。年間を通して上位で走り切るほど昇格が近づきます。</div>
+        <div style={{ fontSize: 11, color: C.sub }}>昇格の最終判定は3月のチャンピオンシップで決まりますが、その必要着順はこのシーズン順位で緩和されます。年間を通して上位で走り切るほど昇格が近づきます。</div>
         <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
       </div>
     );
@@ -84,7 +85,7 @@ export function renderSeasonScheduleBoardScreens(ctx) {
           <h2 style={{ fontFamily: FONT_D, color: "#e8a13c", fontSize: 22, margin: "6px 0" }}>トロフィールーム</h2>
           <div style={{ fontSize: 11, color: C.sub }}>生涯評価スコア</div>
           <div style={{ fontFamily: FONT_M, fontSize: 30, color: C.yellow, fontWeight: 700 }}>{pres.score}</div>
-          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4 }}>累計CP{pres.totalEarnedCP} ・ 殿堂{pres.legendCount}人 ・ 通算タイトル{pres.titleCount}</div>
+          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 4 }}>累計クリアポイント{pres.totalEarnedCP}pt ・ 殿堂{pres.legendCount}人 ・ 通算タイトル{pres.titleCount}</div>
         </div>
         <Eyebrow color={"#e8a13c"}>👑 通算タイトル</Eyebrow>
         <TitlesPanel />

@@ -34,7 +34,7 @@ export function renderRaceCalendarSection(ctx) {
                 </div>
                 <div style={{ fontSize: 11.5, color: C.sub }}>
                   {r.tmpl.kind}・出走{squadLabel}・{TYPES[r.tmpl.favors].label}有利／優勝 約{Math.round(PRIZES[0] * mul)}万・{Math.round(PTS[0] * GRADE_MUL[r.grade])}pt
-                  {raceIsHome(r, g.homeRegion) && <span style={{ color: C.green }}>／🏠 地元開催（出走選手 全能力+{HOME_ABILITY_BONUS}）</span>}
+                  {raceIsHome(r, g.homeRegion) && <span style={{ color: C.green }}>／地元開催</span>}
                   {r.sponsorMandate && <span style={{ color: C.red }}>／スポンサー指定レース</span>}
                   {r.stageRace && <span style={{ color: C.purple }}>／{r.stageCount || 2}日間ステージレース(総合)</span>}
                 </div>

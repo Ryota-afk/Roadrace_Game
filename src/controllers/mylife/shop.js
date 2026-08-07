@@ -74,7 +74,7 @@ export function mlPrivateCamp(s) {
   const gained = Math.round((player[player.focus] - before) * 10) / 10;
   return {
     ...s, player, money: s.money - cost,
-    log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】私設強化合宿を実施（-${cost}万円）。${AB_LABEL[player.focus]}を中心に鍛え上げた（${AB_LABEL[player.focus]}+${gained}）`],
+    log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】私設強化合宿を実施（-${cost}万円）。${AB_LABEL[player.focus]}を中心に鍛え上げた（+${gained}）`],
   };
 }
 

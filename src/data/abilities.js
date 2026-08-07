@@ -6,7 +6,7 @@ export const TYPES = {
   CLM: { label: "クライマー", color: C.red, affinity: { climb: 5, mtn: 5 } },
   RUL: { label: "ルーラー", color: C.blue, affinity: { flat: 4 } },
   PUN: { label: "パンチャー", color: C.purple, affinity: { hill: 5 } },
-  TT:  { label: "独走屋(TT)", color: "#e8a13c", affinity: { tt: 6 } },
+  TT:  { label: "独走屋（TT）", color: "#e8a13c", affinity: { tt: 6 } },
 };
 
 export const TYPE_ROLE_FIT = {
@@ -16,7 +16,7 @@ export const TYPE_ROLE_FIT = {
 
 export const AB_KEYS = ["flat", "climb", "sprint", "stamina", "solo"];
 
-export const AB_LABEL = { flat: "平坦", climb: "登坂", sprint: "ｽﾌﾟﾘﾝﾄ", stamina: "ｽﾀﾐﾅ", solo: "独走" };
+export const AB_LABEL = { flat: "平坦", climb: "登坂", sprint: "スプリント", stamina: "スタミナ", solo: "独走" };
 
 export const AB_COLOR = { flat: C.blue, climb: C.red, sprint: C.green, stamina: "#c9a13c", solo: C.purple };
 
@@ -53,9 +53,9 @@ export const ABILITIES = {
   allrounder_sp:{ label: "オールラウンダー", desc: "全ての区間で能力+2", category: "地形適性" },
   // v34(C-2): 古典適性（脚質別）。各モニュメント（石畳/丘陵/山岳）ごとに専用の適性があり、
   // 対応する古典レースでのみ全能力+5%（金特で+9%）。消耗の激しいワンデー古典の英雄。
-  pave_sp:     { label: "石畳巧者", desc: "石畳の古典《春の地獄》で全能力+5%（金で+9%）", category: "地形適性" },
-  ardennes_sp: { label: "アルデンヌの狼", desc: "丘陵の古典《アルデンヌ》で全能力+5%（金で+9%）", category: "地形適性" },
-  autumn_sp:   { label: "秋の女王", desc: "山岳の古典《秋の女王》で全能力+5%（金で+9%）", category: "地形適性" },
+  pave_sp:     { label: "石畳巧者", desc: "石畳の古典《春の地獄》で全能力+5%（金の状態で+9%）", category: "地形適性" },
+  ardennes_sp: { label: "アルデンヌの狼", desc: "丘陵の古典《アルデンヌ》で全能力+5%（金の状態で+9%）", category: "地形適性" },
+  autumn_sp:   { label: "秋の女王", desc: "山岳の古典《秋の女王》で全能力+5%（金の状態で+9%）", category: "地形適性" },
   // 展開・役割
   escape:      { label: "逃げ屋", desc: "アタック（逃げ）中の能力+4", category: "展開・役割" },
   domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },
@@ -89,7 +89,7 @@ export const ABILITIES = {
   diesel:      { label: "鉄の心肺", desc: "レース中のエネルギー消耗が軽くなる（無尽蔵のエンジンより控えめ）", category: "フィジカル" },
   recover2:    { label: "超回復", desc: "毎月の疲労回復が大きくなる", category: "フィジカル" },
   heavy:       { label: "重量級", desc: "登坂・山岳区間で能力が落ちる", category: "フィジカル", bad: true },
-  glass:       { label: "ガラスの体", desc: "脆い体。シーズン＝故障率2倍・離脱+1ヶ月／マイライフ＝疲労が溜まりやすく抜けにくい", category: "フィジカル", bad: true },
+  glass:       { label: "ガラスの体", desc: "脆い体。シーズンでは故障率2倍・離脱+1ヶ月、マイライフでは疲労が溜まりやすく抜けにくい", category: "フィジカル", bad: true },
   moody:       { label: "ムラっ気", desc: "調子の変動が激しい", category: "フィジカル", bad: true },
   // 成長
   trainer:     { label: "練習の虫", desc: "練習効果+20%", category: "成長" },
@@ -97,13 +97,13 @@ export const ABILITIES = {
   // v28: 若い頃の伸びが良い（マイライフの25歳以下で練習・出走経験+15%）
   genius_sp:   { label: "天才肌", desc: "25歳以下の練習・出走経験の伸びが+15%", category: "成長" },
   // v37: 特能拡充。出走で得る経験（実戦での伸び）が大きい
-  sponge:      { label: "吸収の天才", desc: "レース出走で得る成長（出走経験）が+25%", category: "成長" },
+  sponge:      { label: "吸収の天才", desc: "出走経験の伸びが+25%", category: "成長" },
   lazy_sp:     { label: "練習嫌い", desc: "練習効果-20%", category: "成長", bad: true },
   // v31.2: 配合限定特能（breedOnly）。通常のスカウト・後天習得では絶対に出現せず、
   // 特定条件の配合でしか手に入らない血統の証。TraitLineでは金色枠で表示する
-  sireline:    { label: "系統の申し子", desc: "全区間で能力+3（配合限定）", category: "配合限定", breedOnly: true },
-  hybrid:      { label: "二刀流", desc: "登坂力・スプリント力+2、さらに丘陵・山岳・スプリント区間で能力+5（配合限定）", category: "配合限定", breedOnly: true },
-  dynasty:     { label: "覇道の血脈", desc: "全能力+2・スタミナ+3（配合限定）", category: "配合限定", breedOnly: true },
+  sireline:    { label: "系統の申し子", desc: "全区間で能力+3", category: "配合限定", breedOnly: true },
+  hybrid:      { label: "二刀流", desc: "登坂・スプリント+2、さらに丘陵・山岳・スプリント区間で能力+5", category: "配合限定", breedOnly: true },
+  dynasty:     { label: "覇道の血脈", desc: "全能力+2・スタミナ+3", category: "配合限定", breedOnly: true },
 };
 
 export const PERSONALITIES = {

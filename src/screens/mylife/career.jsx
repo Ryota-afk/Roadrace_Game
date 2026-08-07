@@ -350,7 +350,7 @@ export function renderMyLifeCareerScreens(ctx) {
                 <Btn small outline color={"#e56cc8"} onClick={() => setMl(s => ({ ...s, screen: "mylife_factors" }))}>🧬 因子図鑑</Btn>
               </div>
             </div>
-            <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>これまでのプレイで引退した歴代選手の記録です（{legends.length}名）。2人を親に選んで「配合」で教え子を作れます。</div>
+            <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>これまでのプレイで引退した歴代選手の記録です（{legends.length}名）。1人を師匠に選べば教え子として、2人を親に選べば「配合」でその血を引く子として、次のキャリアに迎えられます。</div>
           </div>
           {/* v31.1: 配合相性表（ニック）。どの脚質同士が好相性か一覧できる */}
           <div style={{ background: "linear-gradient(180deg,#2e2436,#241d2c)", borderRadius: 12, padding: "12px 14px", border: `1px solid #e56cc8` }}>

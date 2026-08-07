@@ -114,9 +114,9 @@ export function renderMyLifeHubScreen(ctx) {
             <div style={{ fontSize: 11, color: C.sub, fontStyle: "italic", marginTop: 8, paddingTop: 6, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>{riderFlavorText(r)}</div>
             {(ml.stock.drink > 0 || ml.stock.supp > 0 || ml.stock.tune > 0) && (
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("drink")}>{ML_STOCK_ITEMS.drink.label}(-30) ×{ml.stock.drink}</Btn>}
-                {ml.stock.supp > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("supp")}>{ML_STOCK_ITEMS.supp.label}(-60) ×{ml.stock.supp}</Btn>}
-                {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("tune")}>{ML_STOCK_ITEMS.tune.label}(フォーム+12) ×{ml.stock.tune}</Btn>}
+                {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("drink")}>{ML_STOCK_ITEMS.drink.label}（疲労-30） ×{ml.stock.drink}</Btn>}
+                {ml.stock.supp > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("supp")}>{ML_STOCK_ITEMS.supp.label}（疲労-60） ×{ml.stock.supp}</Btn>}
+                {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("tune")}>{ML_STOCK_ITEMS.tune.label}（フォーム+12） ×{ml.stock.tune}</Btn>}
               </div>
             )}
           </div>
@@ -370,7 +370,7 @@ export function renderMyLifeHubScreen(ctx) {
                         <span style={{ fontFamily: FONT_D, fontSize: 13, color: "#e8a13c", fontWeight: 700 }}>{amb.label}</span>
                         <span style={{ fontFamily: FONT_M, fontSize: 12, color: C.text }}>{mlAmbitionProgressText(ml, amb)}</span>
                       </div>
-                      <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>達成報酬：{[amb.reward.money ? `資金+${amb.reward.money}万` : null, amb.reward.pop ? `人気+${amb.reward.pop}` : null, amb.reward.ab ? `全能力+${amb.reward.ab}` : null, amb.reward.growth ? "成長力UP" : null].filter(Boolean).join("・")}</div>
+                      <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>達成報酬：{[amb.reward.money ? `資金+${amb.reward.money}万` : null, amb.reward.pop ? `人気+${amb.reward.pop}` : null, amb.reward.ab ? `全能力+${amb.reward.ab}` : null, amb.reward.growth ? `成長力+${amb.reward.growth}段` : null].filter(Boolean).join("・")}</div>
                     </>
                   ) : (
                     <div style={{ fontSize: 12, color: C.yellow, fontWeight: 700, marginTop: 6 }}>🏆 「{path.label}」を極めた！別の生き方に挑戦できます</div>
@@ -457,7 +457,7 @@ export function renderMyLifeHubScreen(ctx) {
                 <Btn small role="danger" onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
                 <Btn small role="danger" onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🚪 静かに引退</Btn>
                 {/* v36(#6): ライバル会話ドラマ（紙芝居/VN風）の on/off トグル */}
-                <Btn small role="menu" onClick={() => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false }))}>🎭 会話ドラマ：{ml.rivalDramaOn === false ? "OFF" : "ON"}</Btn>
+                <Btn small role="menu" onClick={() => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false }))}>🎭 会話ドラマ：{ml.rivalDramaOn === false ? "非表示" : "表示中"}</Btn>
                 <Btn small role="danger" onClick={() => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>🔄 最初からやり直す</Btn>
                 <Btn small role="menu" onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
               </div>
@@ -518,7 +518,7 @@ export function renderMyLifeHubScreen(ctx) {
             <div style={{ display: "flex", gap: 6, padding: "6px 10px", fontSize: 10, color: C.sub, borderBottom: `1px solid ${C.line}`, background: C.panel2 }}>
               <span style={{ flex: 1 }}>選手</span>
               <span style={{ width: 62, textAlign: "center" }}>今季</span>
-              <span style={{ width: 96, textAlign: "center" }}>通算(勝/表彰台)</span>
+              <span style={{ width: 96, textAlign: "center" }}>通算（勝／表彰台）</span>
               <span style={{ width: 40, textAlign: "right" }}>最高</span>
             </div>
             {rows.map((r) => {

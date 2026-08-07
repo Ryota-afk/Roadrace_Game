@@ -5,12 +5,12 @@ export const ITEMS = {
   suit:  { label: "エアロワンピース", desc: "次の1レース：出走全員の平坦+15%", price: 30 },
   supp:  { label: "リカバリーサプリ", desc: "選手1名の疲労を40回復", price: 12 },
   tune:  { label: "コンディション調律", desc: "選手1名の調子を2段階アップ", price: 15 },
-  camp:  { label: "トレーニングキャンプ券", desc: "今月の練習効果×2（チーム全体）。ただし全員の疲労+25（故障リスクに注意）", price: 25 },
+  camp:  { label: "トレーニングキャンプ券", desc: "今月の練習効果×2。ただし全員の疲労+25（故障リスクに注意）", price: 25 },
 };
 
 export const EQUIPS = {
-  frame: { label: "エアロフレーム(チーム)", desc: "平坦 +6%/Lv（全員・恒常）" },
-  wheels: { label: "軽量ホイール(チーム)", desc: "登坂 +6%/Lv（全員・恒常）" },
+  frame: { label: "エアロフレーム", desc: "平坦 +6%/Lv（全員・恒常）" },
+  wheels: { label: "軽量ホイール", desc: "登坂 +6%/Lv（全員・恒常）" },
   facility: { label: "トレーニング設備", desc: "練習効果 +15%/Lv（恒常）" },
   // v42(Wave F-1): 敷地の見た目だけを変える枠。能力値への効果は無い（購入UI・経済は
   // 既存のEQUIPS/buyEquipをそのまま流用し、Lvに応じて敷地画面の装飾が増える）。

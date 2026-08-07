@@ -22,7 +22,7 @@ export function renderRidersTeamSection(ctx) {
                     <span style={{ fontSize: 11.5, color: C.sub }}>🤝 チームケミストリー </span>
                     <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: C.green }}>{chem.label}</span>
                   </div>
-                  <div style={{ fontSize: 10.5, color: C.sub }}>平均在籍{chem.avgTenure.toFixed(1)}ヶ月{chem.mul < 1 ? `／ドラフト消耗-${Math.round((1 - chem.mul) * 100)}%` : ""}</div>
+                  <div style={{ fontSize: 10.5, color: C.sub }}>平均在籍{chem.avgTenure.toFixed(1)}ヶ月{chem.mul < 1 ? `／集団走行の消耗-${Math.round((1 - chem.mul) * 100)}%` : ""}</div>
                 </div>
                 <div style={{ height: 5, borderRadius: 3, background: C.line, marginTop: 6, overflow: "hidden" }}>
                   <div style={{ width: `${pct * 100}%`, height: "100%", background: C.green, borderRadius: 3 }} />
@@ -41,7 +41,7 @@ export function renderRidersTeamSection(ctx) {
               <div style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}` }}>
                 <span style={{ fontSize: 11, color: C.sub }}>🏳 スタッフ陣：</span>
                 <span style={{ fontSize: 11.5, color: C.text }}>
-                  {hired.length === 0 ? "（一般スタッフ未雇用）" : hired.map(([k, lv]) => `${(STAFF_META[k] || {}).icon || ""}${staffMemberName(g.teamName, k)}${(STAFF_META[k] || {}).title || k}Lv${lv}`).join("・")}
+                  {hired.length === 0 ? "（一般スタッフ未雇用）" : hired.map(([k, lv]) => `${(STAFF_META[k] || {}).icon || ""}${staffMemberName(g.teamName, k)}${(STAFF_META[k] || {}).title || "スタッフ"}Lv${lv}`).join("・")}
                   {g.obCoach && <span style={{ color: "#e8a13c" }}>{hired.length > 0 ? "・" : ""}🎓{g.obCoach.name}コーチ</span>}
                 </span>
               </div>

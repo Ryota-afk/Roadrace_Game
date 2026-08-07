@@ -56,7 +56,7 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
       const goodId = (player.abilities || []).find(id => ABILITIES[id] && !ABILITIES[id].bad && !(player.goldAbilities || []).includes(id));
       if (goodId) {
         player.goldAbilities = [...(player.goldAbilities || []), goodId];
-        debutBoon = { label: "🌟 天啓", note: `ひらめきを得て「${ABILITIES[goodId].label}」が金で開花している` };
+        debutBoon = { label: "🌟 天啓", note: `ひらめきを得て「${ABILITIES[goodId].label}」が金の状態で開花している` };
       }
     } else if (br < 0.13 + bb && goodPool.length && (player.abilities || []).length < 4) {
       const id = goodPool[Math.floor(rng() * goodPool.length)];

@@ -41,7 +41,7 @@ export function renderSeasonTransferEventScreens(ctx) {
           </p>
         </div>
         <div style={{ display: "grid", gap: 8 }}>
-          <Btn color={C.green} disabled={g.budget < 30} onClick={retainRider}>慰留する（引き止め費用30万・残留＆調子+1）{g.budget < 30 ? "／資金不足" : ""}</Btn>
+          <Btn color={C.green} disabled={g.budget < 30} onClick={retainRider}>慰留する（慰留費用30万・残留＆調子+1）{g.budget < 30 ? "／資金不足" : ""}</Btn>
           <Btn outline color={C.red} onClick={() => askConfirm(`${req.name}の移籍志願を受け入れますか？この選手はチームを去ります。`, grantTransferRequest)}>志願を受け入れて送り出す</Btn>
         </div>
       </div>
@@ -68,7 +68,7 @@ export function renderSeasonTransferEventScreens(ctx) {
         </div>
         <div style={{ display: "grid", gap: 8 }}>
           <Btn color={C.green} disabled={g.budget < o.retainCost} onClick={poachRetain}>
-            引き止める（慰留費用-{o.retainCost}万・残留＆調子+1）{g.budget < o.retainCost ? "／資金不足" : ""}
+            慰留する（慰留費用-{o.retainCost}万・残留＆調子+1）{g.budget < o.retainCost ? "／資金不足" : ""}
           </Btn>
           <Btn outline color={"#e8a13c"} onClick={() => askConfirm(`${o.name}を${o.team}へ放出し、移籍金${o.fee}万円を受け取りますか？この主力はチームを去ります。`, poachAccept)}>
             放出して移籍金+{o.fee}万を受け取る
@@ -88,7 +88,7 @@ export function renderSeasonTransferEventScreens(ctx) {
         <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid #e8a13c` }}>
           <Eyebrow color={"#e8a13c"}>🎯 引き抜き市場 — ライバルの主力を狙う</Eyebrow>
           <div style={{ fontSize: 12, color: C.sub, marginTop: 4, lineHeight: 1.7 }}>
-            各ライバルチームの<span style={{ color: C.text }}>看板選手</span>を、移籍金を払って引き抜けます。<span style={{ color: C.yellow }}>引き抜きは1シーズンに1回まで</span>。
+            各ライバルチームの<span style={{ color: C.text }}>看板選手</span>を、移籍金を払って引き抜けます（<span style={{ color: C.yellow }}>1シーズンに1回まで</span>）。
             成立すると相手は主力を失い、その選手は今後あなたのチームで走ります。移籍金は選手の実力と移籍意欲で決まります。
           </div>
           <div style={{ fontSize: 11.5, marginTop: 5, color: done ? C.red : full ? C.red : C.green }}>

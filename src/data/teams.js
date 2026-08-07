@@ -21,5 +21,5 @@ export const MYLIFE_TEAMS = [
   ...RIVAL_TEAMS,
   { name: "サンライズ静岡", color: "#4fd1c5", tier: 0, spec: "RUL", trait: "平坦のルーラー集団" },
   { name: "北斗プロサイクル", color: "#c084fc", tier: 1, spec: "PUN", trait: "勝負師揃い" },
-  { name: "クレバー横浜", color: "#38bdf8", tier: 2, spec: "TT", trait: "TTスペシャリスト集団" },
+  { name: "クレバー横浜", color: "#38bdf8", tier: 2, spec: "TT", trait: "TT巧者集団" },
 ];

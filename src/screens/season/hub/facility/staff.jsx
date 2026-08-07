@@ -10,7 +10,7 @@ export function renderFacilityStaffSection(ctx) {
   return (
     <div style={{ display: "grid", gap: 14 }}>
           <section>
-            <Eyebrow color={C.red}>スタッフ（月給制・Lv上限：{cls.id}＝{staffMax}）</Eyebrow>
+            <Eyebrow color={C.red}>スタッフ（月給制・{cls.label}の上限はLv{staffMax}）</Eyebrow>
             {staffMax === 0 ? (
               <div style={{ fontSize: 11.5, color: C.sub, marginTop: 6 }}>A昇格で雇用が解禁されます。</div>
             ) : (
@@ -29,7 +29,7 @@ export function renderFacilityStaffSection(ctx) {
                         <div style={{ color: hired ? C.red : C.sub, fontSize: 11.5 }}>{hired ? `現在の効果：${staffEffectText(k, lv)}` : st.desc}</div>
                       </div>
                       <Btn small color={C.red} disabled={lv >= staffMax} onClick={() => hireStaff(k)}>
-                        {lv >= staffMax ? (g.classIdx < 2 ? "昇格で解禁" : "MAX") : hired ? `昇格 +${STAFF_SALARY_PER_LV}万` : `雇用 月給+${STAFF_SALARY_PER_LV}万`}
+                        {lv >= staffMax ? (g.classIdx < 2 ? "昇格で解禁" : "上限") : hired ? `昇格 +${STAFF_SALARY_PER_LV}万` : `雇用 月給+${STAFF_SALARY_PER_LV}万`}
                       </Btn>
                     </div>
                   );

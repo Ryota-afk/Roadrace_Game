@@ -93,8 +93,8 @@ export function renderSeasonIntroScreens(ctx) {
           const selIdx = g.legendRecruitIdx;
           return (
             <div>
-              <Eyebrow color={"#e56cc8"}>🌳 レジェンド招聘（マイライフで育てた名選手を1名迎える）</Eyebrow>
-              <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px", lineHeight: 1.5 }}>マイライフで育て上げ引退した英雄を、創設メンバーに迎えられます（ベテランとして加入・任意）。</div>
+              <Eyebrow color={"#e56cc8"}>🌳 レジェンド招聘（任意）</Eyebrow>
+              <div style={{ fontSize: 11, color: C.sub, margin: "4px 0 6px", lineHeight: 1.5 }}>マイライフで育てた引退済みの名選手を1名、創設メンバー（ベテラン）として迎えられます。</div>
               <div style={{ display: "grid", gap: 5, maxHeight: 210, overflowY: "auto" }}>
                 {legends.map((leg, i) => {
                   const sel = selIdx === i;

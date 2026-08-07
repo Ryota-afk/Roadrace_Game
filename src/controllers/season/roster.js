@@ -148,7 +148,7 @@ export function signBredYouth(s, legA, legB) {
   if (breed.danger > 0 && !rookie.abilities.includes("tough") && !rookie.abilities.includes("glass") && rng() * 100 < breed.danger) {
     rookie.abilities = [...rookie.abilities, "glass"];
     rookie.fragileBorn = true;
-    fragileNote = "・⚠️ガラスの体";
+    fragileNote = "・ガラスの体を発症";
   }
   // v33.3: 系統確立ボーナス。名門系統を継ぐユースは因子（伸びしろ＋系統特能）を受け取る
   rookie.lineageName = legA.lineageName || `${legA.name}系`;
@@ -162,9 +162,9 @@ export function signBredYouth(s, legA, legB) {
       if (!rookie.abilities.includes(yblb.factor) && rookie.abilities.length < 5) rookie.abilities = [...rookie.abilities, yblb.factor];
       if (yblb.factorGold && rookie.abilities.includes(yblb.factor)) { rookie.goldAbilities = [...(rookie.goldAbilities || [])]; if (!rookie.goldAbilities.includes(yblb.factor)) rookie.goldAbilities.push(yblb.factor); }
     }
-    lineNote = `・🏛${yblb.label}`;
+    lineNote = `・${yblb.label}`;
   }
-  const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・✨金の特殊能力を継承` : "";
+  const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・金の特殊能力を継承` : "";
   return {
     ...s, roster: [...s.roster, rookie], budget: s.budget - 40, youthUsed: true,
     log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}${fragileNote}${lineNote}${specialNote}）`],

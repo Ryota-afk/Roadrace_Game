@@ -28,7 +28,7 @@ export function renderRaceStatusSection(ctx) {
             return (
               <div style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.03), transparent)", borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, borderLeft: `3px solid ${col}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <Eyebrow color={col}>🎯 中期目標 — {om.icon} {om.label}</Eyebrow>
+                  <Eyebrow color={col}>中期目標 — {om.icon} {om.label}</Eyebrow>
                   <span style={{ fontFamily: FONT_M, fontSize: 12, color: col, fontWeight: 700 }}>
                     {om.status === "done" ? "達成✓" : om.status === "failed" ? "未達" : `${obj.progress} / ${obj.need}`}
                   </span>

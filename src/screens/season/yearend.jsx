@@ -18,21 +18,19 @@ export function renderSeasonYearEndScreens(ctx) {
             {info.promoted ? `🎉 ${cls.label} へ昇格！` : info.relegated ? "😞 降格…" : "残留 — 来季へ"}
           </h2>
           <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.8 }}>
-            {info.champBest !== null ? `年度末レース結果：自チーム最高 ${info.champBest}位` : "年度末レースには出場できませんでした（ポイント不足）"}
+            {info.champBest !== null ? `チャンピオンシップ結果：自チーム最高 ${info.champBest}位` : "チャンピオンシップには出場できませんでした（ポイント不足）"}
           </div>
           {info.standingsRank != null && (
             <div style={{ marginTop: 8, fontSize: 13, color: "#e8a13c", lineHeight: 1.8 }}>
-              🏆 シーズン最終順位 {info.standingsRank}/{info.standingsTotal}位
-              {info.standingsMoney > 0 ? ` — 順位ボーナス +${info.standingsMoney}万円` : ""}
-              {info.promoteCut > 3 && info.champBest !== null ? `／ 上位の走りで昇格ボーダーが本番${info.promoteCut}位以内に緩和` : ""}
+              <div>🏆 シーズン最終順位 {info.standingsRank}/{info.standingsTotal}位{info.standingsMoney > 0 ? `（順位ボーナス +${info.standingsMoney}万円）` : ""}</div>
+              {info.promoteCut > 3 && info.champBest !== null && <div>上位の走りで、チャンピオンシップの昇格ラインが{info.promoteCut}位以内まで緩和されています</div>}
             </div>
           )}
           {info.sponsorResult && (
             <div style={{ marginTop: 8, fontSize: 13, color: info.sponsorResult.achieved ? C.green : C.red }}>
-              {info.sponsorResult.name}：ノルマ{info.sponsorResult.norma}ptに対し{info.sponsorResult.pts}pt —
-              {info.sponsorResult.achieved ? ` 達成！ボーナス+${info.sponsorResult.bonus}万円` : ` 未達…違約金-${info.sponsorResult.penalty}万円`}
-              {info.sponsorResult.mandatesMissed > 0 && ` ／ 指定レース見送り${info.sponsorResult.mandatesMissed}回：追加違約金-${info.sponsorResult.mandatePenalty}万円`}
-              {info.sponsorResult.mandatesMet > 0 && ` ／ 指定レース達成${info.sponsorResult.mandatesMet}回`}
+              <div>{info.sponsorResult.name}：ノルマ{info.sponsorResult.norma}ptに対し{info.sponsorResult.pts}pt — {info.sponsorResult.achieved ? `達成！ボーナス+${info.sponsorResult.bonus}万円` : `未達…違約金-${info.sponsorResult.penalty}万円`}</div>
+              {info.sponsorResult.mandatesMissed > 0 && <div>指定レース見送り{info.sponsorResult.mandatesMissed}回：追加違約金-{info.sponsorResult.mandatePenalty}万円</div>}
+              {info.sponsorResult.mandatesMet > 0 && <div>指定レース達成{info.sponsorResult.mandatesMet}回</div>}
             </div>
           )}
           {(() => {
@@ -73,7 +71,8 @@ export function renderSeasonYearEndScreens(ctx) {
         {/* v25: 制覇後もこの轍（チーム）を引き継いで周回できるディナスティモード。
             周を重ねるたびに他チームの地力が上がり、歯応えを保ったまま挑戦を続けられる */}
         <Btn onClick={() => setG(s => ({ ...s, dynastyLevel: (s.dynastyLevel || 0) + 1, screen: "yearend" }))}>
-          🔁 この轍を継いでさらなる高みへ（{(g.dynastyLevel || 0) + 1}周目へ・他チームがさらに強化される）
+          🔁 この轍を継いでさらなる高みへ
+          <span style={{ display: "block", fontSize: 10.5, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>{(g.dynastyLevel || 0) + 1}周目へ・他チームがさらに強化されます</span>
         </Btn>
         <Btn outline onClick={() => { clearSaveGame(); setG(initGame()); }}>新たなチームで最初から</Btn>
       </div>

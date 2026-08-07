@@ -14,7 +14,7 @@ export function renderMarketTransferSection(ctx) {
           <section>
             <Eyebrow color={"#e8a13c"}>🎯 引き抜き市場（他チームの主力を獲得）</Eyebrow>
             <div style={{ fontSize: 11.5, color: C.sub, margin: "4px 0 8px" }}>
-              ライバルの看板選手を移籍金で引き抜けます（年1回まで）。相手を弱体化させつつ自チームを強化する攻めの一手。
+              ライバルの看板選手を移籍金で引き抜けます（年1回まで）。相手を弱体化させつつ自チームを強化できます。
               {g.poachDoneThisYear && <span style={{ color: C.red }}> ／今季は使用済み</span>}
             </div>
             <Btn small color={"#e8a13c"} outline onClick={() => setG(s => ({ ...s, screen: "poachMarket" }))}>

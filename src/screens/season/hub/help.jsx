@@ -93,7 +93,7 @@ export function renderHelpSection() {
                 能力値は<span style={{ color: C.text }}>平坦・登坂・スプリント・スタミナ・独走</span>の5種類（22〜135）。区間の種類ごとに使われる能力が決まり、丘陵は登坂55%＋平坦45%、山頂フィニッシュは登坂70%＋スプリント30%、TT区間は独走60%＋平坦40%というように複数の能力が混ざる区間もあります。
               </div>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
-                選手は<span style={{ color: C.text }}>特殊能力を0〜3個</span>保有します。地形適性・展開/役割・メンタル・フィジカル・成長の5カテゴリがあり、悪特性（バッドステータス）が混ざることもあります。一定の勝利数や役割出走数を満たすと保有能力が「金の特殊能力」に強化され、逆に条件を満たせば未保有の能力を後天的に習得することもあります。発見済みの能力は「記録」タブの特殊能力図鑑で内容を確認できます（未発見のものは？？？で伏せられます）。
+                選手は<span style={{ color: C.text }}>特殊能力を0〜3個</span>保有します。地形適性・展開・役割・メンタル・フィジカル・成長の5カテゴリがあり、悪特性（バッドステータス）が混ざることもあります。一定の勝利数や役割出走数を満たすと保有能力が「金の特殊能力」に強化され、逆に条件を満たせば未保有の能力を後天的に習得することもあります。発見済みの能力は「記録」タブの特殊能力図鑑で内容を確認できます（未発見のものは？？？で伏せられます）。
               </div>
             </div>
           </div>
@@ -105,7 +105,7 @@ export function renderHelpSection() {
                 選手にはそれぞれ<span style={{ color: C.text }}>成長タイプ</span>（早熟・普通・晩成・超早熟・超晩成）があり、年齢によって「成長期（伸び最大）」「全盛期（伸び半減）」「衰え期（能力が少しずつ下がる）」が切り替わります。ピーク年齢は早熟21〜25歳・普通24〜29歳・晩成28〜33歳・超早熟18〜21歳・超晩成32〜38歳です。
               </div>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
-                さらに<span style={{ color: C.text }}>成長力（C/B/A/S）</span>が練習・出走経験の伸び方に倍率をかけます（C×0.7・B×1.0・A×1.3・S×1.6）。練習では指定した1能力に90%、残り4能力に14%の伸びが配分されます（トレードオフ）。出走した場合は、レースで使った区間の種目に応じた「出走経験」でも能力が伸び、レースのグレードが高いほど伸びが大きくなります。
+                さらに<span style={{ color: C.text }}>成長力（C/B/A/S）</span>が練習・出走経験の伸び方に倍率をかけます（C×0.7・B×1.0・A×1.3・S×1.6）。練習では指定した1能力に90%、残り4能力に14%の伸びが配分されます。出走した場合は、レースで使った区間の種目に応じた「出走経験」でも能力が伸び、レースのグレードが高いほど伸びが大きくなります。
               </div>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
                 能力には難易度ごとの<span style={{ color: C.text }}>ソフトキャップ</span>があります（イージー88・ノーマル94・ハード102・鬼112）。この値未満なら伸びは全開ですが、超えると急激に伸びが鈍化します。上限を超えた金色表示の能力は「限界突破」状態です。
@@ -117,7 +117,7 @@ export function renderHelpSection() {
             <Eyebrow color={C.red}>疲労・コンディション・故障</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
-                出走すると疲労が+45（「鉄人」持ちは+32）増えます。<span style={{ color: C.red }}>3ヶ月連続で出走（3連闘）すると確定で故障</span>、疲労が90を超えると確率で故障が発生します（ドクターの雇用で確率・離脱期間ともに軽減）。「頑丈」は故障率半減、「ガラスの体」は故障率2倍＆離脱+1ヶ月です。
+                出走すると疲労が+45（「鉄人」持ちは+32）増えます。<span style={{ color: C.red }}>3ヶ月連続で出走（3連闘）すると確定で故障</span>、疲労が90を超えると確率で故障が発生します（ドクターの雇用で確率・離脱期間ともに軽減）。「頑丈」は故障率半減、「ガラスの体」は故障率2倍・離脱+1ヶ月です。
               </div>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
                 調子は→（普通）／↗（好調）／↑↑（絶好調）／↘（やや不調）／↓↓（絶不調）の5段階で毎月ランダムに変動します（「ムラっ気」は変動幅が大きく、「精密機械」は小さい）。休養させると疲労が回復します（出走なしなら-50、故障中でも自然回復します）。
@@ -132,7 +132,7 @@ export function renderHelpSection() {
                 ロースター平均在籍月数に応じて<span style={{ color: C.text }}>チームケミストリー</span>が「新体制／定着期／円熟したチーム／鉄壁の絆」の順に上がり、レース中のドラフト消耗が最大8%軽減されます。移籍・トレード・解雇が多いと在籍月数がリセットされるため、頻繁な入れ替えは足元のケミストリーを崩すコストがあります。
               </div>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
-                任命した<span style={{ color: C.text }}>キャプテン</span>より2歳以上若い選手は練習効果+10%になりますが、キャプテン自身の練習効果は-5%になります（誰でも任命した方が得、にはならないよう小さなトレードオフがあります）。
+                任命した<span style={{ color: C.text }}>キャプテン</span>より2歳以上若い選手は練習効果+10%になりますが、キャプテン自身の練習効果は-5%になります。若手を導く分、自分の伸びしろは少し犠牲になります。
               </div>
             </div>
           </div>
@@ -165,13 +165,13 @@ export function renderHelpSection() {
           </div>
 
           <div>
-            <Eyebrow color={"#e8a13c"}>グランツール・副次クラシフィケーション</Eyebrow>
+            <Eyebrow color={"#e8a13c"}>グランツール・副次タイトル</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
                 PROクラス限定で年3回（春・夏・秋）、3日間ステージレースの<span style={{ color: C.text }}>グランツール</span>が開催されます。グランファイナルへの出場には、その年の3戦すべてで総合優勝することが条件です。
               </div>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
-                グランツールでは総合成績とは別に、🟢ポイント賞（各区間の着順ポイント合計）・🔴山岳賞（山岳区間の着順ポイント合計）・⚪新人賞（26歳未満限定）の<span style={{ color: C.text }}>副次クラシフィケーション</span>が争われ、自チームが獲得すると賞金ボーナスが入ります。
+                グランツールでは総合成績とは別に、🟢ポイント賞（各区間の着順ポイント合計）・🔴山岳賞（山岳区間の着順ポイント合計）・⚪新人賞（26歳未満限定）の<span style={{ color: C.text }}>副次タイトル</span>が争われ、自チームが獲得すると賞金ボーナスが入ります。
               </div>
             </div>
           </div>
@@ -180,7 +180,7 @@ export function renderHelpSection() {
             <Eyebrow color={C.green}>ディナスティ周回・ユース育成枠</Eyebrow>
             <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
-                グランファイナル制覇後、「新たなチームで最初から」ではなく<span style={{ color: C.text }}>この轍を継いでさらなる高みへ</span>を選ぶと、同じチームのまま周回を継続できます（ディナスティモード）。周回を重ねるたびに他チームの地力が底上げされ、歯応えが保たれます。クリアポイントは周回のたびに再獲得できます。
+                グランファイナル制覇後、「新たなチームで最初から」ではなく<span style={{ color: C.text }}>この轍を継いでさらなる高みへ</span>を選ぶと、同じチームのまま周回を継続できます（ディナスティ周回）。周回を重ねるたびに他チームの地力が底上げされ、歯応えが保たれます。クリアポイントは周回のたびに再獲得できます。
               </div>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
                 「選手・練習」タブでは年1回だけ、契約金15万円で<span style={{ color: C.text }}>ユース選手（16〜17歳・成長力A以上確定）</span>を確保できます。現在の能力は低いですが、長期育成向けの原石です。使用枠は4月の年度替わりでリセットされます。
