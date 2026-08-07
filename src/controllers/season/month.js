@@ -137,7 +137,7 @@ export function monthlyUpdate(state, raceInfo) {
     const upgraded = upgradeGoldAbilities(updated);
     if (upgraded !== updated) {
       upgraded.goldAbilities.filter(id => !(updated.goldAbilities || []).includes(id))
-        .forEach(id => notices.push(`${n.name}の特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
+        .forEach(id => notices.push(`${n.name}の特殊能力「${ABILITIES[id].label}」が金の特殊能力に覚醒した！`));
       updated = upgraded;
     }
     // v17: 特殊能力の後天的獲得判定

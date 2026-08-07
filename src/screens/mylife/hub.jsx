@@ -1,6 +1,7 @@
 // mylife.jsx より分割（Step8）：メインハブ（main/achievements/abilityfile/riderstats/worldstats/records）
 import React from "react";
 import { mlRecordLegend } from "../../breeding/breeding.js";
+import { mlNextAction } from "../../domain/mylife/nextAction.js";
 import { AbilityFileList, AbilityGrid, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, SubStatLine, TitlesPanel, TraitLine } from "../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { Btn, Eyebrow } from "../../components/ui.jsx";
@@ -18,6 +19,24 @@ export function renderMyLifeHubScreen(ctx) {
       const race = ml.races[0];
       const ph = growthPhase(r);
       const powRevealed = mlGrowthPowRevealed(ml);
+      // v46(UI): 次のアクション#15。「今月の練習メニューの推奨」と「今月の行動の推奨」の両方が
+      // 同じ計算（能力の伸びしろ）を必要とするため、ここで一度だけ計算して両方から参照する
+      // （旧実装はこの計算を練習メニューのIIFE内に閉じ込めていたため再利用できなかった）。
+      const capV = mlGrowthCap(ml.year, r, ml);
+      const typeKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[r.type];
+      const raceFav = race?.tmpl?.favors;
+      const raceKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[raceFav];
+      const roomOf = (k) => Math.max(0, Math.round(capV - (r[k] || 0)));
+      const scoreOf = (k) => (k === typeKey ? 10 : 0) + (k === raceKey ? 6 : 0) + Math.min(6, roomOf(k) / 6);
+      const recKey = AB_KEYS.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
+      const roomLabel = (k) => { const rm = roomOf(k); return rm >= 22 ? "伸びしろ大" : rm >= 10 ? "伸びしろ中" : rm >= 3 ? "伸びしろ小" : "頭打ち"; };
+      const recWhy = [recKey === typeKey ? "脚質の主武器" : null, recKey === raceKey ? "今月のレースが有利" : null, roomOf(recKey) >= 15 ? "伸びしろ大" : null].filter(Boolean).join("・") || "バランス";
+      // v46(UI): 「今月は何をすべきか分かりづらい」という指摘への対応。疲労・レースの有無・
+      // 大舞台かどうかから今月のおすすめを1つだけ判定する（domain/mylife/nextAction.js）。
+      // ラベル文言とハンドラはUI都合（フォーカス中の能力名など）なのでここで組み立てる。
+      const nextAction = mlNextAction({ fatigue: r.fatigue, race, recTrainLabel: AB_LABEL[recKey] });
+      const ACTION_LABEL = { race: "🏁 このレースに出場する", rest: "😴 完全休養", train: `💪 練習（${AB_LABEL[r.focus] || "バランス"}中心）` };
+      const ACTION_HANDLER = { race: mlStartRace, rest: () => mlAdvanceMonth("rest"), train: () => mlAdvanceMonth("train") };
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
@@ -110,6 +129,132 @@ export function renderMyLifeHubScreen(ctx) {
               </div>
             )}
           </div>
+          {/* v46(UI): 次のアクション#15「導線・ユーザビリティ」。実測で「マイライフ本編は情報
+              9セクションの後（画面3面目）にようやく行動が来る」ことが判明したため、選手カードの
+              直後に「今月の行動」を新設して最優先の位置に置いた。今月のレース／練習メニューは
+              その行動を選ぶための判断材料としてすぐ下に続け、情報群（成長・新聞・弟子・状況）は
+              その後ろへ回した。ボタンの色は意味ごとに統一（Btnのrole prop。ui.jsx参照）：
+              黄塗り＝今月のおすすめ（1つだけ）／黄枠＝月が進む他の行動／グレー枠＝月は進まない／
+              赤枠＝取り返しがつかない操作。 */}
+          <div style={{ background: "linear-gradient(180deg, rgba(255,210,63,0.10), transparent)", borderRadius: 10, border: `1.5px solid ${C.yellow}`, padding: "10px 12px" }}>
+            <Eyebrow color={C.yellow}>🎬 今月の行動</Eyebrow>
+            <div style={{ marginTop: 8 }}>
+              <Btn role="primary" onClick={ACTION_HANDLER[nextAction.key]}>{ACTION_LABEL[nextAction.key]}</Btn>
+              <div style={{ fontSize: 11, color: C.sub, marginTop: 5, textAlign: "center" }}>{nextAction.reason}</div>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              {nextAction.key !== "race" && <Btn small role="month" onClick={mlStartRace}>{ACTION_LABEL.race}</Btn>}
+              {nextAction.key !== "rest" && <Btn small role="month" onClick={() => mlAdvanceMonth("rest")} title="疲労を大きく回復し、脚がフレッシュに（フォームの下振れを消して微増）＋メンタルも整う。大レース前の仕上げに">{ACTION_LABEL.rest}</Btn>}
+              {nextAction.key !== "train" && <Btn small role="month" onClick={() => mlAdvanceMonth("train")}>{ACTION_LABEL.train}</Btn>}
+              <Btn small role="month" onClick={() => mlAdvanceMonth("peak")}>🎯 ピーキング調整（フォームを上げる）</Btn>
+              {/* v43(Phase 2): 「🎤取材・私生活イベント」は手動ボタンを廃止し、月が終わるたびに
+                  運ステータスで確率が変わる受動発火へ移行した（controllers/mylife/month.js参照） */}
+              {(ml.player.popularity || 0) >= 20 && (
+                <Btn small role="month" onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事</Btn>
+              )}
+            </div>
+            <button onClick={() => setMl(s => ({ ...s, uiSpecialOpen: !s.uiSpecialOpen }))}
+              style={{ width: "100%", marginTop: 10, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, fontSize: 11, padding: "5px 8px", cursor: "pointer" }}>
+              {ml.uiSpecialOpen ? "▲ 専門トレーニングを閉じる" : "▼ 専門トレーニングを見る"}
+            </button>
+            {ml.uiSpecialOpen && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                {Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
+                  <Btn key={k} small role="month" onClick={() => mlAdvanceMonth(k)} title={sp.desc}>{sp.label}</Btn>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{
+            background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
+            border: `1.5px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.line}`,
+          }}>
+            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.green}>{race.milestone ? ML_MILESTONE_LABEL[race.milestone].eyebrow : race.monument ? "🏛️ モニュメント（クラシック）" : "今月のレース"}</Eyebrow>
+            <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0" }}>{race.name}</div>
+            <div style={{ fontSize: 11.5, color: C.sub }}>{race.tmpl.kind}・{"★".repeat(race.grade)}・{TYPES[race.tmpl.favors].label}有利</div>
+            {race.monument && <div style={{ fontSize: 11, color: "#e8a13c", marginTop: 3, fontWeight: 700 }}>格式高い一発勝負の古典。長く消耗の激しいコースで真の実力が問われる。制覇すれば「クラシックの覇者」への道が開ける。</div>}
+            {race.weather && race.weather !== "clear" && (
+              <div style={{ fontSize: 11.5, color: race.weather === "rain" ? C.blue : C.red, marginTop: 2 }}>
+                {WEATHER[race.weather].icon} 天候：{WEATHER[race.weather].label}
+                {race.weather === "rain" ? "（能力低下・落車リスク）" : "（疲労が増える）"}
+              </div>
+            )}
+            {race.milestone && <div style={{ fontSize: 11, color: ML_MILESTONE_LABEL[race.milestone].color, marginTop: 3 }}>代表選出！一生に何度もない大舞台での一戦だ。</div>}
+            {race.milestone && (() => {
+              // v28: 代表チームでの立場。監督評価に応じてエース／アシストの役割が示される
+              const natRole = (race.nationalRole || (ml.managerEval >= 55 ? "ace" : "support"));
+              return (
+                <div style={{ fontSize: 11, color: natRole === "ace" ? C.yellow : C.blue, marginTop: 3 }}>
+                  🎌 代表での役割：<b>{natRole === "ace" ? "エース（3位以内で任務達成）" : "アシスト（10位以内で任務達成）"}</b>。全うすれば名声が大きく上がります。
+                </div>
+              );
+            })()}
+            {/* v32（条件付き作戦＝ノーリスク無線）：出走前に作戦を選ぶと、結果に実際に反映される */}
+            <div style={{ background: C.panel2, borderRadius: 8, padding: "7px 10px", marginTop: 8 }}>
+              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>📻 レース作戦</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {Object.entries(ML_TACTICS).map(([k, t]) => (
+                  <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
+                    style={{ padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 10.5, fontWeight: 700,
+                      background: (ml.tactic || "balanced") === k ? "rgba(255,210,63,0.14)" : C.panel, color: (ml.tactic || "balanced") === k ? C.yellow : C.sub,
+                      border: `1.5px solid ${(ml.tactic || "balanced") === k ? C.yellow : C.line}` }}>{t.label}</button>
+                ))}
+              </div>
+              {(() => {
+                const tac = ML_TACTICS[ml.tactic] || ML_TACTICS.balanced;
+                return (
+                  <div style={{ fontSize: 10, color: C.sub, marginTop: 5, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                    {tac.tag && <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, color: tac.tagColor || C.sub, border: `1px solid ${tac.tagColor || C.line}`, borderRadius: 6, padding: "1px 5px", lineHeight: 1.5 }}>{tac.tag}</span>}
+                    <span>{tac.desc}</span>
+                  </div>
+                );
+              })()}
+            </div>
+            {/* v27: 天候予報。今月を含む先の月の天候を先読みして育成計画に活かせるようにする */}
+            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span>天候予報：</span>
+              {[0, 1, 2].map(off => {
+                const mi = ml.month + off;
+                if (mi > 11) return null;
+                const fr = mlGenRace(ml.year, mi, ml.classIdx);
+                const w = fr.weather || "clear";
+                return (
+                  <span key={off} style={{ color: w === "rain" ? C.blue : w === "heat" ? C.red : C.sub }}>
+                    {MONTHS[mi]}{off === 0 ? "(今)" : ""} {WEATHER[w].icon}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <Eyebrow>今月の練習メニュー</Eyebrow>
+            <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
+              style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, marginTop: 6, width: "100%", boxSizing: "border-box" }}>
+              {AB_KEYS.map(k => <option key={k} value={k}>{k === recKey ? "⭐ " : ""}{AB_LABEL[k]}強化（{roomLabel(k)}）</option>)}
+            </select>
+            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5, lineHeight: 1.5 }}>
+              ⭐推奨：<b style={{ color: C.green }}>{AB_LABEL[recKey]}</b>（{recWhy}）
+              {r.focus !== recKey && <span style={{ color: "#e8a13c" }}>　※今は{AB_LABEL[r.focus]}を強化中</span>}
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+              {AB_KEYS.map(k => (
+                <span key={k} style={{ fontSize: 9.5, fontFamily: FONT_M, color: k === r.focus ? C.yellow : C.sub, background: C.panel2, borderRadius: 5, padding: "1px 6px", border: k === recKey ? `1px solid ${C.green}` : "1px solid transparent" }}>
+                  {AB_LABEL[k]} {Math.round(r[k] || 0)}<span style={{ color: roomOf(k) >= 10 ? C.green : C.sub }}>（+{roomOf(k)}）</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* v38修正: 監督指示は毎レースの必須情報（達成で監督評価↑）なので折りたたみの外に出し、常時表示にする */}
+          {ml.directive && (
+            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.blue}` }}>
+              <Eyebrow color={C.blue}>監督指示</Eyebrow>
+              <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.directive.label}</div>
+              <div style={{ fontSize: 11.5, color: C.sub }}>{ml.directive.desc}</div>
+              <div style={{ fontSize: 11, color: C.sub, marginTop: 5 }}>
+                監督評価: <span style={{ color: managerEvalTier(ml.managerEval).color, fontWeight: 700 }}>{managerEvalTier(ml.managerEval).label}</span>
+              </div>
+            </div>
+          )}
           {/* v38(改善:育成の手応え): 「今月の成長」。直近の月次アクションで伸びた能力・OVR・活力を
               目に見える形で示し、毎月の積み上げに手応えを持たせる。 */}
           {ml.growthReport && (ml.growthReport.deltas.length > 0 || ml.growthReport.ovrUp > 0 || ml.growthReport.subDeltas.length > 0) && (() => {
@@ -184,17 +329,6 @@ export function renderMyLifeHubScreen(ctx) {
               </div>
             );
           })()}
-          {/* v38修正: 監督指示は毎レースの必須情報（達成で監督評価↑）なので折りたたみの外に出し、常時表示にする */}
-          {ml.directive && (
-            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.blue}` }}>
-              <Eyebrow color={C.blue}>監督指示</Eyebrow>
-              <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.directive.label}</div>
-              <div style={{ fontSize: 11.5, color: C.sub }}>{ml.directive.desc}</div>
-              <div style={{ fontSize: 11, color: C.sub, marginTop: 5 }}>
-                監督評価: <span style={{ color: managerEvalTier(ml.managerEval).color, fontWeight: 700 }}>{managerEvalTier(ml.managerEval).label}</span>
-              </div>
-            </div>
-          )}
           {/* v34(UI): チーム・キャリア状況を折りたたみ、毎月の行動（レース/練習）を主画面の上部に出す */}
           <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}` }}>
             <button onClick={() => setMl(s => ({ ...s, uiStatusOpen: !s.uiStatusOpen }))} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: "9px 12px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", color: C.sub, fontSize: 11.5 }}>
@@ -300,163 +434,43 @@ export function renderMyLifeHubScreen(ctx) {
               </div>
             )}
           </div>
-          {(() => {
-            // v38(改善:練習の焦点を戦略的に): 各能力の「伸びしろ」と、脚質・今月のレース・伸びしろから
-            // 導いた「⭐推奨」を提示。どこを鍛えるべきかを一目で判断できるようにする。
-            const capV = mlGrowthCap(ml.year, r, ml);
-            const typeKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[r.type];
-            const raceFav = race?.tmpl?.favors;
-            const raceKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[raceFav];
-            const roomOf = (k) => Math.max(0, Math.round(capV - (r[k] || 0)));
-            const scoreOf = (k) => (k === typeKey ? 10 : 0) + (k === raceKey ? 6 : 0) + Math.min(6, roomOf(k) / 6);
-            const recKey = AB_KEYS.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
-            const roomLabel = (k) => { const rm = roomOf(k); return rm >= 22 ? "伸びしろ大" : rm >= 10 ? "伸びしろ中" : rm >= 3 ? "伸びしろ小" : "頭打ち"; };
-            const recWhy = [recKey === typeKey ? "脚質の主武器" : null, recKey === raceKey ? "今月のレースが有利" : null, roomOf(recKey) >= 15 ? "伸びしろ大" : null].filter(Boolean).join("・") || "バランス";
-            return (
-              <div>
-                <Eyebrow>今月の練習メニュー</Eyebrow>
-                <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
-                  style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, marginTop: 6, width: "100%", boxSizing: "border-box" }}>
-                  {AB_KEYS.map(k => <option key={k} value={k}>{k === recKey ? "⭐ " : ""}{AB_LABEL[k]}強化（{roomLabel(k)}）</option>)}
-                </select>
-                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5, lineHeight: 1.5 }}>
-                  ⭐推奨：<b style={{ color: C.green }}>{AB_LABEL[recKey]}</b>（{recWhy}）
-                  {r.focus !== recKey && <span style={{ color: "#e8a13c" }}>　※今は{AB_LABEL[r.focus]}を強化中</span>}
-                </div>
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-                  {AB_KEYS.map(k => (
-                    <span key={k} style={{ fontSize: 9.5, fontFamily: FONT_M, color: k === r.focus ? C.yellow : C.sub, background: C.panel2, borderRadius: 5, padding: "1px 6px", border: k === recKey ? `1px solid ${C.green}` : "1px solid transparent" }}>
-                      {AB_LABEL[k]} {Math.round(r[k] || 0)}<span style={{ color: roomOf(k) >= 10 ? C.green : C.sub }}>（+{roomOf(k)}）</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-          <div style={{
-            background: (race.milestone || race.monument) ? "#2b2436" : C.panel, borderRadius: 10, padding: "10px 12px",
-            border: `1.5px solid ${race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.line}`,
-          }}>
-            <Eyebrow color={race.milestone ? ML_MILESTONE_LABEL[race.milestone].color : race.monument ? "#e8a13c" : C.green}>{race.milestone ? ML_MILESTONE_LABEL[race.milestone].eyebrow : race.monument ? "🏛️ モニュメント（クラシック）" : "今月のレース"}</Eyebrow>
-            <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0" }}>{race.name}</div>
-            <div style={{ fontSize: 11.5, color: C.sub }}>{race.tmpl.kind}・{"★".repeat(race.grade)}・{TYPES[race.tmpl.favors].label}有利</div>
-            {race.monument && <div style={{ fontSize: 11, color: "#e8a13c", marginTop: 3, fontWeight: 700 }}>格式高い一発勝負の古典。長く消耗の激しいコースで真の実力が問われる。制覇すれば「クラシックの覇者」への道が開ける。</div>}
-            {race.weather && race.weather !== "clear" && (
-              <div style={{ fontSize: 11.5, color: race.weather === "rain" ? C.blue : C.red, marginTop: 2 }}>
-                {WEATHER[race.weather].icon} 天候：{WEATHER[race.weather].label}
-                {race.weather === "rain" ? "（能力低下・落車リスク）" : "（疲労が増える）"}
-              </div>
-            )}
-            {race.milestone && <div style={{ fontSize: 11, color: ML_MILESTONE_LABEL[race.milestone].color, marginTop: 3 }}>代表選出！一生に何度もない大舞台での一戦だ。</div>}
-            {race.milestone && (() => {
-              // v28: 代表チームでの立場。監督評価に応じてエース／アシストの役割が示される
-              const natRole = (race.nationalRole || (ml.managerEval >= 55 ? "ace" : "support"));
-              return (
-                <div style={{ fontSize: 11, color: natRole === "ace" ? C.yellow : C.blue, marginTop: 3 }}>
-                  🎌 代表での役割：<b>{natRole === "ace" ? "エース（3位以内で任務達成）" : "アシスト（10位以内で任務達成）"}</b>。全うすれば名声が大きく上がります。
-                </div>
-              );
-            })()}
-            {/* v27: 天候予報。今月を含む先の月の天候を先読みして育成計画に活かせるようにする */}
-            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span>天候予報：</span>
-              {[0, 1, 2].map(off => {
-                const mi = ml.month + off;
-                if (mi > 11) return null;
-                const fr = mlGenRace(ml.year, mi, ml.classIdx);
-                const w = fr.weather || "clear";
-                return (
-                  <span key={off} style={{ color: w === "rain" ? C.blue : w === "heat" ? C.red : C.sub }}>
-                    {MONTHS[mi]}{off === 0 ? "(今)" : ""} {WEATHER[w].icon}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-          {/* v28: 縦積みになりすぎたボタン群を「今月のアクション（月を消費）」「メニュー（画面表示）」
-              「その他・キャリア管理」の3グループに整理。二次的なものは折り返す小ボタンにまとめる */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <Eyebrow color={C.green}>🎬 今月のアクション — 1つ選ぶと翌月へ</Eyebrow>
-            {/* v31.2: アクションが下部にあり疲労・調子を確認しながら選べないという指摘に対応。
-                行動選択の直前に、判断材料（疲労・調子・フォーム・OVR）の要約を再掲する */}
-            <div style={{ background: C.panel2, borderRadius: 8, padding: "6px 10px", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 11 }}>
-              <span style={{ color: C.sub }}>選択の目安 ▶</span>
-              <span>疲労 <b style={{ color: r.fatigue > 90 ? C.red : r.fatigue > 60 ? "#e8a13c" : C.green, fontFamily: FONT_M }}>{Math.round(r.fatigue)}</b></span>
-              <span>フォーム <b style={{ color: (r.form ?? 50) >= 80 ? C.yellow : (r.form ?? 50) >= 62 ? C.green : C.sub, fontFamily: FONT_M }}>{Math.round(r.form ?? 50)}</b><CondFc dir={r.formForecast} /></span>
-              <span>OVR <b style={{ color: C.yellow, fontFamily: FONT_M }}>{overall(r)}</b></span>
-            </div>
-            {/* v32（条件付き作戦＝ノーリスク無線）：出走前に作戦を選ぶと、結果に実際に反映される */}
-            <div style={{ background: C.panel2, borderRadius: 8, padding: "7px 10px" }}>
-              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>📻 レース作戦</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {Object.entries(ML_TACTICS).map(([k, t]) => (
-                  <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
-                    style={{ padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 10.5, fontWeight: 700,
-                      background: (ml.tactic || "balanced") === k ? "rgba(255,210,63,0.14)" : C.panel, color: (ml.tactic || "balanced") === k ? C.yellow : C.sub,
-                      border: `1.5px solid ${(ml.tactic || "balanced") === k ? C.yellow : C.line}` }}>{t.label}</button>
-                ))}
-              </div>
-              {(() => {
-                const tac = ML_TACTICS[ml.tactic] || ML_TACTICS.balanced;
-                return (
-                  <div style={{ fontSize: 10, color: C.sub, marginTop: 5, display: "flex", gap: 6, alignItems: "flex-start" }}>
-                    {tac.tag && <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, color: tac.tagColor || C.sub, border: `1px solid ${tac.tagColor || C.line}`, borderRadius: 6, padding: "1px 5px", lineHeight: 1.5 }}>{tac.tag}</span>}
-                    <span>{tac.desc}</span>
-                  </div>
-                );
-              })()}
-            </div>
-            <Btn onClick={mlStartRace}>🏁 このレースに出場する</Btn>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {/* v46(UI): ラベルが「練習（focus中心）」と変数名を生で出していた（CLAUDE.md §7(b)）。
-                  すぐ上の練習メニューでは「登坂強化」等と日本語で選ばせているので、実際に選ばれて
-                  いる能力名をそのまま出す。 */}
-              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("train")}>💪 練習（{AB_LABEL[r.focus] || "バランス"}中心）</Btn>
-              <Btn small outline color={C.sub} onClick={() => mlAdvanceMonth("rest")} title="疲労を大きく回復し、脚がフレッシュに（フォームの下振れを消して微増）＋メンタルも整う。大レース前の仕上げに">😴 完全休養</Btn>
-              <Btn small outline color={"#e8a13c"} onClick={() => mlAdvanceMonth("peak")}>🎯 ピーキング調整（フォームを上げる）</Btn>
-              {/* v43(Phase 2): 「🎤取材・私生活イベント」は手動ボタンを廃止し、月が終わるたびに
-                  運ステータスで確率が変わる受動発火へ移行した（controllers/mylife/month.js参照） */}
-              {(ml.player.popularity || 0) >= 20 && (
-                <Btn small outline color={"#e8a13c"} onClick={mlTriggerSponsorGig}>📸 スポンサーの仕事</Btn>
-              )}
-            </div>
-            <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 10px" }}>
-              <Eyebrow color={C.blue}>🎯 専門トレーニング</Eyebrow>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                {Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
-                  <Btn key={k} small outline color={C.blue} onClick={() => mlAdvanceMonth(k)} title={sp.desc}>{sp.label}</Btn>
-                ))}
-              </div>
-            </div>
-          </div>
           <div>
             <Eyebrow color={C.sub}>📂 メニュー（月は進みません）</Eyebrow>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-              <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップ</Btn>
-              <Btn small outline color={C.yellow} onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>🏆 実績 {computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}</Btn>
-              <Btn small outline color={C.green} onClick={() => setMl(s => ({ ...s, screen: "mylife_teamroster" }))}>👥 チーム名鑑</Btn>
-              <Btn small outline color={C.red} onClick={() => setMl(s => ({ ...s, screen: "mylife_riderstats" }))}>📊 選手成績</Btn>
-              <Btn small outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_graph" }))}>📈 キャリアグラフ</Btn>
-              <Btn small outline color={C.purple} onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑</Btn>
-              <Btn small outline color={"#e8a13c"} onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコード</Btn>
-              <Btn small outline color={C.blue} onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプ</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップ</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>🏆 実績 {computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_teamroster" }))}>👥 チーム名鑑</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_riderstats" }))}>📊 選手成績</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_graph" }))}>📈 キャリアグラフ</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコード</Btn>
+              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプ</Btn>
             </div>
           </div>
+          {/* v46(UI): 頻度が低く、かつ一部は取り返しがつかない操作なので折りたたみへ収納。
+              「メンターになる」は前向きな意思決定で終了・消去の類ではないためdangerではなく
+              menu扱い（色の意味＝「戻れない」を、離脱・消去系操作だけに絞るため）。 */}
           <div>
-            <Eyebrow color={C.sub}>⚙ その他・キャリア管理</Eyebrow>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6, alignItems: "center" }}>
-              {ml.flags?.mentor
-                ? <span style={{ fontSize: 11.5, color: C.yellow }}>🎖 チームの精神的支柱{ml.protege ? `・${ml.protege.name}の師` : ""}（毎月疲労-3／評価+0.3）</span>
-                : r.age >= 30 && (
-                  <Btn small outline color={C.yellow} onClick={() => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor)}>🎖 メンターになる（弟子を取る）</Btn>
-                )}
-              <Btn small outline color={"#e8a13c"} onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
-              <Btn small outline color={C.red} onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🚪 静かに引退</Btn>
-              {/* v36(#6): ライバル会話ドラマ（紙芝居/VN風）の on/off トグル */}
-              <Btn small outline color={ml.rivalDramaOn === false ? C.sub : C.purple} onClick={() => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false }))}>🎭 会話ドラマ：{ml.rivalDramaOn === false ? "OFF" : "ON"}</Btn>
-              <Btn small outline color={C.red} onClick={() => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>🔄 最初からやり直す</Btn>
-              <Btn small outline color={C.sub} onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
-            </div>
+            <button onClick={() => setMl(s => ({ ...s, uiOtherOpen: !s.uiOtherOpen }))}
+              style={{ width: "100%", background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, cursor: "pointer", padding: "9px 12px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5 }}>
+              <span>⚙ その他・キャリア管理</span>
+              <span style={{ fontWeight: 700 }}>{ml.uiOtherOpen ? "▲ 閉じる" : "▼ 開く"}</span>
+            </button>
+            {ml.uiOtherOpen && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, alignItems: "center" }}>
+                {ml.flags?.mentor
+                  ? <span style={{ fontSize: 11.5, color: C.yellow }}>🎖 チームの精神的支柱{ml.protege ? `・${ml.protege.name}の師` : ""}（毎月疲労-3／評価+0.3）</span>
+                  : r.age >= 30 && (
+                    <Btn small role="menu" onClick={() => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor)}>🎖 メンターになる（弟子を取る）</Btn>
+                  )}
+                <Btn small role="danger" onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
+                <Btn small role="danger" onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🚪 静かに引退</Btn>
+                {/* v36(#6): ライバル会話ドラマ（紙芝居/VN風）の on/off トグル */}
+                <Btn small role="menu" onClick={() => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false }))}>🎭 会話ドラマ：{ml.rivalDramaOn === false ? "OFF" : "ON"}</Btn>
+                <Btn small role="danger" onClick={() => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>🔄 最初からやり直す</Btn>
+                <Btn small role="menu" onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
+              </div>
+            )}
           </div>
         </div>
       );

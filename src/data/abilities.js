@@ -53,9 +53,9 @@ export const ABILITIES = {
   allrounder_sp:{ label: "オールラウンダー", desc: "全ての区間で能力+2", category: "地形適性" },
   // v34(C-2): 古典適性（脚質別）。各モニュメント（石畳/丘陵/山岳）ごとに専用の適性があり、
   // 対応する古典レースでのみ全能力+5%（金特で+9%）。消耗の激しいワンデー古典の英雄。
-  pave_sp:     { label: "石畳巧者", desc: "石畳の古典《春の地獄》で全能力+5%（金特で+9%）", category: "地形適性" },
-  ardennes_sp: { label: "アルデンヌの狼", desc: "丘陵の古典《アルデンヌ》で全能力+5%（金特で+9%）", category: "地形適性" },
-  autumn_sp:   { label: "秋の女王", desc: "山岳の古典《秋の女王》で全能力+5%（金特で+9%）", category: "地形適性" },
+  pave_sp:     { label: "石畳巧者", desc: "石畳の古典《春の地獄》で全能力+5%（金で+9%）", category: "地形適性" },
+  ardennes_sp: { label: "アルデンヌの狼", desc: "丘陵の古典《アルデンヌ》で全能力+5%（金で+9%）", category: "地形適性" },
+  autumn_sp:   { label: "秋の女王", desc: "山岳の古典《秋の女王》で全能力+5%（金で+9%）", category: "地形適性" },
   // 展開・役割
   escape:      { label: "逃げ屋", desc: "アタック（逃げ）中の能力+4", category: "展開・役割" },
   domestique:  { label: "献身のアシスト", desc: "牽引中の能力+3", category: "展開・役割" },

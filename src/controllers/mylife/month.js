@@ -201,7 +201,7 @@ export function mlAdvanceMonth(s, mode) {
   const upgradedPlayer = upgradeGoldAbilities(player);
   if (upgradedPlayer !== player) {
     upgradedPlayer.goldAbilities.filter(id => !(player.goldAbilities || []).includes(id))
-      .forEach(id => log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[id].label}」が金特に覚醒した！`));
+      .forEach(id => log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[id].label}」が金の特殊能力に覚醒した！`));
     player = upgradedPlayer;
   }
   // v17: 特殊能力の後天的獲得判定

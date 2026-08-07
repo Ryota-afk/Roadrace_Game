@@ -164,7 +164,7 @@ export function signBredYouth(s, legA, legB) {
     }
     lineNote = `・🏛${yblb.label}`;
   }
-  const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・✨金特クロス` : "";
+  const goldNote = (breed.goldInherit && breed.goldInherit.length) ? `・✨金の特殊能力を継承` : "";
   return {
     ...s, roster: [...s.roster, rookie], budget: s.budget - 40, youthUsed: true,
     log: [...s.log, `【${MONTHS[s.month]}】🧬 血統ユース：${legA.name}×${legB.name}の配合で${rookie.name}（${rookie.age}歳・成長力${rookie.growthPow}）を確保（${breed.nick.rank} ${breed.nick.label}${goldNote}${fragileNote}${lineNote}${specialNote}）`],

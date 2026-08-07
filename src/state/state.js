@@ -888,7 +888,7 @@ export const CP_SHOP = [
   { id: "s_rookie", cost: 45, category: "シーズン", label: "エース級新人 確定枠", desc: "シーズン開始時、成長ランクS確定の逸材が1名追加加入", season: { prodigyRookie: 1 } },
   { id: "s_budget", cost: 30, category: "シーズン", label: "開幕資金 +800万円", desc: "シーズン開始時の資金が+800万円", season: { budget: 800 } },
   { id: "s_equip", cost: 55, category: "シーズン", label: "全設備 Lv+3", desc: "フレーム・ホイールの強化レベルが+3された状態でスタート", season: { equipLv: 3 } },
-  { id: "m_gold", cost: 60, category: "マイライフ", label: "デビュー時 金特1つ確定", desc: "新人が必ず特能を1つ金特で持ってデビューする", mylife: { debutGold: true } },
+  { id: "m_gold", cost: 60, category: "マイライフ", label: "デビュー時 特殊能力を金で確定", desc: "新人が必ず特殊能力を1つ、金の状態でデビューする", mylife: { debutGold: true } },
   { id: "m_growth", cost: 45, category: "マイライフ", label: "初期成長力 +1段 確定", desc: "デビュー時、成長力が確定で1段階アップ", mylife: { growthUp: true } },
   { id: "m_money", cost: 25, category: "マイライフ", label: "支度金 +300万円", desc: "デビュー時の所持金が+300万円", mylife: { money: 300 } },
   { id: "m_reroll", cost: 35, category: "マイライフ", label: "リセマラ当たり率 大幅UP", desc: "デビュー当たり特能（天啓/天賦の才）の抽選が大きく上がる", mylife: { boonBonus: 0.25 } },
