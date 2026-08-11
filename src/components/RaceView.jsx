@@ -5,6 +5,7 @@ import { C, FONT_D, FONT_M } from "../data/theme.js";
 import { Btn, Eyebrow } from "./ui.jsx";
 import { fmtGap, fmtTime, hasAbility, strHash } from "../core/core.js";
 import { TICK_SEC, riderHash01, riderWander, resumeSim } from "../sim/race.js";
+import { smoothRaceCamera } from "../domain/shared/raceCamera.js";
 
 // v39(A案): レース中の「判断カード」スロット定義。注目選手のコース進捗(frac)が at を越えた／
 // 状況条件 cond を満たした瞬間に再生を止め、その時点の状況(ctx)に応じて composeCard で選択肢を
@@ -981,7 +982,8 @@ export function RaceView({ sim, onFinish }) {
         let span = Math.min(MAX_VIEW_FRAC, Math.max(MIN_VIEW_FRAC, spreadF * 1.6));
         if (finalSegRef.current) span = Math.min(span, SPRINT_MIN_VIEW_FRAC);
         // v39.3(演出): 山場の間はさらに寄せる（クローズアップ感）
-        if (beatOn) span = Math.max(MIN_VIEW_FRAC * 0.62, span * 0.44);
+        // v46: 0.44→0.62。寄せ量を穏やかにし、ズームの往復が目立ちすぎないようにした
+        if (beatOn) span = Math.max(MIN_VIEW_FRAC * 0.62, span * 0.62);
         // v12バグ修正: 逃げとメイン集団の差が開きMAX_VIEW_FRAC（最大ズームアウト幅）を
         // 超えると、上のMath.minでspanが実際に必要な幅より狭く決まってしまい、
         // 「先頭集団」カメラで追っているはずの選手がキャンバス範囲外（画面右側など）に
@@ -995,27 +997,9 @@ export function RaceView({ sim, onFinish }) {
         // v39.10: パン（中心）は機敏に追従、ズーム（span）だけをなめらかに。さらにズームインは緩やか・
         // ズームアウトは速く戻す非対称補間。これで倍率がだんだん変わり、位置は遅れず右端に寄らない。
         const targetC = (start + end) / 2, targetSpan = end - start;
-        const prev = camSmoothRef.current;
-        let nc, nSpan;
-        if (!prev) { nc = targetC; nSpan = targetSpan; }
-        else {
-          const curC = (prev.start + prev.end) / 2, curSpan = prev.end - prev.start;
-          // v39.17: ズームのハンチング（イン↔アウトの往復）対策。集団が伸び縮みするたびに目標spanが
-          // 揺れ、非対称補間と枠寄せ補正が競合して倍率が振動→選手の動きが不自然に見えていた。
-          // 目標との差が小さいうちは倍率を据え置く（デッドバンド）ことで、細かな往復を止める。
-          const relDiff = Math.abs(targetSpan - curSpan) / Math.max(1e-6, curSpan);
-          const kSpan = relDiff < 0.12 ? 0 : (targetSpan < curSpan ? 0.05 : 0.16);
-          nc = curC + (targetC - curC) * 0.5;               // パンは機敏
-          nSpan = curSpan + (targetSpan - curSpan) * kSpan;
-        }
-        let ns = nc - nSpan / 2, ne = nc + nSpan / 2;
-        // 補正：選手が枠からはみ出しそうなら枠を"寄せて"収める（端に張り付かせない）。入り切らない時だけ広げる
-        // v39.17: 1フレームあたりの寄せ量を制限し、補正が跳ねて集団がガクつくのを防ぐ
-        const margin = nSpan * 0.07, maxShift = nSpan * 0.05;
-        const clampShift = (d) => Math.max(-maxShift, Math.min(maxShift, d));
-        if (maxF > ne - margin) { const d = clampShift(maxF - (ne - margin)); ns += d; ne += d; }
-        if (minF < ns + margin) { const d = clampShift((ns + margin) - minF); ns -= d; ne -= d; }
-        if (maxF > ne) ne = maxF + margin;
+        // v46: カメラ平滑化の計算をdomain/shared/raceCamera.jsへ抽出（Node単体テスト可能に）。
+        // ズームイン/アウトの収束速度をゆっくりめに調整（1.2秒/370ms）。
+        const { start: ns, end: ne } = smoothRaceCamera({ targetC, targetSpan, prev: camSmoothRef.current, maxF, minF });
         camSmoothRef.current = { start: ns, end: ne };
         setCam({ start: ns, end: ne });
         cameraFramingRef.current = framing;

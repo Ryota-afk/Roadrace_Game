@@ -211,7 +211,8 @@ export function renderMyLifeCareerScreens(ctx) {
       const minY = Math.min(...years), maxY = Math.max(...years);
       const xAt = (yr) => maxY === minY ? W / 2 : padL + (yr - minY) / (maxY - minY) * (W - padL - padR);
       const ovrs = hist.map(h => h.ovr || 0);
-      const ovrMin = Math.min(...ovrs) - 3, ovrMax = Math.max(...ovrs) + 3;
+      const ovrVMin = Math.min(...ovrs), ovrVMax = Math.max(...ovrs);
+      const ovrMin = ovrVMin - 3, ovrMax = ovrVMax + 3;
       const yOvr = (v) => H - padB - ((v - ovrMin) / Math.max(1, ovrMax - ovrMin)) * (H - padT - padB);
       const rankPts = hist.filter(h => h.worldRank != null);
       const ranks = rankPts.map(h => h.worldRank);
@@ -219,6 +220,18 @@ export function renderMyLifeCareerScreens(ctx) {
       const yRank = (v) => padT + ((v - rMin) / Math.max(1, rMax - rMin)) * (H - padT - padB);
       const ovrPath = hist.map((h, i) => `${i === 0 ? "M" : "L"}${xAt(h.year).toFixed(1)},${yOvr(h.ovr || 0).toFixed(1)}`).join(" ");
       const rankPath = rankPts.map((h, i) => `${i === 0 ? "M" : "L"}${xAt(h.year).toFixed(1)},${yRank(h.worldRank).toFixed(1)}`).join(" ");
+      // v36: 折れ線に代表点の数値ラベル（初年・最新年・OVR最高年）と軸目盛りを追加
+      const maxOvrIdx = ovrs.indexOf(ovrVMax);
+      const labelIdxs = [...new Set([0, hist.length - 1, maxOvrIdx])];
+      // OVRラベルは点の上・世界ランクラベルは点の下を既定にし、同じ年で両方表示されても
+      // 重ならないようにする（キャリア序盤はOVR安値と世界ランク下位が同時に来やすく、
+      // どちらも「近い側」を選ぶ素朴なロジックだと点の同じ側に重なっていた）
+      const ovrLabelY = (py) => (py < padT + 10 ? py + 12 : py - 6);
+      const rankLabelY = (py) => (py > H - padB - 10 ? py - 6 : py + 12);
+      // 軸目盛りは、既に代表点ラベルで同じ数値が表示済みなら重複表示しない（初年が最安値、
+      // 最高OVR年が必ずlabelIdxsに含まれる、等の理由で軸端の値と点ラベルが一致しやすいため）
+      const ovrLabeledVals = new Set(labelIdxs.map(i => hist[i].ovr || 0));
+      const rankLabeledVals = new Set(labelIdxs.filter(i => hist[i].worldRank != null).map(i => hist[i].worldRank));
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.blue}` }}>
@@ -233,6 +246,21 @@ export function renderMyLifeCareerScreens(ctx) {
               {rankPath && <path d={rankPath} fill="none" stroke={C.green} strokeWidth="2" strokeDasharray="3,2" />}
               {rankPts.map((h, i) => <circle key={`r${i}`} cx={xAt(h.year)} cy={yRank(h.worldRank)} r="2.5" fill={C.green} />)}
               {hist.map((h, i) => <text key={`t${i}`} x={xAt(h.year)} y={H - 6} fontSize="8" fill={C.sub} textAnchor="middle">{h.year}</text>)}
+              {labelIdxs.map(i => {
+                const h = hist[i];
+                const py = yOvr(h.ovr || 0);
+                return <text key={`ovl${i}`} x={xAt(h.year)} y={ovrLabelY(py)} fontSize="8" fill={C.yellow} fontWeight="700" textAnchor="middle">{h.ovr || 0}</text>;
+              })}
+              {labelIdxs.map(i => {
+                const h = hist[i];
+                if (h.worldRank == null) return null;
+                const py = yRank(h.worldRank);
+                return <text key={`rkl${i}`} x={xAt(h.year)} y={rankLabelY(py)} fontSize="8" fill={C.green} fontWeight="700" textAnchor="middle">{h.worldRank}位</text>;
+              })}
+              {!ovrLabeledVals.has(ovrVMax) && <text x={2} y={yOvr(ovrVMax) + 3} fontSize="7" fill={C.sub}>{ovrVMax}</text>}
+              {ovrVMax !== ovrVMin && !ovrLabeledVals.has(ovrVMin) && <text x={2} y={yOvr(ovrVMin) + 3} fontSize="7" fill={C.sub}>{ovrVMin}</text>}
+              {ranks.length > 0 && !rankLabeledVals.has(rMin) && <text x={W - 2} y={yRank(rMin) + 3} fontSize="7" fill={C.sub} textAnchor="end">{rMin}位</text>}
+              {ranks.length > 0 && rMax !== rMin && !rankLabeledVals.has(rMax) && <text x={W - 2} y={yRank(rMax) + 3} fontSize="7" fill={C.sub} textAnchor="end">{rMax}位</text>}
             </svg>
             <div style={{ fontSize: 10.5, color: C.sub, display: "flex", gap: 14, justifyContent: "center", marginTop: 2 }}>
               <span style={{ color: C.yellow }}>― OVR</span><span style={{ color: C.green }}>┈ 世界ランク（上ほど上位）</span>

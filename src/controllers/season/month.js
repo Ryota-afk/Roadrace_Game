@@ -301,14 +301,16 @@ export function advanceMonth(s, raceInfo) {
   };
   // v41: 被引き抜き。ライバルが自チームの主力を引き抜きに来る（主将以外・健康・OVR66以上の最上位）。
   // 引き止める（費用を払って残留）か、放出して移籍金を得るか＝チーム運営の駆け引き。移籍志願より優先。
-  if (month !== 0 && Math.random() < 0.16) {
+  // v46(#14): 開幕1〜2年目はどちらのイベントも抑制する。ロースターが手薄な序盤に立て続けに発生し
+  // 「厳しすぎる」という指摘を受けたため（ベンチ月数の蓄積自体は変えず、発火条件にのみ年数を追加）。
+  if (s.year > 2 && month !== 0 && Math.random() < 0.16) {
     const offer = makePoachOffer({ roster, captainId: s.captainId, classIdx: s.classIdx }, Math.random);
     if (offer) return { ...base, poachOffer: offer, screen: "poachOffer" };
   }
   // v28: 選手の移籍志願。長期間ベンチに置かれた実力者（能力55以上）が不満を募らせ、
   // 退団を申し出ることがある。主将は対象外。慰留か放出かをプレイヤーが選ぶ
   const requester = roster.find(r => r.injury === 0 && (r.benchMonths || 0) >= 4 && overall(r) >= 55 && r.id !== s.captainId);
-  if (month !== 0 && requester && roster.length > 1 && Math.random() < 0.25) {
+  if (s.year > 2 && month !== 0 && requester && roster.length > 1 && Math.random() < 0.25) {
     return { ...base, transferRequest: { riderId: requester.id, name: requester.name }, screen: "transferRequest" };
   }
   // v8: 月替わりでランダムに選択肢付きイベントが発生（春先の解禁月は除く）
