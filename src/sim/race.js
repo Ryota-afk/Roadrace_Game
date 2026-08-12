@@ -644,7 +644,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // ドラフトの風除け（shelterMul）を一部打ち消す係数なので、体力のある選手（＝極まった主人公）は残る。
         const selectiveDrainMul = (course.selective && ["hill", "climb", "mtn"].includes(segType)) ? 1.45 : 1;
         // v39(A案): 「脚を溜める」判断中は集団の中で賢く脚を使い、消耗が軽くなる（＝勝負所に脚を残せる）
-        const conserveMul = en.conserveLeft > 0 ? 0.74 : 1;
+        // v46(#27): 0.74→0.60。従来は温存しても後の一手が残脚を参照していなかったため、
+        // 溜めた脚に使い道が無く「脚を溜める」が全条件で最下位の死に選択肢になっていた（実測）。
+        // 残脚ゲートの導入で溜めた脚が勝負所の一手の威力に直結するようになったため、
+        // 溜める効果自体もはっきり体感できる量にする。
+        const conserveMul = en.conserveLeft > 0 ? 0.60 : 1;
         const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
@@ -678,6 +682,28 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
 // v39(A案): レース中の「判断カード」でプレイヤーが選ぶ動きを、注目選手の状態に落とし込む定義。
 // simulateTicks が解釈するフィールド（attackLeft/committedBreak/conserveLeft/finaleSend）を
 // セットするだけの純関数。RACE_MOVES のキーが RaceView のカード選択肢と対応する。
+// v46(バランス#27): 「脚が残っている時にだけ決まる」ゲート。
+// 【実測でわかったこと】中盤の一手は脚が空だと自然に不発になる（残脚20未満での勝率0%）のに対し、
+// 最終スプリントの一手は脚が空でも決まってしまう（同条件で勝率63.6%）。ゴールが近いと
+// エネルギー欠乏が速度に効いてくる時間が残っておらず、さらに energyPenaltyMul は下限0.55で
+// 既に飽和しているため、「energyを引く」という代償が抑止としてまったく機能していなかった。
+// そこで代償に頼らず、踏み切れる量そのもの（バースト長・追い込み量）を残脚で決める。
+// これによりv39.21が意図した「出力を上げれば脚は減る＝脚が残っている時にだけ決まる」が
+// 初めて実際の挙動になり、同時に「脚を溜める」が後の一手を活かす布石として機能し始める。
+// 範囲は「判断カードが実際に出る瞬間の残脚の分布」を実測して決めた。
+// 中盤カード=中央値93 / 勝負所=-35 / 最終スプリント=-76（ENERGY_FLOOR=-100）。
+// 素朴に0〜60で切ると終盤は全員が下限に張り付き、状況によらず一律に弱くなるだけで
+// 「脚を残した者が報われる」駆け引きにならなかったため、終盤の分布を跨ぐ範囲にしている。
+const LEGS_EMPTY = -90; // これ以下は完全に売り切れ扱い
+const LEGS_FULL = 40;   // これ以上あれば全開で踏み切れる
+export function legsLeft01(en) {
+  const e = en.energy ?? 100;
+  return Math.max(0, Math.min(1, (e - LEGS_EMPTY) / (LEGS_FULL - LEGS_EMPTY)));
+}
+const SEND_MIN_TICKS = 4, SEND_MAX_TICKS = 18;      // 早駆けの持続（空:4秒 / 満:18秒）
+const SEND_MIN_KICK = 0.02, SEND_MAX_KICK = 0.07;   // 早駆けの最終直線での上乗せ
+const ATTACK_MIN_TICKS = 10;                        // 仕掛けの持続の下限（満はBREAKAWAY_ATTACK_TICKS）
+
 export const RACE_MOVES = {
   // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣
   // 得意地形・逃げ屋のアタックは、脚質・特性による能力ブースト（escape/地形適性）がsim側で乗るため、
@@ -685,9 +711,17 @@ export const RACE_MOVES = {
   // v39.21(バランス): 全開の一手には「脚を使う」代償を課す。従来は無コストだったため、終盤に
   // 踏み倒すだけ（send）が全脚質・全地形で最適解になっていた（丘陵クライマーで勝率0%→54%等）。
   // 出力を上げれば脚は減る＝脚が残っている時にだけ決まる、という当たり前の駆け引きに戻す。
-  attack: (r) => { r.attackLeft = BREAKAWAY_ATTACK_TICKS; r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; r.energy -= 9; },
+  // v46(#27): 持続を残脚に比例させる（脚が空なら飛び出しても続かない）。
+  attack: (r) => {
+    const g = legsLeft01(r);
+    r.attackLeft = Math.round(ATTACK_MIN_TICKS + (BREAKAWAY_ATTACK_TICKS - ATTACK_MIN_TICKS) * g);
+    r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; r.energy -= 9;
+  },
   // 🛡 脚を溜める：集団後方で牽かず消耗を抑える。勝負所に脚を残す堅実策
-  conserve: (r) => { r.conserveLeft = 80; r.attackLeft = 0; r.committedBreak = false; r.holdOn = 0; },
+  // v46(#27): 持続を80→500tickへ。実測で、80tickぶんの消耗軽減が終盤の残脚に与える差は
+  // わずか1.4しかなく、「溜めた脚」が後の一手の威力に届かないため温存が死に選択肢だった。
+  // 勝負所まで効き続ける長さにして初めて「溜める→踏み切れる」の因果が成立する。
+  conserve: (r) => { r.conserveLeft = 500; r.attackLeft = 0; r.committedBreak = false; r.holdOn = 0; },
   // 🦴 食らいついて粘る：歯を食いしばって集団に残る（千切れにくい）。食らいつく脚と好相性
   hangOn: (r) => { r.holdOn = 130; r.conserveLeft = 50; r.attackLeft = 0; r.committedBreak = false; },
   // 🚴 流れに任せる：特別な動きはせず展開に乗る（基準の挙動）
@@ -695,7 +729,14 @@ export const RACE_MOVES = {
   // 🔥 早駆け：ここから一気に踏んで抜け出し、そのままゴールまで踏み切る
   // 早駆けは"ゴール前の全開"であって長距離逃げではない。持続を短くし、committedBreakの
   // 地形割引も付けない（＝終盤に踏み倒すだけで勝てる状態を解消）。代償として脚を大きく使う。
-  send: (r) => { r.attackLeft = 18; r.committedBreak = false; r.finaleSend = 0.06; r.conserveLeft = 0; r.energy -= 17; },
+  // v46(#27): 持続・追い込み量とも残脚に比例させる。売り切れた脚での早駆けは不発に終わる。
+  send: (r) => {
+    const g = legsLeft01(r);
+    r.attackLeft = Math.round(SEND_MIN_TICKS + (SEND_MAX_TICKS - SEND_MIN_TICKS) * g);
+    r.committedBreak = false;
+    r.finaleSend = SEND_MIN_KICK + (SEND_MAX_KICK - SEND_MIN_KICK) * g;
+    r.conserveLeft = 0; r.energy -= 17;
+  },
   // ⏳ 差しにかける：最終直線まで脚を溜め、そこで鋭く伸びる（最終区間の追い込みを上乗せ）
   kick: (r) => { r.finaleSend = 0.09; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // 🗡 会心の差し脚：差し脚・豪脚型が最終直線で最大の切れ味を出す（追い込み最大）

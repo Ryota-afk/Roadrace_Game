@@ -925,7 +925,8 @@ export function RaceView({ sim, onFinish }) {
           if (d) {
             firedRef.current.add(d.id);
             const card = composeCard(d.kind, focusR.e, ctx);
-            decisionRef.current = { id: d.id, fromTick, ...card };
+            // v46(#27): 一手の威力が残脚で決まるようになったため、判断の material として残脚を渡す
+            decisionRef.current = { id: d.id, fromTick, energy: ctx.energy, ...card };
             pausedRef.current = true;
             setDecision(decisionRef.current);
             return; // このフレームは凍結（カメラ/HUD更新もスキップ）
@@ -1217,7 +1218,28 @@ export function RaceView({ sim, onFinish }) {
       {decision && (
         <div style={{ background: "linear-gradient(180deg,#2a2018,#1c1712)", border: `2px solid ${C.yellow}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>
           <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 800, color: C.yellow }}>{decision.title}</div>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 2, marginBottom: 10 }}>{decision.sub}{focusEnt ? `　—　${focusEnt.name}` : ""}</div>
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 2, marginBottom: 8 }}>{decision.sub}{focusEnt ? `　—　${focusEnt.name}` : ""}</div>
+          {/* v46(#27): 脚の残り。仕掛け系の一手はこの残量で威力が決まるため、
+              判断の material として必ず見せる（数値ではなくバーと一語で瞬時に読めるようにする） */}
+          {decision.energy != null && (() => {
+            // 脚は -100〜100 の範囲で推移する（0が「使い切った」ではなく、そこから更に粘れる）。
+            // 0〜100だけを見せると終盤は常に空表示になり、仕掛けが決まる/決まらないの差が読めない。
+            const raw = Math.max(-100, Math.min(100, decision.energy));
+            const e = (raw + 100) / 2;
+            const tier = raw >= 40 ? { t: "十分", c: C.green }
+              : raw >= 0 ? { t: "やや消耗", c: C.yellow }
+                : raw >= -60 ? { t: "苦しい", c: "#e8a13c" }
+                  : { t: "売り切れ", c: C.red };
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 10px" }}>
+                <span style={{ fontSize: 11, color: C.sub, flexShrink: 0 }}>脚の残り</span>
+                <div style={{ flex: 1, height: 8, background: C.panel2, borderRadius: 4, overflow: "hidden", border: `1px solid ${C.line}` }}>
+                  <div style={{ width: `${e}%`, height: "100%", background: tier.c, transition: "width .2s" }} />
+                </div>
+                <span style={{ fontSize: 11.5, fontFamily: FONT_D, fontWeight: 700, color: tier.c, flexShrink: 0 }}>{tier.t}</span>
+              </div>
+            );
+          })()}
           <div style={{ display: "grid", gap: 8 }}>
             {decision.choices.map((c) => (
               <button key={c.move} disabled={resimBusy} onClick={() => resolveDecision(c.move)}
