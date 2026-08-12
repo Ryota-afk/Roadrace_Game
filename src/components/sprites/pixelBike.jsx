@@ -12,9 +12,11 @@
 // アルファを閾値30で二値化（車輪のスポークが細く、閾値が高いと車輪が輪だけになって
 // 穴が空く）→ 連結成分の最大だけ残す（ラベル等の混入を落とす）→ パレットへ最近傍写像。
 //
-// 参考画像は輪郭ドットを含むため、`pixelSprite`の自動縁取りは false で呼ぶこと。
+// 参考画像は輪郭ドットを含むため、legend（下記bikeLegend）以外の自動縁取り処理は行わない
+// （rasterize.jsのspriteImageUrlはlegend文字をそのまま塗るだけで縁取りを合成しない）。
 import React from "react";
-import { pixelSprite, shade } from "./kit.jsx";
+import { shade } from "./kit.jsx";
+import { spriteImageUrl } from "./rasterize.js";
 
 // legend文字：K=輪郭 D=タイヤ M=中間グレー R=スポーク/リム W=ハイライト
 //              J=ジャージ/フレーム(動的・チーム色) j=その陰
@@ -634,6 +636,28 @@ export function bikeLegend(color) {
   };
 }
 
+// 記号IDに使えない文字（#や非16進の混入に備え）を除去する。colorは基本的に
+// data/abilities.jsのTYPES[...].color等の#RRGGBB文字列。
+const sanitizeForId = (s) => String(s).replace(/[^a-zA-Z0-9]/g, "");
+
+// Wave 6(#29): pixelSprite()の1ピクセル=1<rect>方式は、集団スプリント演出で毎フレーム
+// 数万ノードになり描画が破綻していた（実測：色数12で2.3fps）。「色×姿勢×dir×クランク
+// コマ」の組み合わせは見た目が完全に静的なので、canvasで1回だけラスタライズして
+// <image>1ノードに焼く（spriteImageUrl）。キャッシュキーが同じなら同一オブジェクトが
+// 返るため、毎フレーム呼んでも新規ラスタライズは発生しない。
+function bikeSprite(color, posture, dir, tableIdx) {
+  const table = tableIdx === 0 ? BIKE : BIKE_B;
+  const frame = table[`${posture}_${dir}`] || table.normal_SE;
+  const key = `bike-${posture}-${dir}-${tableIdx}-${sanitizeForId(color)}`;
+  return { ...spriteImageUrl(frame, bikeLegend(color), key), originCol: frame[0].length / 2, originRow: frame.length };
+}
+
+function BikeImage({ sprite }) {
+  const w = +(sprite.w * BIKE_PX).toFixed(2), h = +(sprite.h * BIKE_PX).toFixed(2);
+  const x = +(-sprite.originCol * BIKE_PX).toFixed(2), y = +(-sprite.originRow * BIKE_PX).toFixed(2);
+  return <image href={sprite.url} x={x} y={y} width={w} height={h} style={{ imageRendering: "pixelated" }} />;
+}
+
 // x,y: 接地点（車輪の下端中央）のワールド座標。color=チーム色（車体とジャージに使う）。
 // posture: "normal" | "dancing" | "sprint"、dir: "SE" | "NE"
 // flip: 画面左向きに進むとき true（activityFacesLeftの一般的な意味のまま）。
@@ -649,67 +673,32 @@ export function PixelBike({ x, y, color, posture = "normal", dir = "SE", flip, t
   // クランク半回転ごとにBIKE⇔BIKE_Bを交互に切り替える（周期約0.22秒）。
   // 元は2.2（周期約0.9秒）だったが「切り替えはもっともっと早くていいです」との指摘により
   // 大幅に高速化（9.0＝約4倍）。
-  const table = Math.floor((t + phase) * 9.0) % 2 === 0 ? BIKE : BIKE_B;
-  const frame = table[`${posture}_${dir}`] || table.normal_SE;
-  const inner = pixelSprite(frame, bikeLegend(color), BIKE_PX,
-    frame[0].length / 2, frame.length, "b", "#161616", false);
+  const tableIdx = Math.floor((t + phase) * 9.0) % 2 === 0 ? 0 : 1;
+  const sprite = bikeSprite(color, posture, dir, tableIdx);
   const mirror = dir === "SE" ? !flip : !!flip;
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
       <ellipse cx="0" cy="0" rx="8.4" ry="2.2" fill="#000" opacity="0.22" />
-      {mirror ? <g transform="scale(-1,1)">{inner}</g> : inner}
+      {mirror ? <g transform="scale(-1,1)"><BikeImage sprite={sprite} /></g> : <BikeImage sprite={sprite} />}
     </g>
   );
 }
 
-// Wave H-4（レース最終スプリントのドット絵化）：多人数(最大22名)を同時に毎フレーム
-// 再描画する場面向けの<defs>+<use>版。PixelBikeは1体あたり塗りピクセル数≒900の<rect>を
-// 持ち（実測。参考画像を粗い粒度で描き直した経緯はファイル冒頭コメント参照）、これを
-// BaseView同様に選手ごと・毎フレーム再構築すると数万ノードになり描画が破綻する。
-// 「色×姿勢×クランク位相」の組み合わせだけ<symbol>を1回だけ定義し、各選手は<use>1個
-// （transform+href切替のみ）で参照する。SVGの<symbol>は非表示要素なので、その瞬間の
-// フレームに登場しない組み合わせを定義に含めておいても描画コストは発生しない。
-//
+// Wave H-4（レース最終スプリントのドット絵化）: 最大22名を同時に毎フレーム描画する場面向け。
 // dir="SE"固定：最終スプリント演出はカメラが選手の背後から追走する固定視点で、
-// 全選手が常に同じ画面方向（右下）へ進む。IsoRider（旧実装）も方向の概念を持たない
-// 固定ジオメトリだったため、この簡略化で見た目は変わらない。
-
-// 記号IDに使えない文字（#や非16進の混入に備え）を除去する。colorは基本的に
-// data/abilities.jsのTYPES[...].color等の#RRGGBB文字列。
-const sanitizeForId = (s) => String(s).replace(/[^a-zA-Z0-9]/g, "");
-
-export function bikeSymbolId(color, posture, tableIdx) {
-  return `bikesym-${posture}-${tableIdx}-${sanitizeForId(color)}`;
-}
-
-// combos: [{ color, posture }, ...]（重複があってもOK。内部で色×姿勢×クランク位相2通りに展開）
-export function PixelBikeSymbolDefs({ combos }) {
-  const seen = new Set();
-  const symbols = [];
-  for (const { color, posture } of combos) {
-    for (const tableIdx of [0, 1]) {
-      const id = bikeSymbolId(color, posture, tableIdx);
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const table = tableIdx === 0 ? BIKE : BIKE_B;
-      const frame = table[`${posture}_SE`] || table.normal_SE;
-      const inner = pixelSprite(frame, bikeLegend(color), BIKE_PX,
-        frame[0].length / 2, frame.length, `${id}-b`, "#161616", false);
-      symbols.push(<symbol key={id} id={id} overflow="visible">{inner}</symbol>);
-    }
-  }
-  return <defs>{symbols}</defs>;
-}
-
-// PixelBikeと同じ見た目・同じ引数（dirは常にSE固定なので持たない）を、<use>参照で描く。
+// 全選手が常に同じ画面方向（右下）へ進む。
+// PixelBikeと同じ見た目・同じ引数（dirは常にSE固定なので持たない）。
+// Wave 6(#29): 従来は<symbol>+<use>方式だったが、直接<image>を描くのと速度が同じ
+// （どちらもラスタライズがキャッシュされるため実質「1ノード参照」で、symbol層を挟む
+// 意味が無くなった）うえ、直接の方がノード数・マウント時間とも軽いため統一した。
 export function PixelBikeUse({ x, y, color, posture = "normal", flip, t = 0, phase = 0 }) {
   const tableIdx = Math.floor((t + phase) * 9.0) % 2 === 0 ? 0 : 1;
-  const id = bikeSymbolId(color, posture, tableIdx);
+  const sprite = bikeSprite(color, posture, "SE", tableIdx);
   const mirror = !flip; // dir="SE"固定なので PixelBike の `dir==="SE" ? !flip : !!flip` と同じ式になる
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
       <ellipse cx="0" cy="0" rx="8.4" ry="2.2" fill="#000" opacity="0.22" />
-      {mirror ? <g transform="scale(-1,1)"><use href={`#${id}`} /></g> : <use href={`#${id}`} />}
+      {mirror ? <g transform="scale(-1,1)"><BikeImage sprite={sprite} /></g> : <BikeImage sprite={sprite} />}
     </g>
   );
 }

@@ -335,12 +335,14 @@ export const cycMod = (v, m) => ((v % m) + m) % m;
 // CLAUDE.md §5）。既存の呼び出し側を書き換えずに済むよう、ここから再exportしている。
 import { CAP_COLORS } from "./sprites/IsoRider.jsx";
 export { CAP_COLORS };
-// Wave H-4: 最終スプリント演出はIsoRider（ベクター）からPixelBikeSymbolDefs/PixelBikeUse
-// （ドット絵・<defs>+<use>方式）へ置き換えた。IsoRider自体はこのファイル以外から
-// importされておらず（`grep -rn "IsoRider" src`で確認済み）、以後未使用のまま残っている。
-// CAP_COLORSは引き続きsprites/IsoRider.jsxから取る（帽子色パレットのデータ部分のみ流用）。
-import { PixelBikeSymbolDefs, PixelBikeUse } from "./sprites/pixelBike.jsx";
-import { SPRINT_POSTURES, pickDancerIds, sprintPosture } from "../domain/shared/sprintPosture.js";
+// Wave H-4: 最終スプリント演出はIsoRider（ベクター）からPixelBikeUse（ドット絵）へ置き換えた。
+// IsoRider自体はこのファイル以外からimportされておらず（`grep -rn "IsoRider" src`で確認済み）、
+// 以後未使用のまま残っている。CAP_COLORSは引き続きsprites/IsoRider.jsxから取る
+// （帽子色パレットのデータ部分のみ流用）。
+// Wave 6(#29): PixelBikeSymbolDefs（<symbol>+<use>方式）は、直接<image>を描く方式と
+// 速度が同じでノード数だけ余分だったため廃止し、PixelBikeUseが直接<image>を描くように統一した。
+import { PixelBikeUse } from "./sprites/pixelBike.jsx";
+import { pickDancerIds, sprintPosture } from "../domain/shared/sprintPosture.js";
 
 // v39.7: バンプ関数（x=0で0、x=Wbで最大1、その先は減衰）。ごぼう抜き/リードアウトの一過性の前後移動に使う。
 function sprintBump(x, Wb) { return x > 0 ? (x / Wb) * Math.exp(1 - x / Wb) : 0; }
@@ -408,15 +410,6 @@ export function FinalSprintCinematic({ contenders }) {
   const [now, setNow] = useState(() => performance.now());
   const startRef = useRef(performance.now());
   const camRef = useRef(null); // v39.6: 追走カメラの平滑化用（先頭交代時のカメラ移動をなめらかに）
-  // Wave H-4: <symbol>定義は「色×姿勢」の組み合わせだけ用意すればよく、
-  // contenders（このシネマティックの間ずっと同じ顔ぶれ）が変わらない限り再計算不要。
-  // v43: 姿勢の一覧は SPRINT_POSTURES から作る。sprintPosture() が返しうる姿勢が
-  // <symbol>に無いと参照先が存在せず選手が丸ごと消えるため、両者を同じ定数から導出して
-  // 作り忘れを構造的に防いでいる。
-  const bikeCombos = useMemo(() => {
-    const colors = [...new Set(contenders.map(c => c.color))];
-    return colors.flatMap(color => SPRINT_POSTURES.map(posture => ({ color, posture })));
-  }, [contenders]);
   const dancerIds = useMemo(() => pickDancerIds(contenders), [contenders]);
   // v39.14(残像対策): 毎フレーム全選手のSVG（1人あたり十数ノード）を再構築すると端末によっては
   // 描画が追いつかず残像・尾を引いて見える。約30fpsに間引いて1フレームあたりの再構築量を半減させる。
@@ -560,10 +553,6 @@ export function FinalSprintCinematic({ contenders }) {
   return (
     <div style={{ position: "relative" }}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${W} / ${H}`, borderRadius: 8, display: "block", background: "#2b3a30" }}>
-        {/* Wave H-4: 色×姿勢の組み合わせぶんだけ<symbol>を1回だけ定義（<defs>は非表示要素なので
-            このフレームに登場しない組み合わせを含めても描画コストが発生しない）。各選手は
-            下のPixelBikeUseで<use>1個として参照するだけになる（詳細はpixelBike.jsx冒頭）。 */}
-        <PixelBikeSymbolDefs combos={bikeCombos} />
         {/* 地面タイル */}
         {tiles.map(t => {
           const dark = (t.a + t.b) & 1;

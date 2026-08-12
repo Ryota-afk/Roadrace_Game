@@ -34,7 +34,3 @@ export function sprintPosture(rem, isDancer) {
   if (isDancer && rem < 2.6) return "dancing";
   return "sprint";
 }
-
-// この演出で出現しうる姿勢の一覧。<symbol>定義（PixelBikeSymbolDefs）に渡す組み合わせを
-// ここから作ることで、「姿勢を増やしたのに<symbol>を作り忘れて選手が消える」事故を防ぐ。
-export const SPRINT_POSTURES = ["normal", "sprint", "dancing"];

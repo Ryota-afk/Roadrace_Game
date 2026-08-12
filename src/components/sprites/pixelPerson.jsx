@@ -8,10 +8,11 @@
 // （scratchpadのPillowスクリプトで解像度16×36を推定→最近傍で量子化→色をlegend文字へ写像）。
 // 手で座標を積むのをやめたので、上記のような「1列ズレ」「左右非対称」は原理的に起きない。
 //
-// 参考画像は輪郭ドット("K")を既に含むため、`pixelSprite`の自動縁取りは**必ず false** にする
-// （true だと輪郭が二重になり細部が黒く潰れる）。
+// 参考画像は輪郭ドット("K")を既に含むため、legend以外の自動縁取り処理は行わない
+// （rasterize.jsのspriteImageUrlはlegend文字をそのまま塗るだけで縁取りを合成しない）。
 import React from "react";
-import { pixelSprite, shade } from "./kit.jsx";
+import { shade } from "./kit.jsx";
+import { spriteImageUrl } from "./rasterize.js";
 
 // legend文字：K=輪郭(黒) S=肌 s=肌の陰/口 H=髪 e=目 G=つば(グレー)
 //              C=帽子(動的・個人識別色) c=帽子の陰 J=ジャージ(動的・チーム色) j=ジャージの陰
@@ -191,6 +192,8 @@ const SIT_ORIGIN_COL = 6;
 // 参考画像の歩行2コマは左右の脚が入れ替わった対の関係で、間に立ちポーズを挟むと
 // 「片脚を前に出す→揃う→反対の脚を前に出す」という自然な歩行サイクルになる。
 const WALK_CYCLE = [WALK_A, STAND, WALK_B, STAND];
+// spriteImageUrlのキャッシュキー用（WALK_A/WALK_Bは幅がSTANDと異なる別絵なので区別する）。
+const WALK_CYCLE_KEYS = ["walkA", "stand", "walkB", "stand"];
 
 export function personLegend(color, cap) {
   return {
@@ -208,17 +211,27 @@ export function personLegend(color, cap) {
 // pose: "walk" | "stand" | "sit"
 // t: 経過秒。paused中はtが進まないので自然に静止する。phase: 個人ごとの位相ずらし。
 // flip: 進行方向が左向きのとき true（鏡像反転）。
+//
+// Wave 6(#29): pixelSprite()の1ピクセル=1<rect>方式は、拠点画面(BaseView)で最大16名を
+// 毎フレーム丸ごと作り直すコストの元凶だった（実測：1体≒430個の<rect>）。姿勢×色×帽子色の
+// 組み合わせは静的な絵なので、canvasで1回ラスタライズし<image>1ノードで参照する。
 export function PixelPerson({ x, y, color, cap, flip, pose = "stand", t = 0, phase = 0 }) {
-  const frame = pose === "sit" ? SIT
-    : pose === "walk" ? WALK_CYCLE[Math.floor(((t + phase) * 5.4) % WALK_CYCLE.length)] // 1歩約0.74秒＝4コマ
-    : STAND;
+  let frame, frameKey;
+  if (pose === "sit") { frame = SIT; frameKey = "sit"; }
+  else if (pose === "walk") {
+    const idx = Math.floor(((t + phase) * 5.4) % WALK_CYCLE.length); // 1歩約0.74秒＝4コマ
+    frame = WALK_CYCLE[idx]; frameKey = WALK_CYCLE_KEYS[idx];
+  } else { frame = STAND; frameKey = "stand"; }
   const originCol = pose === "sit" ? SIT_ORIGIN_COL : frame[0].length / 2;
-  const inner = pixelSprite(frame, personLegend(color, cap), PERSON_PX,
-    originCol, frame.length, "f", "#000000", false);
+  const key = `person-${frameKey}-${color}-${cap}`;
+  const sprite = spriteImageUrl(frame, personLegend(color, cap), key);
+  const w = +(sprite.w * PERSON_PX).toFixed(2), h = +(sprite.h * PERSON_PX).toFixed(2);
+  const ox = +(-originCol * PERSON_PX).toFixed(2), oy = +(-frame.length * PERSON_PX).toFixed(2);
+  const img = <image href={sprite.url} x={ox} y={oy} width={w} height={h} style={{ imageRendering: "pixelated" }} />;
   return (
     <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
       <ellipse cx="0" cy="0" rx="3.6" ry="1.5" fill="#000" opacity="0.2" />
-      {flip ? <g transform="scale(-1,1)">{inner}</g> : inner}
+      {flip ? <g transform="scale(-1,1)">{img}</g> : img}
     </g>
   );
 }
