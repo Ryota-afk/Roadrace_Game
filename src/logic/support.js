@@ -995,19 +995,23 @@ const ML_GROWTHCAP_DIFF_MUL = { easy: 1.3, normal: 1.0, hard: 0.75, oni: 0.5 };
 // 実績ボーナス：現在選んでいる大望の道でクリア済みのはしご数(0-5)×3、大舞台タイトル×4、
 // 通算勝利5勝ごとに+1（この項だけで+10まで）。mlはml状態そのもの（year/careerWins/careerTitles/
 // ambitionPath/player.raceLog等）を想定。無ければ0を返す（呼び出し側でmlが渡せない箇所への配慮）。
+// v47(第7弾B-3): rungs/majors/winsBonusの各重みを引き上げ、mlGrowthCap内で時間成分から
+// 実績成分へ比重を移した分を補う（詳細はDEVLOG §38参照）
 export function mlAchievementBonus(ml) {
   if (!ml) return 0;
   const rungs = mlFirstUnmetRung(ml, ml.ambitionPath || "victory");
   const majors = ml.careerTitles || 0;
-  const winsBonus = Math.min(10, Math.floor((ml.careerWins || 0) / 5));
-  return rungs * 3 + majors * 4 + winsBonus;
+  const winsBonus = Math.min(16, Math.floor((ml.careerWins || 0) / 4));
+  return rungs * 4 + majors * 5 + winsBonus;
 }
 
 export function mlGrowthCap(year, player, ml) {
   // v33: 配合の才能キャップ（talentCap）は選手固有の限界突破分。生まれ持った素質で天井が上がる
   const talent = (player && player.talentCap) ? player.talentCap : 0;
-  // v43: 経過年数の効果は+10年分で頭打ち（従来は無制限に伸び続けていた）
-  const timeComponent = Math.min(10, Math.floor(Math.max(0, (year || 1) - 1))) * 2;
+  // v47(第7弾B-3): 経過年数だけで伸びる時間成分を縮小した（従来は最大+20＝一度も勝たず練習だけ
+  // していても上限が勝手に伸びていた）。上限を主に実績（勝利・表彰台・タイトル＝mlAchievementBonus）
+  // で押し上げる形に寄せ、上げ幅の一部をそちらへ移した（詳細はDEVLOG §38参照）
+  const timeComponent = Math.min(8, Math.floor(Math.max(0, (year || 1) - 1)));
   const achievementBonus = mlAchievementBonus(ml);
   const diffMul = ML_GROWTHCAP_DIFF_MUL[(ml && ml.difficulty) || "normal"] ?? 1.0;
   return Math.min(140, 90 + timeComponent + achievementBonus * diffMul + talent);

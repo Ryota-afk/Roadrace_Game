@@ -684,11 +684,13 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   const aiCap = ({ easy: 92, normal: 96, hard: 102, oni: 112 })[difficultyId] ?? (diffDef.abilCap ?? 94);
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
-  // v22: クラスさえ上がれば以降は相手のレベルが固定されてしまい、キャリア後半は練習しなくても
-  // 勝ち続けられて練習の意味が薄れる、という指摘を受けた。年数が経つほどライバル勢も力をつけて
-  // くる（新世代の台頭）という設定で、経過年数に応じてAIの地力を継続的に底上げする
-  const yearBonus = Math.min(24, ((year || 1) - 1) * 1.5);
-  const power = (50 + classIdx * 9 + (raceMeta.grade - 1) * 4 + yearBonus) * diffAiMul;
+  // v47(第7弾C): yearBonus（経過年数だけでAIの地力を底上げする一律ボーナス、最大+24）を廃止した。
+  // 「新世代の台頭」という同じ役割は既にageWorldRosters()が本物として実装済み（各選手が加齢し、
+  // ピークまで伸び、その後衰え、33〜38歳で引退してルーキーに置き換わる）。yearBonusはこれと同じ
+  // 役割の雑な二重実装で、①プレイヤーから見えない②自チームの僚友も同率で強化してしまう
+  // ③aiCapに吸収される④17年で頭打ち、という欠陥があった。年次の手応えは、以降ワールドロースター
+  // 自身の世代交代（baseline経由の個体差）だけから生まれる（詳細はDEVLOG §38参照）
+  const power = (50 + classIdx * 9 + (raceMeta.grade - 1) * 4) * diffAiMul;
   const { squadMin, squadMax } = raceMeta.tmpl;
   const nameBanned = new Set([player.name]);
   const riders = [];

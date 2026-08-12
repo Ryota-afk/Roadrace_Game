@@ -19,6 +19,10 @@ import { mlGenRace } from "../../domain/mylife/race.js";
 // ここでは疲労・出走経験による能力成長を扱う）。
 // v14.3: 永続トレーニング用品（ローラー台・パワーメーター）と車（レース疲労軽減）の
 // 恒常効果もここで反映する
+// v47(第7弾B): 加齢による衰えの縮小係数。シーズン側のdec(最大1.2/月)はマイライフには急峻すぎる
+// ため、マイライフでは緩やかな衰え（目安 年-3）になるよう縮める（詳細はDEVLOG §38参照）
+const ML_AGE_DECLINE_MUL = 0.2;
+
 export function mlApplyMonthEffect(player0, mode, ctx) {
   const player = { ...player0 };
   // v38(#9 B-2): 活力（バイタリティ）。疲労が短期の"その月の重さ"なのに対し、活力は長期の
@@ -26,6 +30,10 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
   // 活力が高いほど成長が満額に近く、低いと伸びが鈍る＝「休ませて育てる」戦略性が生まれる。
   if (player.vitality == null) player.vitality = 100;
   const vitMul = 0.55 + 0.45 * Math.min(1, Math.max(0, player.vitality) / 70); // 活力70+で満額、低いほど鈍化
+  // v47(第7弾B): 疲労が高いまま練習・合宿を続けると、その月の伸びが鈍る（fatigue<=50は無影響、
+  // 100で最大60%減）。合宿ローテを回し続けて疲労を溜めたままにする戦略への機会費用を作る
+  // （詳細はDEVLOG §38参照）
+  const fatMul = Math.max(0.4, 1 - Math.max(0, (player.fatigue || 0) - 50) * 0.012);
   const gear = (ctx && ctx.gear) || {};
   const carLv = ctx ? ctx.carLv : -1;
   const houseLv = ctx ? ctx.houseLv : -1;
@@ -84,20 +92,21 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
       * (flags.childFocusedCareer ? 1.05 : 1)
       // v25: 新人時代に恩師の指導を受けている間は練習効果+15%
       * (flags.mentorActive ? 1.15 : 1)
-      * vitMul; // v38(#9 B-2): 活力が低いと練習効果も鈍る
+      * vitMul // v38(#9 B-2): 活力が低いと練習効果も鈍る
+      * fatMul; // v47(第7弾B): 疲労が高いと練習効果も鈍る
     const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
     const focusMul = gear.monitor ? 1.10 : 1;
     // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
     const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
     addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), growthCap);
     AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), growthCap));
-    const ph2 = growthPhase(player);
-    if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
     // v29: 通常練習でも加速力・メンタルがわずかに伸びる（focusがsprint/flatなら加速に厚め）
     const subG = 0.28 * ph.gain * POW[player.growthPow].mul;
     growSub(player, "accel", subG * (player.focus === "sprint" || player.focus === "flat" ? 1.3 : 0.7));
     growSub(player, "mental", subG * 0.6);
-    player.fatigue = Math.max(0, player.fatigue - 15 * (glassBody ? 0.75 : 1));
+    // v47(第7弾B-2): 従来は練習が疲労を-15していた＝練習が休養を兼ね、休む理由が無かった。
+    // 練習は疲労を増やす側に回し、休養との使い分け（機会費用）を作る（詳細はDEVLOG §38参照）
+    player.fatigue = Math.min(100, player.fatigue + 10 * (glassBody ? 1.3 : 1));
     player.vitality = Math.max(0, player.vitality - 3); // v38(#9 B-2): 練習でも活力を少し使う
     player.streak = 0;
   } else if (mode === "rest") {
@@ -122,7 +131,8 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     const ph = growthPhase(player);
     const abMul = (hasAbility(player, "trainer") ? 1.2 : hasAbility(player, "lazy_sp") ? 0.8 : 1)
       * (flags.mentorActive ? 1.15 : 1);
-    const base = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul * spec.gainMul;
+    // v47(第7弾B): 疲労が高いと専門トレの伸びも鈍る（合宿ローテを回し続ける戦略への機会費用）
+    const base = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul * spec.gainMul * fatMul;
     const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
     if (spec.keys.length > 0) {
       spec.keys.forEach(k => addAb(player, k, base * 0.65 * persMul(player, k) * coachMul(k), growthCap));
@@ -134,11 +144,18 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     const subBase = ph.gain * POW[player.growthPow].mul;
     if (mode === "sprintcamp") growSub(player, "accel", 1.6 * subBase);
     if (mode === "mental") growSub(player, "mental", 1.8 * subBase);
-    const ph2 = growthPhase(player);
-    if (ph2.dec > 0) AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - ph2.dec); });
     player.fatigue = Math.min(100, player.fatigue + spec.fatigue);
     if (spec.cond) player.form = Math.min(100, (player.form ?? 50) + spec.cond * 8); // v31.3: 調子→フォームに統合
     player.streak = 0;
+  }
+  // v47(第7弾A): 加齢による衰えは、旧実装ではtrain/専門トレの分岐の中にしか無く「練習した月だけ
+  // 衰える」というバグになっていた（真面目に練習し続けると全能力が下限まで崩壊し、練習をやめると
+  // 一切衰えない逆転現象）。シーズン側と同じくmode非依存で毎月必ず適用する
+  // （詳細はDEVLOG §38参照）
+  const declinePh = growthPhase(player);
+  if (declinePh.dec > 0) {
+    const mlDec = declinePh.dec * ML_AGE_DECLINE_MUL;
+    AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - mlDec); });
   }
   if (houseLv >= 0) player.fatigue = Math.max(0, player.fatigue - ML_HOUSES[houseLv].fatigueBonus);
   // v15: 「回復力」を持つ選手は毎月さらに疲労-15（シーズンモードと同じ効果）

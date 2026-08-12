@@ -34,7 +34,7 @@ export function renderMyLifeHubScreen(ctx) {
       // v46(UI): 「今月は何をすべきか分かりづらい」という指摘への対応。疲労・レースの有無・
       // 大舞台かどうかから今月のおすすめを1つだけ判定する（domain/mylife/nextAction.js）。
       // ラベル文言とハンドラはUI都合（フォーカス中の能力名など）なのでここで組み立てる。
-      const nextAction = mlNextAction({ fatigue: r.fatigue, race, recTrainLabel: AB_LABEL[recKey] });
+      const nextAction = mlNextAction({ fatigue: r.fatigue, race, recTrainLabel: AB_LABEL[recKey], declining: ph.tag === "衰え期" });
       const ACTION_LABEL = { race: "🏁 このレースに出場する", rest: "😴 完全休養", train: `💪 練習（${AB_LABEL[r.focus] || "バランス"}中心）` };
       const ACTION_HANDLER = { race: mlStartRace, rest: () => mlAdvanceMonth("rest"), train: () => mlAdvanceMonth("train") };
       return mlWrap(
