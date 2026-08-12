@@ -197,6 +197,13 @@ export function segmentAbility(segType, e, steepness) {
 export const TICK_SEC = 1;
 const GROUP_GAP_DIST = 0.22;      // これ以内の位置差なら同一グループ
 const ROTATION_PERIOD_TICKS = 20; // 20秒ごとに先頭交代
+// v47(第8弾A案): 集団内の位置取り（slot＝0が先頭寄り）に応じてkeepThresh（千切れ判定の基準）を
+// 傾ける幅。最後方(posShare=1)の選手はkeepThreshがこの分だけ厳しくなる＝千切れやすい。
+// 既存のgrinder/holdOn補正（0.04〜0.06緩和）と同程度の大きさに揃えてある（詳細はDEVLOG §39参照）。
+const POSITION_TIGHT_SPAN = 0.015;
+// 判断カードの意思が位置取りの強さに与える補正（順位付けスコアへの加減算）。
+const CONSERVE_BACK_BIAS = 0.10; // 「脚を溜める」は後方へ譲る（意図的な位置低下）
+const HOLDON_FRONT_BIAS = 0.06;  // 「食らいついて粘る」は位置を死守しようとする
 // v12: AIチームごとの隠しの戦略スタイル（プレイヤーの事前作戦とは独立）。
 // aggressive=push相当・conservative=hold相当のローテーションペースになる
 export const AI_STYLES = ["aggressive", "balanced", "conservative"];
@@ -353,6 +360,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // ギャップ維持の消耗が軽くなる（committedBreak）。平坦・スプリントでは恩恵ゼロ＝吸収される。
       en.committedBreak = !!(directive.aceEarly && en.isAce);
       en.posHist = []; en.energyHist = []; en.modeHist = []; en.groupHist = []; en.slotHist = []; en.tagHist = [];
+      en.nextPullerHist = []; // v47(第8弾A案): 「次に牽引」表示用（slotとは別の履歴に分離）
       en.tag = null; en.trainOrder = null; en.launchLeft = 0;
       en.leadoutFor = null; en.isLeadingOut = false;
       // v39(A案): レース中の「判断カード」でプレイヤーが選ぶ動きの状態。conserveLeft>0の間は
@@ -381,6 +389,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       en.modeHist = en.modeHist.slice(0, fromTick); en.groupHist = en.groupHist.slice(0, fromTick);
       en.slotHist = en.slotHist.slice(0, fromTick);
       en.tagHist = (en.tagHist || []).slice(0, fromTick);
+      en.nextPullerHist = (en.nextPullerHist || []).slice(0, fromTick);
       en.tag = null; en.trainOrder = null; en.launchLeft = 0;
       // v39(A案 bugfix): 完走済みの状態が持ち越されると active が空になり再開ループが即break（=再計算されない）。
       // fromTick時点でまだゴールしていない選手（pos<コース長）はレース続行として finished を解除する。
@@ -469,13 +478,17 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const fallbackPool = members.filter(en => !en.isAce);
         if (fallbackPool.length > 0) puller = fallbackPool.reduce((best, en) => (en.energy > best.energy ? en : best), fallbackPool[0]);
       }
-      // v10: 見た目専用のローテーション待ち順（0=牽引中、1,2,...=次に牽引予定、
-      // ローテーションに参加しない選手は集団後方扱い）。finishTime等の実データには無関係
+      // v47(第8弾A案): 旧slotは「牽引ローテ待ち順」（実力と無関係）と「集団内の前後位置」の
+      // 2つの意味を兼ねていた。UIの「次に牽引」表示は前者、keepThresh/backRatioは後者を
+      // 必要とするため分離する。ローテ待ち順はnextPullerへ、位置取りはこの後の
+      // 「集団についていけるか」パスでownCapable・残脚・判断カードから作り直す
+      // （詳細はDEVLOG §39参照）。
+      const nextPullerRider = eligible.length > 1 ? eligible[(rotIdx + 1) % eligible.length] : null;
       members.forEach(en => {
+        en.nextPuller = en === nextPullerRider;
         if (en.attackLeft > 0) { en.mode = "attack"; en.slot = 0; en.attackLeft--; return; }
         en.mode = (puller && en === puller) ? "pull" : "draft";
-        const eIdx = eligible.indexOf(en);
-        en.slot = eIdx === -1 ? eligible.length : ((eIdx - rotIdx) % eligible.length + eligible.length) % eligible.length;
+        if (en.mode === "pull") en.slot = 0; // draft側はこの後の位置取りパスで割り当て直す
       });
     });
     // 3. 移動：先にpull/solo/attackを確定、その後draftが「ついていけるか」を判定
@@ -551,14 +564,33 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
           });
         }
       }
-      members.filter(en => en.mode === "draft").forEach(en => {
+      const groupDist = puller.lastOwnDist;
+      // v47(第8弾A案): 集団内の位置取り（slot）を、脚力・残脚・判断カードから作り直す。
+      // ownCapableはMath.random()のtickジッターを含むため、順位付け用と移動判定用で
+      // 2回呼ぶと食い違う。1回だけ計算してキャッシュし、両方で使い回す。
+      const draftMembers = members.filter(en => en.mode === "draft");
+      const draftCalc = draftMembers.map(en => {
         const segInfo = course.segTypeAt(en.pos);
         const segType = segInfo.type;
+        const ownCapable = tickDistance(en, segType, "pull", course.steepness);
+        return { en, segInfo, segType, ownCapable };
+      });
+      // trainZone/frontZoneで既に前方へ固定された選手（このtickでtagが付いている）はそのまま
+      // 最前列を占有させ、残りを「地形適性(ownCapable/groupDist)＋判断カードの意思」で順位付けする。
+      const pinned = draftCalc.filter(c => c.en.tag === "train" || c.en.tag === "front");
+      const ranked = draftCalc.filter(c => !(c.en.tag === "train" || c.en.tag === "front"));
+      const frontStrength = (c) => c.ownCapable / groupDist
+        - (c.en.conserveLeft > 0 ? CONSERVE_BACK_BIAS : 0)
+        + (c.en.holdOn > 0 ? HOLDON_FRONT_BIAS : 0);
+      ranked.sort((a, b) => frontStrength(b) - frontStrength(a));
+      let nextSlot = pinned.length;
+      ranked.forEach(c => { c.en.slot = nextSlot++; });
+      const totalDraft = Math.max(1, draftCalc.length - 1);
+
+      draftCalc.forEach(({ en, segInfo, segType, ownCapable }) => {
         // v12: 横風区間は道幅の関係で全員がシェルターを得られず、千切れやすくなる
         // （集団についていける基準を厳しくし、ドラフトのコストも上げる）
         const windActive = !!segInfo.wind;
-        const groupDist = puller.lastOwnDist;
-        const ownCapable = tickDistance(en, segType, "pull", course.steepness);
         let dist;
         // v37: 食らいつく脚＝集団に残る基準が緩む（千切れにくい）。ドラフトの「ついていける」閾値を下げる。
         // v38(#1): フィナーレの絞り込み。最終区間（ゴール勝負のストレート）だけ、勝負に向けて
@@ -570,7 +602,12 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // v38(改善): モニュメント/最上級グレードの選抜レースは、丘・登坂・最終で集団についていく基準が
         // 上がる＝実力上位だけが残る「select group」の決着に。極まった選手は残り、力の劣る選手はふるわれる。
         const selectiveTight = (course.selective && (["hill", "climb", "mtn"].includes(segType) || segInfo.idx === course.finalIdx)) ? 0.035 : 0;
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? 0.05 : 0);
+        // v47(第8弾A案): 集団内の位置（0=先頭寄り〜1=最後方）に応じてkeepThreshを傾ける。
+        // 先頭にいるほど千切れにくく、後方にいるほど千切れやすい（実際の集団分裂は前から
+        // 割れずに後方から千切れていく現象を再現）。
+        const posShare = Math.min(1, (en.slot || 0) / totalDraft);
+        const positionTight = posShare * POSITION_TIGHT_SPAN;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? 0.05 : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -632,7 +669,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // 千切れて単独走になった選手（en.mode==="solo"）はこの恩恵を受けない
         const sheltered = en.mode === "draft";
         const shelterMul = sheltered ? groupShelterMul(members.length) : 1;
-        const backRatio = sheltered ? Math.min(1, (en.slot || 0) / Math.max(1, members.length - 1)) : 0;
+        const backRatio = sheltered ? Math.min(1, (en.slot || 0) / totalDraft) : 0;
         const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
         // v15: 横風耐性を持つ選手は横風区間でのドラフト消耗ペナルティが軽減される（1.25→1.1）
         const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "windguard") ? 1.03 : hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
@@ -660,6 +697,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       if (en.holdOn > 0) en.holdOn--;             // v39(A案): 食らいつく残りtickを消化
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
       en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
+      en.nextPullerHist[tick] = !!en.nextPuller;
       // v39.20: 展開タグ（トレイン/リードアウト/発射/前待ち/ピールオフ）を履歴に記録し、観戦で可視化する
       if (en.launchLeft > 0) { en.tag = "launch"; en.launchLeft--; }
       en.tagHist[tick] = en.tag || null;

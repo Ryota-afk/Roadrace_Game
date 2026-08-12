@@ -190,6 +190,13 @@ export function slotAt(en, rt) {
   return idx >= 0 ? (en.slotHist[idx] || 0) : 0;
 }
 
+// v47(第8弾A案): 「次に牽引」表示専用。slotが集団内の前後位置（能力・判断カード由来）を
+// 表すようになったため、ローテ待ち順の情報はここへ分離した（詳細はDEVLOG §39参照）。
+export function nextPullerAt(en, rt) {
+  const idx = Math.min((en.nextPullerHist || []).length - 1, Math.floor(rt / TICK_SEC));
+  return idx >= 0 ? !!en.nextPullerHist[idx] : false;
+}
+
 export function modeStreakAt(en, rt, mode, cap) {
   const idx = Math.min(en.modeHist.length - 1, Math.floor(rt / TICK_SEC));
   if (idx < 0 || en.modeHist[idx] !== mode) return 0;
@@ -910,6 +917,7 @@ export function RaceView({ sim, onFinish }) {
         r.gid = groupAt(r.e, rt);
         r.mode = modeAt(r.e, rt);
         r.slot = slotAt(r.e, rt);
+        r.nextPuller = nextPullerAt(r.e, rt);
         r.tag = tagAt(r.e, rt);
         // v12: 前後バイアス（誰が前寄りか）はslot/modeから決まる目標値へ毎フレーム緩やかに
         // 追従させる（瞬間移動を避けるため）。実際に集団の中を漂う揺らぎは描画時に加える
@@ -1464,7 +1472,7 @@ export function RaceView({ sim, onFinish }) {
                       </circle>
                     )}
                     {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
-                    {r.slot === 1 && r.mode === "draft" && <circle r={r.isAce ? 7.5 : 6} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
+                    {r.nextPuller && r.mode === "draft" && <circle r={r.isAce ? 7.5 : 6} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
                     {/* v29バグ修正: 自分がエースでない（白マーカー）ときにアシスト仲間と見分けが
                         つかないという指摘に対応。自分の印には常に水色の識別リングを重ね、
                         エースかどうかに関わらず一目で自分だとわかるようにする */}
@@ -1489,7 +1497,7 @@ export function RaceView({ sim, onFinish }) {
                       };
                       const badge = TAG[r.tag]
                         || (r.mode === "pull" ? { t: "牽引", c: "#ffffff" }
-                          : (r.slot === 1 && r.mode === "draft") ? { t: "次に牽引", c: "#ffd23f" } : null);
+                          : (r.nextPuller && r.mode === "draft") ? { t: "次に牽引", c: "#ffd23f" } : null);
                       if (!badge || (!r.isMyTeam && !r.isPlayer && r.mode !== "pull")) return null;
                       return (
                         <g>
@@ -1542,7 +1550,7 @@ export function RaceView({ sim, onFinish }) {
                   <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${sideYAt(drawFrac) - Math.abs(dy) * 0.6})`}>
                     {camMode === r.id && <circle r="9" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
                     {r.mode === "attack" && <circle r="7" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
-                    {r.slot === 1 && r.mode === "draft" && <circle r={r.isAce ? 6.5 : 5} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
+                    {r.nextPuller && r.mode === "draft" && <circle r={r.isAce ? 6.5 : 5} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
                     {r.isPlayer && <circle r={r.isAce ? 7 : 5.5} fill="none" stroke="#27d3ff" strokeWidth="1.6" />}
                     <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
                     {r.isPlayer && <circle r="1.5" fill="#14171d" />}
