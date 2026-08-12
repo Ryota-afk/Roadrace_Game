@@ -155,7 +155,10 @@ export function useSeasonGame() {
     // v29: 出走表用に事前生成した相手チーム布陣があればそれを使い、顔ぶれを一致させる
     const { sim, aiTeams } = buildSim(race, squad, aceId, g.sel.roles, g.equip, itemBoost, g.classIdx, g.pendingAiTeams, race.stageRace ? "day1" : undefined, directive, g.difficulty, g.rivalAlumni, g.dynastyLevel, g.teamName, g.rivalRosters, g.year);
     // v35(チームTT): チームTTはペロトン演出を持たないため、観戦を選んでも結果画面へ直行する
-    const effWatch = race.tmpl.teamTT ? false : watch;
+    // v46(#34): 個人TTも同様。駆け引きの無い競技で観戦の情報価値が薄いというユーザー判断に加え、
+    // simがMAX_TICKS到達で打ち切られるレース（山岳系）で観戦が破綻する問題（§36参照）の
+    // 露出も避けられる。
+    const effWatch = (race.tmpl.teamTT || race.tmpl.soloTT) ? false : watch;
     setG(s => s.screen !== "lineup" ? s : ({
       ...s, result: sim,
       gc: race.stageRace ? { race, aceId, roles: s.sel.roles, starters: s.sel.starters, aiTeams, watch: effWatch, stage: 1, directive, stageTimes: {}, dayLogs: [] } : s.gc,

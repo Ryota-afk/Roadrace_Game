@@ -54,7 +54,10 @@ export const TEMPLATES = [
   { kind: "丘陵ロード", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 480, 26], ["hill", 450, 17], ["hill", 450, 17], ["sprint", 130, 4]] },
   { kind: "山岳ロード", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["flat", 460, 26], ["climb", 600, 13], ["climb", 640, 12], ["mtn", 190, 4]] },
   { kind: "ヒルクライム", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["climb", 560, 14], ["climb", 600, 12], ["mtn", 190, 4]] },
-  { kind: "個人TT", favors: "TT", squadMin: 1, squadMax: 1, segs: [["tt", 520, 22], ["tt", 520, 22]] },
+  // v46(#34): soloTTフラグを追加。個人TTは駆け引きの無い競技のため観戦を廃止する
+  // （チームTTのteamTTフラグと対になる形。squadMin===squadMax===1という魔法数字での
+  // 判定はやめ、呼び出し側は明示的にこのフラグを見る）。
+  { kind: "個人TT", favors: "TT", soloTT: true, squadMin: 1, squadMax: 1, segs: [["tt", 520, 22], ["tt", 520, 22]] },
 ];
 
 export const UNLOCK_TEMPLATES = [

@@ -14,8 +14,13 @@ export function renderMyLifeRaceScreens(ctx) {
         <Eyebrow color={C.purple}>🏁 出走表 — {ml.result.raceMeta.name}</Eyebrow>
         <div style={{ fontSize: 11.5, color: C.sub }}>{ml.result.raceMeta.tmpl.kind}・{"★".repeat(ml.result.raceMeta.grade)}・{TYPES[ml.result.raceMeta.tmpl.favors].label}有利</div>
         <StartListPanel entrants={ml.result.entrants} favors={ml.result.raceMeta.tmpl.favors} />
-        {/* v37: チームTTは集団シミュ（観戦アニメ）が無いため、結果画面へ直行する */}
-        <Btn onClick={() => { if (ml.result.teamTT) { mlRaceFinish(); } else setMl(s => ({ ...s, screen: "mylife_race" })); }}>🏁 {ml.result.teamTT ? "チームタイムトライアルに挑む（結果へ）" : "レースを始める"}</Btn>
+        {/* v37: チームTTは集団シミュ（観戦アニメ）が無いため、結果画面へ直行する。
+            v46(#34): 個人TTも同様。駆け引きの無い競技のため観戦を廃止（§36参照）。 */}
+        {(() => {
+          const skipWatch = ml.result.teamTT || ml.result.raceMeta.tmpl.soloTT;
+          const label = ml.result.teamTT ? "チームタイムトライアルに挑む（結果へ）" : skipWatch ? "個人タイムトライアルに挑む（結果へ）" : "レースを始める";
+          return <Btn onClick={() => { if (skipWatch) { mlRaceFinish(); } else setMl(s => ({ ...s, screen: "mylife_race" })); }}>🏁 {label}</Btn>;
+        })()}
         <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, result: null, screen: "mylife_main" }))}>← 出走を取りやめる</Btn>
       </div>
     );

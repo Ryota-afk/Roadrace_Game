@@ -6,6 +6,7 @@ import { Btn, Eyebrow } from "./ui.jsx";
 import { fmtGap, fmtTime, hasAbility, strHash } from "../core/core.js";
 import { TICK_SEC, riderHash01, riderWander, resumeSim } from "../sim/race.js";
 import { smoothRaceCamera } from "../domain/shared/raceCamera.js";
+import { viewHash01, viewWander } from "../domain/shared/viewHash.js";
 
 // v39(A案): レース中の「判断カード」スロット定義。注目選手のコース進捗(frac)が at を越えた／
 // 状況条件 cond を満たした瞬間に再生を止め、その時点の状況(ctx)に応じて composeCard で選択肢を
@@ -139,14 +140,30 @@ export function interpFrac(en, rt, course) {
   const lo = Math.floor(idx), hi = Math.ceil(idx);
   const len = en.posHist.length;
   if (len === 0) return 0;
-  const pos = (en.finished && lo >= len - 1)
-    ? course.length
-    : (() => {
-        const a = en.posHist[Math.min(lo, len - 1)];
-        const b = en.posHist[Math.min(hi, len - 1)];
-        const t = idx - lo;
-        return a + (b - a) * t;
-      })();
+  let pos;
+  if (en.finished && lo >= len - 1) {
+    pos = course.length;
+  } else if (!en.finished && lo >= len - 1) {
+    // v46(#34修正): simがMAX_TICKSで打ち切られると、未完走者のposHistはそこで途切れるが
+    // finishTimeは残り距離をlastOwnDistで割った外挿値になっている（sim/race.js末尾、
+    // en.finishTime = MAX_TICKS*TICK_SEC + (remain/lastDist)*TICK_SEC）。従来はここで
+    // a===b（両方とも最後のサンプルにクランプ）になり、rtがposHistの範囲を超えた瞬間から
+    // 選手が完全に静止していた（倍速を上げても動かない・その場でぐるぐるする不具合の真因）。
+    // 同じ外挿ペースでposを延長し、finishTimeの推定値にちょうど到達するようにする
+    // （simを変更せず再生側だけで辻褄を合わせる）。posHistの長さ(len)はsimのMAX_TICKS定数と
+    // 一致する（打ち切り時に配列がその長さまで埋まるため）ので、外挿の基準時刻はlenそのもの
+    // （len-1ではない＝posHist[len-1]はtick=len-1時点の位置であり、finishTime計算はそこから
+    // さらに1tick進んだ時点=lenを起点にしている）。ペースの下限もsim側の式(Math.max(0.2,…))と
+    // 完全に一致させる（一致しないと外挿がfinishTimeちょうどでcourse.lengthに届かない）。
+    const lastPos = en.posHist[len - 1];
+    const pace = Math.max(0.2, en.lastOwnDist || 0.3);
+    pos = Math.min(course.length, lastPos + (idx - len) * pace);
+  } else {
+    const a = en.posHist[Math.min(lo, len - 1)];
+    const b = en.posHist[Math.min(hi, len - 1)];
+    const t = idx - lo;
+    pos = a + (b - a) * t;
+  }
   return course.fracAtPos(pos);
 }
 
@@ -196,6 +213,12 @@ export const MAX_VIEW_FRAC = 0.4;   // 最大ズームアウト時に見える�
 export const VIEW_LEAD_BIAS = 0.47;  // 集団の中心を画面の何%の位置に置くか（0.5=中央、小さいほど前方の余白が広がる）
 
 export const SPRINT_MIN_VIEW_FRAC = 0.018; // 最終区間突入後のズーム上限（通常のMIN_VIEW_FRACよりさらに狭い）
+
+// v46(#30): 俯瞰マップのカメラ枠を先頭集団に絞るしきい値（frac差）。従来はレースの大半で
+// 最後尾まで収めようとして画面が横に伸び過ぎていた（最終区間だけgidベースで絞っていたが、
+// それより手前は無条件で全走行中選手が対象だった）。gidではなくfrac差で判定するのは、
+// 個人TT等gidが選手ごとに全員バラバラな競技ではgid基準だと1名だけに潰れてしまうため。
+export const LEAD_GROUP_FRAC = 0.06;
 
 export const FINAL_SEG_TIME_RATIO = 0.045;
 
@@ -458,13 +481,19 @@ export function FinalSprintCinematic({ contenders }) {
   const pedalT = (vt - vtStart) * PEDAL_K;
   // 各選手の道沿い位置 w（大＝前方/ゴール通過側）と lane（道幅内の位置）。ゴールは w=0。
   const gEff = (c) => c.gapSec * COMPRESS;
-  const wOf = (c) => (vt - gEff(c)) - (c.kick || 0) * 1.5 * sprintBump(gEff(c) - vt, 1.9)
-    + (riderHash01(c.id, 23) - 0.5) * 1.05;         // v39.13: 前後ズレを大きめに＝同着差の重なり(残像化)をほぐす
+  // v46(#28修正): 従来は末尾に (riderHash01(c.id,23)-0.5)*1.05 という前後方向の固定ジッターを
+  // 加えており、実際の着差(0.42秒でもgEff差0.19)より大きいランダム値が順位を表す軸に乗っていた
+  // （実測：描画順が着順と食い違うレースが80%、最大4着ぶんのズレ）。重なりのほぐしはlaneOf側
+  // （横方向の散らし）が既に担っているため、前後方向のジッターは削除した。
+  const wOf = (c) => (vt - gEff(c)) - (c.kick || 0) * 1.5 * sprintBump(gEff(c) - vt, 1.9);
   const laneOf = (c) => {
     const rem = gEff(c) - vt;
-    const base = (riderHash01(c.id, 3) - 0.5) * 2.4; // 道幅いっぱいに散らばる（＝横並びの団子に）
+    // v46(#32修正): riderHash01は一次式に退化しており(salt+1で必ず+0.62012、id+1で必ず+0.35761
+    // だけ一定シフト)、これが道幅内位置に「楕円軌道」状の規則的なジッターとして現れていた。
+    // 着順計算に使うsim側のriderHash01は変更できないため、演出専用のviewHash01に差し替える。
+    const base = (viewHash01(c.id, 3) - 0.5) * 2.4; // 道幅いっぱいに散らばる（＝横並びの団子に）
     const conv = 0.82 + 0.18 * Math.max(0, Math.min(1, rem / 3.0)); // 収束はさらに控えめ（潰れて一列にしない）
-    const weave = Math.sin(vt * 2.1 + riderHash01(c.id, 9) * 7) * 0.08;
+    const weave = Math.sin(vt * 2.1 + viewHash01(c.id, 9) * 7) * 0.08;
     const passLat = Math.sign(c.kick || 0) * sprintBump(rem, 2.2) * 0.36; // 差し/リードアウトは横へ膨らんで抜く
     return Math.max(-1.25, Math.min(1.25, base * conv + weave + passLat));
   };
@@ -513,7 +542,11 @@ export function FinalSprintCinematic({ contenders }) {
   // Wave H-4: capは廃止（旧IsoRiderのヘルメット色による個体識別）。ドット絵は帽子色の
   // スロットを持たないため、識別は下の順位表（判断④）に一本化した。
   // v43: 姿勢の決定は domain/shared/sprintPosture.js の純関数へ切り出した（詳細はそちら）。
-  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), posture: sprintPosture(gEff(c) - vt, dancerIds.has(c.id)) }))
+  // v46(#13修正): 従来は参照位置(gEff(c)-vt)を渡していたが、これは描画位置w（ジッター・差し脚
+  // バンプ込み）とズレるため、実際にはまだラインを過ぎ切っていない選手が姿勢だけ先に
+  // normalへ戻ってしまっていた。姿勢は実際に描画する位置wから直接決める（w>0＝通過済みなので
+  // -wが「残り」に相当）。
+  const rows = withW.map(({ c, w }) => ({ c, ...S(w, laneOf(c)), posture: sprintPosture(-w, dancerIds.has(c.id)) }))
     .filter(r => r.x > -30 && r.x < W + 30 && r.y < H + 40 && r.y > -40)
     .sort((a, b) => (a.y - b.y) || (a.c.isPlayer ? 1 : -1)); // 奥(上)→手前(下)、自分は最前面
   // Wave H-4（判断④）: capによるヘルメット色での個体識別を廃止した代わりに、現在の
@@ -770,9 +803,11 @@ export function RaceView({ sim, onFinish }) {
     const nCap = Math.min(n, PACK_MAX_MEMBERS_FOR_SCALE);
     const L = (PACK_LEN_BASE + nCap * PACK_LEN_PER_MEMBER) * (1 + elong * 2.2) * span;
     const W = (PACK_WIDTH_BASE + nCap * PACK_WIDTH_PER_MEMBER) * (1 - elong * 0.5);
-    // 選手固有の独立した揺らぎ（前後・左右とも他の選手とは違う周波数・位相）
-    const wanderX = riderWander(r.id, 1, packTSec, PACK_WANDER_FREQ_X);
-    const wanderY = riderWander(r.id, 5, packTSec, PACK_WANDER_FREQ_Y);
+    // 選手固有の独立した揺らぎ（前後・左右とも他の選手とは違う周波数・位相）。
+    // v46(#32修正): riderWander（sim側riderHash01ベース）は演出に使うと「楕円軌道」状の
+    // 規則的なジッターに見えるため、演出専用のviewWander（viewHash01ベース）に差し替え。
+    const wanderX = viewWander(r.id, 1, packTSec, PACK_WANDER_FREQ_X);
+    const wanderY = viewWander(r.id, 5, packTSec, PACK_WANDER_FREQ_Y);
     const ex = L * Math.max(-1, Math.min(1, r.biasX * 0.55 + wanderX * 0.6));
     const ey = W * wanderY;
     // v12バグ修正: exはコース位置（frac）単位、eyは画面ピクセル単位で、そのままではスケールが
@@ -959,6 +994,16 @@ export function RaceView({ sim, onFinish }) {
             const sameGroup = riders.filter(r => r.gid === focus.gid);
             if (sameGroup.length > 0) framing = sameGroup;
           }
+        }
+        // v46(#30修正): 先頭集団追従モードでは常に先頭集団へ絞る（従来は最終区間だけ絞っており、
+        // それより手前はレースの大半で最後尾まで収めようとして画面が横に伸び過ぎていた）。
+        // gidではなくfrac差で判定する。個人TT等、全員が別集団（gidバラバラ）で走る競技では
+        // gid基準だと先頭1名だけに潰れてしまうため。先頭自身は差0でしきい値を満たすので
+        // 空集合にはならない。
+        if (camModeRef.current === "lead") {
+          const leadF = Math.max(...framing.map(r => r.frac));
+          const leadGroup = framing.filter(r => leadF - r.frac <= LEAD_GROUP_FRAC);
+          if (leadGroup.length > 0) framing = leadGroup;
         }
         // v11: 最終区間突入後、先頭集団追従モードに限り先頭集団（最高fracと同じgid）だけに絞り、
         // スプリント勝負に寄せる（選手フィーチャー中はその選手の集団のまま）

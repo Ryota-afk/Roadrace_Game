@@ -24,7 +24,11 @@ export function pickDancerIds(contenders) {
 // v45.4: 旧しきい値は rem<=0.05（＝通過した瞬間）だったため、ゴールした直後に選手が
 // 即座に体を起こして見えた（ユーザー指摘）。POST_FINISH_HOLD分だけ通過後もsprint/dancing
 // 姿勢を保持し、しばらく走り抜けてから自然に立ち上がるようにする。
-const POST_FINISH_HOLD = 1.5;
+// v46(#13再修正): 1.5では実機でまだ早く感じられた（呼び出し元がwOfの前後ジッター削除で
+// 描画位置の精度が上がったこともあり、より正確に「まだ通過していない」ことを検出できる
+// ようになった）。1ユニット=約Px(30)px相当の画面奥行きなので、3.0=自転車2台分ほど
+// 明確に過ぎ切った量まで引き上げた。
+const POST_FINISH_HOLD = 3.0;
 export function sprintPosture(rem, isDancer) {
   if (rem <= -POST_FINISH_HOLD) return "normal";
   if (isDancer && rem < 2.6) return "dancing";
