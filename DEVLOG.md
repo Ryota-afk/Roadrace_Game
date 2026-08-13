@@ -556,6 +556,23 @@ importしない／自己完結の述語関数はデータ扱いだが外部の�
 ため先頭メンバーのidentity・旧セーブ互換は無傷（`roster_pop.mjs`実測で確認）。残りはPhase 1
 （順位表の実体化）とPhase 2本体（ランキングを`worldRosters`＋実績から再構成）。
 
+**派生バグ修正（2026-08）**：「マイライフの自チームはどういう扱いか」というユーザーの質問を
+きっかけに、引退時のCP付与・殿堂記録が**タスクキル→再読み込みで無限に稼げる**バグと、
+「静かに引退」ボタンが**通常プレイでも殿堂に選手を二重登録する**バグを発見・修正。
+根本原因：`useMyLifeGame.js`のCP/殿堂付与useEffectは`ml.screen==="mylife_retired"`遷移を
+メモリ上の`useRef`だけで一度きり判定していたが、その画面遷移自体は`saveMyLife()`の対象外
+（自動保存は`mylife_main`到達時のみ）だったため、CP加算(`saveMeta`)と殿堂登録
+(`mlRecordLegend`)は別keyへ即座に永続化される一方、肝心の「もう付与済み」という情報だけが
+セーブに残らず、リロードで引退前セーブへ巻き戻るたびに再度付与できてしまっていた。
+加えて`hub.jsx`の「🚪 静かに引退」ボタンは`mlRecordLegend`をその場で直接呼んだ上で、
+同じuseEffectでも呼ばれる二重呼び出しになっていた（通常プレイでも常に2件登録）。
+修正：判定を永続化される`ml.awardedCP`の有無に変更し、CP/殿堂を確定させたその場で
+`saveMyLife()`も同期的に呼んで付与済み状態ごとセーブに焼き付け（`ML_SAVE_FIELDS`に
+`awardedCP`追加が必須だった）、hub.jsx側の直接呼び出しは削除して経路を一本化。
+`mlRecordLegend`側にも`riderId`重複防止を保険として追加。Playwrightで旧コード（バグ再現：
+1回の引退でlegendCount=2、reload後もsaveScreenが"mylife_main"のまま）と新コード
+（1回の引退でlegendCount=1固定、3回reloadしてもCP・殿堂とも不変）を比較実測済み。
+
 **順位表実体化の注意点（未着手）**：実体化は`seasonRank`→`champPromoteCut`経由で
 **昇格ボーダーに直結**するため、配分係数は必ず実測較正すること。
 

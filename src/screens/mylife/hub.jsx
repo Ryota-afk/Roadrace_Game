@@ -1,6 +1,5 @@
 // mylife.jsx より分割（Step8）：メインハブ（main/achievements/abilityfile/riderstats/worldstats/records）
 import React from "react";
-import { mlRecordLegend } from "../../breeding/breeding.js";
 import { mlNextAction } from "../../domain/mylife/nextAction.js";
 import { AbilityFileList, CondFc, CourseRecordsPanel, DisciplineGrid, FatigueBar, PersonaLine, TitlesPanel, TraitLine } from "../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
@@ -455,7 +454,11 @@ export function renderMyLifeHubScreen(ctx) {
                     <Btn small role="menu" onClick={() => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor)}>🎖 メンターになる（弟子を取る）</Btn>
                   )}
                 <Btn small role="danger" onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
-                <Btn small role="danger" onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => { mlRecordLegend(ml); setMl(s => ({ ...s, screen: "mylife_retired" })); })}>🚪 静かに引退</Btn>
+                {/* v49(第11弾続き): 殿堂記録(mlRecordLegend)はここで直接呼ばない。以前はここでも
+                    呼んでおり、"mylife_retired"遷移を検知するuseMyLifeGame.js側のuseEffectとの
+                    二重呼び出しで、静かに引退するたび同じ選手が殿堂へ2回登録されるバグになっていた。
+                    他の引退経路（ラストレース／引退勧告）と同じくuseEffect側の一本化した処理に委ねる。 */}
+                <Btn small role="danger" onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => setMl(s => ({ ...s, screen: "mylife_retired" })))}>🚪 静かに引退</Btn>
                 {/* v36(#6): ライバル会話ドラマ（紙芝居/VN風）の on/off トグル */}
                 <Btn small role="menu" onClick={() => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false }))}>🎭 会話ドラマ：{ml.rivalDramaOn === false ? "非表示" : "表示中"}</Btn>
                 <Btn small role="danger" onClick={() => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>🔄 最初からやり直す</Btn>

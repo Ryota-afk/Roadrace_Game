@@ -238,6 +238,9 @@ export function mlLegendSnapshot(s) {
   const ancestors = Array.isArray(r.ancestorBloodIds) ? r.ancestorBloodIds.slice(0, 12) : [];
   const arch = mlCareerArchetype(s); // v31.4: 生き様（称号）
   return {
+    // v49(第11弾続き): この選手個体を一意に識別するid。mlRecordLegend()の二重記録防止に使う
+    // （リロード等で同じ引退が2回呼ばれても、同一idの選手を殿堂に重複登録しないためのキー）。
+    riderId: r.id,
     name: r.name, type: r.type, background: r.background, team: s.team,
     endYear: s.year, age: r.age, races: (r.raceLog || []).length, wins, podiums,
     salary: s.salary, rivalName: s.rival ? s.rival.name : null, rivalRecord: s.rivalRecord || null,
@@ -434,6 +437,11 @@ export function mlBreedBonus(parentA, parentB) {
 
 export function mlRecordLegend(s) {
   const snap = mlLegendSnapshot(s);
-  saveMlLegends([...loadMlLegends(), snap]);
+  const existing = loadMlLegends();
+  // v49(第11弾続き): 同一選手（riderId）の重複登録を防ぐ。強制終了→再読み込みで引退直後の
+  // 状態に巻き戻っても、この選手は既に殿堂入り済みなら再登録しない（呼び出し元の
+  // useMyLifeGame.js側の恒久化修正が主対策だが、経路によらず二重登録を防ぐ保険として残す）。
+  if (snap.riderId != null && existing.some(e => e.riderId === snap.riderId)) return;
+  saveMlLegends([...existing, snap]);
   mlRegisterBloodline(snap); // v33.3: 系統確立レジストリへ実績を累積
 }

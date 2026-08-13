@@ -60,17 +60,26 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   // v41(§Step7第3弾): mlRecordLegend（殿堂記録）も同じ理由でここに合流させた。mlLastRaceFinish・
   // mlRetireAdviceAcceptのどちらの経路でも"mylife_retired"に遷移するため、遷移元を問わず
   // 一度だけ記録される。効果発火時点でmlは既に最終raceLogを含む確定済みstate。
-  const mlClearAwardedRef = useRef(false);
+  //
+  // v49(第11弾続き・バグ修正): 従来はメモリ上のuseRefだけで「一度だけ」を守っていたが、
+  // "mylife_retired"へ遷移してもsaveMyLife()はここでは呼ばれず（自動保存は"mylife_main"
+  // 到達時のみ）、この画面のままタスクキル→再読み込みするとセーブは引退前の状態に戻る。
+  // 一方CP付与(saveMeta)と殿堂登録(mlRecordLegend)は別のlocalStorageキーへ即座に書き込み
+  // 済みのため、「引退→CP/殿堂だけ確定させてタスクキル→引退前セーブに巻き戻る」を繰り返す
+  // だけでCPと殿堂枠を無限に稼げてしまっていた。判定をメモリ上のrefではなく永続化される
+  // ml.awardedCPの有無に変え、CP/殿堂を確定させたその場でsaveMyLife()も同期的に呼んで
+  // 「付与済み」も同時にセーブへ焼き付けることで、どのタイミングでリロードしても
+  // 再付与されないようにする（mlRecordLegend側にもriderId重複防止を保険として追加済み）。
   useEffect(() => {
-    if (ml.screen === "mylife_retired" && !mlClearAwardedRef.current) {
-      mlClearAwardedRef.current = true;
+    if (ml.screen === "mylife_retired" && !ml.awardedCP) {
       const res = computeMyLifeClearPoints(ml);
       if (res.total > 0) { const meta = loadMeta(); saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + res.total }); }
-      setMl(s => ({ ...s, awardedCP: res }));
       mlRecordLegend(ml);
+      const next = { ...ml, awardedCP: res };
+      saveMyLife(next);
+      setMl(() => next);
     }
-    if (ml.screen !== "mylife_retired") mlClearAwardedRef.current = false;
-  }, [ml.screen]);
+  }, [ml.screen, ml.awardedCP]);
   // v41(§Step7第3弾): 年度末のadvanceWorldYear()（共有ワールドの年を進める・非冪等）も、
   // 以前はadvanceMonth/mlAdvanceMonthのreducer内で直接呼んでいた休眠中の地雷だった。
   // g.year/ml.yearの変化を検知し、実際に年が進んだ時だけ1回呼ぶ（season/mylifeは独立のref）。

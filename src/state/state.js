@@ -588,6 +588,10 @@ const ML_SAVE_FIELDS = [
   "riderStats", // v37: 永続キャラ（ライバル/仲間）の成績台帳
   "worldRosters", // v37: 永続ワールドロースター（各AIチーム固定の選手団）
   "difficulty", // v38(#6): マイライフの難易度（相手強さ・CP倍率）
+  // v49(第11弾続き): 引退時のCP付与済みフラグ。これがリスト外だとsaveMyLife()で保存しても
+  // 次回読み込み時に消え、「未付与」判定に戻ってCP・殿堂を再付与できてしまう
+  // （タスクキル→再読み込みでのCP無限稼ぎ・殿堂重複登録バグの直接原因だった）。
+  "awardedCP",
 ];
 
 export function saveMyLife(ml) {
