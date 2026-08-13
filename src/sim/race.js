@@ -607,7 +607,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // 割れずに後方から千切れていく現象を再現）。
         const posShare = Math.min(1, (en.slot || 0) / totalDraft);
         const positionTight = posShare * POSITION_TIGHT_SPAN;
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? 0.05 : 0);
+        // v47(第8弾Phase4): hangOnのkeepThresh緩和を0.05→HANGON_KEEPTHRESH_RELIEF(0.12)へ強化
+        // （詳細は定数コメント参照）。
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0);
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -739,8 +741,33 @@ export function legsLeft01(en) {
   return Math.max(0, Math.min(1, (e - LEGS_EMPTY) / (LEGS_FULL - LEGS_EMPTY)));
 }
 const SEND_MIN_TICKS = 4, SEND_MAX_TICKS = 18;      // 早駆けの持続（空:4秒 / 満:18秒）
-const SEND_MIN_KICK = 0.02, SEND_MAX_KICK = 0.07;   // 早駆けの最終直線での上乗せ
+// v47(第8弾Phase4): 早駆け(send)は脚を17も使う代償付きの一手なのに、無代償の差し脚(kick)より
+// 上限が低く（旧0.07 vs kickの固定0.09）、リスクを取る意味が無かった。kickの旧上限0.09より
+// 明確に上へ引き上げる。
+const SEND_MIN_KICK = 0.03, SEND_MAX_KICK = 0.13;   // 早駆けの最終直線での上乗せ
 const ATTACK_MIN_TICKS = 10;                        // 仕掛けの持続の下限（満はBREAKAWAY_ATTACK_TICKS）
+// v47(第8弾Phase4): 差し脚系(kick/kickBig/sprintWait)は残脚に関係なく固定値の追い込みを
+// 得ていたため、attack/sendだけが残脚ゲートの代償を背負う非対称になっていた（Phase 3実測で
+// 発火点によらずkickが最強手として支配的だったのはこれが原因）。他の判断と同じく
+// legsLeft01()に比例させ、「脚が残っていてこそ効く」という条件を揃える。
+const KICK_MIN = 0.03, KICK_MAX = 0.11;
+const KICKBIG_MIN = 0.05, KICKBIG_MAX = 0.17;
+const SPRINTWAIT_MIN = 0.04, SPRINTWAIT_MAX = 0.13;
+// v47(第8弾Phase4): conserveの持続はA案（位置取り）導入前にkeepThresh一律の時代の値
+// （§35で80→500）。A案で後方ほど千切れやすくなった今は効きすぎ（Phase 3実測で中盤・格下の
+// 勝率95%）だったため、位置取りとの相互作用込みで再較正する。
+// v47(第8弾Phase4較正): 260でも中盤発火→ゴールの平均間隔(~865tick)の3割程度をカバーし、
+// エネルギー温存がkeepThresh判定・最終着差の両方に波及して複利的に効きすぎた（実測：中盤・
+// 格下で勝率96%）。150へさらに絞る。
+const CONSERVE_TICKS = 150;
+// v47(第8弾Phase4): hangOnは§35時点でほぼholdと同値という既知の課題だった（Phase 3実測でも
+// 9区分すべてでholdとの差がほぼ無いことを確認）。keepThreshの緩和・持続を強化し、
+// 「脚を使って位置を死守する」という代償付きの手として機能させる。
+const HANGON_TICKS = 220;
+// v47(第8弾Phase4較正): 0.12でもholdとの差がほぼ出なかった（実測：格上85でむしろhold優位）。
+// 緩和を強化し、脚の消費コストは半減して純粋な効果を見えやすくする。
+const HANGON_KEEPTHRESH_RELIEF = 0.20;
+const HANGON_ENERGY_COST = 3;
 
 export const RACE_MOVES = {
   // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣
@@ -756,12 +783,11 @@ export const RACE_MOVES = {
     r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; r.energy -= 9;
   },
   // 🛡 脚を溜める：集団後方で牽かず消耗を抑える。勝負所に脚を残す堅実策
-  // v46(#27): 持続を80→500tickへ。実測で、80tickぶんの消耗軽減が終盤の残脚に与える差は
-  // わずか1.4しかなく、「溜めた脚」が後の一手の威力に届かないため温存が死に選択肢だった。
-  // 勝負所まで効き続ける長さにして初めて「溜める→踏み切れる」の因果が成立する。
-  conserve: (r) => { r.conserveLeft = 500; r.attackLeft = 0; r.committedBreak = false; r.holdOn = 0; },
-  // 🦴 食らいついて粘る：歯を食いしばって集団に残る（千切れにくい）。食らいつく脚と好相性
-  hangOn: (r) => { r.holdOn = 130; r.conserveLeft = 50; r.attackLeft = 0; r.committedBreak = false; },
+  // v47(第8弾Phase4): 500→260tickへ再較正（詳細は定数コメント参照）。
+  conserve: (r) => { r.conserveLeft = CONSERVE_TICKS; r.attackLeft = 0; r.committedBreak = false; r.holdOn = 0; },
+  // 🦴 食らいついて粘る：歯を食いしばって集団に残る（千切れにくい・脚を消費する）。食らいつく脚と好相性
+  // v47(第8弾Phase4): keepThreshの緩和・持続を強化し、脚を消費する代償付きの手にした（詳細は定数コメント参照）。
+  hangOn: (r) => { r.holdOn = HANGON_TICKS; r.conserveLeft = 50; r.attackLeft = 0; r.committedBreak = false; r.energy -= HANGON_ENERGY_COST; },
   // 🚴 流れに任せる：特別な動きはせず展開に乗る（基準の挙動）
   hold: (r) => { r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; r.holdOn = 0; },
   // 🔥 早駆け：ここから一気に踏んで抜け出し、そのままゴールまで踏み切る
@@ -776,11 +802,12 @@ export const RACE_MOVES = {
     r.conserveLeft = 0; r.energy -= 17;
   },
   // ⏳ 差しにかける：最終直線まで脚を溜め、そこで鋭く伸びる（最終区間の追い込みを上乗せ）
-  kick: (r) => { r.finaleSend = 0.09; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  // v47(第8弾Phase4): 固定値0.09→残脚比例。脚を使い切っていれば差し脚も不発になる（詳細は定数コメント参照）。
+  kick: (r) => { const g = legsLeft01(r); r.finaleSend = KICK_MIN + (KICK_MAX - KICK_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // 🗡 会心の差し脚：差し脚・豪脚型が最終直線で最大の切れ味を出す（追い込み最大）
-  kickBig: (r) => { r.finaleSend = 0.15; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  kickBig: (r) => { const g = legsLeft01(r); r.finaleSend = KICKBIG_MIN + (KICKBIG_MAX - KICKBIG_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // 🏁 スプリント勝負：集団のゴールスプリントに合わせ、番手をキープして最後に爆発させる
-  sprintWait: (r) => { r.finaleSend = 0.11; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  sprintWait: (r) => { const g = legsLeft01(r); r.finaleSend = SPRINTWAIT_MIN + (SPRINTWAIT_MAX - SPRINTWAIT_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // v39.22(シーズン): 監督指示＝チーム全体を動かす一手。focusはエース、riders経由で僚友を働かせる。
   // 🛡 エースを守れ：僚友が風除け・位置取りを担い、エースは脚を温存できる（僚友は脚を使う）
   teamShelter: (r, riders) => {
