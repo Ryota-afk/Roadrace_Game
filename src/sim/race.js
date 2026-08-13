@@ -274,8 +274,19 @@ export function groupShelterMul(n) {
 export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこない位置）での基礎回復量/tick
 // v35(バランス): 勝負を賭けた逃げ（committedBreak）が単独で先頭に立っている間だけ、
 // 選抜地形で消耗が軽減される（brk係数）。登坂・山岳で最も効き（集団が組織的に追えず、
-// 登りでは集団のドラフト優位も縮む）、丘で中程度、平坦・スプリントでは無効＝吸収される。
+// 登りでは集団のドラフト優位も縮む）、丘で中程度、平坦・スプリントでは軽め＝それでも吸収される。
 // 集団に吸収されて draft/pull へ戻れば solo/attack ではなくなり自動的に無効化される。
+// v48(第9弾): attack判断の実測診断で、仕掛け後に実際にsolo化する割合は85〜90%と機能してはいる
+// ものの、平均で60〜90tickしか独走を維持できず集団に吸収され、しかもその間の消耗（brk旧値：
+// 平坦/スプリント/TTは軽減なし=1.0倍）がそのまま終盤まで尾を引いて他の判断より明確に不利
+// だった（実測：勝者との差が全区分でholdの2〜3倍）。まず「独走の持続時間を延ばす」方向を
+// 試したが、attackモード中は集団判定を無視して強制的にsolo相当の高消耗（effortCost 1.6）を
+// 払い続けるため、持続tickを大きく伸ばす（30→140）とエネルギーが壊滅的に枯渇し逆に大惨敗した
+// （実測：平均着差が数十秒→100秒超に悪化）。持続時間はいじらず、消耗緩和（brk係数）だけを
+// 全地形で強化する方向へ切り替えた。平坦・スプリント・TTにも緩和を与え（1.0→0.75/0.85/0.75）、
+// 登坂・丘も併せて強化（0.55/0.6/0.78→0.4/0.45/0.55）。結果、勝率はほぼ変えずに敗着差・平均
+// 順位が全区分で明確に改善（例：能力105・finale発火で着差14.5秒→11.7秒、平均順位9.0→5.5）。
+// 「時々刺さるがリスクの高い一手」という設計意図に沿う形になった（詳細はDEVLOG §40）。
 function energyDrain(en, mode, segType, steepness) {
   // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（金特で更に軽減）
   const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88)
@@ -286,7 +297,7 @@ function energyDrain(en, mode, segType, steepness) {
   const rouleurEco = (hasAbility(en, "rouleur") && (segType === "flat" || mode === "solo" || mode === "attack")) ? (hasGoldAbility(en, "rouleur") ? 0.78 : 0.85) : 1;
   const terrainEcoMul = climbEco * rouleurEco;
   const brk = en.committedBreak && (mode === "solo" || mode === "attack")
-    ? ({ mtn: 0.55, climb: 0.6, hill: 0.78, flat: 1, sprint: 1, tt: 1 }[segType] ?? 1) : 1;
+    ? ({ mtn: 0.4, climb: 0.45, hill: 0.55, flat: 0.75, sprint: 0.85, tt: 0.75 }[segType] ?? 1) : 1;
   // v35: 献身のアシストに徹する選手は、賢く脚を使って（無駄に踏み過ぎず）自滅を避ける。
   // 長丁場のクリテ等で牽引しすぎて千切れ、自分もエースも大敗する事故を防ぐ。
   const assistMul = en.isAssisting ? 0.78 : 1;

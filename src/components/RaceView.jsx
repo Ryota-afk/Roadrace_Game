@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FINISH_COMMENTARY, SEG_COMMENTARY } from "../data/course.js";
 import { C, FONT_D, FONT_M } from "../data/theme.js";
 import { Btn, Eyebrow } from "./ui.jsx";
+import { DecisionCard } from "./DecisionCard.jsx";
 import { fmtGap, fmtTime, hasAbility, strHash } from "../core/core.js";
 import { TICK_SEC, riderHash01, riderWander, resumeSim } from "../sim/race.js";
 import { smoothRaceCamera } from "../domain/shared/raceCamera.js";
@@ -1257,47 +1258,8 @@ export function RaceView({ sim, onFinish }) {
         </div>
       </div>
       {/* v39(A案): レース中の判断カード。表示中は再生が止まり、選ぶと結果に反映される */}
-      {decision && (
-        <div style={{ background: "linear-gradient(180deg,#2a2018,#1c1712)", border: `2px solid ${C.yellow}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>
-          <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 800, color: C.yellow }}>{decision.title}</div>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 2, marginBottom: 8 }}>{decision.sub}{focusEnt ? `　—　${focusEnt.name}` : ""}</div>
-          {/* v46(#27): 脚の残り。仕掛け系の一手はこの残量で威力が決まるため、
-              判断の material として必ず見せる（数値ではなくバーと一語で瞬時に読めるようにする） */}
-          {decision.energy != null && (() => {
-            // 脚は -100〜100 の範囲で推移する（0が「使い切った」ではなく、そこから更に粘れる）。
-            // 0〜100だけを見せると終盤は常に空表示になり、仕掛けが決まる/決まらないの差が読めない。
-            const raw = Math.max(-100, Math.min(100, decision.energy));
-            const e = (raw + 100) / 2;
-            const tier = raw >= 40 ? { t: "十分", c: C.green }
-              : raw >= 0 ? { t: "やや消耗", c: C.yellow }
-                : raw >= -60 ? { t: "苦しい", c: "#e8a13c" }
-                  : { t: "売り切れ", c: C.red };
-            return (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 10px" }}>
-                <span style={{ fontSize: 11, color: C.sub, flexShrink: 0 }}>脚の残り</span>
-                <div style={{ flex: 1, height: 8, background: C.panel2, borderRadius: 4, overflow: "hidden", border: `1px solid ${C.line}` }}>
-                  <div style={{ width: `${e}%`, height: "100%", background: tier.c, transition: "width .2s" }} />
-                </div>
-                <span style={{ fontSize: 11.5, fontFamily: FONT_D, fontWeight: 700, color: tier.c, flexShrink: 0 }}>{tier.t}</span>
-              </div>
-            );
-          })()}
-          <div style={{ display: "grid", gap: 8 }}>
-            {decision.choices.map((c) => (
-              <button key={c.move} disabled={resimBusy} onClick={() => resolveDecision(c.move)}
-                style={{
-                  textAlign: "left", padding: "9px 12px", borderRadius: 8, cursor: resimBusy ? "default" : "pointer",
-                  background: C.panel2, color: C.text, border: `1px solid ${C.line}`, opacity: resimBusy ? 0.5 : 1,
-                  display: "grid", gap: 2,
-                }}>
-                <span style={{ fontFamily: FONT_D, fontSize: 13.5, fontWeight: 700, color: C.text }}>{c.label}</span>
-                <span style={{ fontSize: 11, color: C.sub }}>{c.desc}</span>
-              </button>
-            ))}
-          </div>
-          {resimBusy && <div style={{ fontSize: 11, color: C.yellow, marginTop: 8 }}>展開を再計算中…</div>}
-        </div>
-      )}
+      {/* v48(第9弾): カードUIはDecisionCard.jsxへ切り出し（レア度演出・2段レイアウト） */}
+      <DecisionCard decision={decision} focusName={focusEnt?.name} resimBusy={resimBusy} onChoose={resolveDecision} />
       {!cinematic && !decision && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {[{ id: "lead", label: "🎥 先頭集団" }, ...playerRoster.map(e => ({ id: e.id, label: `🎥 ${e.name.split(" ")[0]}${e.isAce ? " 👑" : ""}` }))].map(o => (
           <button key={o.id} onClick={() => selectCam(o.id)}
