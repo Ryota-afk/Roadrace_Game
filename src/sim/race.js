@@ -683,11 +683,12 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // ドラフトの風除け（shelterMul）を一部打ち消す係数なので、体力のある選手（＝極まった主人公）は残る。
         const selectiveDrainMul = (course.selective && ["hill", "climb", "mtn"].includes(segType)) ? 1.45 : 1;
         // v39(A案): 「脚を溜める」判断中は集団の中で賢く脚を使い、消耗が軽くなる（＝勝負所に脚を残せる）
-        // v46(#27): 0.74→0.60。従来は温存しても後の一手が残脚を参照していなかったため、
-        // 溜めた脚に使い道が無く「脚を溜める」が全条件で最下位の死に選択肢になっていた（実測）。
-        // 残脚ゲートの導入で溜めた脚が勝負所の一手の威力に直結するようになったため、
-        // 溜める効果自体もはっきり体感できる量にする。
-        const conserveMul = en.conserveLeft > 0 ? 0.60 : 1;
+        // v46(#27): 0.74→0.60。当時は残脚ゲート(legsLeft01)がLEGS_FULL=40の頭打ちで常に1.00に
+        // 張り付いており実質機能していなかったため、conserveの効果を体感できる量まで強めていた。
+        // v47(第8弾Phase4-bis): LEGS_EMPTY/LEGS_FULLの再較正でゲートが実際に機能するようになった今、
+        // 0.60は過剰だった（中盤発火・持続tickを150まで削っても勝率93%と動かなかった＝tick数では
+        // なくこの消費倍率そのものが支配的だったと実測で判明）。0.75へ緩和する。
+        const conserveMul = en.conserveLeft > 0 ? 0.75 : 1;
         const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
@@ -730,12 +731,18 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
 // そこで代償に頼らず、踏み切れる量そのもの（バースト長・追い込み量）を残脚で決める。
 // これによりv39.21が意図した「出力を上げれば脚は減る＝脚が残っている時にだけ決まる」が
 // 初めて実際の挙動になり、同時に「脚を溜める」が後の一手を活かす布石として機能し始める。
-// 範囲は「判断カードが実際に出る瞬間の残脚の分布」を実測して決めた。
-// 中盤カード=中央値93 / 勝負所=-35 / 最終スプリント=-76（ENERGY_FLOOR=-100）。
-// 素朴に0〜60で切ると終盤は全員が下限に張り付き、状況によらず一律に弱くなるだけで
-// 「脚を残した者が報われる」駆け引きにならなかったため、終盤の分布を跨ぐ範囲にしている。
-const LEGS_EMPTY = -90; // これ以下は完全に売り切れ扱い
-const LEGS_FULL = 40;   // これ以上あれば全開で踏み切れる
+//
+// v47(第8弾Phase4-bis・再較正): 上記のコメントに残る「中盤93/勝負所-35/最終-76」という分布は
+// §35時点（第7弾より前）の実測で、その後の第7弾（練習にコストを作る・年次インフレ廃止）と
+// 第8弾A案（集団内の位置取りを実力ベースに）でレースのエネルギー経済が大きく変わったため、
+// もはや実態と一致しない。旧LEGS_FULL=40は現在の分布に対して低すぎ、判断カードが出る瞬間の
+// 残脚の大半（能力93以上・丘陵ロードで中盤72・勝負所28等）が「全開で踏み切れる」判定に
+// 潰れてしまい、legsLeft01が常に1.00に張り付いて残脚ゲートが実質機能していなかった
+// （scratchpad/legs_dist.mjsで丘陵/山岳/クリテの3コース×能力85/93/105×3発火点を実測）。
+// LEGS_EMPTY=-45/LEGS_FULL=95へ引き直し、能力93〜105帯で発火点ごとに0.27〜0.89まで
+// 開閉するようにした（詳細な分布はDEVLOG §39参照）。
+const LEGS_EMPTY = -45; // これ以下は完全に売り切れ扱い
+const LEGS_FULL = 95;   // これ以上あれば全開で踏み切れる
 export function legsLeft01(en) {
   const e = en.energy ?? 100;
   return Math.max(0, Math.min(1, (e - LEGS_EMPTY) / (LEGS_FULL - LEGS_EMPTY)));
@@ -758,8 +765,16 @@ const SPRINTWAIT_MIN = 0.04, SPRINTWAIT_MAX = 0.13;
 // 勝率95%）だったため、位置取りとの相互作用込みで再較正する。
 // v47(第8弾Phase4較正): 260でも中盤発火→ゴールの平均間隔(~865tick)の3割程度をカバーし、
 // エネルギー温存がkeepThresh判定・最終着差の両方に波及して複利的に効きすぎた（実測：中盤・
-// 格下で勝率96%）。150へさらに絞る。
-const CONSERVE_TICKS = 150;
+// 格下で勝率96%）。150へ絞ったが、なお勝率93%で変化がほぼ無かった。
+// v47(第8弾Phase4-bis): conserveMulを0.60→0.75に緩めても勝率が動かなかったため、真因を
+// 切り分けた結果、支配的なのはconserveMul（消費倍率）ではなく「conserveLeft>0の間は
+// 牽引ローテのeligibleプールから完全に除外される」効果だと判明した（他の判断はローテに
+// 参加し続けるため150tick=約7.5サイクルの間に平均1〜2回は消費の大きいpullを割り当てられるが、
+// conserveだけがそれを免除される）。conserveMulをいくら緩めてもこの効果は変わらないため、
+// 免除される期間そのものを§35の元の値(80)に近い60まで縮める。
+// v47(第8弾Phase4-bis 続): 60でも中盤・格下で勝率80%とkick(69%)よりなお高かった（「牽引免除」の
+// 効果がまだ残っていた）。40まで追加で絞る。
+const CONSERVE_TICKS = 40;
 // v47(第8弾Phase4): hangOnは§35時点でほぼholdと同値という既知の課題だった（Phase 3実測でも
 // 9区分すべてでholdとの差がほぼ無いことを確認）。keepThreshの緩和・持続を強化し、
 // 「脚を使って位置を死守する」という代償付きの手として機能させる。
