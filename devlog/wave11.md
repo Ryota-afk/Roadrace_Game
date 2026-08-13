@@ -91,11 +91,26 @@
   `worldRosters`側の世代交代（`ageWorldRosters`/`topUpWorldRosters`）へ移す**
   （そちらが本物の加齢・引退・補充を既に実装済みのため）。
 
-**要対応（設計上の必然）**：現在の`worldRankTier()`は**300位スケール**
-（1位／≤3／≤10／≤30／≤80／≤200／それ以下）だが、実際の世界人口は**72名**。
-統合すると「世界200位」が存在し得なくなるので、**母集団の実サイズに合わせて
-しきい値を引き直す**か、`WORLD_ROSTER_SIZE`を増やして人口を広げるかの判断が要る。
-実装フェーズの最初にここを決めること。
+**要対応（設計上の必然）→ 解決済み（2026-08）**：現在の`worldRankTier()`は**300位スケール**
+（1位／≤3／≤10／≤30／≤80／≤200／それ以下）だが、実際の世界人口は**72名**だった。
+統合すると「世界200位」が存在し得なくなるため、**しきい値を引き直す**か
+**`WORLD_ROSTER_SIZE`を増やして人口を広げる**かの二択で、ユーザーは後者を選択（「人口を
+広げたい」）。
+
+`WORLD_ROSTER_SIZE`を`data/teams.js`で8→34へ変更。9チーム×34＝306名で300位スケールと
+ほぼ一致し、`worldRankTier()`自体は変更不要。既存の拡張方式（v46 #23で確立済み：
+`genWorldRosters()`の初期生成数・rngストリームには触れず、`topUpWorldRosters()`が独立した
+rngストリームで末尾に追記するだけ）をそのまま踏襲したため、先頭メンバーのidentity・並び順・
+旧セーブ互換は無傷（`scratchpad/roster_pop.mjs`で実測確認：新規生成で306名・先頭6名identity
+不変・旧セーブ想定の8名ロースターが`topUpWorldRosters`/`ageWorldRosters`いずれの経路でも
+34名まで自動補充される）。`WORLD_ROSTER_SIZE`はSeasonの`rivalRosters`（`RIVAL_TEAMS`6チーム）
+とも共有する定数のため、こちらも対称に6×34＝204名へ拡張された（Season側に300位スケールの
+世界ランキングは無いが、控え層が厚くなること自体は移籍市場・引き抜き耐性の観点で無害）。
+
+`aiSquadN = Math.min(aiSquadNRaw, roster.length)`で実際のレース出走人数は`roster.slice(0, N)`
+の上位のみ使うため（`state.js`/`support.js`）、ロースター深化はレースの計算量・出走人数に
+一切影響しない。Playwright回帰（マイライフ6年到達・エラー/NaN/undefinedゼロ）・`npm run build`
+で確認済み。`worldRankTier()`自体、`genWorldRosters()`のcount引数は無変更。
 
 **注意**：`mlWorldStarsForYear`は「状態は`ml.worldSeed`のみ保存し毎回1年目から再計算」という
 設計。これを捨てても`worldRosters`は既に永続化されているのでデータ的な損失は無いが、

@@ -163,7 +163,8 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
 - `mlWorldNews(seed, year, legendPool)`, `mlWorldBoard(ml)`, `computeWorldRank`
 - **殿堂の血が流入**：`legendPool = loadMlLegends()`を渡すと上位スターが殿堂選手の姓・脚質を継ぐ`bloodOf`付きになる。
 - **殿堂の頭数と対戦相手への出現は無関係**（次のアクション調査済み）：`legendPool`は無制限に蓄積するが、1レースあたりの殿堂選手代打は`nLeg=0/1/2`（55%×35%分布）で固定上限。
-- **永続ロースター（§33）**：`WORLD_ROSTER_SIZE = 8`（`data/teams.js`）。
+- **永続ロースター（§33）**：`WORLD_ROSTER_SIZE = 34`（`data/teams.js`）。マイライフ世界人口は
+  9チーム×34＝306名（第11弾Phase2の前提として、世界ランキングの300位スケールに合わせ8→34へ拡張）。
   `genWorldRosters(rng, count, teams)`で生成→`ageWorldRosters()`が年次で加齢/引退/新人補充＋定員補充、
   `topUpWorldRosters()`が定員割れを末尾に追記（既存メンバーの順序・identityには触れない）。
   **⚠️ 絶対にやってはいけないこと**：`genWorldRosters()`の`count`を直接変えること。
@@ -541,10 +542,16 @@ importしない／自己完結の述語関数はデータ扱いだが外部の�
 実際に走る72名）を統合し、ランキングを実際の対戦相手＋実績から作る ③能力開示を
 「情報を得る行為」（シーズン＝スカウト職Lv／マイライフ＝対戦経験）に紐づける。
 
-**実装フェーズで最初に決めること**：`worldRankTier()`は300位スケールだが実際の世界人口は
-**72名**。統合するとしきい値が破綻するため、引き直すか人口を広げるかの判断が要る。
-また順位表の実体化は`seasonRank`→`champPromoteCut`経由で**昇格ボーダーに直結**するため、
-配分係数は必ず実測較正すること。
+**人口拡張（着手済み・2026-08）**：`worldRankTier()`の300位スケールとの整合を、しきい値の
+引き直しではなく**人口を広げる**方針で解決（ユーザー判断）。`WORLD_ROSTER_SIZE`を8→34へ
+拡張し、マイライフ世界人口は9チーム×34＝306名（300位スケールとほぼ一致）。既存の
+「初期生成6名は据え置き・`topUpWorldRosters()`が末尾に追記」方式をそのまま踏襲したため
+先頭メンバーのidentity・旧セーブ互換は無傷（`roster_pop.mjs`実測で確認）。Season側の
+`rivalRosters`（6チーム）も同じ定数を共有するため対称に拡張済み。残りはPhase 1（順位表の
+実体化）とPhase 2本体（ランキングを`worldRosters`＋実績から再構成）。
+
+**順位表実体化の注意点（未着手）**：実体化は`seasonRank`→`champPromoteCut`経由で
+**昇格ボーダーに直結**するため、配分係数は必ず実測較正すること。
 
 ---
 
