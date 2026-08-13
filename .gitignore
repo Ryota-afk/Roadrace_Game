@@ -5,6 +5,9 @@
 !roadrace_*
 !index.html
 !DEVLOG.md
+# --- 弾（wave）ごとの詳細記録。DEVLOG.mdは短い索引のみを持ち、全文はこちらに置く ---
+!devlog/
+!devlog/**
 # --- モジュール分割＋Viteビルド（v12 移行）---
 !package.json
 !package-lock.json
