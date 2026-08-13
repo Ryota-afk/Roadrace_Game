@@ -13,7 +13,7 @@ import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, UNLOCK_TEMPLATES, VEN
 import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "../data/progression.js";
 import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE } from "../data/teams.js";
 import { C } from "../data/theme.js";
-import { SUB_STAT_KEYS, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
+import { SUB_STAT_KEYS, aiFormRoll, idYearSeed, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
 import { loadMlLegends, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname } from "../breeding/breeding.js";
 import { legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers } from "../domain/season/transfer.js";
@@ -742,15 +742,18 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const memberTarget = Math.max(0, aiSquadN - 1);
       const protegeSlot = (protege && protege.id != null && memberTarget >= 1) ? 1 : 0;
       const tmSlots = Math.max(0, memberTarget - protegeSlot);
+      // v48(第10弾続き): 固定メンバーの土台をworldRostersと同じid+年シードへ揃える。
+      // 従来はここだけ毎レース非決定論的なrngで再ロールしており、「毎回同じ顔ぶれなのに
+      // 能力だけ毎回変わる」という食い違いになっていた（詳細はDEVLOG §41／devlog/wave10.md）。
       teammates.slice(0, tmSlots).forEach((tm, i) => {
-        const st = newRider(power + (i === 0 ? 4 : 0), rng, { type: tm.type, banned: nameBanned });
+        const st = newRider(power + (i === 0 ? 4 : 0), idYearSeed(tm.id, year), { type: tm.type, banned: nameBanned });
         st.id = tm.id; st.name = tm.name; st.type = tm.type; st.personality = tm.personality || st.personality;
         if (tm.abilities) st.abilities = tm.abilities;
         members.push(st);
       });
       if (protegeSlot) {
         const pOvr = protege.curOvr || protege.ovr0 || 55;
-        const prng = mulberry(((protege.id * 2654435761) ^ ((year || 1) * 40503)) >>> 0);
+        const prng = idYearSeed(protege.id, year);
         const st = newRider(pOvr, prng, { type: protege.type, cap: aiCap, banned: nameBanned });
         st.id = protege.id; st.name = protege.name; st.type = protege.type;
         st.personality = protege.personality || st.personality;
@@ -768,8 +771,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const roster = worldRosters[d.name];
       aiSquadN = Math.min(aiSquadNRaw, roster.length);
       roster.slice(0, aiSquadN).forEach(wr => {
-        const wrng = mulberry(((wr.id * 2654435761) ^ ((year || 1) * 40503)) >>> 0);
-        const st = newRider(power + (wr.baseline || 0), wrng, { type: wr.type, cap: aiCap, banned: nameBanned });
+        const st = newRider(power + (wr.baseline || 0), idYearSeed(wr.id, year), { type: wr.type, cap: aiCap, banned: nameBanned });
         st.id = wr.id; st.name = wr.name; st.type = wr.type; st.personality = wr.personality || st.personality;
         if (wr.abilities) st.abilities = wr.abilities;
         st.goldAbilities = wr.goldAbilities || [];
@@ -783,6 +785,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
     const teamEntrants = members.map((r, i) => {
       // v29: マイライフのAI相手もeffAbilitiesを通し、体格・調子・大舞台・加速力・メンタルを反映
+      // v48(第10弾続き): 土台の能力値はid+年で固定した分、当日の調子（form）は毎レース振り直す。
+      // プレイヤー本人のピーキング（±約17%）より控えめな幅（±5%程度、aiFormRoll参照）。
+      r.form = aiFormRoll(rng);
       const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       return {
         id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, ...e,
@@ -794,8 +799,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       };
     });
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
-      const rivalStats = newRider(power + 6, rng, { type: rival.type, banned: nameBanned, cap: aiCap });
+      const rivalStats = newRider(power + 6, idYearSeed(rival.id, year), { type: rival.type, banned: nameBanned, cap: aiCap });
       rivalStats.abilities = rival.abilities; rivalStats.goldAbilities = rival.goldAbilities;
+      rivalStats.form = aiFormRoll(rng);
       const re = effAbilities(rivalStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...re,
@@ -805,8 +811,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
     // v26: 複数ライバル制。2人目のライバル（好敵手）は別チームの出走枠を差し替える
     if (rival2 && raceMeta.rival2Present && d.name === rival2.team && d.name !== myTeamName) {
-      const rival2Stats = newRider(power + 6, rng, { type: rival2.type, banned: nameBanned, cap: aiCap });
+      const rival2Stats = newRider(power + 6, idYearSeed(rival2.id, year), { type: rival2.type, banned: nameBanned, cap: aiCap });
       rival2Stats.abilities = rival2.abilities; rival2Stats.goldAbilities = rival2.goldAbilities;
+      rival2Stats.form = aiFormRoll(rng);
       const r2e = effAbilities(rival2Stats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...r2e,
@@ -826,6 +833,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const decay = Math.max(0.82, 0.92 - Math.max(0, legOvr0 - 80) * 0.006);
       AB_KEYS.forEach(k => { if (leg.finalAbilities && leg.finalAbilities[k] != null) legStats[k] = Math.round(leg.finalAbilities[k] * decay); });
       SUB_STAT_KEYS.forEach(k => { if (leg.finalSubStats && leg.finalSubStats[k] != null) legStats[k] = Math.round(leg.finalSubStats[k] * decay); });
+      legStats.form = aiFormRoll(rng);
       const le = effAbilities(legStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
       teamEntrants[0] = {
         ...teamEntrants[0], ...le,

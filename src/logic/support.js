@@ -5,7 +5,7 @@
 // を変更せずに済むようにしている（＝互換シム。将来的に呼び出し側を data/* への直接importへ
 // 揃えれば、このファイルの再エクスポート行は削除できる）。
 import { legendBloodId, loadMlLegends, saveMlLegends, loadBloodlines, mlBloodlineTier } from "../breeding/breeding.js";
-import { ASSIST_ROLES, GOLD_CONDITIONS, countRoleUses, countWins, hasAbility, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "../core/core.js";
+import { ASSIST_ROLES, GOLD_CONDITIONS, aiFormRoll, countRoleUses, countWins, hasAbility, idYearSeed, mulberry, newRider, overall, pickRiderName, ridState, rollAbilities, strHash } from "../core/core.js";
 import { ABILITIES, AB_KEYS, AB_LABEL, GROWTH, PERSONALITIES, TYPES } from "../data/abilities.js";
 import { BREED_NICKS } from "../data/breeding.js";
 import { VENUE_REGION, UNLOCK_TEMPLATES } from "../data/course.js";
@@ -1167,8 +1167,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
         roster.slice(0, Math.min(aiSquadN, roster.length)).forEach(wr => {
           if (members.length >= aiSquadN) return;
           if (alumniIds.has(wr.id)) return; // 既にalumniで出走している選手は重複させない
-          const wrng = mulberry(((wr.id * 2654435761) ^ ((year || 1) * 40503)) >>> 0);
-          const st = newRider(power + (wr.baseline || 0), wrng, { type: wr.type, cap: aiCap, banned: nameBanned });
+          const st = newRider(power + (wr.baseline || 0), idYearSeed(wr.id, year), { type: wr.type, cap: aiCap, banned: nameBanned });
           st.id = wr.id; st.name = wr.name; st.type = wr.type; st.personality = wr.personality || st.personality;
           if (wr.abilities) st.abilities = wr.abilities;
           st.goldAbilities = wr.goldAbilities || [];
@@ -1189,6 +1188,8 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
       return members.map((r, i) => {
         // v29: AI相手もプレイヤーと同じeffAbilitiesを通し、体格(パワーウェイト)・調子・大舞台適性・
         // 加速力・メンタルなどの副次補正が相手選手にも効くようにする（天候補正もこの中で処理）
+        // v48(第10弾続き): 土台の能力値はid+年で固定（安定）、当日の調子（form）は毎レース振り直す。
+        r.form = aiFormRoll(rng);
         const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
         return {
           id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, age: r.age, ...e,
