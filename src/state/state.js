@@ -13,7 +13,7 @@ import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, UNLOCK_TEMPLATES, VEN
 import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "../data/progression.js";
 import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE } from "../data/teams.js";
 import { C } from "../data/theme.js";
-import { SUB_STAT_KEYS, hasAbility, hasGoldAbility, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
+import { SUB_STAT_KEYS, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
 import { loadMlLegends, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname } from "../breeding/breeding.js";
 import { legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers } from "../domain/season/transfer.js";
@@ -672,7 +672,10 @@ export const ML_TACTICS = {
   wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", tag: "堅実・平坦向き", tagColor: "#4fbf6b", chaseMode: "push",   aceEarly: false, desc: "逃げを潰して集団を保ち、ゴールスプリントで勝負。スプリント型・平坦/クリテで最も安定して上位に入る" },
   early:      { label: "💨 早めに逃げる",               tag: "博打・起伏向き", tagColor: "#e8734a", chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "ハイリスクな作戦で、多くは吸収されて平均着順は落ちる。だが集団スプリントで勝てない脚質が「一発」を狙える唯一の手。平坦より起伏・山岳の方が逃げ切りやすい" },
   aggressive: { label: "⚔ 積極的に仕掛ける",            tag: "非スプリント型向き", tagColor: "#e8a13c", chaseMode: "normal", aceEarly: true,  desc: "終盤にエース自ら加速して先着を狙う。集団ゴールで分が悪い登坂・独走・パンチャー型向き。スプリント型は末脚を消すので不利" },
-  assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "push",   aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを押し上げる献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
+  // v48(第10弾): chaseMode:"push"を撤去。実測でこれ自体がチーム成績を悪化させる主犯だった
+  // （集団のローテを速める効果で献身の意味論には無関係）。献身の効果はチームドラフト
+  // （sim/race.js）に一本化する。
+  assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "normal", aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを風除けで支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
 
 export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars, worldRosters, protege) {
@@ -856,24 +859,14 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       else if (directiveKey === "support" || directiveKey === "experience") playerIsAce = false;
       else playerIsAce = playerTotal >= topAbility;
       if (playerIsAce) teamEntrants.forEach(e => { e.isAce = false; });
-      // v33.8: アシストに徹する＝チームのエース（先頭のチームメイト）を献身で押し上げる。
-      // 牽引・風除け・ボトルの恩恵を、自分の地力＋「献身のアシスト」特能に応じてエースの決め所へ還元する。
+      // v48(第10弾): アシストに徹する＝チームのエース（先頭のチームメイト）を献身で支える。
+      // 従来はここでエースの能力値を出走前に直接書き換えていた（+boost、下限をplayerEff-gapまで
+      // 引き上げ、99で頭打ち）が、これは実際のレース内容と無関係な作り話だった。第10弾でsim側に
+      // 実在の風除け（チームドラフト、simulateTicks参照）を新設したため、ここでは
+      // 「誰が押し上げ対象か」だけを覚えておく（結果画面の献身報酬判定に使う）。
       if (tac.playerAssist && !playerIsAce) {
         const ace = teamEntrants.find(e => e.isAce);
-        if (ace) {
-          const contrib = (playerTotal / 5 - 55) * 0.16 + (hasAbility(player, "domestique") ? (hasGoldAbility(player, "domestique") ? 5 : 3) : 0);
-          const boost = Math.max(2, Math.min(10, Math.round(contrib)));
-          // v35: 献身は「格下のエースを自分の走力の近くまで引き上げ、格上の展開に乗せる」もの。
-          // 弱いエースが千切れて牽引が届かず無意味になる問題を解消するため、各能力を
-          // 「プレイヤー実効値 - gap」まで底上げする（＝風除け・位置取り・ボトルで勝負所へ運ぶ）。
-          // 「献身のアシスト」持ちほど密着でき、格差(gap)が縮まる。
-          const gap = hasAbility(player, "domestique") ? (hasGoldAbility(player, "domestique") ? 4 : 6) : 9;
-          AB_KEYS.forEach(k => { ace[k] = Math.min(99, Math.max((ace[k] || 0) + boost, (playerEff[k] || 0) - gap)); });
-          ace.assistBoost = boost;
-          // v35: 守られるエースは風除け・位置取りの恩恵で脚を温存でき、集団から千切れにくくなる
-          ace.isAssisting = true;
-          assistedAceRef = ace;
-        }
+        if (ace) assistedAceRef = ace;
       }
       // v32（条件付き作戦）：早めに逃げる作戦なら、プレイヤーを逃げ要員として飛び出させる
       const playerRole = tac.playerBreakaway ? "breakaway" : (playerIsAce ? "lead" : "sub");
@@ -906,13 +899,13 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   rankSim(sim);
   // v36修正: レース後にfinishTimeを書き換えると、観戦アニメ（posHist）と着順（finishTime）が
   // 食い違い「先頭でゴールしたのにリザルト2位」等の同期ズレが起きていた。着順の書き換えは全廃し、
-  // 献身の作用はすべてシミュレーション内で完結させる：(1)エースは能力ブースト＋風除け（isAssisting=
-  // 消耗軽減）で勝負圏に残る、(2)アシスト本人は最終直線で流して勝負を譲る（isAssistingの最終区間
-  // ハンドリング）。結果はシミュレーション（＝観戦）そのまま＝アニメと必ず一致する。
+  // 献身の作用はすべてシミュレーション内で完結させる：(1)エースはチームドラフト（sim/race.js
+  // 参照）による実在の風除けで勝負圏に残る、(2)アシスト本人は最終直線で流して勝負を譲る
+  // （isAssistingの最終区間ハンドリング）。結果はシミュレーション（＝観戦）そのまま＝アニメと必ず一致する。
   if (assistedAceRef) {
     // 結果画面用に、献身で押し上げたエースを渡す。着順(rank)はレース中の判断カード(resumeSim)で
     // 再ランクされ得るため、結果画面側で id から最新順位を引き直す（snapshotのrankはフォールバック）。
-    sim.assistedAce = { id: assistedAceRef.id, name: assistedAceRef.name, rank: assistedAceRef.rank, boost: assistedAceRef.assistBoost };
+    sim.assistedAce = { id: assistedAceRef.id, name: assistedAceRef.name, rank: assistedAceRef.rank };
   }
   return sim;
 }

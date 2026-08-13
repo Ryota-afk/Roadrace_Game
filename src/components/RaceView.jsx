@@ -1456,6 +1456,7 @@ export function RaceView({ sim, onFinish }) {
                         launch: { t: "発射！", c: "#ff8a3d" },
                         front: { t: "前待ち", c: "#7fd6a0" },
                         peel: { t: "力尽き後退", c: "#9aa3b5" },
+                        shelter: { t: "援護中", c: "#5aa9e6" },
                       };
                       const badge = TAG[r.tag]
                         || (r.mode === "pull" ? { t: "牽引", c: "#ffffff" }

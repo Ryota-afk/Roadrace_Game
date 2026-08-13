@@ -204,6 +204,19 @@ const POSITION_TIGHT_SPAN = 0.015;
 // 判断カードの意思が位置取りの強さに与える補正（順位付けスコアへの加減算）。
 const CONSERVE_BACK_BIAS = 0.10; // 「脚を溜める」は後方へ譲る（意図的な位置低下）
 const HOLDON_FRONT_BIAS = 0.06;  // 「食らいついて粘る」は位置を死守しようとする
+// v48(第10弾): チームドラフト。従来はshelterMul（消耗軽減）が集団の人数だけで決まり、
+// 前を牽いているのが味方か敵かで計算結果が1ビットも変わらなかった＝「協力の実感が無い」の
+// 実体（詳細はDEVLOG §41／devlog/wave10.md）。同じ集団内で自分より前にいる味方の人数・
+// 牽引者が味方かどうかに応じてドラフトの消耗を軽減する（全チームに対称適用）。
+const TEAM_SHELTER_PER_MATE = 0.05;   // 前にいる味方1人につき消耗-5%
+const TEAM_SHELTER_PULL_BONUS = 0.08; // 牽引者が味方なら追加で-8%
+const TEAM_SHELTER_FLOOR = 0.6;       // 下限（大所帯チームでも消耗ゼロにはしない）
+// v48(第10弾): 「ついていける」基準（keepThresh）そのものへの緩和。消耗軽減（上）だけでは、
+// 地力の劣る選手はその恩恵を受ける前に千切れてしまう（＝守る相手がそもそも集団に残らない）。
+// grinder特性のkeepThresh緩和（0.04〜0.06）と同程度の大きさに揃えてある。
+const TEAM_KEEP_RELIEF_PER_MATE = 0.015;
+const TEAM_KEEP_RELIEF_PULL_BONUS = 0.02;
+const TEAM_KEEP_RELIEF_MAX = 0.08;
 // v12: AIチームごとの隠しの戦略スタイル（プレイヤーの事前作戦とは独立）。
 // aggressive=push相当・conservative=hold相当のローテーションペースになる
 export const AI_STYLES = ["aggressive", "balanced", "conservative"];
@@ -306,11 +319,11 @@ function energyDrain(en, mode, segType, steepness) {
 
 export function canPull(en, segType) {
   if (en.isAce) return false;
-  // v36修正: 献身のアシストは集団内で風除け（ドラフト）に徹し、自分は牽引で消耗し尽くさない。
-  // チームの牽引・風除けの恩恵はエースへの能力ブースト（isAssisting時に付与）で表現済みのため、
-  // ここで本人まで牽引に回すと長丁場で自滅（+数百秒の大敗）してしまう。集団に残って脚を残し、
-  // 最終直線で勝負を譲る（sit up）ことで、観戦と一致したまま「エースを勝負圏へ届ける」形にする。
-  if (en.isAssisting) return false;
+  // v48(第10弾): v36修正時は「献身のアシストは牽かない」だったが、その代わりに
+  // エースへの能力値書き換えで恩恵を表現していた（第10弾で廃止・実効果のチームドラフトへ置換、
+  // simulateTicks参照）。実際にチームへ風除けを供給できるのは牽引できてこそなので、
+  // ここでの除外もあわせて撤廃する。自滅対策はv38(#2)のPULL_MIN/RESUME_ENERGYヒステリシス
+  // （下のcommitted分岐）と既存のassistMul(energyDrain)がそのまま効く。
   if (en.energy <= 0) return false;
   // v38(#2): スタミナ管理。勝負を賭けた逃げ（breakaway/committedBreak）以外は、消耗したら
   // 牽引を降りて集団内で回復し、脚が戻ったら再び牽引に加わる。牽引の抱え込みによる自滅を防ぐ。
@@ -618,9 +631,22 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // 割れずに後方から千切れていく現象を再現）。
         const posShare = Math.min(1, (en.slot || 0) / totalDraft);
         const positionTight = posShare * POSITION_TIGHT_SPAN;
+        // v48(第10弾): チームドラフト。自分より前にいる味方の人数＋牽引者が味方かを見て、
+        // 「ついていける」基準そのものを緩める（＝力の劣る味方でも千切れにくくなる）のと、
+        // 実際についていけた後の消耗（drainのteamShelterMul、下）の両方に効かせる。
+        // 前者が無いと、地力の劣るエースは風除けの恩恵を受ける前にkeepThreshで千切れてしまい
+        // 「そもそも守る相手が集団に残っていない」状態になる（詳細はDEVLOG §41／devlog/wave10.md）。
+        const teamAhead = members.filter(m => m !== en && m.team === en.team
+          && (m.mode === "pull" || (m.mode === "draft" && (m.slot ?? 0) < (en.slot ?? 0)))).length;
+        const pullerIsMate = !!(puller && puller.team === en.team);
+        const teamKeepRelief = Math.min(TEAM_KEEP_RELIEF_MAX, teamAhead * TEAM_KEEP_RELIEF_PER_MATE + (pullerIsMate ? TEAM_KEEP_RELIEF_PULL_BONUS : 0));
+        // v48(第10弾): 風除けを受けている選手に展開タグを立てる（train/front/leadout/peelが
+        // 既に付いていればそちらを優先＝上書きしない）。これで「協力が効いている」ことが
+        // 脚バーの減り方だけでなく画面上のタグとしても常時見える。
+        if (!en.tag && (teamAhead > 0 || pullerIsMate)) en.tag = "shelter";
         // v47(第8弾Phase4): hangOnのkeepThresh緩和を0.05→HANGON_KEEPTHRESH_RELIEF(0.12)へ強化
         // （詳細は定数コメント参照）。
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0);
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief;
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -684,6 +710,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         const shelterMul = sheltered ? groupShelterMul(members.length) : 1;
         const backRatio = sheltered ? Math.min(1, (en.slot || 0) / totalDraft) : 0;
         const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
+        const teamShelterMul = sheltered
+          ? Math.max(TEAM_SHELTER_FLOOR, 1 - teamAhead * TEAM_SHELTER_PER_MATE - (pullerIsMate ? TEAM_SHELTER_PULL_BONUS : 0))
+          : 1;
         // v15: 横風耐性を持つ選手は横風区間でのドラフト消耗ペナルティが軽減される（1.25→1.1）
         const windPenalty = windActive && en.mode === "draft" ? (hasAbility(en, "windguard") ? 1.03 : hasAbility(en, "crosswind_sp") ? 1.1 : 1.25) : 1;
         // v17: チームケミストリー（squad構築時にchemMulを付与。未設定なら1で無効果）
@@ -700,7 +729,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // 0.60は過剰だった（中盤発火・持続tickを150まで削っても勝率93%と動かなかった＝tick数では
         // なくこの消費倍率そのものが支配的だったと実測で判明）。0.75へ緩和する。
         const conserveMul = en.conserveLeft > 0 ? 0.75 : 1;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * teamShelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
       });

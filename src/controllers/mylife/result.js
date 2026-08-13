@@ -153,6 +153,9 @@ export function mlRaceFinish(s) {
     log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🎯アンビション「${curAmb.label}」を達成！（${rw.text}）`];
   }
   // v33.8: 献身の走りの成果。支えたエースが上位に入れば名アシストとして評価・人気・報酬が上乗せされる
+  // v48(第10弾): 表彰台(3位以内)でしか報われない一段階のゲートは実測で「ほぼ発火しない」状態
+  // だった（エースの表彰台率は能力帯によって1〜5割）。惜しかった健闘（上位10位）にも小さな
+  // 見返りを置く2段階へ改める（詳細はDEVLOG §41／devlog/wave10.md）。
   let assistOutcome = null, assistPop = 0, assistEval = 0, assistMoney = 0;
   if (sim.assistedAce) {
     // v39.4修正: エースの着順は最終ランキング（判断カードの再計算後）から引き直す。
@@ -161,10 +164,14 @@ export function mlRaceFinish(s) {
     const aceEntrant = sim.ranked.find(e => e.id === sim.assistedAce.id);
     const ar = aceEntrant ? aceEntrant.rank : sim.assistedAce.rank;
     const success = ar <= 3;
+    const solid = !success && ar <= 10;
     assistOutcome = { name: sim.assistedAce.name, rank: ar, success };
     if (success) {
-      assistPop = ar === 1 ? 2.5 : 1.5; assistEval = ar === 1 ? 4 : 2; assistMoney = ar === 1 ? 30 : 15;
+      assistPop = ar === 1 ? 3 : 2; assistEval = ar === 1 ? 5 : 3; assistMoney = ar === 1 ? 40 : 20;
       log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 あなたの献身の牽引でエース${sim.assistedAce.name}が${ar}位！名アシストとして称えられた（人気+${assistPop}・評価+${assistEval}・+${assistMoney}万円）`];
+    } else if (solid) {
+      assistPop = 0.5; assistEval = 1; assistMoney = 5;
+      log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 エース${sim.assistedAce.name}を最後まで牽引し${ar}位。表彰台には届かなかったが堅実な仕事ぶりが評価された（評価+${assistEval}・+${assistMoney}万円）`];
     } else {
       log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 エース${sim.assistedAce.name}を最後まで牽引したが${ar}位。報われない走りになった`];
     }
