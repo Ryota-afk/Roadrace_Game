@@ -5,7 +5,7 @@ import { MONTHS } from "../../data/course.js";
 import { CLASSES } from "../../data/progression.js";
 import { MANAGER_DIRECTIVES } from "../../data/directives.js";
 import { mulberry, overall, pickRiderName, ridState, rollAbilities } from "../../core/core.js";
-import { mlGenTeammates } from "../../state/state.js";
+import { mlTeammatesFromRoster } from "../../state/state.js";
 import { ML_CROSSROADS, ML_OFFSEASON_CHOICES, abilityDeltaSummary, mlGenDirective, mlRollCrossroads } from "../../logic/support.js";
 import { mlGenRace } from "../../domain/mylife/race.js";
 
@@ -54,8 +54,12 @@ export function mlChooseTeam(s, offer) {
       : `${offer.team}への移籍に伴い${CLASSES[classIdx].label}に降格となった`];
   }
   // v32: 移籍で所属が変わったら固定チームメイトも新チームの顔ぶれに一新する
+  // v49(第11弾続き): 以前は無関係な新顔を毎回ランダム生成していたが、移籍先チームの
+  // worldRosters（実在の永続ロースター＝これまで対戦相手として見てきた顔ぶれ）から
+  // そのまま引き継ぐ。「あのチームに移籍したら、あの選手たちが仲間になった」という
+  // 一貫した世界になる（詳細はmlTeammatesFromRoster()参照）。
   const newTeammates = offer.team !== s.team
-    ? mlGenTeammates(mulberry(Date.now() % 999983 + s.year * 13), offer.team, 5, [s.player.name, s.rival?.name, s.rival2?.name].filter(Boolean), s.year)
+    ? mlTeammatesFromRoster(s.worldRosters, offer.team)
     : s.teammates;
   return { ...s, team: offer.team, classIdx, races, directive, salary, money, teammates: newTeammates, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
 }

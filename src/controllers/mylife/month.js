@@ -6,7 +6,7 @@ import { CLASSES } from "../../data/progression.js";
 import { MONTHS, SEG_AB } from "../../data/course.js";
 import { ML_CARS, ML_HOUSES } from "../../data/gear.js";
 import { mulberry, overall, hasAbility } from "../../core/core.js";
-import { MYLIFE_TEAMS, ageWorldRosters } from "../../state/state.js";
+import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
   GRADE_MUL, ML_AB_COACH_KEY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, computeWorldRank,
   growSub, growthPhase, mlGenDirective, mlGrowthCap, mlLivingCost, mlTeamTier, mlUpdateRiderStats,
@@ -250,10 +250,26 @@ export function mlAdvanceMonth(s, mode) {
     const aged = ageWorldRosters(s.worldRosters, agerng, s.year + 1);
     // v41(§Step7第3弾): advanceWorldYear()（非冪等なlocalStorage書き込み）はここで呼ばず、
     // s.yearの変化を検知したApp()側のuseEffectに一本化した（詳細はDEVLOG §9参照）。
-    aged.retired.slice(0, 3).forEach(r => {
+    // 自チームの引退は下のチームメイト専用ログで個別に出すため、ここでは他チーム分だけに絞る
+    // （同じ引退が「世代交代」枠と「チームメイト」枠の二重表示になるのを防ぐ）。
+    aged.retired.filter(r => r.team !== s.team).slice(0, 3).forEach(r => {
       const debut = aged.debuted.find(d => d.team === r.team);
       log.push(`【${s.year}年目 3月】🌍 世代交代：${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : "後継者の台頭が待たれる"}`);
     });
+    // v49(第11弾続き): 固定チームメイトも実在ロースター（worldRosters[所属チーム]）から
+    // 取っているため、上のageWorldRosters()による加齢・成長衰え・引退・新人補充が
+    // 自チームにもそのまま反映される。ここで取り直して次年度の教チームメイトへ反映し、
+    // 自チームで実際に入れ替わりがあれば専用のログも出す（背景で起きても気づけないと
+    // 「本当に効いているのか」分からないため）。
+    const nextTeammates = mlTeammatesFromRoster(aged.worldRosters, s.team);
+    const myRetired = aged.retired.filter(r => r.team === s.team);
+    if (myRetired.length) {
+      log.push(`【${s.year}年目 3月】チームメイトの${myRetired.map(r => `${r.name}（${r.age}歳）`).join("・")}が引退した`);
+    }
+    const freshFaces = nextTeammates.filter(tm => !(s.teammates || []).some(prev => prev.id === tm.id));
+    if (freshFaces.length && s.teammates && s.teammates.length) {
+      log.push(`【${s.year}年目 3月】新加入の${freshFaces.map(tm => tm.name).join("・")}がチームに合流した`);
+    }
     // v36(弟子深化): 弟子がこの年度替わりでOVRの節目(70/80/90)を越えたら祝いのニュースを記録
     if (s.protege) {
       const news = protegeMilestoneNews(s.protege, s.year, s.year + 1);
@@ -328,7 +344,7 @@ export function mlAdvanceMonth(s, mode) {
         races: [mlGenRace(s.year + 1, 0, classIdx)],
         directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
         contractOffers: [stayOffer, ...offerTeams], biddingWar,
-        salary, money, managerEval, worldRosters: aged.worldRosters,
+        salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates,
         screen: "mylife_contract", log,
       });
     }
@@ -336,7 +352,7 @@ export function mlAdvanceMonth(s, mode) {
       ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
       races: [mlGenRace(s.year + 1, 0, classIdx)],
       directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-      salary, money, managerEval, worldRosters: aged.worldRosters,
+      salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates,
       screen: "mylife_main", log,
     });
   }

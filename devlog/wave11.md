@@ -170,3 +170,59 @@ spec/tier配分は既存9チームと揃えて機械的に決定（各spec＝5�
 4. 両モードのPlaywright回帰＋`npm run build`。
 5. CLAUDE.md §7：情報量が多い領域なので、**表で埋め尽くさず図・強弱で読ませる**こと。
    長い説明文で誤魔化さない。
+
+---
+
+## 追補：マイライフの自チーム（teammates）をworldRostersへ統合（2026-08・実装済み）
+
+**発端**：人口拡張（25チーム化）の完了後、ユーザーから「マイライフの自分のチームはどういう
+扱いになっているか」「自チームも人数を揃えたほうがいい」「移籍しても全チーム名鑑と自チームの
+整合性が取れるようにしてほしい」「選手の引退・新加入・成長衰えは自チーム／AIチーム問わず
+起きているか」という一連の質問。
+
+**調査で判明した現状（修正前）**：
+- 自チーム＝プレイヤー＋固定チームメイト5人（`mlGenTeammates`で独立生成）。id+年シード
+  （第10弾続きで対応済み）で年内は安定するが、**年を取らない・引退しない・成長衰えもしない**。
+  AIチーム（`worldRosters`）は`ageWorldRosters()`で年次に加齢/成長衰え/引退/新人補充が回っているが、
+  自チームの5人にはこの処理が一切かかっていなかった。
+- 移籍すると5人は個別の入れ替わりではなく**丸ごと総入れ替え**（無関係な新顔をランダム生成）。
+- 自分が今いるチームでも`worldRosters[自チーム名]`という**使われない並行ロースター**が裏で
+  存在し続け、他チームと同じく毎年加齢されていた（実害は`buildMyLifeSim`の分岐で防がれて
+  いたが、既存の「チーム名鑑」画面（`mylife_teamroster`）は`ml.teammates`だけを見るため、
+  この2系統が食い違うリスクを構造的に抱えていた）。
+
+**採用した設計（ユーザー承認：「この方向で進める」）**：`ml.teammates`の独立生成をやめ、
+**そのチームの実在ロースター（`worldRosters[チーム名]`）から取る**方式へ統合。
+- `mlTeammatesFromRoster(worldRosters, teamName, n=ML_TEAMMATE_COUNT)`（`state.js`）を新設。
+  `ML_TEAMMATE_COUNT = WORLD_ROSTER_SIZE - 1 = 11`（プレイヤー本人+11=12名でAIチームと同数）。
+  ロースターは既にbaseline降順（エースが先頭）なので`slice(0, n)`だけで済む。
+- `createChar.js`（新規キャリア）・`career.js`の`mlChooseTeam`（移籍）ともに
+  `mlGenTeammates`の呼び出しをこの関数へ置換。移籍は「行き先チームに既にいる実在の選手たち
+  （今まで対戦相手として見てきた顔ぶれ）に合流する」形になった。
+- `month.js`の年度末処理（`ageWorldRosters`実行箇所）で`teammates`も同時に取り直すよう追加
+  （残留・移籍いずれの分岐でも反映されるよう両方のfinalizeYearEnd呼び出しへ`teammates:
+  nextTeammates`を追加）。自チームで引退・新加入があれば専用のログ行を出す
+  （背景で起きても気づけないと「本当に効いているのか」分からないため）。
+  重複を避けるため、既存の「世代交代（他チーム分・上位3件）」ログは自チームを除外する形に変更。
+- `buildMyLifeSim`の自チーム分岐（`isMyTeam && teammates`）は、以前は先頭1人だけ固定+4する
+  近似処理だったが、`tm.baseline || 0`をそのまま使うAIチーム側と同じ式に統一。これで
+  worldRosters側の成長衰えが実際の地力にも反映されるようになった。
+- 旧セーブ移行（`loadMyLifeGame`）も、`worldRosters`があればそちらから取る形に更新
+  （無ければ`mlGenTeammates`へフォールバック、既存の互換性は維持）。
+- 副次的な品質改善：`topUpWorldRosters()`が末尾に追記した控え選手をソートしていなかった
+  ため、baseline降順の前提が一部で崩れていた（`genWorldRosters`/`ageWorldRosters`は
+  末尾で既にソート済みだった）。「先頭＝最強」を前提にslice(0,N)する全呼び出し側
+  （出走メンバー選出・今回の自チームteammates選出）の正しさを揃えるため、ここにもソートを追加。
+
+**検証**：
+- `scratchpad/teammate_unify_check.mjs`：全25チームで11名固定、teammatesがworldRosters先頭
+  11名と完全一致、移籍先チームの実在ロースターに合流し元チームと重複無し、baseline降順を確認。
+- `scratchpad/teammate_aging_check.mjs`：同一チームを15年分`ageWorldRosters`で進め、
+  teammatesの年齢・baselineが年々変化し（成長→ピーク→衰え）、途中で世代交代（新人加入・
+  ベテラン引退）が実際に起きることを確認（15年間で顔ぶれが一切変わらない＝badは`false`）。
+- Playwright：新規デビュー直後の「チーム名鑑」画面で自分+11名（計12名）が正しく表示される
+  ことをスクリーンショットで確認。localStorage上の`ml.teammates`（11件）が`ml.worldRosters
+  [自チーム]`の先頭11件と完全一致することも直接検証。7年分のプレイでエラー・NaN・
+  undefined漏れゼロ、最終年のteammates年齢が20〜34歳とばらけている（＝加齢/世代交代が
+  実際に効いている）ことを確認。
+- `npm run build`成功。

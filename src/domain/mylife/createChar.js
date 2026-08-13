@@ -8,7 +8,7 @@ import { ML_BACKGROUNDS } from "../../data/events.js";
 import { SUB_STAT_KEYS, mulberry, newRider, overall, pickRiderName } from "../../core/core.js";
 import { legendAncestorSet, legendBloodId, mlBloodlineBonus, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { GROWTHPOW_ORDER } from "../../data/progression.js";
-import { MYLIFE_TEAMS, mlGenTeammates, sharedWorldRosters, cpShopMylifePerks } from "../../state/state.js";
+import { MYLIFE_TEAMS, mlTeammatesFromRoster, sharedWorldRosters, cpShopMylifePerks } from "../../state/state.js";
 import { bumpGrowthPow, mlCpPerks, mlCreateRival, mlGenDirective } from "../../logic/support.js";
 import { mlGenRace } from "./race.js";
 
@@ -198,6 +198,10 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     `【1年目 4月】${rival.team}の${rival.name}が、これから長く続くライバルになりそうだ`,
   ];
   // v36(#4): 経歴ごとのメリットをログで明示（出自の選択に意味が出るように）
+  // v49(第11弾続き): 固定チームメイトを永続ワールドロースター（worldRosters）から取る。
+  // 新規キャリアでも既存の共有ワールド（前回・シーズンと同じ世界）から所属チームの実在
+  // ロースターを引くので、デビュー時点から「実在するチームメイト」になる。
+  const worldRosters = sharedWorldRosters();
   if (bg.meritLabel) initLog.push(`【1年目 4月】${bg.meritLabel}：${bg.merit}`);
   if (master) {
     initLog.push(`【1年目 4月】かつての名選手・${master.name}の教え子としてデビュー。師の教え「${inh.teaching.label}」を授かり、${AB_LABEL[inh.keys[0]]}を受け継いだ`);
@@ -237,10 +241,12 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory",
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
     // v32: 固定チームメイト・作戦・キャリア記録
-    teammates: mlGenTeammates(rng, team.name, 5, [player.name, rival.name, rival2.name], 1),
+    // v49(第11弾続き): worldRosters[所属チーム]から実在の11名を取る（プレイヤー本人+11=12名で
+    // AIチームと同人数）。詳細はmlTeammatesFromRoster()のコメント参照。
+    teammates: mlTeammatesFromRoster(worldRosters, team.name),
     // v37: 永続ワールドロースター（各AIチーム固定の選手団）。毎レース同じ顔ぶれが出走する
     // v38(#9 A-3): 共有ワールドから取得＝新キャリアでも前回・シーズンと同じ世界（年を取った状態）で始まる
-    worldRosters: sharedWorldRosters(),
+    worldRosters,
     tactic: "balanced", careerHistory: [],
     log: initLog,
     // v36(#5リセマラ): デビュー前に素質を確認できる「素質診断」画面へ。引き直し（リセマラ）が

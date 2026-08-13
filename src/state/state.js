@@ -178,6 +178,12 @@ export function topUpWorldRosters(rosters, rng, teams = MYLIFE_TEAMS) {
       banned.add(r.name);
       added.push(r);
     }
+    // v49(第11弾続き): 追記した控え選手のbaselineが、既存メンバーの下位より高いことがあり得るため
+    // 再ソートする（identityや個々のbaseline値は変えない、並び順だけの整理）。genWorldRosters()/
+    // ageWorldRosters()は末尾で既に同じソートをしており、ここだけ抜けていた。「先頭＝最強」という
+    // 前提でslice(0, N)している呼び出し側（出走メンバー選出・第11弾続きのチームメイト選出）の
+    // 正しさをこの関数でも揃える。
+    added.sort((a, b) => b.baseline - a.baseline);
     next[d.name] = added;
   });
   return next;
@@ -624,9 +630,17 @@ export function loadMyLifeGame() {
       merged.ambitionIdx = mlFirstUnmetRung(merged, "victory");
     }
     // v32: 固定チームメイト未設定の旧セーブは、現所属チームのメンバーを今生成する
+    // v49(第11弾続き): worldRostersが既にあるならそちらの実在ロースターから取る（新規/移籍時と
+    // 同じ経路）。旧セーブがworldRostersごと欠けている場合のみ、最後の手段として
+    // mlGenTeammates()のランダム生成にフォールバックする。
     if ((!merged.teammates || merged.teammates.length === 0) && merged.player && merged.team) {
-      const trng = mulberry(Date.now() % 999983 + 7);
-      merged.teammates = mlGenTeammates(trng, merged.team, 5, [merged.player.name], merged.year || 1);
+      const fromRoster = mlTeammatesFromRoster(merged.worldRosters, merged.team);
+      if (fromRoster.length) {
+        merged.teammates = fromRoster;
+      } else {
+        const trng = mulberry(Date.now() % 999983 + 7);
+        merged.teammates = mlGenTeammates(trng, merged.team, 5, [merged.player.name], merged.year || 1);
+      }
     }
     if (!merged.tactic) merged.tactic = "balanced";
     if (!Array.isArray(merged.careerHistory)) merged.careerHistory = [];
@@ -664,6 +678,24 @@ export function mlGenTeammates(rng, teamName, count, bannedNames, year) {
     list.push({ id: ridState.value++, name, type, personality, abilities: rollAbilities(rng), team: teamName, joinYear: year || 1, winsForMe: 0 });
   }
   return list;
+}
+
+// v49(第11弾続き): 固定チームメイトの定員。永続ワールドロースター（WORLD_ROSTER_SIZE=12）から
+// 自分の1枠を引いた11名を「実在のチームメイト」として使う（プレイヤー本人＋11＝AIチームと
+// 同じ12名になる）。
+export const ML_TEAMMATE_COUNT = WORLD_ROSTER_SIZE - 1;
+
+// v49(第11弾続き): 固定チームメイトをworldRosters[teamName]から取得する。以前はmlGenTeammates()で
+// 独立に生成していたが、①毎回別人が生まれ他チームの選手と顔ぶれが重ならない②年を取らず引退も
+// 成長衰えもしない③移籍すると5人まるごと総入れ替えになる④自チーム分だけ`worldRosters`に
+// 「使われない並行ロースター」が残り続ける、という4つの問題があった。実在するworldRostersの
+// ロースター（id+年シードで安定・ageWorldRosters()で年次に加齢/成長衰え/引退/新人補充が
+// 回っている）をそのままチームメイトとして使うことで、名鑑と自チームが同じデータソースになり、
+// 移籍すれば「そのチームに実際にいた選手たち」が新しい仲間になる。roster側は既にbaselineの
+// 降順でソート済み（エースが先頭）なので、そのままslice(0, n)で強い順に取れる。
+export function mlTeammatesFromRoster(worldRosters, teamName, n = ML_TEAMMATE_COUNT) {
+  const roster = worldRosters && worldRosters[teamName];
+  return roster && roster.length ? roster.slice(0, n) : [];
 }
 
 // v35(バランス): 作戦の説明を実測（Node頭付き比較）に合わせて正直化。
@@ -749,8 +781,13 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       // v48(第10弾続き): 固定メンバーの土台をworldRostersと同じid+年シードへ揃える。
       // 従来はここだけ毎レース非決定論的なrngで再ロールしており、「毎回同じ顔ぶれなのに
       // 能力だけ毎回変わる」という食い違いになっていた（詳細はDEVLOG §41／devlog/wave10.md）。
-      teammates.slice(0, tmSlots).forEach((tm, i) => {
-        const st = newRider(power + (i === 0 ? 4 : 0), idYearSeed(tm.id, year), { type: tm.type, banned: nameBanned });
+      // v49(第11弾続き): teammatesはworldRosters[team]由来（mlTeammatesFromRoster）になり、
+      // 各自baselineを持つ（ageWorldRosters()で年次に加齢/成長衰えが反映される）。以前は
+      // 先頭（＝もっとも強い1人）だけ固定+4する雑な近似だったが、実在のbaselineをそのまま
+      // 使うことでAIチーム（worldRostersのelseブランチ）と同じ式に揃え、自チームにも
+      // 成長・衰えが実際に効くようにする。
+      teammates.slice(0, tmSlots).forEach((tm) => {
+        const st = newRider(power + (tm.baseline || 0), idYearSeed(tm.id, year), { type: tm.type, banned: nameBanned });
         st.id = tm.id; st.name = tm.name; st.type = tm.type; st.personality = tm.personality || st.personality;
         if (tm.abilities) st.abilities = tm.abilities;
         members.push(st);
