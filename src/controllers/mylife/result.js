@@ -7,6 +7,7 @@
 // peekCourseRecord（読み取り専用の判定）に差し替えた。実際の書き込みはApp()側のuseEffectが
 // resultInfo.courseRecord.isNewを見てpersistCourseRecordを1回だけ呼ぶ（詳細はDEVLOG §9参照）。
 import { MONTHS } from "../../data/course.js";
+import { CLASSES } from "../../data/progression.js";
 import { ML_TACTICS, buildMyLifeSim, mlAmbitionCleared } from "../../state/state.js";
 import {
   GRADE_MUL, MANAGER_DIRECTIVES, POP_MILESTONES, PRIZES, PTS, applyAmbitionReward, computeWorldRank,
@@ -128,9 +129,14 @@ export function mlRaceFinish(s) {
   if (rivalOutcome && rivalOutcome.promoted) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rivalOutcome.promoted.replace(/^——/, "")}`];
   if (rivalOutcome2 && rivalOutcome2.promoted) log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】${rivalOutcome2.promoted.replace(/^——/, "")}`];
   // v30: 世界ランキング更新＆キャリア・アンビション判定
-  const wpGain = worldPointsForFinish(me.rank, race.grade);
+  // v51(第11弾Phase2・2-C): riderStats（このレースのAI参加者分も含む）を先に更新し、
+  // その実データに対する自分の実順位を出す（旧computeWorldRank(points,year)は他人を
+  // 一切参照しない張りぼてだった。devlog/wave11.md Phase2参照）。
+  const classMul = CLASSES[s.classIdx].prizeMul;
+  const riderStats = mlUpdateRiderStats(s.riderStats, sim.ranked, new Set([...(s.teammates || []).map(t => t.id), ...(s.protege ? [s.protege.id] : [])]), s.year, race.grade, classMul);
+  const wpGain = worldPointsForFinish(me.rank, race.grade, classMul);
   const worldPoints = (s.worldPoints || 0) + wpGain;
-  const worldRank = computeWorldRank(worldPoints, s.year);
+  const worldRank = computeWorldRank(riderStats, worldPoints);
   const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
   const careerWins = (s.careerWins || 0) + (me.rank === 1 ? 1 : 0);
   const careerPodiums = (s.careerPodiums || 0) + (me.rank <= 3 ? 1 : 0);
@@ -185,8 +191,8 @@ export function mlRaceFinish(s) {
     money: s.money + prize + popBonus + ambMoney + assistMoney, rivalRecord, rivalRecord2,
     worldPoints, worldRank, worldRankBest, careerWins, careerPodiums, careerBigWins, careerTitles, careerClassics,
     ambitionIdx, ambitionDone,
-    // v37: 永続キャラ（ライバル／チームメイト）の成績台帳を更新
-    riderStats: mlUpdateRiderStats(s.riderStats, sim.ranked, new Set([...(s.teammates || []).map(t => t.id), ...(s.protege ? [s.protege.id] : [])]), s.year),
+    // v37: 永続キャラ（ライバル／チームメイト）の成績台帳を更新（上でworldRank算出のため既に計算済み）
+    riderStats,
     resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared, assistOutcome, milestoneWin,
       // v34(UI): レース後サマリーの整理。フィニッシュタイム・トップとの差・下馬評の答え合わせ。
       finishTime: me.finishTime, gapSec: me.rank === 1 ? 0 : (me.finishTime - winner.finishTime),
@@ -211,9 +217,9 @@ export function mlFinishTeamTT(s, sim, race) {
     riders: (t.riders || []).map(r => r.name),
   }));
   const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] };
-  const wpGain = worldPointsForFinish(teamRank, race.grade);
+  const wpGain = worldPointsForFinish(teamRank, race.grade, CLASSES[s.classIdx].prizeMul);
   const worldPoints = (s.worldPoints || 0) + wpGain;
-  const worldRank = computeWorldRank(worldPoints, s.year);
+  const worldRank = computeWorldRank(s.riderStats, worldPoints);
   const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
   const careerPodiums = (s.careerPodiums || 0) + (teamRank <= 3 ? 1 : 0);
   return {

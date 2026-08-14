@@ -4,8 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { C } from "../data/theme.js";
 import { ML_STOCK_ITEMS, computeMyLifeClearPoints, noteAbilityDiscovery, persistCourseRecord, protegeState } from "../logic/support.js";
-import { loadMlLegends, mlRecordLegend } from "../breeding/breeding.js";
-import { mlWorldStarsForYear } from "../world/world.js";
+import { mlRecordLegend } from "../breeding/breeding.js";
 import { buildMyLifeSim, computeAchievements, advanceWorldYear, initMyLife, loadMeta, recordTitle, saveMeta, saveMyLife } from "../state/state.js";
 import { mlGenRace } from "../domain/mylife/race.js";
 import { mlCreateChar as domainMlCreateChar } from "../domain/mylife/createChar.js";
@@ -157,9 +156,8 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     if (ml.screen !== "mylife_main") return;
     const baseDirectiveKey = ml.directive ? ml.directive.key : null;
     const { race, directiveKey } = resolveNationalRole(ml.races[0], ml.managerEval, baseDirectiveKey);
-    const worldStars = mlWorldStarsForYear(ml.worldSeed, ml.year, loadMlLegends());
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, worldStars, ml.worldRosters, protegeForRace);
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, ml.worldRosters, protegeForRace);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
     setMl(s => s.screen !== "mylife_main" ? s : ({
       ...s, races: race !== ml.races[0] ? [race, ...s.races.slice(1)] : s.races,
@@ -170,7 +168,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     if (ml.screen !== "mylife_main") return;
     const meta = buildLastRaceMeta(ml.player, ml.year, ml.classIdx);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
-    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", undefined, ml.worldRosters, protegeForRace);
+    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", ml.worldRosters, protegeForRace);
     setMl(s => s.screen !== "mylife_main" ? s : ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
   }
   // v41(§Step7第3弾): マイライフのレース結果確定は controllers/mylife/result.js の純関数に集約。

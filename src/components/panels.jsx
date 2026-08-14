@@ -93,9 +93,9 @@ export function StartListPanel({ entrants, favors }) {
               {t.list.map((e, i) => {
                 const fc = forecast.get(e);
                 return (
-                  <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : e.isWorldStar ? "#4f8fe8" : (e.isRival || e.isRival2) ? C.red : C.text }}>
+                  <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : (e.isRival || e.isRival2) ? C.red : C.text }}>
                     {fc && fc.mark ? <span style={{ color: fc.mark.color, fontWeight: 700, marginRight: 1 }}>{fc.mark.icon}</span> : ""}
-                    {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.isWorldStar ? `🌍${e.worldRank}位 ` : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
+                    {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
                   </span>
                 );
               })}

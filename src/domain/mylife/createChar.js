@@ -237,7 +237,6 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     flags: { ...s.flags, mentorName, mentorActive: true, master: master ? master.name : null },
     // v30: 世界ランキング＆アンビションを新規キャリア用に初期化
     worldPoints: 0, worldRank: null, worldRankBest: null,
-    worldSeed: (Math.floor(Math.random() * 1e9) >>> 0) || 777, // v33.9: 生きた世界のシード
     ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory",
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
     // v32: 固定チームメイト・作戦・キャリア記録

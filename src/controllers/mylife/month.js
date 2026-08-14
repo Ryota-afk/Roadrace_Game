@@ -9,10 +9,11 @@ import { mulberry, overall, hasAbility } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
   GRADE_MUL, ML_AB_COACH_KEY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, computeWorldRank,
-  growSub, growthPhase, mlGenDirective, mlGrowthCap, mlLivingCost, mlTeamTier, mlUpdateRiderStats,
-  mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
+  decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCap, mlLivingCost, mlTeamTier,
+  mlUpdateRiderStats, mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
 import { mlGenRace } from "../../domain/mylife/race.js";
+import { loadMlLegends } from "../../breeding/breeding.js";
 
 // v14.2: 月次アクションを「レース／練習」の2択から拡張。練習・休養・イベントで
 // 選手への効果を出し分ける（順位・ポイント・賞金は既にmlRaceFinish側で反映済みのため
@@ -247,7 +248,7 @@ export function mlAdvanceMonth(s, mode) {
     // ピーク前は成長・ピーク後は衰えを反映。高齢者は引退して新人ルーキーに置き換わる。
     // これで「同じ顔ぶれが永遠に同じ強さ」ではなく、若手台頭とベテラン引退の流れが生まれる。
     const agerng = mulberry(((s.year + 1) * 2246822519) >>> 0);
-    const aged = ageWorldRosters(s.worldRosters, agerng, s.year + 1);
+    const aged = ageWorldRosters(s.worldRosters, agerng, s.year + 1, MYLIFE_TEAMS, loadMlLegends());
     // v41(§Step7第3弾): advanceWorldYear()（非冪等なlocalStorage書き込み）はここで呼ばず、
     // s.yearの変化を検知したApp()側のuseEffectに一本化した（詳細はDEVLOG §9参照）。
     // 自チームの引退は下のチームメイト専用ログで個別に出すため、ここでは他チーム分だけに絞る
@@ -287,9 +288,19 @@ export function mlAdvanceMonth(s, mode) {
       // v30: 世界ランキングの持ち点は年ごとに一部減衰し、翌年の（強くなった）基準で
       // 順位を引き直す。休むと順位が落ちるため、上位維持には走り続ける必要がある
       const decayedWP = Math.round((s.worldPoints || 0) * 0.72);
+      // v51(第11弾Phase2・2-B/2-C): riderStats側のwpも同じ0.72で一律減衰させ、
+      // 実データに対する実順位を引き直す（旧computeWorldRank(points,year)は自分の持ち点
+      // だけで決まる張りぼてだった。devlog/wave11.md Phase2参照）。
+      const decayedRiderStats = decayRiderStatsWp(s.riderStats, 0.72);
+      const worldRank = computeWorldRank(decayedRiderStats, decayedWP);
+      // v51(第11弾Phase2・2-D): 世界ニュースをこの年度末に1回だけ生成して保存する
+      // （mlWorldStarsForYearの「毎回1年目から再計算」に代わり、実際に起きたイベント
+      // ＝ageWorldRosters()のretired/debutedをそのまま文章化する）。
+      const leaderEntry = Object.values(decayedRiderStats).sort((a, b) => (b.wp || 0) - (a.wp || 0))[0] || null;
+      const worldNews = mlBuildWorldNews(decayedRiderStats, leaderEntry, aged.retired, aged.debuted, s.year + 1);
       // v32（キャリアグラフ）：この年の到達値を年次記録に積む（OVR・世界ランク・通算成績の推移）
       const histEntry = { year: s.year, ovr: overall(player), worldRank: s.worldRank, worldBest: s.worldRankBest, wins: s.careerWins || 0, podiums: s.careerPodiums || 0 };
-      nextState = { ...nextState, worldPoints: decayedWP, worldRank: computeWorldRank(decayedWP, nextState.year), careerHistory: [...(s.careerHistory || []), histEntry] };
+      nextState = { ...nextState, worldPoints: decayedWP, worldRank, riderStats: decayedRiderStats, worldNews, careerHistory: [...(s.careerHistory || []), histEntry] };
       const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState };
       if (retireChoice) {
         return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval,
@@ -357,12 +368,20 @@ export function mlAdvanceMonth(s, mode) {
     });
   }
   const month = s.month + 1;
-  // v37: 自分が出走しなかった月（練習・休養・イベント等）は、その月のレースをワールドの選手だけで
-  // 軽量に決着させ、成績台帳に積む（自分が出ていないレースの成績も溜まる）。
+  // v37: 自分が出走しなかったクラスは、その月のレースをワールドの選手だけで軽量に決着させ、
+  // 成績台帳に積む（自分が出ていないレースの成績も溜まる）。
+  // v51(第11弾Phase2・2-A): 実レース（buildMyLifeSim）は自クラスのみに絞られているため、
+  // 台帳の土俵を揃えるには残り2クラスも毎月ここで決着させる必要がある。自分が走った
+  // クラス（mode==="race"の場合のs.classIdx）だけはmlRaceFinish側で実結果を既に積んでいる
+  // ので、二重計上を避けてスキップする。
   let riderStats = s.riderStats;
-  if (mode !== "race" && s.worldRosters && Object.keys(s.worldRosters).length) {
-    const worldLite = mlWorldRaceLite(s, s.year * 1000 + s.month * 17 + 3);
-    riderStats = mlUpdateRiderStats(s.riderStats, worldLite, new Set(), s.year);
+  if (s.worldRosters && Object.keys(s.worldRosters).length) {
+    for (let cls = 0; cls < 3; cls++) {
+      if (mode === "race" && cls === s.classIdx) continue;
+      const raceForClass = mlGenRace(s.year, s.month, cls);
+      const worldLite = mlWorldRaceLite(s, s.year * 1000 + s.month * 17 + 3 + cls, cls, raceForClass);
+      riderStats = mlUpdateRiderStats(riderStats, worldLite, new Set(), s.year, raceForClass.grade, CLASSES[cls].prizeMul);
+    }
   }
   // v38(改善:育成の手応え): 「今月の成長」レポート。伸びた能力（丸め後で+1以上、または生の伸びが
   // 大きいもの）とOVR・活力の増減をまとめ、主画面に出す。毎月の積み上げを目に見える手応えにする。

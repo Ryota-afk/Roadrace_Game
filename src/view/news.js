@@ -1,9 +1,7 @@
 // ニュース・号外の文字列生成（純関数）。Phase 4-1後の support.js から分離（Step 4: view層）。
 import { mulberry } from "../core/core.js";
-import { TYPES } from "../data/abilities.js";
 import { MONTHS } from "../data/course.js";
 import { RIVAL_TEAMS } from "../state/state.js";
-import { mlWorldStarsForYear } from "../world/world.js";
 
 export const RIVAL_NEWS_TEMPLATES = [
   t => `${t}が有望な若手を獲得し、戦力を着々と上積みしているという。`,
@@ -23,18 +21,24 @@ export function rivalNews(year, month) {
   return { team: team.name, color: team.color, text: tmpl(team.name) };
 }
 
-export function mlWorldNews(seed, year, legendPool) {
+// v51(第11弾Phase2・2-D): mlWorldStarsForYear（24人の別世界を毎回1年目から再計算する
+// 仕組み）を廃止し、実データから生成する形へ置換。旧実装は「前年・今年」を独立に
+// 再計算して差分を取っていたが、riderStatsは現在値しか持たない（過去年のスナップショットが
+// 無い）ため、その年に実際に起きたイベント（ageWorldRosters()が返すretired/debuted＝
+// state.js側で既に計算済み）を年度末にそのまま文章化する形にした。呼び出し側（月次コントローラ）
+// で年度末に1回だけ生成し、ml.worldNewsとして保存する（career.jsx側での再計算・シード復元は不要）。
+export function mlBuildWorldNews(riderStatsById, leaderEntry, retired, debuted, year) {
   if (!year || year < 2) return [];
-  const prev = mlWorldStarsForYear(seed, year - 1, legendPool);
-  const cur = mlWorldStarsForYear(seed, year, legendPool);
   const news = [];
-  if (cur[0] && (!prev[0] || prev[0].id !== cur[0].id)) news.push(`👑 ${cur[0].name}（${cur[0].age}歳・${TYPES[cur[0].type]?.label || cur[0].type}）が世界ランキング首位に立った${cur[0].bloodOf ? `。${cur[0].bloodOf}の血が世界の頂点へ` : ""}`);
-  const curIds = new Set(cur.map(s => s.id));
-  const retired = prev.filter(s => !curIds.has(s.id)).sort((a, b) => b.wins - a.wins);
-  if (retired[0]) news.push(`🏁 ${retired[0].name}が現役を退いた（通算${retired[0].wins}勝）`);
-  const risers = cur.filter(s => s.debutYear === year);
-  const topRiser = risers.sort((a, b) => b.rating - a.rating)[0];
-  if (topRiser) news.push(`🌟 新星 ${topRiser.name}（${topRiser.age}歳）が台頭${topRiser.lineage ? `。${topRiser.lineage}の血を継ぐ逸材だ` : ""}`);
+  if (leaderEntry) news.push(`👑 ${leaderEntry.name}（${leaderEntry.team || "無所属"}）が世界ランキング首位（通算${leaderEntry.wins || 0}勝）`);
+  const notableRetired = [...(retired || [])].sort((a, b) => ((riderStatsById[b.id] || {}).wins || 0) - ((riderStatsById[a.id] || {}).wins || 0))[0];
+  if (notableRetired) {
+    const st = riderStatsById[notableRetired.id];
+    news.push(`🏁 ${notableRetired.name}が現役を退いた${st ? `（通算${st.wins}勝）` : ""}`);
+  }
+  const topDebut = (debuted || []).find(d => d.bloodOf);
+  if (topDebut) news.push(`🌟 新星 ${topDebut.name}（${topDebut.age}歳）が台頭。${topDebut.bloodOf}の血を継ぐ逸材だ`);
+  else if (debuted && debuted[0]) news.push(`🌟 新星 ${debuted[0].name}（${debuted[0].age}歳）が台頭`);
   return news;
 }
 

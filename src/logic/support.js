@@ -18,9 +18,8 @@ import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_CO
 import { C } from "../data/theme.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "../sim/race.js";
 import { ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, SAVE_KEY, mlAmbitionMetricValue, mlFirstUnmetRung, teamsForClass } from "../state/state.js";
-import { mlWorldStarsForYear } from "../world/world.js";
 import { riderFlavorText } from "../view/flavor.js";
-import { mlNewspaper, mlWorldNews, rivalNews } from "../view/news.js";
+import { mlNewspaper, mlBuildWorldNews, rivalNews } from "../view/news.js";
 import { computePickupChance } from "../domain/season/transfer.js";
 import { genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText } from "../domain/season/sponsor.js";
 import { computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut } from "../domain/season/standings.js";
@@ -35,7 +34,7 @@ export {
   ML_AB_COACH_KEY, ML_CARS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS,
   ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_COLOR, DISCIPLINES, DISCIPLINE_KEYS,
   FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL,
-  riderFlavorText, mlNewspaper, mlWorldNews, rivalNews,
+  riderFlavorText, mlNewspaper, mlBuildWorldNews, rivalNews,
   computePickupChance,
   genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText,
   computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut,
@@ -1275,11 +1274,14 @@ export function clearSaveGame() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* noop */ }
 }
 
-export function worldPointsForFinish(rank, grade) {
+// v51(第11弾Phase2・2-B): classMul（クラス係数、CLASSES[classIdx].prizeMulを流用）を追加。
+// 世界ランキングを実データ化するにあたり、PROで勝つ方がB1で勝つより世界的な価値が
+// はっきり大きくなるようにする（ユーザー判断）。省略時は1.0＝旧来どおり。
+export function worldPointsForFinish(rank, grade, classMul = 1) {
   const gradePts = { 1: 16, 2: 34, 3: 66, 4: 130 }[grade] || 16;
   const place = rank === 1 ? 1 : rank === 2 ? 0.7 : rank === 3 ? 0.55
     : rank <= 5 ? 0.4 : rank <= 10 ? 0.25 : rank <= 20 ? 0.12 : 0.05;
-  return Math.round(gradePts * place);
+  return Math.round(gradePts * place * classMul);
 }
 
 
@@ -1288,7 +1290,10 @@ export function worldPointsForFinish(rank, grade) {
 // 純関数（ml から読むだけ）。tone で色分け（good/bad/neutral）。seed で月ごとに文面を少し変える。
 // v37: 選手成績台帳。毎レース後、永続キャラ（ライバル／自チームメイト）の着順を集計する純関数。
 // 出走ごとに通算＆年度別（勝利/表彰台/トップ10/ベスト着順）を積む。使い捨てのモブは対象外。
-export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
+// v51(第11弾Phase2・2-B): grade・classMulを渡すと、着順に応じたworldPointsForFinish()の
+// 値もcur.wpへ積む（世界ランキングの実データ化）。省略時（grade未指定）はwpを積まない＝
+// 既存の呼び出し（成績集計だけが目的の箇所）は無変更で動く。
+export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year, grade, classMul) {
   const next = { ...(prev || {}) };
   (rankedEntrants || []).forEach(e => {
     if (e.isPlayerChar) return; // 自分は raceLog で別管理
@@ -1300,7 +1305,7 @@ export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
     const kind = e.isProtege ? "protege" : isRival ? "rival" : isMate ? "teammate" : "world";
     const cur = next[e.id]
       ? { ...next[e.id], byYear: { ...next[e.id].byYear } }
-      : { id: e.id, name: e.name, team: e.teamName || e.team, kind, races: 0, wins: 0, podiums: 0, top10: 0, bestRank: 99, byYear: {} };
+      : { id: e.id, name: e.name, team: e.teamName || e.team, kind, races: 0, wins: 0, podiums: 0, top10: 0, bestRank: 99, wp: 0, byYear: {} };
     // 既存記録のkindがrival/teammateなら維持（worldに降格させない）
     if (cur.kind === "world" && kind !== "world") cur.kind = kind;
     const r = e.rank;
@@ -1310,6 +1315,7 @@ export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
     if (r <= 3) cur.podiums += 1;
     if (r <= 10) cur.top10 += 1;
     cur.bestRank = Math.min(cur.bestRank, r);
+    if (grade != null) cur.wp = (cur.wp || 0) + worldPointsForFinish(r, grade, classMul || 1);
     const y = cur.byYear[year] ? { ...cur.byYear[year] } : { races: 0, wins: 0, podiums: 0 };
     y.races += 1; if (r === 1) y.wins += 1; if (r <= 3) y.podiums += 1;
     cur.byYear[year] = y;
@@ -1318,27 +1324,54 @@ export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year) {
   return next;
 }
 
-// v37: 自分が出走しなかった月のレース結果を軽量に決着させる（ワールドの選手だけで順位付け）。
+// v51(第11弾Phase2・2-B): 年度末、全世界選手のwpを一律に減衰させる（プレイヤー自身の
+// worldPointsに掛けているのと同じ0.72）。減衰しないと「一度稼いだ古参」が永遠に
+// 上位に居座り、新世代・プレイヤーの追い上げが意味を持たなくなる。
+export function decayRiderStatsWp(riderStats, mul) {
+  const next = {};
+  Object.entries(riderStats || {}).forEach(([id, s]) => { next[id] = { ...s, wp: Math.round((s.wp || 0) * mul) }; });
+  return next;
+}
+
+// v51(第11弾Phase2・2-C): 世界ランキングを「自分の持ち点だけで決まる計算式」から
+// 「riderStats（実際に走る全選手）に対する実順位」へ置換。旧computeWorldRank(points, year)は
+// 他人を一切参照しない張りぼてだった（実測でworldPoints=600なら年次に関わらず無条件世界1位に
+// なることを確認済み。devlog/wave11.md Phase2参照）。
+export function computeWorldRank(riderStats, myWp) {
+  const wp = myWp || 0;
+  const better = Object.values(riderStats || {}).filter(s => (s.wp || 0) > wp).length;
+  return Math.max(1, better + 1);
+}
+
+// v37: 自分が出走しなかったクラスのレース結果を軽量に決着させる（ワールドの選手だけで順位付け）。
 // 地形適性（コース得意脚質との一致）＋強さ階級baseline＋ノイズでスコアリングし、pseudo-entrants を返す。
 // これを mlUpdateRiderStats に渡すことで、自分が出ていないレースの成績も台帳に積める。
-export function mlWorldRaceLite(ml, seed) {
+// v51(第11弾Phase2・2-A): 従来は全25チーム(288名)を1レースで決着させていたが、実レース
+// （buildMyLifeSim）はクラス分割済み（teamsForClass、約9チーム）のため台帳の土俵が
+// 食い違っていた。classIdxを受け取りteamsForClass(classIdx)だけを母集団にすることで統一する。
+// raceForClassはmlGenRace(year, month, classIdx)で生成した「そのクラスの今月のレース」
+// （地形favors・グレード取得用。実際に開催されて見せる訳ではない）。
+export function mlWorldRaceLite(ml, seed, classIdx, raceForClass) {
   const rosters = ml.worldRosters || {};
-  const race = (ml.races && ml.races[0]) || {};
-  const favors = race.tmpl ? race.tmpl.favors : null;
+  const teams = teamsForClass(classIdx);
+  const favors = raceForClass && raceForClass.tmpl ? raceForClass.tmpl.favors : null;
   const rng = mulberry(((seed || 1) >>> 0) || 1);
   const entrants = [];
-  Object.entries(rosters).forEach(([teamName, riders]) => {
+  teams.forEach(t => {
     // v38(#4): 自チームは worldRosters ではなく teammates が実体（レースに出るのはそちら）。
     // ここで自チームのロースターに成績を積むと、名鑑に「出走したことのない幽霊選手」の成績が
     // 表示されてしまうため除外する（チームメイトは自分の出走レースで台帳に積まれる）
-    if (teamName === ml.team) return;
-    (riders || []).forEach(wr => {
+    if (t.name === ml.team) return;
+    (rosters[t.name] || []).forEach(wr => {
       const typeMatch = (favors && wr.type === favors) ? 8 : 0;
-      entrants.push({ id: wr.id, name: wr.name, teamName, score: (wr.baseline || 0) + typeMatch + (rng() - 0.5) * 14 });
+      entrants.push({ id: wr.id, name: wr.name, teamName: t.name, score: (wr.baseline || 0) + typeMatch + (rng() - 0.5) * 14 });
     });
   });
+  // v51: ライバルは所属チームのtierが一致するクラスの世界にだけ出す（3クラス全部に
+  // 重複出現させない）。所属チームが不明（旧セーブ等）ならtier0扱い。
   [ml.rival, ml.rival2].forEach((rv, idx) => {
     if (!rv) return;
+    if (mlTeamTier(rv.team) !== classIdx) return;
     const typeMatch = (favors && rv.type === favors) ? 8 : 0;
     entrants.push({ id: rv.id, name: rv.name, teamName: rv.team, isRival: idx === 0, isRival2: idx === 1, score: 6 + typeMatch + (rng() - 0.5) * 14 });
   });
@@ -1613,14 +1646,6 @@ export function protegeMilestoneNews(protege, oldYear, newYear) {
   return `🎓 弟子 ${name} がOVR70を突破！一人前のプロとして、レースで結果を残せる選手になった`;
 }
 
-export function computeWorldRank(points, year) {
-  if (!points || points <= 1) return 300;
-  const P1 = 360 + (year - 1) * 52; // 世界1位相当の持ち点（年々上昇）
-  if (points >= P1) return 1;
-  const rank = Math.ceil(Math.pow(P1 / points, 1 / 0.72));
-  return Math.max(1, Math.min(300, rank));
-}
-
 export function worldRankTier(rank) {
   if (rank == null) return { label: "ランク外", color: "#9aa3b5" };
   if (rank === 1) return { label: "世界王者", color: "#ffd23f" };
@@ -1632,38 +1657,32 @@ export function worldRankTier(rank) {
   return { label: "無名の挑戦者", color: "#9aa3b5" };
 }
 
+// v51(第11弾Phase2・2-C/2-D): 世界ランキング表を実データ（riderStats、実際に走る全選手）から
+// 組み立てる。旧来は永続スターの別世界（mlWorldStarsForYear・24人）で穴埋めしていたが、
+// 実際に走る300人がそのまま順位表の実体になる（devlog/wave11.md Phase2参照）。
 export function mlWorldBoard(ml) {
-  const year = ml.year || 1;
-  const P1 = 360 + (year - 1) * 52;
-  const myRank = ml.worldRank;
   const myPts = Math.round(ml.worldPoints || 0);
-  const ptsAt = (rank) => Math.round(P1 * Math.pow(rank, -0.72));
-  // v33.9: 生きた世界。各順位は永続的な世界のスター（加齢・世代交代する）で埋める
-  // v33.10: あなたの殿堂の血も流入させる
-  const stars = mlWorldStarsForYear(ml.worldSeed, year, (typeof loadMlLegends === "function" ? loadMlLegends() : []));
-  const starAt = (rank) => stars[rank - 1] || null;
-  const nameAt = (rank) => { const st = starAt(rank); return st ? st.name : pickRiderName(mulberry(year * 100003 + rank * 131 + 7), null); };
-  const rivalRankOf = (rv, seedOff) => {
-    if (!rv) return null;
-    let rank = 2 + Math.floor(mulberry(strHash((rv.name || "") + seedOff))() * 45);
-    if (myRank != null && rank === myRank) rank += 1;
-    return rank;
-  };
-  const rivalRank = rivalRankOf(ml.rival, 11);
-  const rival2Rank = (ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0) ? rivalRankOf(ml.rival2, 29) : null;
-  const labelFor = (rank) => {
-    if (myRank != null && rank === myRank) return { name: (ml.player && ml.player.name) || "あなた", isPlayer: true };
-    if (rivalRank === rank && ml.rival) return { name: ml.rival.name, isRival: true };
-    if (rival2Rank === rank && ml.rival2) return { name: ml.rival2.name, isRival2: true };
-    const st = starAt(rank);
-    return st ? { name: st.name, star: { age: st.age, wins: st.wins, type: st.type, lineage: st.lineage, bloodOf: st.bloodOf } } : { name: nameAt(rank) };
-  };
-  const entry = (rank) => ({ rank, pts: (myRank != null && rank === myRank) ? myPts : ptsAt(rank), ...labelFor(rank) });
-  const top = [];
-  for (let r = 1; r <= 10; r++) top.push(entry(r));
+  const stats = ml.riderStats || {};
+  const others = Object.values(stats).map(s => ({ id: s.id, name: s.name, team: s.team, wp: s.wp || 0, wins: s.wins || 0, bloodOf: s.bloodOf || null }));
+  const me = { name: (ml.player && ml.player.name) || "あなた", wp: myPts, isPlayer: true };
+  const all = [...others, me].sort((a, b) => b.wp - a.wp || (a.isPlayer ? -1 : b.isPlayer ? 1 : 0));
+  all.forEach((e, i) => { e.rank = i + 1; });
+  const myRank = all.find(e => e.isPlayer).rank;
+  const rivalId = ml.rival ? ml.rival.id : null;
+  const rival2Id = ml.rival2 ? ml.rival2.id : null;
+  const entryFor = (e) => ({
+    rank: e.rank, pts: e.wp, name: e.name, isPlayer: !!e.isPlayer,
+    isRival: !e.isPlayer && rivalId != null && e.id === rivalId,
+    isRival2: !e.isPlayer && rival2Id != null && e.id === rival2Id,
+    star: e.isPlayer ? null : { wins: e.wins, bloodOf: e.bloodOf },
+  });
+  const top = all.slice(0, 10).map(entryFor);
+  const idx = myRank - 1;
   const around = [];
-  if (myRank != null && myRank > 12) { for (let r = myRank - 2; r <= myRank + 2; r++) { if (r >= 1) around.push(entry(r)); } }
-  return { top, around, myRank, myPts, rivalRank, rival2Rank };
+  if (idx > 11) { for (let i = idx - 2; i <= idx + 2; i++) { if (i >= 0 && i < all.length) around.push(entryFor(all[i])); } }
+  const rivalEntry = rivalId != null ? all.find(e => !e.isPlayer && e.id === rivalId) : null;
+  const rival2Entry = rival2Id != null ? all.find(e => !e.isPlayer && e.id === rival2Id) : null;
+  return { top, around, myRank, myPts, rivalRank: rivalEntry ? rivalEntry.rank : null, rival2Rank: rival2Entry ? rival2Entry.rank : null };
 }
 
 

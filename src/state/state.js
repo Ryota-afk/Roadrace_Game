@@ -8,7 +8,6 @@
 // 唯一の呼び出し元）へ移送。従来 state.js⇄breeding.js が循環importだったのを、これで
 // state.js→breeding.js の一方向に整理した（loadMlLegendsのみ引き続き必要）。
 import { AB_KEYS, TYPES } from "../data/abilities.js";
-import { TYPE_ABKEYS } from "../data/breeding.js";
 import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, UNLOCK_TEMPLATES, VENUES } from "../data/course.js";
 import { CLASSES, DIFFICULTIES, TITLE_DEFS, seasonNeed } from "../data/progression.js";
 import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE, teamsForClass } from "../data/teams.js";
@@ -102,12 +101,18 @@ function growthStep(growthPow) {
 
 // v38: 年次成長・引退で世代交代。年に一度（シーズン終わり）呼び出す。
 // 各選手を1歳加齢し、ピーク前は成長・ピーク後は衰え。高齢者は引退して新人に置き換わる。
-// 戻り値: { worldRosters: 更新後, retired: [{team, name, age, type}...], debuted: [{team, name, age}...] }
-export function ageWorldRosters(prevRosters, rng, year, teams = MYLIFE_TEAMS) {
+// 戻り値: { worldRosters: 更新後, retired: [{team, name, age, type, id}...], debuted: [{team, name, age, id, bloodOf}...] }
+// v51(第11弾Phase2・2-D): legendPool（マイライフの殿堂選手一覧、省略可）を渡すと、
+// 引退の後継ルーキーに一定確率で殿堂の血（bloodOf）を継がせる。退役したmlWorldStarsForYear
+// が担っていた「殿堂の血が世界へ流入する」役割をここへ移植した。母集団が24人から
+// 実際に走る300人規模に拡大したため、血統の希少感を保つ目安として旧来の40%より
+// 控えめな15%を採用（Season側のageWorldRosters呼び出しはlegendPool省略＝挙動不変）。
+export function ageWorldRosters(prevRosters, rng, year, teams = MYLIFE_TEAMS, legendPool) {
   const next = {};
   const retired = [];
   const debuted = [];
   const banned = new Set();
+  const legs = (legendPool && legendPool.length) ? legendPool : null;
   // 既存の名前を banned に集めて重複回避
   Object.values(prevRosters || {}).forEach(list => (list || []).forEach(r => banned.add(r.name)));
   teams.forEach(d => {
@@ -126,16 +131,20 @@ export function ageWorldRosters(prevRosters, rng, year, teams = MYLIFE_TEAMS) {
       // 引退判定: 38歳で強制、33歳以上は確率的（年齢が上がるほど高確率）
       const retireChance = age >= 38 ? 1 : (age >= 33 ? 0.18 + (age - 33) * 0.06 : 0);
       if (retireChance > 0 && rng() < retireChance) {
-        retired.push({ team: d.name, name: r.name, age, type: r.type });
+        retired.push({ team: d.name, name: r.name, age, type: r.type, id: r.id });
         banned.delete(r.name);
-        // 新人ルーキーで補充
+        // 新人ルーキーで補充（殿堂の血を継ぐことがある）
         const rookie = genOneWorldRider(rng, d.spec, banned, {
           age: 20 + Math.floor(rng() * 3),
           baseline: Math.round(rng() * 6 - 3),
           joinYear: year,
         });
+        if (legs && rng() < 0.15) {
+          const leg = legs[Math.floor(rng() * legs.length)];
+          rookie.bloodOf = leg.lineageName || ((leg.name || "名家 選手").split(" ")[0] + "系");
+        }
         banned.add(rookie.name);
-        debuted.push({ team: d.name, name: rookie.name, age: rookie.age });
+        debuted.push({ team: d.name, name: rookie.name, age: rookie.age, id: rookie.id, bloodOf: rookie.bloodOf || null });
         out.push(rookie);
       } else {
         out.push({ ...r, age, baseline });
@@ -151,7 +160,7 @@ export function ageWorldRosters(prevRosters, rng, year, teams = MYLIFE_TEAMS) {
         joinYear: year,
       });
       banned.add(rookie.name);
-      debuted.push({ team: d.name, name: rookie.name, age: rookie.age });
+      debuted.push({ team: d.name, name: rookie.name, age: rookie.age, id: rookie.id, bloodOf: null });
       out.push(rookie);
     }
     out.sort((a, b) => b.baseline - a.baseline); // エースが先頭に再ソート
@@ -593,7 +602,7 @@ export function initMyLife() {
     pendingOffseason: null, offseasonResultText: null,
     // v30: 世界ランキング＆キャリア・アンビション
     worldPoints: 0, worldRank: null, worldRankBest: null,
-    worldSeed: (Math.floor(Math.random() * 1e9) >>> 0) || 777, // v33.9: 生きた世界のシード
+    worldNews: [], // v51(第11弾Phase2・2-D): 年度末に生成する世界ニュース（実データベース）
     ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory", // v31.5: 生き方（路線）
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
     // v32: 固定チームメイト・条件付き作戦・キャリアグラフ用の年次記録
@@ -609,7 +618,7 @@ const ML_SAVE_FIELDS = [
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
   "rival", "rivalRecord", "rival2", "rivalRecord2", "flags", "rewardedAchievements",
   // v30: 世界ランキング＆キャリア・アンビション
-  "worldPoints", "worldRank", "worldRankBest", "worldSeed", "ambitionIdx", "ambitionDone", "ambitionPath",
+  "worldPoints", "worldRank", "worldRankBest", "worldNews", "ambitionIdx", "ambitionDone", "ambitionPath",
   "careerWins", "careerPodiums", "careerBigWins", "careerTitles", "careerClassics",
   "teammates", "tactic", "careerHistory",
   "protege", // v35(逆メンター): 弟子（プロテジェ）
@@ -667,6 +676,17 @@ export function loadMyLifeGame() {
     }
     if (!merged.tactic) merged.tactic = "balanced";
     if (!Array.isArray(merged.careerHistory)) merged.careerHistory = [];
+    // v51(第11弾Phase2): 世界ランキング実体化に伴う旧セーブ移行。riderStatsに.wp（世界ポイント）が
+    // 無い＝Phase2より前のセーブと判定し、ユーザー判断どおり「自分を含め全員0から再スタート」
+    // させる（旧worldPointsを残すと、他の全員が0スタートの中で自分だけ持ち点が残り継続セーブが
+    // 不自然に世界上位に立ってしまうため。年度減衰があるので数年で妥当な位置に戻る）。
+    const hasWp = Object.values(merged.riderStats || {}).some(r => r.wp != null);
+    if (!hasWp && Object.keys(merged.riderStats || {}).length > 0) {
+      merged.riderStats = {};
+      merged.worldPoints = 0;
+      merged.worldRank = null;
+    }
+    if (!Array.isArray(merged.worldNews)) merged.worldNews = [];
     return merged;
   } catch (e) { return null; }
 }
@@ -737,7 +757,7 @@ export const ML_TACTICS = {
   assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "normal", aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを風除けで支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
 
-export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldStars, worldRosters, protege) {
+export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
   // v38(#6): マイライフのAI能力上限を難易度で引き上げる。従来は easy/normal/hard がどれも94上限で
@@ -776,19 +796,11 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     const teamsForLeg = [...otherTeams].sort(() => rng() - 0.5).slice(0, nLeg);
     shuffled.forEach((leg, i) => { if (teamsForLeg[i]) legendTeams[teamsForLeg[i].name] = leg; });
   }
-  // v33.12（A-3）：世界ランキング上位の永続スターを、実際のレースに名前付きで出走させる。
-  // グレードが高いほど強豪が集う。殿堂・ライバルのチームとは重ならないよう割り当てる。
-  const worldStarTeams = {}; // teamName -> { star, rank }
-  if (worldStars && worldStars.length) {
-    const nWant = ({ 1: 1, 2: 2, 3: 3, 4: 4 }[raceMeta.grade] || 1) - Object.keys(legendTeams).length;
-    if (nWant > 0) {
-      const avail = raceTeams.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team) && !legendTeams[d.name]);
-      const pool = worldStars.slice(0, Math.min(worldStars.length, nWant * 3));
-      const chosen = [...pool].sort(() => rng() - 0.5).slice(0, Math.min(nWant, avail.length));
-      const teamsForStar = [...avail].sort(() => rng() - 0.5);
-      chosen.forEach((st, i) => { if (teamsForStar[i]) worldStarTeams[teamsForStar[i].name] = { star: st, rank: worldStars.indexOf(st) + 1 }; });
-    }
-  }
+  // v51(第11弾Phase2・2-D): 世界ランキング上位スターをAIチームのエース枠へ差し替える仕組み
+  // （worldStarTeams）は廃止した。永続ワールドロースター（worldRosters）の各チーム先頭
+  // （baseline最大＝実質エース）が既にその役割を果たしており、二重実装だった上、
+  // 差し替えのたびにnewRider()で新idを振っていたため世界スター自身の通算成績が
+  // 一切積まれない不具合があった（devlog/wave11.md Phase2参照）。
   let assistedAceRef = null; // v33.8: アシスト宣言時に献身で押し上げた自チームのエース
   // v46(#23): 出走人数の下限を3へ引き上げ（従来1〜5でチームごとに大きく揺れていた）。
   // squadMin===squadMaxのレース（個人TT=1名固定・チームTT=4〜6名）はこの下限の対象外。
@@ -911,19 +923,6 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         ...teamEntrants[0], ...le,
         id: legStats.id, name: leg.name, type: leg.type, abilities: legStats.abilities, goldAbilities: legStats.goldAbilities,
         isLegend: true, legendTitle: leg.careerTitle || null,
-      };
-    }
-    // v33.12（A-3）：世界ランキングのスターをエース枠に差し替える（isLegendと排他）
-    if (worldStarTeams[d.name] && !isMyTeam && !legendTeams[d.name]) {
-      const { star, rank } = worldStarTeams[d.name];
-      const wsStats = newRider(power, rng, { type: star.type, banned: nameBanned });
-      const keyset = TYPE_ABKEYS[star.type] || [];
-      AB_KEYS.forEach(k => { wsStats[k] = Math.max(40, Math.min(98, Math.round(star.rating - 8 + (keyset.includes(k) ? 8 : 0) + rng() * 5))); });
-      const we = effAbilities(wsStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
-      teamEntrants[0] = {
-        ...teamEntrants[0], ...we,
-        id: wsStats.id, name: star.name, type: star.type, abilities: wsStats.abilities, goldAbilities: wsStats.goldAbilities,
-        isWorldStar: true, worldRank: rank, bloodOf: star.bloodOf || null,
       };
     }
     if (isMyTeam) {

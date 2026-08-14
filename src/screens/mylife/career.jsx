@@ -8,7 +8,7 @@ import { overall } from "../../core/core.js";
 import { ABILITIES, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { C, FONT_D, FONT_M } from "../../data/theme.js";
-import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlEpilogueAway, mlEpilogueDirector, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlWorldBoard, mlWorldNews, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
+import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlEpilogueAway, mlEpilogueDirector, mlSetAutobiography, mlSetEpilogue, mlCareerTimeline, mlWorldBoard, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { initMyLife, mlCareerArchetype, riderCareerSummary, riderNickname } from "../../state/state.js";
 
 export function renderMyLifeCareerScreens(ctx) {
@@ -304,13 +304,13 @@ export function renderMyLifeCareerScreens(ctx) {
           <span style={{ fontFamily: FONT_M, fontSize: 12, width: 34, textAlign: "right", color: e.rank <= 3 ? C.yellow : e.rank <= 10 ? C.green : C.sub, fontWeight: 700 }}>{e.rank}位</span>
           <span style={{ flex: 1, fontSize: 12, color: e.isPlayer ? C.yellow : C.text, fontWeight: e.isPlayer ? 700 : 400 }}>
             {e.name}{e.isPlayer ? " ●（あなた）" : e.isRival ? " 🔥ライバル" : e.isRival2 ? " 🔥好敵手" : ""}
-            {e.star && <span style={{ fontSize: 10, color: C.sub }}>　{TYPES[e.star.type]?.label || e.star.type}・{e.star.age}歳・通算{e.star.wins}勝</span>}
+            {e.star && <span style={{ fontSize: 10, color: C.sub }}>　通算{e.star.wins}勝</span>}
             {e.star && e.star.bloodOf && <span style={{ fontSize: 10, color: "#e8a13c", fontWeight: 700 }}>　🩸{e.star.bloodOf}</span>}
           </span>
           <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>{e.pts}pt</span>
         </div>
       );
-      const worldNews = mlWorldNews(ml.worldSeed, ml.year, loadMlLegends());
+      const worldNews = ml.worldNews || [];
       return mlWrap(
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ background: "linear-gradient(180deg,#2a2740,#22202f)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>

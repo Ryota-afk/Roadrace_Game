@@ -344,6 +344,56 @@ Node単体チェック（`wave11_phase1_check.mjs`）：MyLife出走人数はB1/
 4. 旧セーブ互換：`wp`不在・`worldSeed`参照箇所の除去でクラッシュしないこと。
 5. マイライフのPlaywright回帰（複数年到達）＋`npm run build`。
 
+#### Phase 2 実装結果（2026-08・完了）
+
+**実装した項目（2-A〜2-E、設計どおり）**：
+- 2-A：`mlWorldRaceLite(ml, seed, classIdx, raceForClass)`にclassIdx引数を追加し、
+  `teamsForClass(classIdx)`だけを母集団にするよう変更。`controllers/mylife/month.js`の
+  月次処理で3クラス分を毎月ループ決着させ（自分が走ったクラスだけmlRaceFinish側の
+  実結果と二重計上しないようスキップ）、台帳の土俵を統一した。
+- 2-B：`worldPointsForFinish(rank, grade, classMul=1)`・`mlUpdateRiderStats(...,grade,classMul)`
+  にクラス係数を追加（`CLASSES[classIdx].prizeMul`＝1.0/2.0/3.5をそのまま流用、新規定数は
+  不要だった）。年度末に`decayRiderStatsWp()`で全員のwpを×0.72（自分のworldPointsと同じ率）。
+- 2-C：`computeWorldRank(riderStats, myWp)`へ完全に置換（旧`computeWorldRank(points, year)`は
+  削除）。`mlWorldBoard(ml)`も`riderStats`から実データのソート済み順位表を組み立てる形へ
+  書き換えた。
+- 2-D：`world/world.js`（`mlWorldStarsForYear`）を削除。`state.js`の`buildMyLifeSim`から
+  `worldStars`引数・`worldStarTeams`差し替えブロックを除去（`isWorldStar`バッジも
+  `panels.jsx`から撤去）。🩸殿堂の血の流入は`ageWorldRosters()`に`legendPool`引数を追加して
+  移植（引退の後継ルーキーが15%の確率で殿堂の血を継ぐ。Season側の呼び出しは`legendPool`
+  省略＝挙動不変）。世界ニュースは`mlBuildWorldNews()`（`view/news.js`）へ差し替え、
+  年度末に1回だけ生成して`ml.worldNews`に保存する方式にした（`mlWorldStarsForYear`の
+  「毎回1年目から再計算して差分を取る」設計は、`riderStats`が現在値しか持たないため
+  そのままは移植できず、`ageWorldRosters()`が返す`retired`/`debuted`をその場で文章化する
+  方式に変更）。`worldSeed`フィールドは全消費箇所の削除に伴い完全に削除。
+  「🌍N位」バッジ（出走表への本物の世界順位表示）は副産物として設計に書いたが、
+  対戦相手全員分の実順位を毎レース計算するコストとスコープの兼ね合いで今回は見送った
+  （スコープ外セクション参照）。
+- 2-E：実測の結果、追加の較正は不要と判断。Playwrightでの2回の独立プレイスルー
+  （4年目まで自動プレイ）で世界7位・世界57位に到達しており、野望`rankAtMost`の
+  TOP50→TOP20→TOP10→TOP3→TOP1という段階に対して詰みも簡単すぎもしない妥当な
+  ペースだった（詳細は下記実機検証参照）。
+
+**旧セーブ移行**：`loadMyLifeGame()`に、`riderStats`のエントリに`.wp`が無い（＝Phase2より前の
+セーブ）と判定した場合に`riderStats`を空にし`worldPoints`/`worldRank`も0/nullへ戻す処理を追加
+（ユーザー判断どおり「自分を含め全員0から再スタート」）。
+
+**実機検証（Playwright）**：マイライフでキャラ作成→月次進行（レース/休養/ライバル会話）を
+自動化し、4年目（B1→A→PROへ2回昇格）まで到達。コンソールエラー0件・NaN/undefined 0件を
+2回の独立実行で確認。
+- 1回目：`worldPoints=827 worldRank=7 worldRankBest=6`、`riderStats`件数295（全員wp>0）、
+  `worldNews`に実際の首位選手の勝利数が表示される。
+- 2回目：`worldPoints=303 worldRank=57 worldRankBest=11`、ランキング画面で「あなたの周辺」
+  （55〜59位）・世界トップ10（実データ・勝数付き）・ライバル/好敵手の実順位（🔥ライバル
+  世界2位／好敵手 世界16位）が正しく表示されることをスクリーンショットで確認。
+- Node単体チェック：`mlWorldRaceLite`のクラス別母集団分離、`ageWorldRosters`の血統継承率
+  （20〜100トライアルで13〜15%、目安どおり）、`computeWorldRank`の実順位計算を個別に検証。
+  `npm run build`成功。
+
+**スコープ外として残した項目（低優先度、別弾で対応）**：出走表・レース観戦画面への
+「🌍実順位」バッジ表示（副産物として設計時に触れたが、毎レース全対戦相手分の順位計算
+コストとのバランスで見送り）。
+
 **要対応（設計上の必然）→ 解決済み（2026-08・2段階の実装）**：現在の`worldRankTier()`は
 **300位スケール**（1位／≤3／≤10／≤30／≤80／≤200／それ以下）だが、実際の世界人口は**72名**
 だった。統合すると「世界200位」が存在し得なくなるため、**しきい値を引き直す**か
