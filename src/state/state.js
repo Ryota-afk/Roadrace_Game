@@ -12,6 +12,7 @@ import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, UNLOCK_TEMPLATES, VEN
 import { CLASSES, DIFFICULTIES, TITLE_DEFS, seasonNeed } from "../data/progression.js";
 import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE, teamsForClass } from "../data/teams.js";
 import { raceEntryPlan } from "../domain/season/entryPlan.js";
+import { aiPowerFor, mlAiCapFor, scoutedAbilities, scoutStageFromLv, scoutStageFromRaces, ovrBandLabel } from "../domain/shared/scouting.js";
 import { C } from "../data/theme.js";
 import { SUB_STAT_KEYS, aiFormRoll, idYearSeed, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
@@ -763,7 +764,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // v38(#6): マイライフのAI能力上限を難易度で引き上げる。従来は easy/normal/hard がどれも94上限で
   // 実質同強度になり、能力を極めた終盤（100超）に対して hard でも相手が頭打ちで無双できた。
   // hard=102/oni=112 まで許容し、極まった選手にも歯応えが残るようにする（season側のDIFFICULTIESは不変）。
-  const aiCap = ({ easy: 92, normal: 96, hard: 102, oni: 112 })[difficultyId] ?? (diffDef.abilCap ?? 94);
+  const aiCap = mlAiCapFor(difficultyId, diffDef.abilCap);
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
   // v47(第7弾C): yearBonus（経過年数だけでAIの地力を底上げする一律ボーナス、最大+24）を廃止した。
@@ -772,7 +773,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // 役割の雑な二重実装で、①プレイヤーから見えない②自チームの僚友も同率で強化してしまう
   // ③aiCapに吸収される④17年で頭打ち、という欠陥があった。年次の手応えは、以降ワールドロースター
   // 自身の世代交代（baseline経由の個体差）だけから生まれる（詳細はDEVLOG §38参照）
-  const power = (50 + classIdx * 9 + (raceMeta.grade - 1) * 4) * diffAiMul;
+  const power = aiPowerFor(50, classIdx, raceMeta.grade, diffAiMul);
   const { squadMin, squadMax } = raceMeta.tmpl;
   const nameBanned = new Set([player.name]);
   const riders = [];

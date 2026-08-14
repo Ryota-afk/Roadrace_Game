@@ -11,7 +11,7 @@ import { renderSeasonYearEndScreens } from "./season/yearend.jsx";
 
 const INTRO_SCREENS = new Set(["intro", "newgame_setup", "scoutpolicy_initial", "sponsor"]);
 const TRANSFER_EVENT_SCREENS = new Set(["event", "transferRequest", "poachOffer", "poachMarket", "event_result"]);
-const SCHEDULE_BOARD_SCREENS = new Set(["program", "standings", "trophy"]);
+const SCHEDULE_BOARD_SCREENS = new Set(["program", "standings", "trophy", "rivals"]);
 const RACE_SCREENS = new Set(["startlist", "lineup", "race", "result_pending", "result", "gc_stage", "gc_role_setup", "gc_final"]);
 const YEAREND_SCREENS = new Set(["yearend", "clear"]);
 

@@ -1,11 +1,11 @@
 // season.jsx より分割（Step8）：日程・順位表・殿堂（program/standings/trophy）
 import React from "react";
-import { TitlesPanel } from "../../components/panels.jsx";
+import { ScoutBadge, TitlesPanel } from "../../components/panels.jsx";
 import { Btn, Eyebrow } from "../../components/ui.jsx";
 import { TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { C, FONT_D, FONT_M } from "../../data/theme.js";
-import { WEATHER, computeStandings, standingsRankReward } from "../../logic/support.js";
+import { WEATHER, computeStandings, seasonRivalDex, standingsRankReward } from "../../logic/support.js";
 import { computePrestige, genMonthRaces, riderNickname } from "../../state/state.js";
 
 export function renderSeasonScheduleBoardScreens(ctx) {
@@ -111,6 +111,34 @@ export function renderSeasonScheduleBoardScreens(ctx) {
               })}
             </div>
           )}
+        <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
+      </div>
+    );
+  }
+
+  // v51(第11弾Phase3・3-C): 他チーム名鑑。自クラスの相手選手を、スカウトLvに応じた段階で査定する。
+  if (g.screen === "rivals") {
+    const teams = seasonRivalDex(g);
+    const scoutLv = (g.staff && g.staff.scout) || 0;
+    return wrap(
+      <div style={{ display: "grid", gap: 10 }}>
+        <Eyebrow color={C.green}>🔍 他チーム名鑑（{cls.label}）</Eyebrow>
+        <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.6 }}>
+          スカウトを雇うほど、相手選手の分析が段階的に進みます（現在Lv{scoutLv}）。
+        </div>
+        {teams.map(t => (
+          <div key={t.teamName} style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${t.color}`, overflow: "hidden" }}>
+            <div style={{ padding: "7px 12px", background: C.panel2 }}>
+              <span style={{ fontFamily: FONT_D, fontSize: 14, color: C.text }}>{t.teamName}<span style={{ fontSize: 10, color: C.sub, marginLeft: 6 }}>{t.trait}</span></span>
+            </div>
+            {t.riders.map(r => (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: "5px 12px", borderTop: `1px solid ${C.bg}`, fontSize: 12 }}>
+                <span style={{ flex: 1, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}<span style={{ fontSize: 9.5, color: TYPES[r.type]?.color, marginLeft: 4 }}>{TYPES[r.type]?.label}</span></span>
+                <ScoutBadge scout={r.scout} />
+              </div>
+            ))}
+          </div>
+        ))}
         <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
       </div>
     );

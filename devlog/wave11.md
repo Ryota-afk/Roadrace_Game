@@ -534,6 +534,61 @@ spec/tier配分は既存9チームと揃えて機械的に決定（各spec＝5�
 4. 旧セーブ互換：スカウト未雇用・`riderStats`が薄い状態でクラッシュしないこと。
 5. 両モードのPlaywright回帰＋`npm run build`。
 
+#### Phase 3 実装結果（2026-08・完了）
+
+**新規ファイル**：`domain/shared/scouting.js`（`aiPowerFor`／`mlAiCapFor`／`scoutedAbilities`／
+`scoutStageFromLv`／`scoutStageFromRaces`／`ovrBandLabel`）。`components/panels.jsx`に
+`ScoutBadge`コンポーネントを追加（両モード共通の段階表示パーツ）。
+
+**実装した項目（3-A〜3-D、設計どおり）**：
+- 3-A：`power`式の二重管理を解消。`buildSim`（`logic/support.js`、base=52）・
+  `buildMyLifeSim`（`state/state.js`、base=50）双方の既存インライン式を`aiPowerFor(base,
+  classIdx, grade, diffAiMul, extra)`へ置換（実測でバイト単位一致を確認、挙動変更ゼロ）。
+  マイライフのAI能力上限マッピングも`mlAiCapFor()`へ集約。`scoutedAbilities(rider, power,
+  year, cap)`が基準文脈（★2・現在の年・現在の難易度）で`newRider`+`idYearSeed`+`overall`を
+  呼び、査定値を返す。
+- 3-B：`scoutStageFromLv(scoutLv)`（シーズン）／`scoutStageFromRaces(races)`（マイライフ）で
+  0-3の段階を判定。`ovrBandLabel(ovr)`で「60台」のような粗い帯を返す。乱数のブレは使わず、
+  段階ごとに粒度（帯→適性グレード→数値）だけを変える設計どおりに実装。
+- 3-C：`logic/support.js`に`mlWorldTeamStats`の拡張（各行へ`scoutStage`/`scout`を付加）と
+  新規`seasonRivalDex(g)`を追加。マイライフは既存の「全チーム名鑑」画面（`screens/mylife/
+  hub.jsx`）にそのまま`ScoutBadge`を差し込み、シーズンは新規画面（`g.screen==="rivals"`、
+  `screens/season/scheduleBoard.jsx`）を追加し「記録」メニューの年間プログラム/順位表と
+  同じ導線（`records_standings`セクションに4つ目のボタン）に置いた。
+  - 自分（プレイヤー本人）は査定値を使わず、実際に保有する能力値をそのまま表示する
+    （プレイヤーは毎レースAI生成されない実在キャラのため。他は全員AI生成されるので査定値）。
+  - 自チームのチームメイトは常にstage3（`forceStage`引数で強制）。マイライフの実際の
+    レース生成（`newRider(power+baseline, ..., {type, banned})`＝cap未指定＝既定94）と
+    完全に一致させるため、チームメイトのみcap=94固定（相手チームはaiCap）。
+- 3-D：CLAUDE.md §7に沿い、未開示は「🔒未分析」の一言のみ（説明文なし）。既存の
+  `APT_GRADE_COLOR`・`DISCIPLINE_KEYS`をそのまま流用し新しい配色を発明していない。
+  行がstage別に長さが変わるため`flexWrap: "wrap"`でレイアウト崩れを防いだ。
+
+**実機検証（Playwright）**：
+- Node単体チェック（`scratchpad/p3_check.mjs`）：段階の境界値（Lv0-4→0/1/2/3/3、
+  races0/1/2/3/5/6/10→0/1/1/2/2/3/3）、マイライフの自分・チームメイト・相手選手（対戦0/2/8戦）
+  それぞれの`scout`出力、シーズンのスカウトLv0〜3それぞれの`scout`出力を確認。
+  自分の`scout`が保有能力の実値と一致し、対戦経験に応じて相手の`scoutStage`が正しく
+  切り替わることを確認。
+- Playwright実機：シーズンの「他チーム名鑑」をLv0（全員🔒未分析）・Lv3（`localStorage`経由で
+  `staff.scout`を書き換えて再読込）の両方で開き、9チーム全員分（B1クラス）を
+  コンソールエラー0件でレンダリング。Lv3ではクライマー系チーム（ヴェロチタ京都）の登坂値が
+  軒並み高く、独走系チーム（ウィンドミル北海道）の独走値が高いなど、脚質ボーナスが査定値に
+  正しく反映されていることをスクリーンショットで確認。マイライフの「全チーム名鑑」も同様に
+  25チーム×12名（300行）を描画コスト・エラーともに問題なく確認、自チーム内は`OVR◯◯`表示・
+  対戦経験ゼロの相手は`🔒未分析`表示を確認。
+- `npm run build`成功。
+
+**スコープ外として残した項目（今回やらないと決めたこと）**：
+- 出走表（`components/panels.jsx`の`StartListPanel`）への段階表示統合。設計時は
+  「両モード共通で出す」としていたが、`StartListPanel`の`entrants`は既にそのレース用に
+  実際に生成された本物の能力値を持っており（`raceForecast`が直接`e.flat`等を読む）、
+  段階表示を統合するには`riderStats`／`g.staff.scout`をこの共通コンポーネントまで新たに
+  引き回す必要がある。3-Cの2画面（両モードの名鑑）でPhase 3の中心的な価値
+  （「情報を得る行為に能力開示を紐づける」）は既に実現できているため、3つ目の統合先は
+  見送り、確実な検証ができた範囲で今回のPhaseを区切った。着手する場合は`entrants`側に
+  `scoutStage`を事前計算して添える形が良さそう。
+
 #### スコープ外（Phase 3ではやらないと決めたこと）
 
 - **能力値の永続化**（3-Aで却下）。将来やるなら「AI強度設計の全面再調整」とセットの別弾にする。

@@ -308,6 +308,38 @@ export function DisciplineGrid({ r, highlightKey }) {
   );
 }
 
+// v51(第11弾Phase3・3-C/3-D): 他チーム選手の査定バッジ。段階（scout.stage）ごとに粒度だけを
+// 変える（帯→適性グレード→数値）。乱数のブレは使わない（画面を開くたび数字が揺れて
+// 壊れて見える事故を構造的に防ぐため。詳細はdevlog/wave11.md Phase3参照）。
+// 未開示（stage0）は🔒一言で示し、長い説明文は書かない（CLAUDE.md §7）。
+export function ScoutBadge({ scout, compact }) {
+  if (!scout || scout.stage < 1) {
+    return <span style={{ fontSize: 10, color: C.sub }}>🔒未分析</span>;
+  }
+  if (scout.stage === 1) {
+    return <span style={{ fontSize: 10.5, fontFamily: FONT_M, color: C.sub }}>OVR<span style={{ color: C.text }}>{scout.ovrBand}</span></span>;
+  }
+  if (scout.stage === 2) {
+    return (
+      <span style={{ display: "inline-flex", gap: 4 }}>
+        {DISCIPLINE_KEYS.map(k => {
+          const g = scout.grades[k];
+          return <span key={k} title={DISCIPLINES[k].label} style={{ fontFamily: FONT_D, fontSize: 10.5, fontWeight: 700, color: APT_GRADE_COLOR[g] || C.sub }}>{g}</span>;
+        })}
+      </span>
+    );
+  }
+  // stage3: 実数値
+  if (compact) {
+    return <span style={{ fontSize: 10.5, fontFamily: FONT_M, color: C.text }}>OVR<span style={{ color: C.yellow, fontWeight: 700 }}>{scout.ovr}</span></span>;
+  }
+  return (
+    <span style={{ display: "inline-flex", gap: 6, fontFamily: FONT_M, fontSize: 10.5, color: C.sub }}>
+      <span>平{scout.flat}</span><span>登{scout.climb}</span><span>スプ{scout.sprint}</span><span>スタ{scout.stamina}</span><span>独{scout.solo}</span>
+    </span>
+  );
+}
+
 export function BlurGrid({ blur }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, marginTop: 6 }}>

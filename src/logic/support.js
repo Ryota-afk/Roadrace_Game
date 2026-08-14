@@ -24,6 +24,7 @@ import { computePickupChance } from "../domain/season/transfer.js";
 import { genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText } from "../domain/season/sponsor.js";
 import { computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut } from "../domain/season/standings.js";
 import { raceForecast } from "../domain/shared/forecast.js";
+import { aiPowerFor, mlAiCapFor, scoutedAbilities, scoutStageFromLv, scoutStageFromRaces, ovrBandLabel } from "../domain/shared/scouting.js";
 
 // data/* ・ view/* ・ domain/* へ移送した定数・関数の再エクスポート（呼び出し側の import 文を変更しないための互換シム）
 export {
@@ -40,6 +41,7 @@ export {
   computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut,
   raceForecast,
   teamsForClass,
+  aiPowerFor, mlAiCapFor, scoutedAbilities, scoutStageFromLv, scoutStageFromRaces, ovrBandLabel,
 };
 
 export function upgradeGoldAbilities(r) {
@@ -1139,7 +1141,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
     fixedAiTeams.forEach(list => list.forEach(en => riders.push({ ...en })));
   } else {
     const rng = mulberry(Date.now() % 999983);
-    const power = (52 + classIdx * 9 + (raceMeta.grade - 1) * 4 + (raceMeta.championship ? 6 : 0) + dynastyBonus) * diffAiMul;
+    const power = aiPowerFor(52, classIdx, raceMeta.grade, diffAiMul, (raceMeta.championship ? 6 : 0) + dynastyBonus);
     // v12: 相手チームの出走人数は自チームの選択人数に連動させず、レース規定の範囲内で
     // チームごとに独立して決める（毎回同じ人数になる不自然さを解消）
     const { squadMin, squadMax } = raceMeta.tmpl;
@@ -1409,20 +1411,38 @@ export function mlRiderStatsRows(ml) {
 
 // v37: 全チームの選手名鑑＋成績（チームごとにグルーピング）。永続ワールドロースターの全選手を、
 // 蓄積した成績（riderStats）と突き合わせて返す。未出走の選手も0成績で表示する。
+// v51(第11弾Phase3・3-B/3-C): 各行にscoutStage（0-3）とscout（段階に応じた査定情報）を添える。
+// 自分・チームメイトは常にstage3（毎日一緒に練習している以上、伏せる理由が無い＝ユーザー判断）。
+// 相手チームの選手は対戦経験（riderStats[id].races）で段階が開く。
 export function mlWorldTeamStats(ml) {
   const stats = ml.riderStats || {};
   const rosters = ml.worldRosters || {};
   const year = ml.year || 1;
+  const diffDef = DIFFICULTIES.find(d => d.id === ml.difficulty) || DIFFICULTIES[1];
+  const aiCap = mlAiCapFor(ml.difficulty, diffDef.abilCap);
+  // v51: 査定は実際のレース生成と同じ式で計算する。相手チーム（worldRosters経由）はaiCap、
+  // 自チームメイト（buildMyLifeSimでcap未指定＝既定94）はcapを分ける（実際の生成と食い違わせない）。
+  const scoutInfoFor = (rider, classIdx, stage, cap) => {
+    if (stage < 1) return null;
+    const power = aiPowerFor(50, classIdx, 2, diffDef.aiMul);
+    const ab = scoutedAbilities(rider, power, year, cap);
+    if (stage === 1) return { stage, ovrBand: ovrBandLabel(ab.ovr) };
+    if (stage === 2) return { stage, grades: DISCIPLINE_KEYS.reduce((acc, k) => { acc[k] = aptGrade(disciplineScore(ab, k)); return acc; }, {}) };
+    return { stage, ...ab };
+  };
   const teams = [];
-  const statRow = (id, name, type, extra = {}) => {
+  const statRow = (id, name, type, wr, teamTier, extra = {}, forceStage) => {
     const s = stats[id];
     const yr = s && s.byYear && s.byYear[year] ? s.byYear[year] : { races: 0, wins: 0, podiums: 0 };
+    const stage = forceStage != null ? forceStage : scoutStageFromRaces(s ? s.races : 0);
     return { id, name, type,
       races: s ? s.races : 0, wins: s ? s.wins : 0, podiums: s ? s.podiums : 0,
-      bestRank: s ? s.bestRank : 99, yr, ...extra };
+      bestRank: s ? s.bestRank : 99, yr, scoutStage: stage,
+      scout: wr ? scoutInfoFor(wr, teamTier, stage, forceStage != null ? 94 : aiCap) : null, ...extra };
   };
   Object.entries(rosters).forEach(([teamName, riders]) => {
     const teamInfo = MYLIFE_TEAMS.find(t => t.name === teamName);
+    const teamTier = teamInfo ? teamInfo.tier : 0;
     let rows;
     if (teamName === ml.team) {
       // v38(#4): 自チームは worldRosters の未使用選手団ではなく、実際にレースへ出ている
@@ -1438,9 +1458,11 @@ export function mlWorldTeamStats(ml) {
           agg.bestRank = Math.min(agg.bestRank, e.rank);
           if (e.year === year) { agg.yr.races++; if (e.rank === 1) agg.yr.wins++; if (e.rank <= 3) agg.yr.podiums++; }
         });
-        rows.push({ id: p.id, name: p.name, type: p.type, ...agg, self: true });
+        // 自分は毎レースAI生成しない実在のキャラなので、査定値ではなく実際の保有能力をそのまま出す
+        rows.push({ id: p.id, name: p.name, type: p.type, ...agg, self: true, scoutStage: 3,
+          scout: { stage: 3, flat: p.flat, climb: p.climb, sprint: p.sprint, stamina: p.stamina, solo: p.solo, ovr: overall(p) } });
       }
-      (ml.teammates || []).forEach(tm => rows.push(statRow(tm.id, tm.name, tm.type)));
+      (ml.teammates || []).forEach(tm => rows.push(statRow(tm.id, tm.name, tm.type, tm, teamTier, {}, 3)));
       // 自分を先頭に固定し、チームメイトは成績順
       rows = [rows[0], ...rows.slice(1).sort((a, b) => (b.wins - a.wins) || (b.podiums - a.podiums) || (a.bestRank - b.bestRank))].filter(Boolean);
       const teamWins = rows.reduce((a, r) => a + r.wins, 0);
@@ -1448,7 +1470,7 @@ export function mlWorldTeamStats(ml) {
       teams.push({ teamName, color: teamInfo ? teamInfo.color : "#9aa3b5", trait: teamInfo ? teamInfo.trait : "", riders: rows, teamWins, teamPodiums, isMyTeam: true });
       return;
     }
-    rows = (riders || []).map(wr => statRow(wr.id, wr.name, wr.type));
+    rows = (riders || []).map(wr => statRow(wr.id, wr.name, wr.type, wr, teamTier));
     rows.sort((a, b) => (b.wins - a.wins) || (b.podiums - a.podiums) || (a.bestRank - b.bestRank));
     const teamWins = rows.reduce((a, r) => a + r.wins, 0);
     const teamPodiums = rows.reduce((a, r) => a + r.podiums, 0);
@@ -1456,6 +1478,33 @@ export function mlWorldTeamStats(ml) {
   });
   teams.sort((a, b) => (b.teamWins - a.teamWins) || (b.teamPodiums - a.teamPodiums));
   return teams;
+}
+
+// v51(第11弾Phase3・3-C): シーズン版「他チーム名鑑」。自クラス（teamsForClass）の相手選手を
+// スカウトLv（g.staff.scout、0-3）に応じた段階で査定する。マイライフと違い対戦経験の概念が
+// 無いため、開示はスタッフ雇用だけで決まる（スタッフを雇う＝情報を得る行為、という点は
+// マイライフの「対戦する」と同じ構図）。
+export function seasonRivalDex(g) {
+  const rosters = g.rivalRosters || {};
+  const teams = teamsForClass(g.classIdx);
+  const diffDef = DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0];
+  const aiCap = diffDef.abilCap ?? 94;
+  const stage = scoutStageFromLv(g.staff && g.staff.scout);
+  return teams.map(t => {
+    const roster = rosters[t.name] || [];
+    const riders = roster.map(wr => {
+      let scout = null;
+      if (stage >= 1) {
+        const power = aiPowerFor(52, t.tier, 2, diffDef.aiMul);
+        const ab = scoutedAbilities(wr, power, g.year, aiCap);
+        if (stage === 1) scout = { stage, ovrBand: ovrBandLabel(ab.ovr) };
+        else if (stage === 2) scout = { stage, grades: DISCIPLINE_KEYS.reduce((acc, k) => { acc[k] = aptGrade(disciplineScore(ab, k)); return acc; }, {}) };
+        else scout = { stage, ...ab };
+      }
+      return { id: wr.id, name: wr.name, type: wr.type, age: wr.age, scoutStage: stage, scout };
+    });
+    return { teamName: t.name, color: t.color, trait: t.trait, riders };
+  });
 }
 
 export function mlMediaHeadline(ml) {

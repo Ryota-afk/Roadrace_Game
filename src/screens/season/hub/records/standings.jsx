@@ -14,6 +14,7 @@ export function renderRecordsStandingsSection(ctx) {
             <Btn small outline color={C.blue} onClick={() => setG(s => ({ ...s, screen: "program" }))}>📅 年間プログラム</Btn>
             <Btn small outline color={C.purple} onClick={() => setG(s => ({ ...s, screen: "standings" }))}>📊 順位表</Btn>
             <Btn small outline color={"#e8a13c"} onClick={() => setG(s => ({ ...s, screen: "trophy" }))}>🏆 トロフィールーム</Btn>
+            <Btn small outline color={C.green} onClick={() => setG(s => ({ ...s, screen: "rivals" }))}>🔍 他チーム名鑑</Btn>
           </div>
         </div>
   );
