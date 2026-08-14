@@ -10,8 +10,9 @@
 import { AB_KEYS, TYPES } from "../data/abilities.js";
 import { TYPE_ABKEYS } from "../data/breeding.js";
 import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, UNLOCK_TEMPLATES, VENUES } from "../data/course.js";
-import { CLASSES, DIFFICULTIES, TITLE_DEFS } from "../data/progression.js";
-import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE } from "../data/teams.js";
+import { CLASSES, DIFFICULTIES, TITLE_DEFS, seasonNeed } from "../data/progression.js";
+import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE, teamsForClass } from "../data/teams.js";
+import { raceEntryPlan } from "../domain/season/entryPlan.js";
 import { C } from "../data/theme.js";
 import { SUB_STAT_KEYS, aiFormRoll, idYearSeed, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
@@ -20,7 +21,7 @@ import { legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoac
 import { initRoster, genScouts } from "../domain/season/roster.js";
 import { genSponsors } from "../domain/season/sponsor.js";
 
-export { RIVAL_TEAMS, MYLIFE_TEAMS, legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers, initRoster, genScouts, genSponsors, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname };
+export { RIVAL_TEAMS, MYLIFE_TEAMS, teamsForClass, legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers, initRoster, genScouts, genSponsors, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname, raceEntryPlan };
 
 export function totalTitleCount() {
   const t = loadTitles();
@@ -246,7 +247,7 @@ export function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
   if (month === 11) {
     const isProFinal = classIdx === 2;
     const gtWinCount = (gtWins || []).length;
-    const qualified = isProFinal ? gtWinCount >= GRAND_TOURS.length : points >= CLASSES[classIdx].need;
+    const qualified = isProFinal ? gtWinCount >= GRAND_TOURS.length : points >= seasonNeed(classIdx);
     // v12: 以前はB1→Aの昇格戦だけが2日間ステージレースで、A→PRO・PROグランファイナルは
     // 1日のとばしレースだった（1日目を観戦してもすぐ結果に飛ぶように見え、2日目が
     // 行われないバグと誤解されていた）。全クラスのチャンピオンシップを統一して
@@ -260,7 +261,7 @@ export function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
       tmpl: TEMPLATES[3], grade: 3, cls: classIdx, weather: rollWeather(rng),
       lockReason: qualified ? null : (isProFinal
         ? `出場権なし（年間グランツール全${GRAND_TOURS.length}戦制覇が必要・現在${gtWinCount}/${GRAND_TOURS.length}勝）`
-        : `出場権なし（${CLASSES[classIdx].need}pt必要）`),
+        : `出場権なし（${seasonNeed(classIdx)}pt必要）`),
     });
     const t = pool[Math.floor(rng() * pool.length)];
     const fvenue = VENUES[Math.floor(rng() * VENUES.length)];
@@ -312,7 +313,10 @@ export function initGame() {
   const roster = initRoster();
   const rosterNames = roster.map(r => r.name);
   // v41: 引き抜き市場は rivalRosters と id を共有する必要があるため、先に一度だけ生成して使い回す
-  const rivalRosters = sharedWorldRosters(RIVAL_TEAMS);
+  // v50(第11弾Phase1・1-A): RIVAL_TEAMS(6)ではなくMYLIFE_TEAMS(25)全体でロースターを持つ。
+  // クラス昇降格で対戦相手が入れ替わっても、行き先クラスのチームには既にロースターがある状態にする。
+  const rivalRosters = sharedWorldRosters(MYLIFE_TEAMS);
+  const initRaces = genMonthRaces(1, 0, 0, 0, null, []);
   return {
     screen: "intro", tab: "home",
     // v28: 自チーム名（プレイヤーが命名できる。未設定なら既定名）
@@ -340,7 +344,12 @@ export function initGame() {
     scouts: genScouts(0, Date.now() % 999983, "balance", rosterNames),
     faMarket: genFaPool(0, (Date.now() + 12345) % 999983, rosterNames),
     tradeOffers: genTradeOffers(0, (Date.now() + 54321) % 999983, roster),
-    races: genMonthRaces(1, 0, 0, 0, null, []),
+    races: initRaces,
+    // v50(第11弾Phase1・1-B): AIチームの月内出走登録（raceId→登録チーム名の配列）。
+    // 決定論的（year+monthのみでシード）なので、プレイヤーが見る前に確定している。
+    entryPlan: raceEntryPlan(initRaces, teamsForClass(0), 0, rivalRosters, 1, 0),
+    // v50(第11弾Phase1・1-C): 実際のレース結果から積み上げるチーム別ポイント（張りぼてのハッシュ式を置換）
+    rivalPoints: {},
     sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
     result: null, prizeInfo: null,
     champBest: null, gc: null, pendingEvent: null, eventResult: null,
@@ -378,7 +387,7 @@ export function initGame() {
     obCoach: null,
     // v41: 移籍市場の駆け引き（引き抜き）。他チームの主力を引き抜く候補（年1更新）と、
     // 引き抜きは年1回までの制限フラグ（年度末にリセット）
-    poachTargets: genPoachTargets(0, 1, 777 + 13, rivalRosters),
+    poachTargets: genPoachTargets(0, 1, 777 + 13, rivalRosters, teamsForClass(0)),
     poachDoneThisYear: false,
   };
 }
@@ -391,6 +400,8 @@ const SAVE_FIELDS = [
   "champBest", "log", "cleared", "careerStats", "careerHistory", "difficulty", "hallOfFame", "rivalAlumni",
   "gtWins", "captainId", "tradeOffers", "jerseyWinCounts", "rewardedAchievements", "dynastyLevel", "youthUsed", "obCoach", "homeRegion", "teamName",
   "rivalRosters", "rivalStats", "poachTargets", "poachDoneThisYear",
+  // v50(第11弾Phase1): 出走登録（1-B）と実体化した順位ポイント（1-C）
+  "entryPlan", "rivalPoints",
 ];
 
 export function serializeState(g) {
@@ -424,11 +435,23 @@ export function loadGame() {
     if (parsed.version !== SAVE_VERSION || !parsed.state) return null;
     const base = initGame();
     resyncRid(parsed.state);
-    return {
+    const merged = {
       ...base, ...parsed.state,
       screen: "main", tab: "home",
       sel: base.sel, result: null, prizeInfo: null, gc: null, pendingEvent: null, eventResult: null, yearendInfo: null,
     };
+    // v50(第11弾Phase1): entryPlan/rivalRosters未保存の旧セーブ（RIVAL_TEAMS(6)時代）は
+    // rivalRostersがMYLIFE_TEAMS(25)に満たない可能性があるため補充し、entryPlanも
+    // 現在のyear/month/classIdxに合わせて作り直す（initGame()の1年目1月分をそのまま
+    // 使うと年月がズレて破綻するため）。
+    if (!merged.rivalRosters || Object.keys(merged.rivalRosters).length < MYLIFE_TEAMS.length) {
+      merged.rivalRosters = topUpWorldRosters(merged.rivalRosters || {}, mulberry((merged.year * 7919 + merged.month * 31) >>> 0), MYLIFE_TEAMS);
+    }
+    if (parsed.state.entryPlan == null) {
+      merged.entryPlan = raceEntryPlan(merged.races, teamsForClass(merged.classIdx), merged.classIdx, merged.rivalRosters, merged.year, merged.month);
+    }
+    if (parsed.state.rivalPoints == null) merged.rivalPoints = {};
+    return merged;
   } catch (e) { return null; }
 }
 
@@ -734,13 +757,21 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   const nameBanned = new Set([player.name]);
   const riders = [];
   const playerEff = effAbilities(player, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
+  // v50(第11弾Phase1・1-A): 対戦相手はteamsForClass(classIdx)（今のクラスのチームだけ）に絞る。
+  // ただしMyLifeのclassIdxは所属チームのtierとは独立に動く（tier0のチームに居たままクラスAへ
+  // 昇格し得る）ため、自チーム・ライバル1・ライバル2の所属チームはクラスが違っても必ず含める
+  // （でないと自チームが出走できない・ライバルと一生出会えなくなる）。
+  const classTeams = teamsForClass(classIdx);
+  const classTeamNames = new Set(classTeams.map(d => d.name));
+  const extraTeamNames = new Set([myTeamName, rival && rival.team, rival2 && rival2.team].filter(n => n && !classTeamNames.has(n)));
+  const raceTeams = [...classTeams, ...[...extraTeamNames].map(n => MYLIFE_TEAMS.find(d => d.name === n)).filter(Boolean)];
   // v32（世界の統合）：歴代殿堂選手を、AIチームのエース枠に一定確率で紛れ込ませる。
   // 過去の自分やライバルの血を引く名選手たちと、同じレースで再会できる。
   const legendPool = loadMlLegends().filter(l => l && l.finalAbilities);
   const legendTeams = {}; // teamName -> legend
   if (legendPool.length > 0) {
     const nLeg = rng() < 0.55 ? (rng() < 0.35 ? 2 : 1) : 0;
-    const otherTeams = MYLIFE_TEAMS.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team));
+    const otherTeams = raceTeams.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team));
     const shuffled = [...legendPool].sort(() => rng() - 0.5).slice(0, nLeg);
     const teamsForLeg = [...otherTeams].sort(() => rng() - 0.5).slice(0, nLeg);
     shuffled.forEach((leg, i) => { if (teamsForLeg[i]) legendTeams[teamsForLeg[i].name] = leg; });
@@ -751,7 +782,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   if (worldStars && worldStars.length) {
     const nWant = ({ 1: 1, 2: 2, 3: 3, 4: 4 }[raceMeta.grade] || 1) - Object.keys(legendTeams).length;
     if (nWant > 0) {
-      const avail = MYLIFE_TEAMS.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team) && !legendTeams[d.name]);
+      const avail = raceTeams.filter(d => d.name !== myTeamName && !(rival && d.name === rival.team) && !(rival2 && d.name === rival2.team) && !legendTeams[d.name]);
       const pool = worldStars.slice(0, Math.min(worldStars.length, nWant * 3));
       const chosen = [...pool].sort(() => rng() - 0.5).slice(0, Math.min(nWant, avail.length));
       const teamsForStar = [...avail].sort(() => rng() - 0.5);
@@ -762,7 +793,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // v46(#23): 出走人数の下限を3へ引き上げ（従来1〜5でチームごとに大きく揺れていた）。
   // squadMin===squadMaxのレース（個人TT=1名固定・チームTT=4〜6名）はこの下限の対象外。
   const aiMinFloor = squadMin === squadMax ? squadMin : Math.min(squadMax, Math.max(squadMin, 3));
-  MYLIFE_TEAMS.forEach(d => {
+  raceTeams.forEach(d => {
     const isMyTeam = d.name === myTeamName;
     const aiSquadNRaw = squadMin === squadMax ? squadMin : aiMinFloor + Math.floor(rng() * (squadMax - aiMinFloor + 1));
     const members = [];

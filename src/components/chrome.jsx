@@ -2,7 +2,7 @@
 // Step7第11弾でmain.jsxから分離。season/mylife両モードが共有する「額縁」だけをここに置く。
 import React from "react";
 import { C, FONT_D, FONT_B, FONT_M } from "../data/theme.js";
-import { CLASSES } from "../data/progression.js";
+import { CLASSES, seasonNeed } from "../data/progression.js";
 import { MONTHS, UPKEEP_PER_RIDER } from "../data/course.js";
 import { OB_COACH_SALARY } from "../data/economy.js";
 import { Btn, Eyebrow } from "./ui.jsx";
@@ -24,7 +24,7 @@ export function SeasonHeader({ g, cls }) {
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontFamily: FONT_M, fontSize: 18, color: g.budget < 0 ? C.red : C.yellow }}>{g.budget}<span style={{ fontSize: 10 }}>万円{g.budget < 0 ? "（借金）" : ""}</span></div>
-          <div style={{ fontFamily: FONT_M, fontSize: 12, color: C.green }}>{g.points}pt <span style={{ color: C.sub }}>/ 出場権{cls.need}pt</span></div>
+          <div style={{ fontFamily: FONT_M, fontSize: 12, color: C.green }}>{g.points}pt <span style={{ color: C.sub }}>/ 出場権{seasonNeed(g.classIdx)}pt</span></div>
           {(() => { const sr = seasonRank(g); return (
             <div style={{ fontFamily: FONT_M, fontSize: 11, color: sr.rank <= 3 ? "#e8a13c" : C.sub }}>
               🏆 順位 {sr.rank}/{sr.total}位{sr.rank <= 3 ? "（昇格ボーダー緩和圏）" : ""}

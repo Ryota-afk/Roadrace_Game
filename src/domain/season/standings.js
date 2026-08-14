@@ -4,19 +4,30 @@
 import { mulberry, strHash } from "../../core/core.js";
 import { CLASSES, DIFFICULTIES } from "../../data/progression.js";
 import { C } from "../../data/theme.js";
-import { RIVAL_TEAMS } from "../../data/teams.js";
+import { teamsForClass } from "../../data/teams.js";
 
+// v50(第11弾Phase1・1-C): g.rivalPointsが実際のレース結果から積み上がる実データになったため、
+// これを読むだけの形へ実体化した（従来はチーム名のハッシュ×月進捗の張りぼてで、
+// レース結果を一切参照しなかった）。対象チームもRIVAL_TEAMS(6・クラス無関係固定)から
+// teamsForClass(g.classIdx)（1-A・そのクラスの8〜9チーム）へ変更。
+// 旧セーブ（rivalPoints未保存）はハッシュ式のフォールバックを残し、クラッシュしないようにする。
 export function computeStandings(g) {
-  const monthProg = Math.max(0.08, (g.month + 1) / 12);
-  const need = CLASSES[g.classIdx].need;
-  const diffMul = (DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).aiMul;
-  const dynastyMul = 1 + Math.min(0.4, (g.dynastyLevel || 0) * 0.1);
-  const rows = RIVAL_TEAMS.map(t => {
-    const rng = mulberry(strHash(t.name) + g.year * 101 + g.classIdx * 7);
-    const strength = (0.6 + rng() * 0.85) * diffMul * dynastyMul;
-    const seasonTotal = Math.round(need * strength * 1.35);
-    return { name: t.name, color: t.color, spec: t.spec, trait: t.trait, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
-  });
+  const teams = teamsForClass(g.classIdx);
+  let rows;
+  if (g.rivalPoints != null) {
+    rows = teams.map(t => ({ name: t.name, color: t.color, spec: t.spec, trait: t.trait, pts: (g.rivalPoints && g.rivalPoints[t.name]) || 0, isPlayer: false }));
+  } else {
+    const monthProg = Math.max(0.08, (g.month + 1) / 12);
+    const need = CLASSES[g.classIdx].need;
+    const diffMul = (DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).aiMul;
+    const dynastyMul = 1 + Math.min(0.4, (g.dynastyLevel || 0) * 0.1);
+    rows = teams.map(t => {
+      const rng = mulberry(strHash(t.name) + g.year * 101 + g.classIdx * 7);
+      const strength = (0.6 + rng() * 0.85) * diffMul * dynastyMul;
+      const seasonTotal = Math.round(need * strength * 1.35);
+      return { name: t.name, color: t.color, spec: t.spec, trait: t.trait, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
+    });
+  }
   rows.push({ name: g.teamName || "あなたのチーム", color: C.yellow, pts: g.points, isPlayer: true });
   rows.sort((a, b) => b.pts - a.pts);
   return rows;

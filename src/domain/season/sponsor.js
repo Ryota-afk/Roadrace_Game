@@ -1,6 +1,6 @@
 // スポンサー契約・シーズン中期目標の純ロジック。Phase 4-1後の state.js/logic/support.js から分離（Step5: domain抽出）。
 import { mulberry } from "../../core/core.js";
-import { CLASSES } from "../../data/progression.js";
+import { seasonNeed } from "../../data/progression.js";
 import { SEASON_OBJECTIVES } from "../../data/directives.js";
 
 const SPONSOR_NAMES = ["アオゾラ銀行", "ハヤテ運輸", "ヤマセミ食品", "クレセント自転車", "ソラマメ製菓", "ツバキ石油", "ミナモ製薬", "カワセミ電工"];
@@ -8,7 +8,8 @@ const SPONSOR_NAMES = ["アオゾラ銀行", "ハヤテ運輸", "ヤマセミ食
 export function genSponsors(classIdx, year) {
   const rng = mulberry(year * 913 + classIdx * 77 + 3);
   const pick = () => SPONSOR_NAMES[Math.floor(rng() * SPONSOR_NAMES.length)];
-  const need = CLASSES[classIdx].need;
+  // v50(第11弾Phase1): ノルマもseasonNeed()基準に揃える（1-Dのpts合算化でCLASSES.need生値では緩すぎる）
+  const need = seasonNeed(classIdx);
   return [
     { name: pick(), style: "安定型", monthly: 18 + classIdx * 8, norma: Math.max(10, need - 10), bonus: 80 + classIdx * 40, penalty: 30 + classIdx * 15, mandates: 1 },
     { name: pick(), style: "バランス型", monthly: 12 + classIdx * 7, norma: need - 3, bonus: 180 + classIdx * 70, penalty: 80 + classIdx * 30, mandates: 1 },

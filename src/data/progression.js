@@ -7,6 +7,23 @@ export const CLASSES = [
   { id: "PRO", label: "クラス PRO", prizeMul: 3.5, need: 60, scout: 74 },
 ];
 
+// v50(第11弾Phase1・1-D): シーズンのポイントを「上位10位内の全選手合算」へ変更したことで、
+// 1レースあたりの獲得ptが従来（自チーム最上位1人分だけ）よりかなり増えた。CLASSES.needは
+// マイライフの昇格判定（controllers/mylife/month.js、ポイント式は変更していない＝旧のまま）
+// とも共有しているため、needの値自体は変えず、シーズン側だけ表示・判定に掛ける倍率として
+// 独立させる。実測（scratchpad/need_calib.mjs・25チーム構成でのシーズン相当11ヶ月の
+// AIチーム獲得pt平均）：B1平均159/A平均178.5/PRO平均202。旧式では平均AI獲得pt≒need×1.38
+// だったため、同じ「needは平均よりやや控えめな到達可能ライン」という関係を保つ倍率として
+// 2.5を採用（B1:112.5≈115／A:125≈130／PRO:150）。**実プレイでの昇格成功率を見て
+// 要再調整**（devlog/wave11.md参照）。
+export const SEASON_NEED_MUL = 2.5;
+
+// シーズン側だけが参照する「実際の昇格ライン」。CLASSES[classIdx].needそのものは
+// マイライフと共有の生値として変えず、表示・判定はこの関数経由に統一する。
+export function seasonNeed(classIdx) {
+  return Math.round(CLASSES[classIdx].need * SEASON_NEED_MUL);
+}
+
 // v35(バランス): abilCap＝AI選手の能力値上限。newRiderは従来どこでも一律94で頭打ちだったため、
 // PRO帯ではaiMul（1.25/1.55）を掛けても地力がすべて94でクランプされ、ハードと鬼がPROで完全に
 // 同一の強さになっていた（難易度つまみが高クラスで効かない不具合。実測：PRO/y8でhard5.6位＝oni5.5位）。

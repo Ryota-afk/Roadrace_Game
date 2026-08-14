@@ -63,3 +63,11 @@ export const MYLIFE_TEAMS = [
   { name: "常磐ウルフ", color: "#b8860b", tier: 1, spec: "RUL", trait: "常磐路の集団戦術家" },
   { name: "ヴァルハラ広島", color: "#6ab04c", tier: 2, spec: "RUL", trait: "中国地方の重戦車軍団" },
 ];
+
+// v50(第11弾Phase1): 25チームのtierをそのままクラス（0=B1/1=A/2=PRO）として扱う。
+// tier内訳はB1=9/A=8/PRO=8とほぼ均等。シーズン・マイライフとも「今のクラスの相手だけ」を
+// 対戦相手にする際はこの関数で絞り込む（RIVAL_TEAMSの6チーム固定はもう順位表・出走生成には
+// 使わない＝25チームの世界へ一本化。RIVAL_TEAMSは移籍・ニュースの軽い演出用途にのみ残す）。
+export function teamsForClass(classIdx) {
+  return MYLIFE_TEAMS.filter(t => t.tier === classIdx);
+}

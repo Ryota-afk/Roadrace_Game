@@ -3,7 +3,7 @@
 import React from "react";
 import { Eyebrow } from "../../../components/ui.jsx";
 import { CHASE_MODES, ROLES } from "../../../data/course.js";
-import { CLASSES } from "../../../data/progression.js";
+import { CLASSES, seasonNeed } from "../../../data/progression.js";
 import { C, FONT_D, FONT_M } from "../../../data/theme.js";
 
 export function renderHelpSection() {
@@ -73,15 +73,14 @@ export function renderHelpSection() {
             <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
               <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, lineHeight: 1.8 }}>
                 レースの★（グレード）は賞金・獲得ポイントの倍率です：★1=×1.0／★2=×1.5／★3=×2.0。
+                獲得ポイントは<span style={{ color: C.text }}>出走選手のうち上位10位以内に入った全員の合算</span>。
+                層の厚いチームで送り込むほど伸びる。
               </div>
-              {CLASSES.map(c => {
-                const perRace = (c.need / 11).toFixed(1);
-                return (
-                  <div key={c.id} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub }}>
-                    <span style={{ color: C.text, fontFamily: FONT_D, fontWeight: 700 }}>{c.label}</span>：昇格に必要{c.need}pt ÷ シーズン11レース ＝ 平均<span style={{ color: C.yellow, fontFamily: FONT_M }}> {perRace}pt/レース</span>が目安（★1のレースなら概ね6〜7位以内の成績）
-                  </div>
-                );
-              })}
+              {CLASSES.map((c, i) => (
+                <div key={c.id} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub }}>
+                  <span style={{ color: C.text, fontFamily: FONT_D, fontWeight: 700 }}>{c.label}</span>：昇格に必要<span style={{ color: C.yellow, fontFamily: FONT_M }}> {seasonNeed(i)}pt</span>（シーズン合計）
+                </div>
+              ))}
             </div>
           </div>
 

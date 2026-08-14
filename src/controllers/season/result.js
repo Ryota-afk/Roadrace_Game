@@ -16,8 +16,9 @@
 import { CLASSES } from "../../data/progression.js";
 import { MONTHS } from "../../data/course.js";
 import {
-  GRADE_MUL, PRIZES, PTS, advanceObjective, bumpCareerStats, peekCourseRecord, raceObjectiveEvent,
+  GRADE_MUL, PRIZES, advanceObjective, bumpCareerStats, peekCourseRecord, raceObjectiveEvent,
 } from "../../logic/support.js";
+import { addRivalPoints, teamPointsFromRanked } from "../../domain/season/points.js";
 
 export function finishRace(s, sim, race, stageOverride) {
   // v35(チームTT): チーム単位の合算タイム。チーム順位で得点・賞金を確定する
@@ -31,7 +32,10 @@ export function finishRace(s, sim, race, stageOverride) {
   const mul = CLASSES[s.classIdx].prizeMul * GRADE_MUL[race.grade];
   const prize = Math.round(playerRs.reduce((s2, e) => s2 + (PRIZES[e.rank - 1] || 1), 0) * mul);
   const mandateHit = !race.championship && !!race.sponsorMandate;
-  let pts = Math.round((PTS[best.rank - 1] || 0) * GRADE_MUL[race.grade]);
+  // v50(第11弾Phase1・1-D): 賞金と同じ「自チーム全選手（上位10位以内）の合算」でpts算定。
+  // rivalPointsと同じteamPointsFromRankedを使うため、AIチームと完全に同じ物差しになる。
+  const teamPts = teamPointsFromRanked(sim.ranked, race.grade);
+  let pts = teamPts.PLAYER || 0;
   if (mandateHit) pts = Math.round(pts * 1.3);
   // v13: 選手名鑑用に、出走した自チーム選手それぞれの着順を各選手のraceLogへ記録する
   const rankById = {}; playerRs.forEach(e => { rankById[e.id] = e.rank; });
@@ -51,8 +55,12 @@ export function finishRace(s, sim, race, stageOverride) {
   let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
   const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, best.rank, best.age), MONTHS[s.month]);
   if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
+  // v50(第11弾Phase1・1-C): 自分が出走したレースのAIチーム分ポイントも実際の着順(sim.ranked)から
+  // 積む（自チームと同じ物差し＝上位10位内の全選手合算、1-D）。昇格戦(championship)は自分の
+  // ポイントも加算しない特別枠なので、rivalPointsも同様に据え置く。
+  const rivalPoints = race.championship ? s.rivalPoints : addRivalPoints(s.rivalPoints, teamPts);
   return {
-    ...s, roster, rivalAlumni, sponsor,
+    ...s, roster, rivalAlumni, sponsor, rivalPoints,
     log: objRes.log ? [...s.log, objRes.log] : s.log,
     budget: s.budget + prize + objRes.budgetDelta,
     points: race.championship ? s.points : s.points + pts + objRes.pointsDelta,
@@ -73,7 +81,10 @@ export function finishTeamTT(s, sim, race) {
   // チーム1つの結果なので、個人レースの複数入賞相当に賞金を厚めに換算
   const prize = Math.round((PRIZES[teamRank - 1] || 1) * mul * 2.4);
   const mandateHit = !race.championship && !!race.sponsorMandate;
-  let pts = Math.round((PTS[teamRank - 1] || 0) * GRADE_MUL[race.grade]);
+  // v50(第11弾Phase1・1-D): チームTTはチーム単位で1エントリなので、合算も従来の
+  // teamRank基準と実質同じ値になるが、rivalPointsと同じteamPointsFromRankedに揃えておく。
+  const teamPts = teamPointsFromRanked(teams, race.grade);
+  let pts = teamPts.PLAYER || 0;
   if (mandateHit) pts = Math.round(pts * 1.3);
   const starterIds = new Set((playerTeam ? playerTeam.riders : []).map(r => r.id));
   const roster = s.roster.map(r => starterIds.has(r.id)
@@ -83,8 +94,11 @@ export function finishTeamTT(s, sim, race) {
   let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
   const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, teamRank, null), MONTHS[s.month]);
   if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
+  // v50(第11弾Phase1・1-C): チームTTはteams(sim.teamTT)にチーム単位のrankが既にあるので
+  // そのままteamPointsFromRankedへ渡せる（個人の着順は無いためチームごと1件で数える）。
+  const rivalPoints = race.championship ? s.rivalPoints : addRivalPoints(s.rivalPoints, teamPts);
   return {
-    ...s, roster, sponsor,
+    ...s, roster, sponsor, rivalPoints,
     log: objRes.log ? [...s.log, objRes.log] : s.log,
     budget: s.budget + prize + objRes.budgetDelta,
     points: race.championship ? s.points : s.points + pts + objRes.pointsDelta,
@@ -121,7 +135,11 @@ export function finishStage(s, sim, race, stageOverride) {
   // v13: 昇格戦（championship）は年度末に近くポイントがどのみちリセットされるため対象外。
   // グランツールなど通常カレンダー上のステージレースは、複数日にわたる大会である
   // ことを踏まえ通常レースよりポイント倍率を優遇する
-  const pts = race.championship ? 0 : Math.round((PTS[bestRank - 1] || 0) * GRADE_MUL[race.grade] * 1.3);
+  // v50(第11弾Phase1・1-D): GC総合順位(order)から各チームのGCベスト着順ベースでポイントを積む。
+  // 通常レースと同じ「上位10位内の全選手合算」（1-D）に、ステージレース優遇の×1.3を揃える。
+  const rankedByTeam = order.map(([id], i) => ({ team: idToEntrant[id]?.team, rank: i + 1 })).filter(e => e.team);
+  const teamPts = teamPointsFromRanked(rankedByTeam, race.grade, 1.3);
+  const pts = race.championship ? 0 : (teamPts.PLAYER || 0);
   // v13: 選手名鑑用に、ステージレース全体の総合着順を各選手のraceLogへ記録する
   // （各日のステージ結果ではなく、最終確定した総合成績のみを1件記録する）
   const rankById = {}; playerRanks.forEach(o => { rankById[o.id] = o.rank; });
@@ -189,8 +207,9 @@ export function finishStage(s, sim, race, stageOverride) {
   let sponsor = s.sponsor;
   const objRes = advanceObjective(sponsor && sponsor.objective, raceObjectiveEvent(race, bestRank, aceAge), MONTHS[s.month]);
   if (sponsor && sponsor.objective) sponsor = { ...sponsor, objective: objRes.objective };
+  const rivalPoints = race.championship ? s.rivalPoints : addRivalPoints(s.rivalPoints, teamPts);
   return {
-    ...s, roster, rivalAlumni, sponsor, budget: s.budget + prize + jerseyBonus + objRes.budgetDelta,
+    ...s, roster, rivalAlumni, sponsor, rivalPoints, budget: s.budget + prize + jerseyBonus + objRes.budgetDelta,
     points: race.championship ? s.points : s.points + pts + objRes.pointsDelta, champBest: bestRank,
     log: objRes.log ? [...s.log, objRes.log] : s.log,
     careerStats: bumpCareerStats(s.careerStats, bestRank, prize + jerseyBonus),

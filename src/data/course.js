@@ -3,7 +3,14 @@ import { C } from "./theme.js";
 
 export const MONTHS = ["4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
 
-export const RELEGATE_LINE = 15;
+// v50(第11弾Phase1・1-D): シーズンのポイントが「上位10位内の全選手合算」へ変わり、
+// 旧式（自チーム最上位1人分だけ）より1レースあたりの獲得ptが増えた。ただし増え方は
+// 実力に比例して非線形（弱いチームほど複数選手が上位10位に食い込みにくく、伸びが小さい）。
+// 実測（scratchpad/relegate_calib2.mjs・AI中心比のability帯で11ヶ月分の獲得ptをシミュレート）：
+// AI中心-15（明確に力不足）→平均pt約3、AI中心-7（やや力不足）→平均pt約18。この間に
+// 「際どく残留/降格し得る」帯を置く値として25を採用（Season専用。RELEGATE_LINE自体は
+// マイライフ側からは参照されない＝この定数はSeason専用で共有していないため直接改定できる）。
+export const RELEGATE_LINE = 25;
 
 export const ROSTER_MAX_BY_CLASS = [12, 14, 16];
 

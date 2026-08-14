@@ -205,6 +205,64 @@ CLAUDE.md §7に従い、長い説明文ではなく**図・強弱で読ませ�
 4. 旧セーブ互換：`rivalPoints`不在／`rivalRosters`が6チームのセーブでクラッシュしないこと。
 5. 両モードのPlaywright回帰＋`npm run build`。
 
+#### Phase 1 実装結果（2026-08・完了）
+
+**新規ファイル**：`domain/season/entryPlan.js`（`raceEntryPlan`）、`domain/season/points.js`
+（`teamPointsFromRanked`／`resolveLiteTeamRace`／`addRivalPoints`）。
+
+**実装した項目（1-A〜1-E、設計どおり）**：
+- 1-A：`teamsForClass(classIdx)`（`MYLIFE_TEAMS`の`tier`をクラスとして使う）。Season・
+  MyLife双方の対戦相手選出をこれに統一。MyLifeは`classIdx`と所属チームの`tier`が
+  独立に動きうる（昇格しても元のtierのチームに残れる）ため、`teamsForClass`∪自チーム∪
+  両ライバル所属チーム、の和集合で対戦相手を作る（`buildMyLifeSim`）。
+- 1-B：`raceEntryPlan()`。チーム強さ（上位6名`baseline`合算）降順に、
+  `(GRADE_MUL×specMatch)/(1+congestion/10)`のスコアで各AIチームが1レースを選ぶ
+  決定論的な貪欲法。強豪が★の高いレースに偏り、弱小チームが★1へ逃げる混雑回避が
+  実際に発生する（`scratchpad/entryplan_tune.mjs`で除数を40→10へ調整、実測で確認）。
+- 1-C：`g.entryPlan`（レースID→登録チーム名配列）／`g.rivalPoints`（チーム名→累計pt）を
+  新設し`SAVE_FIELDS`へ追加。プレイヤーが出走しなかった登録レースは`resolveLiteTeamRace`
+  （baseline＋地形適性＋ノイズの簡易決着、`mlWorldRaceLite`と同型）で軽量決着し、
+  `advanceMonth()`内で毎月`rivalPoints`へ積む。
+- 1-D：ポイント算定を「上位10位以内の全選手の合算」へ変更。**自チームの`s.points`にも
+  同じ`teamPointsFromRanked`を適用**（`finishRace`/`finishTeamTT`/`finishStage`の3経路とも、
+  `rivalPoints`用に計算した`teamPts`をそのまま自チーム分`pts`にも再利用）。これにより
+  `computeStandings()`で自チーム(`g.points`)とAIチーム(`g.rivalPoints`)を同じ物差しで
+  直接比較できる（当初`rivalPoints`だけ合算化してプレイヤー側を旧式のまま据え置く案を
+  検討したが、両者のスケールが噛み合わず順位表が常にプレイヤー最下位になる不具合になる
+  ため、1-Dの設計どおり対称に揃えることで解消した）。
+- 1-E：`calendar.jsx`にカラードットの参戦表示（CLAUDE.md §7準拠、長文の代わりに
+  色ドット＋「◯チーム・激戦／空いている」の短いラベル）。実機で「4チーム・激戦」
+  「5チーム・激戦」等が正しく表示されることを確認。
+
+**`need`/ノルマ/降格ラインの再較正**：1-Dで自チームの獲得ptも実力に応じて非線形に増える
+ため（弱いチームは1人しか上位10位に入らず旧式と大差ないが、強いチームは複数人が入り
+最大3倍強に増える）、`CLASSES.need`の生値はマイライフと共有のため触らず、Season専用の
+`seasonNeed(classIdx) = CLASSES[classIdx].need * SEASON_NEED_MUL`（`data/progression.js`、
+`SEASON_NEED_MUL=2.5`）を新設し、昇格判定（`state.js`の`genMonthRaces`）・スポンサーノルマ
+（`domain/season/sponsor.js`の`genSponsors`）・ヘッダー表示（`chrome.jsx`の`SeasonHeader`）・
+ヘルプ文言（`help.jsx`）をすべてこの関数経由に統一した（`CLASSES.need`の生値はMyLife側の
+既存の判定・表示に一切影響しない）。`RELEGATE_LINE`（`data/course.js`）はSeason専用の定数
+（MyLifeからは参照されない）と判明したため直接15→25へ改定。両方とも
+`scratchpad/need_calib.mjs`・`scratchpad/relegate_calib2.mjs`でAI選手の実際の生成式
+（`buildSim`の`power`項）を踏まえた実測に基づく（AI中心比のability帯で11ヶ月分の
+獲得ptをシミュレート：AI中心-15→平均pt約3、AI中心-7→平均pt約18、互角→平均pt約75、
++7→平均pt約194、+15→平均pt約353。`seasonNeed(0)=113`は「互角」と「やや強い」の間、
+`RELEGATE_LINE=25`は「明確に力不足」と「やや力不足」の間に位置する）。
+
+**実機検証（Playwright）**：シーズン開始→カレンダー→レース出場→出走5名選択→エース選択→
+結果画面→翌月へ進む、を通しで実行しコンソールエラー0件を確認。結果画面のヘッダーに
+「14pt / 出場権113pt」が表示され、自チーム3名が上位10位入り（1位+4位+6位＝10+3+1=14pt）
+した結果と完全に一致することを確認（1-Dの対称化が実際に効いていることの直接証拠）。
+Node単体チェック（`wave11_phase1_check.mjs`）：MyLife出走人数はB1/A/PROいずれも34〜46名の
+レンジに収まり、別クラス所属のライバルも正しく出現。`initGame()`の`computeStandings()`は
+`teamsForClass(0).length + 1 = 10`行、旧セーブ（`rivalPoints`なし）フォールバックも
+クラッシュなし。`npm run build`成功。
+
+**スコープ外として残した項目**（低優先度・cosmetic、別弾で対応）：`domain/season/transfer.js`
+の`genPoachTargets`デフォルト引数・`makePoachOffer`・`genTradeOffers`、`roster.js`/
+`transfer.js`の`rivalAlumni.signedTeam`割り当て、`view/news.js`の`rivalNews()`が、
+いずれも旧来の固定6チーム`RIVAL_TEAMS`のまま（移籍・ニュースの演出用途のみで実害は薄い）。
+
 ### Phase 2：マイライフの世界ランキングを実際の対戦相手から作る
 
 - ランキングの母集団を`worldRosters`（実際に走る72名）＋自分＋ライバルへ変更。

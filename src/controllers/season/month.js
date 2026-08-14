@@ -7,16 +7,17 @@ import { MONTHS, RELEGATE_LINE, UPKEEP_PER_RIDER } from "../../data/course.js";
 import { OB_COACH_SALARY } from "../../data/economy.js";
 import { ABILITIES, AB_KEYS, POW } from "../../data/abilities.js";
 import { DIFFICULTIES } from "../../data/progression.js";
-import { mulberry, overall, hasAbility } from "../../core/core.js";
+import { mulberry, overall, hasAbility, strHash } from "../../core/core.js";
 import {
-  RIVAL_TEAMS, ageWorldRosters, genFaPool, genMonthRaces, genPoachTargets,
-  genScouts, genSponsors, genTradeOffers, makePoachOffer,
+  MYLIFE_TEAMS, ageWorldRosters, genFaPool, genMonthRaces, genPoachTargets, raceEntryPlan,
+  genScouts, genSponsors, genTradeOffers, makePoachOffer, teamsForClass,
 } from "../../state/state.js";
 import {
   EVENTS, EVENT_CHANCE, GRADE_MUL, acquireNewAbility, addAb, champPromoteCut, expireObjective,
   growSub, growthPhase, isHallOfFameWorthy, persMul, rollCondDir, seasonPersonalityEvent, seasonRank,
   staffSalaryTotal, standingsRankReward, teamChemistryTier, upgradeGoldAbilities,
 } from "../../logic/support.js";
+import { addRivalPoints, resolveLiteTeamRace } from "../../domain/season/points.js";
 
 // v9: 基礎成長量をさらに引き下げ（2.2→1.5）。「将来性一択」問題への対処
 // 戻り値を {roster, notices} に正規化（旧: 引数stateへ state._injured を積むout-param方式）。
@@ -153,6 +154,19 @@ export function monthlyUpdate(state, raceInfo) {
 }
 
 export function advanceMonth(s, raceInfo) {
+  // v50(第11弾Phase1・1-C): 今月プレイヤーが出走しなかった登録レース（s.entryPlan）を、
+  // 登録チームだけで軽量決着してrivalPointsへ積む。s自体を差し替えることで、この後の
+  // seasonRank(s)（12月ならここで最終順位を確定する）にも今月分の結果がちゃんと反映される。
+  const enteredRaceId = raceInfo ? raceInfo.raceId : null;
+  let rivalPoints = s.rivalPoints || {};
+  Object.entries(s.entryPlan || {}).forEach(([raceId, teamNames]) => {
+    if (raceId === enteredRaceId || !teamNames || !teamNames.length) return;
+    const race = (s.races || []).find(r => r.id === raceId);
+    if (!race) return;
+    const seed = (strHash(raceId) ^ (((s.year || 1) * 7919 + (s.month || 0) * 131) >>> 0)) >>> 0;
+    rivalPoints = addRivalPoints(rivalPoints, resolveLiteTeamRace(teamNames, s.rivalRosters, race.tmpl && race.tmpl.favors, race.grade, seed));
+  });
+  s = { ...s, rivalPoints };
   const { roster, notices } = monthlyUpdate(s, raceInfo);
   const income = s.sponsor ? s.sponsor.monthly : 0;
   const log = [...s.log, ...notices.map(t => `【${MONTHS[s.month]}】${t}`)];
@@ -221,7 +235,9 @@ export function advanceMonth(s, raceInfo) {
     const year = s.year + 1;
     // v38: ライバルチームも年次で世代交代（加齢→成長/衰え→引退→新人補充）。
     // これで周回の相手が固定強度で止まらず、若手台頭とベテラン引退の流れが生まれる。
-    const agedRivals = ageWorldRosters(s.rivalRosters, mulberry((year * 2246822519) >>> 0), year, RIVAL_TEAMS);
+    // v50(第11弾Phase1・1-A): RIVAL_TEAMS(6)ではなくMYLIFE_TEAMS(25)全体を年次で加齢する
+    // （昇降格でどのクラスへ移っても、行き先のロースターが既に育っている状態にするため）。
+    const agedRivals = ageWorldRosters(s.rivalRosters, mulberry((year * 2246822519) >>> 0), year, MYLIFE_TEAMS);
     // v41(§Step7第3弾): advanceWorldYear()（非冪等なlocalStorage書き込み）はここで呼ばず、
     // s.yearの変化を検知したApp()側のuseEffectに一本化した（詳細はDEVLOG §9参照）。
     agedRivals.retired.slice(0, 3).forEach(r => {
@@ -263,6 +279,7 @@ export function advanceMonth(s, raceInfo) {
       ...info.retiredRiders.filter(isHallOfFameWorthy).map(n => ({ ...n, farewellYear: s.year, farewellReason: "retired" })),
       ...retiredAlumniHof,
     ];
+    const nextRaces = genMonthRaces(year, 0, classIdx, 0, null, []);
     return {
       ...s, roster: survivors, classIdx, points: 0, year, month: 0,
       budget: s.budget + income + delta + standingsMoney - upkeep - staffSalary - objectivePenalty,
@@ -270,7 +287,11 @@ export function advanceMonth(s, raceInfo) {
       scouts: genScouts(classIdx, year * 771 + 13, s.scoutPolicy, survivors.map(r => r.name), s.staff?.scout || 0),
       faMarket: genFaPool(classIdx, year * 613 + 29, survivors.map(r => r.name)),
       tradeOffers: genTradeOffers(classIdx, year * 1471 + 37, survivors),
-      races: genMonthRaces(year, 0, classIdx, 0, null, []),
+      races: nextRaces,
+      // v50(第11弾Phase1・1-B/1-C): 新しい年・新しいクラスの出走登録を作り直し、ポイントは
+      // 年度替わりでリセット（g.pointsと同じ扱い）。
+      entryPlan: raceEntryPlan(nextRaces, teamsForClass(classIdx), classIdx, agedRivals.worldRosters, year, 0),
+      rivalPoints: {},
       camp: false, champBest: null, gc: null,
       sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
       // v14.8: 年が変わるのでグランツール制覇状況もリセットする
@@ -280,7 +301,8 @@ export function advanceMonth(s, raceInfo) {
       yearendInfo: info, cleared: info.cleared, log, careerHistory, hallOfFame, rivalAlumni: survivingAlumni,
       rivalRosters: agedRivals.worldRosters,
       // v41: 引き抜き市場を来季の（年を取った）ライバル主力で更新し、年1回の引き抜き枠をリセット
-      poachTargets: genPoachTargets(classIdx, year, year * 331 + 47, agedRivals.worldRosters),
+      // v50(第11弾Phase1・1-A): 対象を新クラスのチームに絞る
+      poachTargets: genPoachTargets(classIdx, year, year * 331 + 47, agedRivals.worldRosters, teamsForClass(classIdx)),
       poachDoneThisYear: false,
       screen: info.cleared ? "clear" : "yearend", tab: "home",
     };
@@ -288,13 +310,17 @@ export function advanceMonth(s, raceInfo) {
   const month = s.month + 1;
   const upkeep = roster.length * UPKEEP_PER_RIDER;
   const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
+  const nextMonthRaces = genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins);
   const base = {
     ...s, roster, month, camp: false,
     budget: s.budget + income - upkeep - staffSalary - objectivePenalty,
     sponsor,
     faMarket: genFaPool(s.classIdx, s.year * 1013 + month * 37 + 7, roster.map(r => r.name)),
     tradeOffers: genTradeOffers(s.classIdx, s.year * 1231 + month * 59 + 17, roster),
-    races: genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins),
+    races: nextMonthRaces,
+    // v50(第11弾Phase1・1-B): 来月分の出走登録を作り直す（s.rivalPointsは上でこの月分を
+    // 解決済みなのでそのまま引き継がれる＝...sで既に含まれる）。
+    entryPlan: raceEntryPlan(nextMonthRaces, teamsForClass(s.classIdx), s.classIdx, s.rivalRosters, s.year, month),
     sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
     gc: null,
     screen: "main", log,

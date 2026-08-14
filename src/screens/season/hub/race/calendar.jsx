@@ -6,7 +6,7 @@ import { TYPES } from "../../../../data/abilities.js";
 import { HOME_ABILITY_BONUS, SEG_COLOR } from "../../../../data/course.js";
 import { CLASSES } from "../../../../data/progression.js";
 import { C, FONT_D, FONT_M } from "../../../../data/theme.js";
-import { GRADE_MUL, PRIZES, PTS, WEATHER, buildSim, raceIsHome } from "../../../../logic/support.js";
+import { GRADE_MUL, PRIZES, PTS, WEATHER, buildSim, raceIsHome, teamsForClass } from "../../../../logic/support.js";
 
 export function renderRaceCalendarSection(ctx) {
   const { advanceMonth, g, healthy, setG } = ctx;
@@ -38,14 +38,40 @@ export function renderRaceCalendarSection(ctx) {
                   {r.sponsorMandate && <span style={{ color: C.red }}>／スポンサー指定レース</span>}
                   {r.stageRace && <span style={{ color: C.purple }}>／{r.stageCount || 2}日間ステージレース(総合)</span>}
                 </div>
+                {(() => {
+                  // v50(第11弾Phase1・1-E): このレースに登録済みのライバルチームを色ドットで見せる。
+                  // 「混んでいる／空いている」を一目で判断できるようにする（長文説明にしない、CLAUDE.md §7）。
+                  if (r.locked || !g.entryPlan) return null;
+                  const registeredNames = g.entryPlan[r.id];
+                  if (!registeredNames) return null;
+                  const teams = teamsForClass(g.classIdx).filter(t => registeredNames.includes(t.name));
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10.5, color: C.sub }}>参戦</span>
+                      {teams.length === 0
+                        ? <span style={{ fontSize: 10.5, color: C.sub }}>空いている</span>
+                        : teams.map(t => (
+                          <span key={t.name} title={t.name} style={{ width: 9, height: 9, borderRadius: 5, background: t.color, display: "inline-block" }} />
+                        ))}
+                      <span style={{ fontSize: 10.5, color: teams.length >= 4 ? C.red : teams.length <= 1 ? C.green : C.sub }}>
+                        {teams.length}チーム{teams.length >= 4 ? "・激戦" : teams.length <= 1 ? "・空いている" : ""}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div style={{ marginTop: 8 }}>
                   {r.locked
                     ? <span style={{ fontSize: 12, color: C.red }}>🔒 {r.lockReason}</span>
                     : <Btn small disabled={!enough} onClick={() => setG(s => {
                         const defN = Math.max(r.tmpl.squadMin, Math.min(r.tmpl.squadMax, healthy.length));
+                        // v50(第11弾Phase1・1-B): このレースに実際に登録されたチーム（s.entryPlan）を
+                        // team定義オブジェクトへ解決してbuildSimへ渡す。未登録（旧セーブ等）ならクラス
+                        // 全体へフォールバックする（buildSim側のデフォルト任せ）。
+                        const registered = (s.entryPlan && s.entryPlan[r.id]) || null;
+                        const entryTeams = registered ? teamsForClass(s.classIdx).filter(t => registered.includes(t.name)) : undefined;
                         // v29: 出走表用に相手チームの布陣を先に生成してキャッシュ。実際のレースでも
                         // このfixedAiTeamsを再利用するので、出走表と本番の顔ぶれが一致する
-                        const { aiTeams } = buildSim(r, healthy, null, {}, s.equip, {}, s.classIdx, undefined, r.stageRace ? "day1" : undefined, { chaseMode: "normal", aceEarly: false }, s.difficulty, s.rivalAlumni, s.dynastyLevel, s.teamName, s.rivalRosters, s.year);
+                        const { aiTeams } = buildSim(r, healthy, null, {}, s.equip, {}, s.classIdx, undefined, r.stageRace ? "day1" : undefined, { chaseMode: "normal", aceEarly: false }, s.difficulty, s.rivalAlumni, s.dynastyLevel, s.teamName, s.rivalRosters, s.year, entryTeams);
                         return { ...s, sel: { ...s.sel, raceId: r.id, starters: [], ace: null, roles: {}, squadN: defN }, pendingAiTeams: aiTeams, screen: "lineup" };
                       })}>
                         {enough ? "このレースに出場" : `出走可能${healthy.length}名（最低${r.tmpl.squadMin}名必要）`}

@@ -17,7 +17,7 @@ import { ML_AB_COACH_KEY, ML_CARS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_S
 import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_COLOR, DIFFICULTIES, DISCIPLINES, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL } from "../data/progression.js";
 import { C } from "../data/theme.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "../sim/race.js";
-import { ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, RIVAL_TEAMS, SAVE_KEY, mlAmbitionMetricValue, mlFirstUnmetRung } from "../state/state.js";
+import { ML_AMBITION_PATHS, ML_SAVE_KEY, MYLIFE_TEAMS, SAVE_KEY, mlAmbitionMetricValue, mlFirstUnmetRung, teamsForClass } from "../state/state.js";
 import { mlWorldStarsForYear } from "../world/world.js";
 import { riderFlavorText } from "../view/flavor.js";
 import { mlNewspaper, mlWorldNews, rivalNews } from "../view/news.js";
@@ -40,6 +40,7 @@ export {
   genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText,
   computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut,
   raceForecast,
+  teamsForClass,
 };
 
 export function upgradeGoldAbilities(r) {
@@ -1109,7 +1110,10 @@ export function teamChemistryTier(squad) {
   return { ...tier, avgTenure: avg };
 }
 
-export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel, teamName, rivalRosters, year) {
+// v50(第11弾Phase1・1-A/1-B): entryTeamsは「このレースに実際に登録されたチーム」の配列
+// （domain/season/entryPlan.jsのraceEntryPlan()の結果をteam定義オブジェクトへ解決したもの）。
+// 省略時はteamsForClass(classIdx)（そのクラスの全チーム）にフォールバックする。
+export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classIdx, fixedAiTeams, dayTag, directive, difficultyId, rivalAlumni, dynastyLevel, teamName, rivalRosters, year, entryTeams) {
   // v13: 難易度による他チームの強さ補正（aiMul）。省略時はnormal相当
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
@@ -1146,7 +1150,8 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
     // v46(#23): 出走人数の下限を3へ引き上げ（従来1〜5でチームごとに大きく揺れていた）。
     // squadMin===squadMaxのレース（個人TT=1名固定・チームTT=4〜6名）はこの下限の対象外。
     const aiMinFloor = squadMin === squadMax ? squadMin : Math.min(squadMax, Math.max(squadMin, 3));
-    aiTeamsUsed = RIVAL_TEAMS.map(d => {
+    const teamsInThisRace = (entryTeams && entryTeams.length) ? entryTeams : teamsForClass(classIdx);
+    aiTeamsUsed = teamsInThisRace.map(d => {
       const aiSquadNRaw = squadMin === squadMax ? squadMin : aiMinFloor + Math.floor(rng() * (squadMax - aiMinFloor + 1));
       // v13.1: 解雇後にこのチームへ拾われた元自チーム選手がいれば、実際の能力のまま
       // 優先的に出走させる（フルの新規生成ではなく実データを引き継ぐ）
