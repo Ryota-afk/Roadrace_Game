@@ -8,7 +8,7 @@ import { mlBloodlineBonus, mlBreedBonus } from "../../breeding/breeding.js";
 import { bumpGrowthPow, computePickupChance, isHallOfFameWorthy } from "../../logic/support.js";
 
 export function signScout(s, sc) {
-  const rosterMax = ROSTER_MAX_BY_CLASS[s.classIdx];
+  const rosterMax = ROSTER_MAX_BY_CLASS[s.classIdx] + (s.rosterMaxBonus || 0);
   if (s.budget < sc.price || s.roster.length >= rosterMax) return s;
   return {
     ...s, budget: s.budget - sc.price, roster: [...s.roster, { ...sc.rider }],
@@ -19,7 +19,7 @@ export function signScout(s, sc) {
 
 // v11: FA移籍市場。即決購入方式（新人スカウトと異なり能力は伏せず即座に表示）
 export function signFa(s, fa) {
-  const rosterMax = ROSTER_MAX_BY_CLASS[s.classIdx];
+  const rosterMax = ROSTER_MAX_BY_CLASS[s.classIdx] + (s.rosterMaxBonus || 0);
   if (s.budget < fa.price || s.roster.length >= rosterMax) return s;
   return {
     ...s, budget: s.budget - fa.price, roster: [...s.roster, { ...fa.rider }],
@@ -108,7 +108,7 @@ export function signYouthProspect(s) {
 // v31.1: 血統ユース（配合）。マイライフ殿堂の2名を親に選び、配合の原石をユース枠で確保する。
 // 通常ユース（15万）より高価（40万）だが、相性・血の濃さ・累代+値・金特クロスの恩恵が乗る
 export function signBredYouth(s, legA, legB) {
-  if (s.youthUsed || s.budget < 40 || s.roster.length >= ROSTER_MAX_BY_CLASS[s.classIdx] || !legA || !legB) return s;
+  if (s.youthUsed || s.budget < 40 || s.roster.length >= ROSTER_MAX_BY_CLASS[s.classIdx] + (s.rosterMaxBonus || 0) || !legA || !legB) return s;
   const rng = mulberry(Date.now() % 999983 + s.roster.length * 7333);
   const banned = new Set(s.roster.map(r => r.name));
   const growthPow = rng() < 0.5 ? "S" : "A";

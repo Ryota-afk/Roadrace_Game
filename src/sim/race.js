@@ -2,6 +2,7 @@
 import { AB_KEYS, TYPES } from "../data/abilities.js";
 import { SEG_LABEL } from "../data/course.js";
 import { condMul, hasAbility, hasGoldAbility, mulberry, strHash } from "../core/core.js";
+import { ML_PART_LV_MUL } from "../data/gear.js";
 
 export const PART_SLOTS = ["frame", "tire", "wheels", "nutrition"];
 
@@ -61,7 +62,11 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   if (r.parts) {
     PART_SLOTS.forEach(slot => {
       const pid = r.parts[slot];
-      if (pid && PARTS[pid]) Object.entries(PARTS[pid].ab).forEach(([k, v]) => { e[k] += v; });
+      if (!pid || !PARTS[pid]) return;
+      // v51(第12弾12-B): マイライフ限定のパーツ強化Lv（Season選手はr.partLvが存在せず常に0＝無影響）
+      const lv = (r.partLv && r.partLv[slot]) || 0;
+      const mul = 1 + ML_PART_LV_MUL * lv;
+      Object.entries(PARTS[pid].ab).forEach(([k, v]) => { e[k] += v * mul; });
     });
   }
   // v28: 大舞台適性。big=★3で+6%、nervous(悪特性)=★3で-5%

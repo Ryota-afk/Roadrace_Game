@@ -257,3 +257,40 @@ if (r.parts) {
   モデルのまま据え置く）。
 - **才能開花系の価格改定**（第7弾v43で抜け道封じのため意図的に高くした部分。触らない）。
 - **収入側（賞金・スポンサー）の引き下げ**。12-Aの出口側で足りるかを実測してから判断する。
+
+## 実装結果（2026-08・Sonnet実装完了）
+
+12-A/B/Cすべて実装済み。設計どおりに実装し、検証1〜9すべて通過。
+
+- **12-A**: `domain/season/salary.js`新設（`riderSalary`/`teamPayroll`）。実コードでの
+  カーブ再検証：OVR70=7万／80=16万／90=30万／95=40万＝設計値と完全一致（検証1）。
+  B1 8名OVR68＝年額480万（月額40万）・PRO16名OVR88＝年額5,184万・PRO16名OVR95＝年額7,680万
+  （検証2・4。年間"収支"は原資からこの年俸を引いた額で、設計時試算どおりの符号関係を維持）。
+  `controllers/season/month.js`（月次・年度末）・`components/chrome.jsx`（表示、ラベルも
+  「選手維持費」→「選手年俸」に変更）の3箇所を差し替え、`UPKEEP_PER_RIDER`は
+  `data/course.js`から削除。`loadGame()`に`payrollMigrated`フラグを追加し、旧セーブ（フラグ
+  なし）は初回ロード時に`teamPayroll(roster)*6`の移行支援金を一度だけ付与（検証6、
+  ローカルでlocalStorageを模した読み込みテストで動作確認済み）。
+  実装中に1件バグを発見・修正：移行判定を`merged.payrollMigrated`（`initGame()`由来のbase値
+  でオブジェクトspread時に上書きされず常にtrueになってしまう）ではなく
+  `parsed.state.payrollMigrated`（セーブファイル自体の値）で見るよう修正。
+- **12-B**: `data/gear.js`に`ML_PART_UPGRADE_COST`/`ML_PART_LV_MAX`/`ML_PART_LV_MUL`を追加し、
+  `sim/race.js`の`effAbilities`にパーツLv倍率を実装。`r.partLv`が存在しないSeason選手は
+  常にmul=1となり、実コードで新旧の出力を突き合わせ完全一致を確認（検証8・必須項目）。
+  `controllers/mylife/shop.js`に`mlUpgradePart()`を追加し、`screens/mylife/events.jsx`の
+  パーツ画面に強化UIを実装。Playwrightでdevサーバー上に合成セーブを注入し実際にUIを操作、
+  Lv0→Lv2への強化（コスト30+55=85万）・効果表示の倍率反映（+10→+12.4＝設計どおりの
+  1+0.12*2）・他スロットが無関係に据え置かれることを目視確認（検証7）。
+- **12-C**: 12-A/Bの実測を踏まえてCP価格を確定し`CP_SHOP`へ4項目追加（スタッフ枠+1＝50CP・
+  所属枠+2＝45CP・パーツ強化の上限+2＝40CP・年俸交渉術−10%＝60CP）。設計時に未確定だった
+  「上限+2」の追加コスト表（Lv5→6・Lv6→7）は、既存5段の価格上昇比（直近2段は約1.6倍/段）を
+  そのまま延長し385万・615万とした。`ROSTER_MAX_BY_CLASS`/`STAFF_MAX_BY_CLASS`直参照の
+  7箇所（設計時の"8箇所"は実地調査で7箇所と判明）すべてに`+(bonus||0)`を追加し、
+  `g.rosterMaxBonus`/`g.staffMaxBonus`/`g.salaryDiscountMul`（シーズン）・
+  `ml.partLvMaxBonus`（マイライフ）をセーブフィールドに追加。ゲーム開始時
+  （`screens/season/intro.jsx`／`domain/mylife/createChar.js`）に`cpShopSeasonPerks()`/
+  `cpShopMylifePerks()`から一度だけ適用。Node実測でCP購入→効果適用の全経路
+  （スタッフ枠拡張・年俸10%割引・パーツLv7到達）を確認。
+
+**検証9（回帰）**: `npm run build`成功（3回、各フェーズ後）。Playwrightでシーズン起動画面・
+CP交換所・マイライフショップ画面のスクリーンショットとコンソールエラー無しを確認。

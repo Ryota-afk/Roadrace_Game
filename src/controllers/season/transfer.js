@@ -76,7 +76,7 @@ export function poachSign(s, targetId) {
   if (!t) return s;
   if (s.poachDoneThisYear) return s;
   if (s.budget < t.fee) return s;
-  const rosterMax = ROSTER_MAX_BY_CLASS[s.classIdx];
+  const rosterMax = ROSTER_MAX_BY_CLASS[s.classIdx] + (s.rosterMaxBonus || 0);
   if (s.roster.length >= rosterMax) return s;
   // 相手ロースターから引き抜いた選手を外す（世界に反映＝以後その相手として出走しない）
   const rivalRosters = { ...(s.rivalRosters || {}) };

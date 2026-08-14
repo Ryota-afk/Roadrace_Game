@@ -168,6 +168,8 @@ export function renderSeasonIntroScreens(ctx) {
           if (shop.budget) base = { ...base, budget: base.budget + shop.budget };
           if (shop.equipLv) base = bumpEquipLv(base, shop.equipLv);
           if (shop.rosterBoost) base = bumpRosterAbAll(base, shop.rosterBoost);
+          // v51(第12弾12-C): CP交換所の恒久上限拡張・年俸割引
+          base = { ...base, rosterMaxBonus: shop.rosterMaxBonus, staffMaxBonus: shop.staffMaxBonus, salaryDiscountMul: shop.salaryDiscountMul };
           // v38(#9 A-2): 招聘したレジェンドを創設メンバーとしてロースターへ加える
           if (g.legendRecruitIdx != null) {
             const legends = [...loadMlLegends()].reverse();

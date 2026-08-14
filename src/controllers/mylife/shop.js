@@ -2,7 +2,7 @@
 // controllers/season/shop.js の対（マイライフ側は setMl への薄い接続）。
 import { MONTHS } from "../../data/course.js";
 import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
-import { ML_CARS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE } from "../../data/gear.js";
+import { ML_CARS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX } from "../../data/gear.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PARTS } from "../../sim/race.js";
 import { addAb, mlGrowthCap, mlPrivateCampCost } from "../../logic/support.js";
@@ -15,6 +15,23 @@ export function mlBuyPart(s, pid) {
 
 export function mlSetPart(s, slot, pid) {
   return { ...s, player: { ...s.player, parts: { ...s.player.parts, [slot]: pid || null } } };
+}
+
+// 第12弾(12-B): 装着中のパーツを強化する（買い切り・段階制、Lv0〜実効上限）。
+// 未装着スロットや上限到達済みスロットは対象外。実効上限はCP交換所「パーツ強化の上限+2」
+// （第12弾12-C・s.partLvMaxBonus）を加算した値。
+export function mlUpgradePart(s, slot) {
+  const player = s.player;
+  if (!player.parts || !player.parts[slot]) return s;
+  const lv = (player.partLv && player.partLv[slot]) || 0;
+  const maxLv = ML_PART_LV_MAX + (s.partLvMaxBonus || 0);
+  if (lv >= maxLv) return s;
+  const cost = ML_PART_UPGRADE_COST[lv];
+  if (s.money < cost) return s;
+  return {
+    ...s, money: s.money - cost,
+    player: { ...player, partLv: { ...player.partLv, [slot]: lv + 1 } },
+  };
 }
 
 export function mlBuyGear(s, k) {

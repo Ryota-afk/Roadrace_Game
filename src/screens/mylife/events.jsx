@@ -4,13 +4,13 @@ import { FatigueBar } from "../../components/panels.jsx";
 import { Btn, Eyebrow } from "../../components/ui.jsx";
 import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
-import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE } from "../../data/gear.js";
+import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
 import { C, FONT_D, FONT_M } from "../../data/theme.js";
 import { CLASS_TIER_COLOR, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
 import { PARTS, PART_SLOTS } from "../../sim/race.js";
 
 export function renderMyLifeEventScreens(ctx) {
-  const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyGrowthPowUp, mlBuyGrowthShift, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUseStockConfirm, mlWrap, setMl } = ctx;
+  const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyGrowthPowUp, mlBuyGrowthShift, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUpgradePart, mlUseStockConfirm, mlWrap, setMl } = ctx;
     if (ml.screen === "mylife_shop" && ml.player) {
       const r = ml.player;
       const availPartsMl = (pid) => (ml.partsInv[pid] || 0) - (Object.values(r.parts || {}).includes(pid) ? 1 : 0);
@@ -64,6 +64,34 @@ export function renderMyLifeEventScreens(ctx) {
                   </select>
                 </span>
               ))}
+            </div>
+            <div style={{ marginTop: 14 }}>
+              {(() => { const maxLv = ML_PART_LV_MAX + (ml.partLvMaxBonus || 0); return (<>
+              <Eyebrow color={C.purple}>装着中パーツの強化（買い切り・Lv{maxLv}まで）</Eyebrow>
+              <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+                {PART_SLOTS.filter(slot => r.parts[slot]).map(slot => {
+                  const pid = r.parts[slot];
+                  const p = PARTS[pid];
+                  const lv = (r.partLv && r.partLv[slot]) || 0;
+                  const maxed = lv >= maxLv;
+                  const cost = maxed ? null : ML_PART_UPGRADE_COST[lv];
+                  return (
+                    <div key={slot} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div>
+                        <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>
+                          {p.label} <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.purple }}>Lv{lv}/{maxLv}</span>
+                        </div>
+                        <div style={{ color: C.sub, fontSize: 11 }}>{Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${Math.round(v * (1 + ML_PART_LV_MUL * lv) * 10) / 10}`).join(" / ")}</div>
+                      </div>
+                      {maxed
+                        ? <span style={{ fontSize: 11, color: C.purple, whiteSpace: "nowrap" }}>✔ 最大強化</span>
+                        : <Btn small color={C.purple} disabled={ml.money < cost} onClick={() => mlUpgradePart(slot)}>{cost}万</Btn>}
+                    </div>
+                  );
+                })}
+                {PART_SLOTS.every(slot => !r.parts[slot]) && <div style={{ color: C.sub, fontSize: 11.5 }}>パーツを装着すると、ここで強化できます</div>}
+              </div>
+              </>); })()}
             </div>
           </section>)}
           {shopCat === "items" && (<section>

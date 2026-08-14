@@ -18,8 +18,6 @@ export const SCOUT_COUNT_BY_CLASS = [5, 7, 9];
 
 export const PRODIGY_CHANCE_BY_CLASS = [0.28, 0.38, 0.5];
 
-export const UPKEEP_PER_RIDER = 3; // 選手1名あたりの月次維持費（万円）
-
 export const ROLES = {
   lead:      { label: "第一アシスト", desc: "エースを最後まで牽引" },
   sub:       { label: "第二アシスト", desc: "第一アシストを支援。脚がなくなると離脱" },

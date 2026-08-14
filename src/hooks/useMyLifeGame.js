@@ -12,7 +12,7 @@ import { resolveNationalRole, buildLastRaceMeta } from "../controllers/mylife/ra
 import { mlAdvanceMonth as mmAdvanceMonth } from "../controllers/mylife/month.js";
 import { mlRaceFinish as mrRaceFinish, mlLastRaceFinish as mrLastRaceFinish } from "../controllers/mylife/result.js";
 import {
-  mlBuyPart as mshBuyPart, mlSetPart as mshSetPart, mlBuyGear as mshBuyGear, mlBuyStock as mshBuyStock,
+  mlBuyPart as mshBuyPart, mlSetPart as mshSetPart, mlUpgradePart as mshUpgradePart, mlBuyGear as mshBuyGear, mlBuyStock as mshBuyStock,
   mlUseStock as mshUseStock, mlPrivateCamp as mshPrivateCamp, mlBuyCar as mshBuyCar, mlBuyHouse as mshBuyHouse,
   mlSetFocus as mshSetFocus, mlBuyGrowthPowUp as mshBuyGrowthPowUp, mlBuyGrowthShift as mshBuyGrowthShift,
 } from "../controllers/mylife/shop.js";
@@ -203,6 +203,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   // （msh*）に集約。main.jsx側は setMl に接続する薄いラッパーのみを持つ。
   const mlBuyPart = (pid) => setMl(s => mshBuyPart(s, pid));
   const mlSetPart = (slot, pid) => setMl(s => mshSetPart(s, slot, pid));
+  const mlUpgradePart = (slot) => setMl(s => mshUpgradePart(s, slot));
   const mlBuyGear = (k) => setMl(s => mshBuyGear(s, k));
   const mlBuyStock = (k) => setMl(s => mshBuyStock(s, k));
   const mlUseStock = (k) => setMl(s => mshUseStock(s, k));
@@ -238,7 +239,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlRetireAdviceAccept,
     mlChooseTeam, mlResolveOffseason, mlContinueAfterOffseason, mlResolveCrossroads, mlContinueAfterCrossroads,
     mlTriggerSponsorGig, mlResolveEvent,
-    mlBuyPart, mlSetPart, mlBuyGear, mlBuyStock, mlUseStock, mlUseStockConfirm,
+    mlBuyPart, mlSetPart, mlUpgradePart, mlBuyGear, mlBuyStock, mlUseStock, mlUseStockConfirm,
     mlPrivateCamp, mlBuyCar, mlBuyHouse, mlBuyGrowthPowUp, mlBuyGrowthShift, mlGenRace,
   };
 }

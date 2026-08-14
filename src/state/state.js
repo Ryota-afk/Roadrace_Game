@@ -18,6 +18,7 @@ import { SUB_STAT_KEYS, aiFormRoll, idYearSeed, mulberry, newRider, pickRiderNam
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
 import { loadMlLegends, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname } from "../breeding/breeding.js";
 import { legendToSeasonRider, worldRiderToRosterRider, genPoachTargets, makePoachOffer, genFaPool, genTradeOffers } from "../domain/season/transfer.js";
+import { teamPayroll } from "../domain/season/salary.js";
 import { initRoster, genScouts } from "../domain/season/roster.js";
 import { genSponsors } from "../domain/season/sponsor.js";
 
@@ -399,6 +400,12 @@ export function initGame() {
     // 引き抜きは年1回までの制限フラグ（年度末にリセット）
     poachTargets: genPoachTargets(0, 1, 777 + 13, rivalRosters, teamsForClass(0)),
     poachDoneThisYear: false,
+    // v51(第12弾12-A): 選手年俸制への移行フラグ。新規ゲームは最初から年俸制なので移行不要＝true。
+    // 旧セーブ（一律月3万時代）はloadGame()側でfalse扱いとなり、一度だけ移行支援金を受け取る。
+    payrollMigrated: true,
+    // v51(第12弾12-C): CP交換所の恒久上限拡張・年俸割引。既定は無購入＝ボーナス0／割引なし。
+    // 実際の付与はscreens/season/intro.jsxのゲーム開始時にcpShopSeasonPerks()から一度だけ適用される。
+    rosterMaxBonus: 0, staffMaxBonus: 0, salaryDiscountMul: 1,
   };
 }
 
@@ -412,6 +419,10 @@ const SAVE_FIELDS = [
   "rivalRosters", "rivalStats", "poachTargets", "poachDoneThisYear",
   // v50(第11弾Phase1): 出走登録（1-B）と実体化した順位ポイント（1-C）
   "entryPlan", "rivalPoints",
+  // v51(第12弾12-A): 選手年俸制への移行済みフラグ
+  "payrollMigrated",
+  // v51(第12弾12-C): CP交換所の恒久上限拡張・年俸割引
+  "rosterMaxBonus", "staffMaxBonus", "salaryDiscountMul",
 ];
 
 export function serializeState(g) {
@@ -461,6 +472,14 @@ export function loadGame() {
       merged.entryPlan = raceEntryPlan(merged.races, teamsForClass(merged.classIdx), merged.classIdx, merged.rivalRosters, merged.year, merged.month);
     }
     if (parsed.state.rivalPoints == null) merged.rivalPoints = {};
+    // v51(第12弾12-A): 選手年俸制への移行。旧セーブ（一律月3万時代）は、新方式の半年分を
+    // 移行支援金として一度だけ支給する（急な負担増で即赤字化するのを防ぐ）。
+    if (!parsed.state.payrollMigrated) {
+      const grant = teamPayroll(merged.roster) * 6;
+      merged.budget = merged.budget + grant;
+      merged.payrollMigrated = true;
+      merged.log = [...(merged.log || []), `【運営方針の変更】選手の待遇を一律の維持費から実力に応じた年俸制へ改めた。移行にあたり支度金${grant}万円を受け取った`];
+    }
     return merged;
   } catch (e) { return null; }
 }
@@ -609,6 +628,9 @@ export function initMyLife() {
     // v32: 固定チームメイト・条件付き作戦・キャリアグラフ用の年次記録
     teammates: [], tactic: "balanced", careerHistory: [],
     difficulty: "easy", mlDiffChoice: "easy", // v38(#6): 難易度
+    // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」。デビュー時にcpShopMylifePerks()から
+    // 一度だけ適用される（既定は無購入＝0）。
+    partLvMaxBonus: 0,
   };
 }
 
@@ -631,6 +653,8 @@ const ML_SAVE_FIELDS = [
   // 次回読み込み時に消え、「未付与」判定に戻ってCP・殿堂を再付与できてしまう
   // （タスクキル→再読み込みでのCP無限稼ぎ・殿堂重複登録バグの直接原因だった）。
   "awardedCP",
+  // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」
+  "partLvMaxBonus",
 ];
 
 export function saveMyLife(ml) {
@@ -1024,6 +1048,12 @@ export const CP_SHOP = [
   { id: "m_reroll2", cost: 80, category: "マイライフ", label: "デビュー特能運 特大アップ（リセマラ）", desc: "デビュー当たり特能（天啓/天賦の才）の抽選がさらに大きく上がる", mylife: { boonBonus: 0.30 } },
   { id: "m_money2", cost: 55, category: "マイライフ", label: "支度金 +700万円", desc: "デビュー時の所持金へ自動加算される", mylife: { money: 700 } },
   { id: "x_boost2", cost: 120, category: "特別", label: "初期能力 特大ブースト", desc: "シーズンでは全選手の能力+6、マイライフではデビュー時の能力+6でスタート（初期能力ブーストと重複購入可・合計+12）", season: { rosterBoost: 6 }, mylife: { statBoost: 6 } },
+  // v51(第12弾12-C): 「開始時ブースト」ではなく「恒久的な上限拡張」の新カテゴリ。
+  // 12-A（年俸制）・12-B（パーツ強化）の実測値を踏まえた終盤向けの追加投資先。
+  { id: "s_staffmax", cost: 50, category: "シーズン", label: "スタッフ枠 +1", desc: "全クラスでスタッフを1名多く雇用できるようになる（恒常）", season: { staffMaxBonus: 1 } },
+  { id: "s_rostermax", cost: 45, category: "シーズン", label: "所属枠 +2", desc: "全クラスでロースターの上限が2名増える（恒常）", season: { rosterMaxBonus: 2 } },
+  { id: "m_partlvmax", cost: 40, category: "マイライフ", label: "パーツ強化の上限 +2", desc: "装着中パーツをLv7まで強化できるようになる（恒常）", mylife: { partLvMaxBonus: 2 } },
+  { id: "s_salarydiscount", cost: 60, category: "シーズン", label: "年俸交渉術", desc: "選手の年俸が一律10%割安になる（恒常）", season: { salaryDiscountMul: 0.9 } },
 ];
 export function cpOwned(meta, id) { return (meta.cpUnlocks || []).includes(id); }
 export function cpBuy(meta, id) {
@@ -1032,13 +1062,19 @@ export function cpBuy(meta, id) {
   return { ...meta, cpSpent: (meta.cpSpent || 0) + item.cost, cpUnlocks: [...(meta.cpUnlocks || []), id] };
 }
 export function cpShopSeasonPerks(meta) {
-  const acc = { prodigyRookie: 0, budget: 0, equipLv: 0, rosterBoost: 0 };
-  CP_SHOP.forEach(it => { if (cpOwned(meta, it.id)) { const s = it.season || {}; acc.prodigyRookie += s.prodigyRookie || 0; acc.budget += s.budget || 0; acc.equipLv += s.equipLv || 0; acc.rosterBoost += s.rosterBoost || 0; } });
+  const acc = { prodigyRookie: 0, budget: 0, equipLv: 0, rosterBoost: 0, staffMaxBonus: 0, rosterMaxBonus: 0, salaryDiscountMul: 1 };
+  CP_SHOP.forEach(it => {
+    if (!cpOwned(meta, it.id)) return;
+    const s = it.season || {};
+    acc.prodigyRookie += s.prodigyRookie || 0; acc.budget += s.budget || 0; acc.equipLv += s.equipLv || 0; acc.rosterBoost += s.rosterBoost || 0;
+    acc.staffMaxBonus += s.staffMaxBonus || 0; acc.rosterMaxBonus += s.rosterMaxBonus || 0;
+    if (s.salaryDiscountMul) acc.salaryDiscountMul *= s.salaryDiscountMul;
+  });
   return acc;
 }
 export function cpShopMylifePerks(meta) {
-  const acc = { debutGold: false, growthUp: false, money: 0, boonBonus: 0, statBoost: 0 };
-  CP_SHOP.forEach(it => { if (cpOwned(meta, it.id)) { const m = it.mylife || {}; if (m.debutGold) acc.debutGold = true; if (m.growthUp) acc.growthUp = true; acc.money += m.money || 0; acc.boonBonus += m.boonBonus || 0; acc.statBoost += m.statBoost || 0; } });
+  const acc = { debutGold: false, growthUp: false, money: 0, boonBonus: 0, statBoost: 0, partLvMaxBonus: 0 };
+  CP_SHOP.forEach(it => { if (cpOwned(meta, it.id)) { const m = it.mylife || {}; if (m.debutGold) acc.debutGold = true; if (m.growthUp) acc.growthUp = true; acc.money += m.money || 0; acc.boonBonus += m.boonBonus || 0; acc.statBoost += m.statBoost || 0; acc.partLvMaxBonus += m.partLvMaxBonus || 0; } });
   return acc;
 }
 

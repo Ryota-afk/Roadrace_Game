@@ -41,8 +41,8 @@ export function useSeasonGame() {
   const cls = CLASSES[g.classIdx];
   const healthy = g.roster.filter(r => r.injury === 0);
   const equipMax = 3 + g.classIdx;
-  const rosterMax = ROSTER_MAX_BY_CLASS[g.classIdx];
-  const staffMax = STAFF_MAX_BY_CLASS[g.classIdx];
+  const rosterMax = ROSTER_MAX_BY_CLASS[g.classIdx] + (g.rosterMaxBonus || 0);
+  const staffMax = STAFF_MAX_BY_CLASS[g.classIdx] + (g.staffMaxBonus || 0);
   // v14.11: 「限界突破」表示のしきい値は難易度ごとの成長上限（growthCap）と
   // 一致させる（以前は難易度に関わらず固定95だったため、上位難易度で実際の
   // ソフトキャップ〈102/112〉と表示上のしきい値〈95〉がズレていた）

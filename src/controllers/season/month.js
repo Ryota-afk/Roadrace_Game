@@ -3,7 +3,7 @@
 // このファイルからは呼ばない。年度末（screen遷移・g.year変化）を検知したApp()側のuseEffectが
 // 1回だけ実行する（既存のclearAwardedRefイディオムを踏襲。詳細はDEVLOG §9参照）。
 import { CLASSES } from "../../data/progression.js";
-import { MONTHS, RELEGATE_LINE, UPKEEP_PER_RIDER } from "../../data/course.js";
+import { MONTHS, RELEGATE_LINE } from "../../data/course.js";
 import { OB_COACH_SALARY } from "../../data/economy.js";
 import { ABILITIES, AB_KEYS, POW } from "../../data/abilities.js";
 import { DIFFICULTIES } from "../../data/progression.js";
@@ -18,6 +18,7 @@ import {
   staffSalaryTotal, standingsRankReward, teamChemistryTier, upgradeGoldAbilities,
 } from "../../logic/support.js";
 import { addRivalPoints, resolveLiteTeamRace } from "../../domain/season/points.js";
+import { teamPayroll } from "../../domain/season/salary.js";
 
 // v9: 基礎成長量をさらに引き下げ（2.2→1.5）。「将来性一択」問題への対処
 // 戻り値を {roster, notices} に正規化（旧: 引数stateへ state._injured を積むout-param方式）。
@@ -244,7 +245,7 @@ export function advanceMonth(s, raceInfo) {
       const debut = agedRivals.debuted.find(d => d.team === r.team);
       log.push(`【${s.year}年目 世代交代】🌍 ${r.team}の${r.name}（${r.age}歳）が引退。${debut ? `新星${debut.name}（${debut.age}歳）が加入した` : ""}`);
     });
-    const upkeep = survivors.length * UPKEEP_PER_RIDER;
+    const upkeep = teamPayroll(survivors, s.salaryDiscountMul || 1);
     const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
     const managerLv = s.staff?.manager || 0;
     const nextOffers = genSponsors(classIdx, year).map(o => ({
@@ -308,7 +309,7 @@ export function advanceMonth(s, raceInfo) {
     };
   }
   const month = s.month + 1;
-  const upkeep = roster.length * UPKEEP_PER_RIDER;
+  const upkeep = teamPayroll(roster, s.salaryDiscountMul || 1);
   const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
   const nextMonthRaces = genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins);
   const base = {

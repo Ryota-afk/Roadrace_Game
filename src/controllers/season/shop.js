@@ -47,7 +47,7 @@ export function buyRoomUpgrade(s, k) {
 // v11: スタッフは買い切りではなく月給制。レベルを上げると翌月から月給が増える（即時の費用はない）
 export function hireStaff(s, k) {
   const lv = s.staff[k] || 0;
-  const staffMax = STAFF_MAX_BY_CLASS[s.classIdx];
+  const staffMax = STAFF_MAX_BY_CLASS[s.classIdx] + (s.staffMaxBonus || 0);
   if (lv >= staffMax) return s;
   return { ...s, staff: { ...s.staff, [k]: (s.staff[k] || 0) + 1 } };
 }

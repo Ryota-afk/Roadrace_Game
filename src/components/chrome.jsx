@@ -3,10 +3,11 @@
 import React from "react";
 import { C, FONT_D, FONT_B, FONT_M } from "../data/theme.js";
 import { CLASSES, seasonNeed } from "../data/progression.js";
-import { MONTHS, UPKEEP_PER_RIDER } from "../data/course.js";
+import { MONTHS } from "../data/course.js";
 import { OB_COACH_SALARY } from "../data/economy.js";
 import { Btn, Eyebrow } from "./ui.jsx";
 import { seasonRank, staffSalaryTotal, mlLivingCost } from "../logic/support.js";
+import { teamPayroll } from "../domain/season/salary.js";
 
 export function SeasonHeader({ g, cls }) {
   return (
@@ -17,7 +18,7 @@ export function SeasonHeader({ g, cls }) {
           <div style={{ fontFamily: FONT_D, fontSize: 18, fontWeight: 700, color: C.text }}>{g.teamName || "あなたのチーム"}</div>
           {g.sponsor && <div style={{ fontSize: 10.5, color: C.sub }}>スポンサー {g.sponsor.name}（月+{g.sponsor.monthly}万／ノルマ{g.sponsor.norma}pt／未達-{g.sponsor.penalty}万／指定レース{g.sponsor.mandatesMet}済{g.sponsor.mandatesMissed > 0 ? `・見送り${g.sponsor.mandatesMissed}` : ""}）</div>}
           <div style={{ fontSize: 10.5, color: C.sub }}>
-            選手維持費 -{g.roster.length * UPKEEP_PER_RIDER}万/月（{g.roster.length}名）
+            選手年俸 -{teamPayroll(g.roster, g.salaryDiscountMul || 1)}万/月（{g.roster.length}名）
             {staffSalaryTotal(g.staff) > 0 && <>／スタッフ月給 -{staffSalaryTotal(g.staff)}万/月</>}
             {g.obCoach && <>／OBコーチ -{OB_COACH_SALARY}万/月</>}
           </div>

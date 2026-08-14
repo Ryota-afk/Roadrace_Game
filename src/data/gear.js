@@ -48,6 +48,14 @@ export const ML_GROWTH_POW_UP_PRICE = { C: 400, B: 1200, A: 3000 };
 // 双方向を1つの権利として共有し、高額にした。
 export const ML_GROWTH_SHIFT_PRICE = 900;
 
+// 第12弾(12-B): パーツを「育てる装備」へ。買い切りの完成品ではなく、資金を注ぎ続けて
+// 育てる対象にすることで、稼いだ資金の使い道を終盤まで保つ（詳細はdevlog/wave12.md）。
+// 第12弾(12-C): CP交換所「パーツ強化の上限+2」でLv7まで解禁される。既存5段の価格上昇比
+// （直近2段は約1.6倍/段）をそのまま延長し、Lv5→6=240*1.6≈385、Lv6→7=385*1.6≈615とした。
+export const ML_PART_UPGRADE_COST = [30, 55, 90, 150, 240, 385, 615]; // Lv0→1 … Lv6→7（万円）
+export const ML_PART_LV_MAX = 5; // CP未購入時の上限（購入後の実効上限は+partLvMaxBonus）
+export const ML_PART_LV_MUL = 0.12; // 1Lvあたり+12% → Lv5で1.6倍・Lv7で1.84倍
+
 export const ML_SPECIAL_TRAINING = {
   altitude: { label: "🏔 高地合宿", keys: ["stamina", "solo"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "スタミナ・独走を集中的に鍛える（疲労大）" },
   sprintcamp: { label: "⚡ スプリント特訓", keys: ["sprint", "flat"], gainMul: 1.7, fatigue: 20, cond: 0, desc: "スプリント・平坦＋加速力を集中的に鍛える" },

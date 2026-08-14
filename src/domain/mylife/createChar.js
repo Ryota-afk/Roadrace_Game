@@ -229,6 +229,8 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     races: [mlGenRace(1, 0, 0)],
     directive: mlGenDirective(1, 0, 0, 30),
     managerEval: 30 + (perk.evalBonus || 0) + cpPerks.eval, salary: initialSalary, money: (perk.moneyBonus || 0) + cpPerks.money + cpShop.money,
+    // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」
+    partLvMaxBonus: cpShop.partLvMaxBonus,
     partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
     gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
     houseLv: -1, carLv: -1,
