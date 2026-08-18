@@ -121,6 +121,12 @@ export function renderMyLifeHelpScreens(ctx) {
             <Card>初勝利・初表彰台など、キャリアを通じた実績を達成すると報酬が入ります。達成状況は「実績を見る」から確認できます。引退時はキャリアが記録として殿堂（歴代選手の殿堂）に残ります。</Card>
           </Section>
 
+          <Section color={C.sub} title="使用フォントについて">
+            <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11, color: C.sub, lineHeight: 1.8 }}>
+              チェックポイント．（制作：マルセ／よく飛ばない鳥　https://yokutobanaitori.web.fc2.com/）
+            </div>
+          </Section>
+
           <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
         </div>
       );

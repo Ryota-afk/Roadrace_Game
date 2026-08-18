@@ -201,6 +201,13 @@ export function renderHelpSection() {
               </div>
             </div>
           </div>
+
+          <div>
+            <Eyebrow color={C.sub}>使用フォントについて</Eyebrow>
+            <div style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, fontSize: 11, color: C.sub, lineHeight: 1.8, marginTop: 8 }}>
+              チェックポイント．（制作：マルセ／よく飛ばない鳥　https://yokutobanaitori.web.fc2.com/）
+            </div>
+          </div>
         </div>
   );
 }
