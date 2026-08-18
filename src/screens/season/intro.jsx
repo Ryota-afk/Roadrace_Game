@@ -9,6 +9,7 @@ import { DIFFICULTIES } from "../../data/progression.js";
 import { C, FONT_B, FONT_D, FONT_M } from "../../data/theme.js";
 import { CP_MILESTONES, SCOUT_POLICIES, applyCpMilestones, addProdigyRookie, bumpEquipLv, bumpRosterAbAll, clearSaveGame, hasSaveGame, pickMandateMonths, genSeasonObjective, objectiveStatusText } from "../../logic/support.js";
 import { cpShopSeasonPerks, genScouts, initGame, legendToSeasonRider, loadGame, loadMeta, saveGameInfo } from "../../state/state.js";
+import { findUnsupportedChars } from "../../domain/shared/textInput.js";
 
 export function renderSeasonIntroScreens(ctx) {
   const { askConfirm, diffChoice, g, metaWrap, setDiffChoice, setG, setSuperMode, setTeamNameChoice, teamNameChoice, wrap } = ctx;
@@ -50,6 +51,7 @@ export function renderSeasonIntroScreens(ctx) {
   if (g.screen === "newgame_setup") {
     const meta = loadMeta();
     const nextMilestone = CP_MILESTONES.find(m => meta.totalEarnedCP < m.cp);
+    const teamNameBadChars = findUnsupportedChars(teamNameChoice);
     return metaWrap(
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
@@ -60,8 +62,10 @@ export function renderSeasonIntroScreens(ctx) {
           <Eyebrow>チーム名</Eyebrow>
           <input type="text" value={teamNameChoice} maxLength={16} placeholder="あなたのチーム"
             onChange={e => setTeamNameChoice(e.target.value)}
-            style={{ width: "100%", boxSizing: "border-box", marginTop: 6, background: C.panel2, color: C.text, border: `1.5px solid ${C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
-          <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>後から変更できます。</div>
+            style={{ width: "100%", boxSizing: "border-box", marginTop: 6, background: C.panel2, color: C.text, border: `1.5px solid ${teamNameBadChars.length ? C.red : C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
+          {teamNameBadChars.length > 0
+            ? <div style={{ fontSize: 11.5, color: C.red, marginTop: 3 }}>「{teamNameBadChars.join("")}」は使えません</div>
+            : <div style={{ fontSize: 10.5, color: C.sub, marginTop: 3 }}>後から変更できます。</div>}
         </div>
         <div>
           <Eyebrow>難易度を選択</Eyebrow>
@@ -155,7 +159,7 @@ export function renderSeasonIntroScreens(ctx) {
           </div>
           <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>解禁すると両モードのカレンダーに登場します。</div>
         </div>
-        <Btn onClick={() => {
+        <Btn disabled={teamNameBadChars.length > 0} onClick={() => {
           const name = teamNameChoice.trim();
           // v46(UI): クリアポイントのリセットがCP交換所へ移設されたため、選択中の難易度が
           // （そちらでリセットされた等の理由で）既にロック済みになっているケースを開始直前に

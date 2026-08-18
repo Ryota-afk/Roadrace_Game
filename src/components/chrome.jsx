@@ -8,6 +8,7 @@ import { OB_COACH_SALARY } from "../data/economy.js";
 import { Btn, Eyebrow } from "./ui.jsx";
 import { seasonRank, staffSalaryTotal, mlLivingCost } from "../logic/support.js";
 import { teamPayroll } from "../domain/season/salary.js";
+import { findUnsupportedChars } from "../domain/shared/textInput.js";
 
 export function SeasonHeader({ g, cls }) {
   return (
@@ -40,18 +41,21 @@ export function SeasonHeader({ g, cls }) {
 // v29: 選手名変更モーダル（wrap/mlWrap両方で表示する共用JSX）
 export function RenameModal({ renameState, setRenameState }) {
   if (!renameState) return null;
-  const commitRename = () => { const v = (renameState.value || "").trim(); if (v) renameState.onCommit(v); setRenameState(null); };
+  const badChars = findUnsupportedChars(renameState.value);
+  const canCommit = badChars.length === 0 && (renameState.value || "").trim().length > 0;
+  const commitRename = () => { const v = (renameState.value || "").trim(); if (v && badChars.length === 0) renameState.onCommit(v); setRenameState(null); };
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
       <div style={{ background: C.panel, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", border: `1px solid ${C.line}` }}>
         <div style={{ color: C.text, fontSize: 14, marginBottom: 12 }}>{renameState.title}</div>
-        <input type="text" autoFocus value={renameState.value} maxLength={12}
+        <input type="text" autoFocus value={renameState.value} maxLength={renameState.maxLength ?? 12}
           onChange={e => setRenameState(s => ({ ...s, value: e.target.value }))}
-          onKeyDown={e => { if (e.key === "Enter") commitRename(); }}
-          style={{ width: "100%", boxSizing: "border-box", background: C.panel2, color: C.text, border: `1.5px solid ${C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
+          onKeyDown={e => { if (e.key === "Enter" && canCommit) commitRename(); }}
+          style={{ width: "100%", boxSizing: "border-box", background: C.panel2, color: C.text, border: `1.5px solid ${badChars.length ? C.red : C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
+        {badChars.length > 0 && <div style={{ color: C.red, fontSize: 11.5, marginTop: 6 }}>「{badChars.join("")}」は使えません</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
           <Btn small outline color={C.sub} onClick={() => setRenameState(null)}>キャンセル</Btn>
-          <Btn small color={C.green} onClick={commitRename}>変更</Btn>
+          <Btn small color={C.green} disabled={!canCommit} onClick={commitRename}>変更</Btn>
         </div>
       </div>
     </div>

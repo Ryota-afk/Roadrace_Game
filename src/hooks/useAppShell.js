@@ -21,8 +21,9 @@ export function useAppShell() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const askConfirm = (message, onConfirm) => setConfirmDialog({ message, onConfirm });
   // v29: 選手名の変更用モーダル（アプリ内完結のテキスト入力）
-  const [renameState, setRenameState] = useState(null); // { title, value, onCommit }
-  const openRename = (title, current, onCommit) => setRenameState({ title, value: current || "", onCommit });
+  // 第13弾: maxLengthを可変化（チーム名16文字／選手名12文字など呼び出し元ごとに異なるため）
+  const [renameState, setRenameState] = useState(null); // { title, value, onCommit, maxLength }
+  const openRename = (title, current, onCommit, maxLength = 12) => setRenameState({ title, value: current || "", onCommit, maxLength });
 
   return {
     superMode, setSuperMode, uiTick, buyCpItem, resetCpProgress,
