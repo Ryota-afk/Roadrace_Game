@@ -300,3 +300,54 @@ egress許可リストに無いため取得できず（`Host not in allowlist: yo
 **確認・反映済み**：`BIKE.normal_SE`（`e592cba`）／`BIKE.dancing_SE`（`bb31a94`）／
 `BIKE.sprint_SE`（`d4d1b31`）／`BIKE_B.normal_SE`（`eb4bda6`）／`BIKE_B.dancing_SE`（`188a9c8`）／
 `BIKE_B.sprint_SE`（`6f941b0`）。対象6コマすべて完了。
+
+## Phase 0: `support.js`分割（完了・`0d14999`）
+
+**背景**：`src/logic/support.js`が1844行・100件超のexportを抱える巨大ファイルになっていた。
+CLAUDE.md §5が定める`data → core/sim → domain/state/view → controllers → screens → app`という
+依存階層のどこにも属さない孤立したディレクトリ（`logic/`）に、成長計算・CP・血統・スタッフ・
+イベント効果・ライバル演出・実績・育成上限・世界ランク・キャリア年表・野望・セーブ入出力・
+`buildSim`という性質の異なる十数種類の機能が同居していた。呼び出し元は37ファイル
+（`controllers/`・`domain/`・`screens/`・`data/`・`components/`）。
+
+**分割案**（ユーザー合意済み）：
+
+| 新ファイル | 中身 |
+|---|---|
+| `domain/shared/growth.js` | 成長計算（growthFactor/softFactor/breakthroughMul/growthPhase/potentialHint/disciplineScore/riderAptitudes/aptGrade/t_label等） |
+| `domain/mylife/cp.js` | CP・アビリティ習得（CP_MILESTONES/applyCpMilestones/loadAbilityFile等） |
+| `domain/shared/courseRecords.js` | コースレコードの保存・照合 |
+| `domain/mylife/lineage.js` | 血統表・配合表記・因子図鑑 |
+| `domain/season/staff.js` | スタッフ名・効果・給与 |
+| `domain/season/events.js` | イベント効果適用・性格イベント |
+| `domain/season/rival.js` | ライバルの熱量・セリフ生成・殿堂判定 |
+| `domain/season/achievements.js` | 人生の岐路・オフシーズン選択・シーズン実績・指令 |
+| `domain/mylife/growthCap.js` | 育成上限・私生活イベント抽選・生活費 |
+| `domain/mylife/worldRank.js` | 世界ランキング・選手成績台帳・メディア記事 |
+| `domain/mylife/career.js` | キャリア年表・弟子・素質ランク・エピローグ |
+| `domain/mylife/ambition.js` | 野望パス |
+| `state/saveGame.js` | セーブ有無判定・削除（localStorage I/O） |
+| `sim/buildSim.js` | `buildSim()`・`groupModeFor`・`raceIsHome`・`teamChemistryTier` |
+
+**実装時に判明した層の制約（計画時点の想定から1点調整）**：`teamChemistryTier`は元々
+`SEASON_ACHIEVEMENTS`のchemistry_max判定にも`buildSim`にも使われていたが、sim層はdomain層に
+依存できない（data→core/sim→domain の一方通行）ため、`domain/season/achievements.js`に
+置くとbuildSim側から参照できず層違反になる。`groupModeFor`・`raceIsHome`と合わせて
+`sim/buildSim.js`側に置き、`achievements.js`・`rival.js`はそこからimportする形に変更した
+（domain→simの参照は一方通行と整合するため問題なし）。
+
+**安全策**：`support.js`自体は互換シムとして残し、新ファイルからre-exportするだけにした。
+37箇所の既存import文は無変更で動く。
+
+**検証**：
+- ロジックは全関数本体を無編集で移送（式・分岐・コメント含め一字一句変更なし）。
+- ビルド出力サイズが移送前後で一致（931.17kB→931.16kB）。
+- Node上で`logic/support.js`の全175 export（既存のdata/*再エクスポート含む）を読み込み、
+  undefinedが無いことを確認。`buildSim`・`teamChemistryTier`・`groupModeFor`・`raceIsHome`・
+  `mlUpdateRiderStats`・`mlWorldBoard`・`SEASON_ACHIEVEMENTS`のchemistry_max判定など、
+  分割ファイル間を跨ぐ依存（rival.js↔worldRank.js、growth.js↔growthCap.js↔achievements.js↔
+  sim/buildSim.js）を個別に呼び出して正しく動作することを確認。
+- Playwrightでシーズンモード・マイライフモードの両方を実際に操作して検証：マイライフは
+  デビュー〜ハブ画面〜実績／チーム名鑑／選手成績／キャリアグラフ／特殊能力図鑑／
+  コースレコードの全画面遷移、シーズンは開幕〜レースカレンダー〜出走表（`buildSim`を
+  実際に呼び出すプレビュー機能）まで、いずれもコンソールエラー無しで動作を確認。
