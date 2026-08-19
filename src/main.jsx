@@ -1,6 +1,9 @@
 import { createRoot } from "react-dom/client";
 import React from "react";
 
+// 第13弾Phase1: 埋め込みフォントの@font-face宣言。ビルド時にbase64で単一HTMLへインライン化される。
+import "./styles/fonts.css";
+
 import { initGame } from "./state/state.js";
 import { makeWrap, makeMlWrap, makeMetaWrap } from "./components/chrome.jsx";
 import { renderMetaScreens } from "./screens/meta.jsx";

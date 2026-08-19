@@ -1,0 +1,13 @@
+/* 第13弾Phase1: 埋め込みフォントの宣言。
+   CheckpointPeriod-jis.woff2（JIS第1・第2水準∪ゲーム使用文字、9,577字・227KB）を同梱する。
+   vite.config.js の assetsInlineLimit により、ビルド時にbase64として単一HTMLへインライン化される
+   （このゲームは単一ファイル配布のため、外部フォントの取得を前提にできない）。
+   ライセンスはCC BY-ND相当でサブセット化・WOFF変換が明示的に許可されている。
+   全文は src/assets/fonts/LICENSE-CheckpointPeriod.txt、クレジットは両モードのヘルプ画面に記載。 */
+@font-face {
+  font-family: "CheckpointPeriod";
+  src: url("../assets/fonts/CheckpointPeriod-jis.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
