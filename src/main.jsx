@@ -35,7 +35,8 @@ function App() {
 
   const modal = { renameState, setRenameState, confirmDialog, setConfirmDialog };
   const wrap = makeWrap({ g, setG, ...modal });
-  const mlWrap = makeMlWrap({ ml, ...modal });
+  // 第13弾Phase3-A: 下部タブ（chrome.jsxのBottomTabs）が画面遷移するためsetMlを渡す
+  const mlWrap = makeMlWrap({ ml, setMl: mylife.setMl, ...modal });
   const metaWrap = makeMetaWrap({ ...modal });
 
   // ================= メタ画面（モード選択・生涯評価・系譜・因子・CPショップ） =================

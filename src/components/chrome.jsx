@@ -1,11 +1,12 @@
 // アプリ全体の共通クローム（Header/Nav/改名モーダル/確認モーダル/wrap・mlWrap）。
 // Step7第11弾でmain.jsxから分離。season/mylife両モードが共有する「額縁」だけをここに置く。
 import React from "react";
-import { C, FONT_D, FONT_B, FONT_M } from "../data/theme.js";
+import { C, FONT_D, FONT_B, FONT_DOT, FONT_M, T } from "../data/theme.js";
 import { CLASSES, seasonNeed } from "../data/progression.js";
 import { MONTHS } from "../data/course.js";
 import { OB_COACH_SALARY } from "../data/economy.js";
 import { Btn, Eyebrow } from "./ui.jsx";
+import { BottomTabs } from "./BottomTabs.jsx";
 import { seasonRank, staffSalaryTotal, mlLivingCost } from "../logic/support.js";
 import { teamPayroll } from "../domain/season/salary.js";
 import { findUnsupportedChars } from "../domain/shared/textInput.js";
@@ -119,19 +120,43 @@ export function makeMetaWrap({ renameState, setRenameState, confirmDialog, setCo
 }
 
 // ================= v14: モード選択（タイトル） =================
-export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
+// 第13弾Phase3-A：ヘッダを新トークンへ寄せ、下部タブ5分類（ホーム／選手／世界／ショップ／記録）を
+// 全画面共通の足回りとして追加した。タブはキャラ作成前やレース中など「今そこから動かれると困る」
+// 画面では出さない（TAB_HIDDEN_SCREENS）。
+const TAB_HIDDEN_SCREENS = new Set([
+  "mylife_create", "mylife_scout",
+  "mylife_startlist", "mylife_race", "mylife_result", "mylife_rival_scene", "mylife_newspaper",
+  "mylife_event", "mylife_protege_event", "mylife_event_result",
+  "mylife_offseason", "mylife_offseason_result", "mylife_crossroads", "mylife_crossroads_result",
+  "mylife_contract", "mylife_retire_advice", "mylife_retired",
+]);
+
+export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, setConfirmDialog, setMl }) {
   return (children) => (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT_B }}>
+    <div style={{ minHeight: "100vh", background: T.color.bg, fontFamily: FONT_B }}>
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "6px 14px 40px" }}>
         {ml.player && (
-          <div style={{ padding: "10px 0", borderBottom: `1px solid ${C.line}`, marginBottom: 12 }}>
-            <Eyebrow>マイライフ — {CLASSES[ml.classIdx].label} {ml.year}年目 {MONTHS[ml.month]}</Eyebrow>
-            <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{ml.player.name}（{ml.team}）</div>
-            <div style={{ fontSize: 11, color: C.sub }}>{ml.points}pt / 昇格権{CLASSES[ml.classIdx].need}pt</div>
-            <div style={{ fontSize: 11, color: C.sub }}>所持金{ml.money}万円・年俸{ml.salary}万円（生活費/税 -{mlLivingCost(ml)}万/月）</div>
+          <div style={{ fontFamily: FONT_DOT, padding: `${T.space.sm}px 0 ${T.space.md}px`, borderBottom: `1px solid ${T.color.rule}`, marginBottom: T.space.md }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub }}>
+              <span>{CLASSES[ml.classIdx].label}</span>
+              <span>{ml.year}年目 {MONTHS[ml.month]}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.xs }}>
+              <span style={{ fontSize: T.size.head, color: T.color.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ml.team}</span>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>
+                <span style={{ color: T.color.text, fontSize: T.size.body }}>{ml.money}</span>万円
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>
+              <span>昇格まで {ml.points} / {CLASSES[ml.classIdx].need}pt</span>
+              <span>年俸{ml.salary}万・生活費-{mlLivingCost(ml)}万</span>
+            </div>
           </div>
         )}
         {children}
+        {ml.player && setMl && !TAB_HIDDEN_SCREENS.has(ml.screen) && (
+          <BottomTabs screen={ml.screen} onSelect={(key) => setMl(s => ({ ...s, screen: key }))} />
+        )}
       </div>
       <RenameModal renameState={renameState} setRenameState={setRenameState} />
       <ConfirmDialog confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />

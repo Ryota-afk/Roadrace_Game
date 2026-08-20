@@ -145,321 +145,123 @@ export function renderMyLifeHubScreen(ctx) {
             </div>
           )}
 
-          {/* 第13弾Phase2：ここから下（「その他」の中身）はモックアップに含めなかった要素の仮置き場。
-              旧トークン(C系)のまま——Phase3で選手/世界タブ等の行き先が決まってから作り直す。 */}
-          <div>
-            <button onClick={() => setMl(s => ({ ...s, uiStatusOpen: !s.uiStatusOpen }))}
-              style={{ width: "100%", background: "none", border: `1px solid ${T.color.rule}`, color: T.color.sub, cursor: "pointer", padding: `${T.space.sm}px ${T.space.md}px`, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: FONT_DOT, fontSize: T.size.caption }}>
-              <span>その他</span>
-              <span>{ml.uiStatusOpen ? "閉じる" : "開く"}</span>
-            </button>
-            {ml.uiStatusOpen && (
-              <div style={{ display: "grid", gap: 12, marginTop: 12, fontFamily: FONT_B }}>
-                <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-                  {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
-                  {r.master && <div style={{ fontSize: 11, color: C.purple, marginTop: 1 }}>🎓 {r.master}の教え子{r.teaching ? `・師の教え「${r.teaching}」` : ""}</div>}
-                  {r.partner && <div style={{ fontSize: 11, color: "#e56cc8", marginTop: 1 }}>🧬 {r.master}×{r.partner}の配合{(r.generation || 0) > 1 ? `・${r.generation}代目` : ""}{(r.plusValue || 0) > 0 ? `・累代+${Math.min(15, r.plusValue)}` : ""}</div>}
-                  {r.lineageName && <div style={{ fontSize: 10.5, color: "#c98bf0", marginTop: 1 }}>🩸 {r.lineageName}{r.bloodlineTier ? `　🏛${["", "確立", "名門", "大系統"][r.bloodlineTier]}系統` : ""}</div>}
-                  {r.specialMating && <div style={{ fontSize: 10.5, color: r.specialMating.color || C.yellow, fontWeight: 700, marginTop: 1 }}>🌟 特殊配合『{r.specialMating.title}』</div>}
-                  <PersonaLine p={r.personality} />
-                  <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
-                  <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
-                    <span>成長{powRevealed ? <span style={{ color: POW[r.growthPow].color }}>{r.growthPow}</span> : <span style={{ color: C.sub }}>🔒???</span>}</span>
-                    {(() => { const pot = potentialHint(r, powRevealed); return <span style={{ color: pot.color }}>{pot.label}</span>; })()}
-                    {ml.flags?.married && <span style={{ color: C.purple }}>💍 既婚</span>}
-                  </div>
-                  {(() => {
-                    const cap = mlGrowthCap(ml.year, r, ml);
-                    return (
-                      <>
-                        <div style={{ fontSize: 10.5, color: C.sub, marginTop: 8 }}>コース適性</div>
-                        <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
-                        <div style={{ marginTop: 10 }}>
-                          <AbilitySoshitsuRadarPair r={r} cap={cap} size={148} />
-                        </div>
-                        {r.talentCap ? <div style={{ fontSize: 10, color: C.sub, marginTop: 4, textAlign: "center" }}>才能で上限+{r.talentCap}</div> : null}
-                      </>
-                    );
-                  })()}
-                  <div style={{ fontSize: 11, color: C.sub, fontStyle: "italic", marginTop: 8, paddingTop: 6, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>{riderFlavorText(r)}</div>
-                  {(ml.stock.drink > 0 || ml.stock.supp > 0 || ml.stock.tune > 0) && (
-                    <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                      {ml.stock.drink > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("drink")}>{ML_STOCK_ITEMS.drink.label}（疲労-30） ×{ml.stock.drink}</Btn>}
-                      {ml.stock.supp > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("supp")}>{ML_STOCK_ITEMS.supp.label}（疲労-60） ×{ml.stock.supp}</Btn>}
-                      {ml.stock.tune > 0 && <Btn small outline color={C.green} onClick={() => mlUseStockConfirm("tune")}>{ML_STOCK_ITEMS.tune.label}（フォーム+12） ×{ml.stock.tune}</Btn>}
-                    </div>
-                  )}
-                </div>
-                <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-                  <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>📻 レース作戦</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {Object.entries(ML_TACTICS).map(([k, t]) => (
-                      <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
-                        style={{ padding: "4px 8px", borderRadius: 8, cursor: "pointer", fontSize: 10.5, fontWeight: 700,
-                          background: (ml.tactic || "balanced") === k ? "rgba(255,210,63,0.14)" : C.panel, color: (ml.tactic || "balanced") === k ? C.yellow : C.sub,
-                          border: `1.5px solid ${(ml.tactic || "balanced") === k ? C.yellow : C.line}` }}>{t.label}</button>
-                    ))}
-                  </div>
-                  {(() => {
-                    const tac = ML_TACTICS[ml.tactic] || ML_TACTICS.balanced;
-                    return (
-                      <div style={{ fontSize: 10, color: C.sub, marginTop: 5, display: "flex", gap: 6, alignItems: "flex-start" }}>
-                        {tac.tag && <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, color: tac.tagColor || C.sub, border: `1px solid ${tac.tagColor || C.line}`, borderRadius: 6, padding: "1px 5px", lineHeight: 1.5 }}>{tac.tag}</span>}
-                        <span>{tac.desc}</span>
-                      </div>
-                    );
-                  })()}
-                  <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <span>天候予報：</span>
-                    {[0, 1, 2].map(off => {
-                      const mi = ml.month + off;
-                      if (mi > 11) return null;
-                      const fr = mlGenRace(ml.year, mi, ml.classIdx);
-                      const w = fr.weather || "clear";
-                      return (
-                        <span key={off} style={{ color: w === "rain" ? C.blue : w === "heat" ? C.red : C.sub }}>
-                          {MONTHS[mi]}{off === 0 ? "(今)" : ""} {WEATHER[w].icon}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <Eyebrow>今月の練習メニュー</Eyebrow>
-                  <select value={r.focus} onChange={e => mlSetFocus(e.target.value)}
-                    style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "6px 8px", fontSize: 13, marginTop: 6, width: "100%", boxSizing: "border-box" }}>
-                    {AB_KEYS.map(k => <option key={k} value={k}>{k === recKey ? "⭐ " : ""}{AB_LABEL[k]}強化（{roomLabel(k)}）</option>)}
-                  </select>
-                  <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5, lineHeight: 1.5 }}>
-                    ⭐推奨：<b style={{ color: C.green }}>{AB_LABEL[recKey]}</b>（{recWhy}）
-                    {r.focus !== recKey && <span style={{ color: "#e8a13c" }}>　※今は{AB_LABEL[r.focus]}を強化中</span>}
-                  </div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-                    {AB_KEYS.map(k => (
-                      <span key={k} style={{ fontSize: 9.5, fontFamily: FONT_M, color: k === r.focus ? C.yellow : C.sub, background: C.panel2, borderRadius: 5, padding: "1px 6px", border: k === recKey ? `1px solid ${C.green}` : "1px solid transparent" }}>
-                        {AB_LABEL[k]} {Math.round(r[k] || 0)}<span style={{ color: roomOf(k) >= 10 ? C.green : C.sub }}>（+{roomOf(k)}）</span>
-                      </span>
-                    ))}
-                  </div>
-                  <button onClick={() => setMl(s => ({ ...s, uiSpecialOpen: !s.uiSpecialOpen }))}
-                    style={{ width: "100%", marginTop: 10, background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, fontSize: 11, padding: "5px 8px", cursor: "pointer" }}>
-                    {ml.uiSpecialOpen ? "▲ 専門トレーニングを閉じる" : "▼ 専門トレーニングを見る"}
-                  </button>
-                  {ml.uiSpecialOpen && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                      {Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
-                        <Btn key={k} small role="month" onClick={() => mlAdvanceMonth(k)} title={sp.desc}>{sp.label}</Btn>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {ml.growthReport && (ml.growthReport.deltas.length > 0 || ml.growthReport.ovrUp > 0 || ml.growthReport.subDeltas.length > 0) && (() => {
-                  const gr = ml.growthReport;
-                  return (
-                    <div style={{ background: "linear-gradient(180deg, rgba(125,208,160,0.12), transparent)", borderRadius: 10, border: `1px solid ${C.green}`, padding: "9px 12px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontSize: 11.5, color: C.green, fontWeight: 700 }}>📈 先月の成長</span>
-                        {gr.ovrUp > 0 && <span style={{ fontFamily: FONT_M, fontSize: 13, color: C.yellow, fontWeight: 700 }}>OVR {gr.ovrBefore}→{gr.ovrAfter} <span style={{ color: C.green }}>(+{gr.ovrUp})</span></span>}
-                      </div>
-                      {gr.ovrMilestone && <div style={{ fontSize: 12.5, color: C.yellow, fontWeight: 700, marginTop: 5 }}>🎉 総合力 {gr.ovrMilestone} 到達！新たな領域へ</div>}
-                      {(gr.deltas.length > 0 || gr.subDeltas.length > 0) ? (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                          {gr.deltas.map(d => (
-                            <span key={d.key} style={{ fontFamily: FONT_M, fontSize: 11.5, color: C.text, background: C.panel2, borderRadius: 6, padding: "2px 8px" }}>
-                              {d.label} <b style={{ color: C.green }}>{d.before}→{d.after}</b> <span style={{ color: C.green }}>+{d.up}</span>
-                            </span>
-                          ))}
-                          {gr.subDeltas.map((d, i) => (
-                            <span key={"s" + i} style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub, background: C.panel2, borderRadius: 6, padding: "2px 8px" }}>{d.label} +{d.up}</span>
-                          ))}
-                        </div>
-                      ) : <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5 }}>伸びが頭打ち。休養で活力を戻すと伸びやすくなります。</div>}
-                      {gr.vitAfter !== gr.vitBefore && <div style={{ fontSize: 10, color: gr.vitAfter > gr.vitBefore ? C.green : "#c86", marginTop: 5 }}>💚 活力 {gr.vitBefore}→{gr.vitAfter}{gr.vitAfter > gr.vitBefore ? "（休養で回復）" : "（走り込みで消耗）"}</div>}
-                    </div>
-                  );
-                })()}
-                {(() => {
-                  const media = mlMediaHeadline(ml);
-                  if (!media) return null;
-                  const tc = media.tone === "good" ? C.green : media.tone === "bad" ? C.red : "#5aa9e6";
-                  return (
-                    <div style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.03), transparent)", borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${tc}`, padding: "8px 12px" }}>
-                      <div style={{ fontSize: 9.5, color: C.sub, letterSpacing: 1, textTransform: "uppercase" }}>📰 ロードレース・タイムズ</div>
-                      <div style={{ fontFamily: FONT_D, fontSize: 15, color: tc, margin: "2px 0 3px", lineHeight: 1.3 }}>{media.headline}</div>
-                      <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.5 }}>{media.body}</div>
-                    </div>
-                  );
-                })()}
-                {ml.protege && (() => {
-                  const pr = protegeState(ml.protege, ml.year);
-                  const t = TYPES[ml.protege.type];
-                  const growPct = pr.nextMilestone ? Math.max(0, Math.min(1, (pr.ovr - (pr.nextMilestone - 10)) / 10)) : 1;
-                  return (
-                    <div style={{ background: "linear-gradient(180deg, rgba(53,192,126,0.06), transparent)", borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.green}`, padding: "9px 12px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontSize: 10.5, color: C.green, fontWeight: 700 }}>🎓 弟子の成長</span>
-                        <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>年 +{pr.perYear}（絆×{pr.bondMul}・鍛錬×{pr.trainMul}）</span>
-                      </div>
-                      <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "2px 0 1px" }}>
-                        {ml.protege.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
-                        <span style={{ marginLeft: 6, fontSize: 11, color: C.sub }}>{pr.age}歳・成長力{ml.protege.growthPow}</span>
-                        <span style={{ marginLeft: 8, fontFamily: FONT_M, fontSize: 13, color: C.yellow }}>OVR {pr.ovr}</span>
-                      </div>
-                      <div style={{ height: 5, borderRadius: 3, background: C.line, marginTop: 5, overflow: "hidden" }}>
-                        <div style={{ width: `${growPct * 100}%`, height: "100%", background: C.green, borderRadius: 3 }} />
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
-                        <span style={{ fontSize: 9.5, color: C.pink }}>絆</span>
-                        <div style={{ flex: 1, height: 4, borderRadius: 3, background: C.line, overflow: "hidden" }}>
-                          <div style={{ width: `${pr.bond}%`, height: "100%", background: C.pink, borderRadius: 3 }} />
-                        </div>
-                        <span style={{ fontFamily: FONT_M, fontSize: 9.5, color: C.sub }}>{pr.bond}/100</span>
-                      </div>
-                      <div style={{ fontSize: 10, color: C.sub, marginTop: 3 }}>
-                        {pr.nextMilestone
-                          ? (pr.yrs === 0 ? `弟子入りしたばかり。あなたの背中を追い、OVR${pr.nextMilestone}を目指す。` : `${pr.yrs}年の指導で着実に成長中。次はOVR${pr.nextMilestone}の壁。`)
-                          : "一流の域に達した。あなたの教えが確かに実を結んでいる。"}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {(() => {
-                  const tier = worldRankTier(ml.worldRank);
-                  const path = mlAmbitionPath(ml);
-                  const amb = mlCurrentAmbition(ml);
-                  const idx = ml.ambitionIdx || 0;
-                  return (
-                    <div style={{ background: "linear-gradient(180deg,#2a2740,#22202f)", borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.purple}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <Eyebrow color={C.purple}>🌍 世界ランキング＆アンビション</Eyebrow>
-                        <Btn small outline color={C.green} onClick={() => setMl(s => ({ ...s, screen: "mylife_ranking" }))}>📊 ランキングを見る</Btn>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 5 }}>
-                        <span style={{ fontFamily: FONT_D, fontSize: 13.5, color: C.text }}>
-                          世界ランク <span style={{ fontFamily: FONT_M, fontSize: 18, color: tier.color, fontWeight: 700 }}>{ml.worldRank == null ? "—" : `${ml.worldRank}位`}</span>
-                          <span style={{ fontSize: 11, color: tier.color, marginLeft: 6 }}>{tier.label}</span>
-                        </span>
-                        <span style={{ fontSize: 10.5, color: C.sub, fontFamily: FONT_M }}>{Math.round(ml.worldPoints || 0)}pt{ml.worldRankBest != null ? `／自己最高 ${ml.worldRankBest}位` : ""}</span>
-                      </div>
-                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, color: path.color, fontWeight: 700 }}>{path.icon} {path.label}</span>
-                          <button onClick={() => setMl(s => ({ ...s, showPathChooser: !s.showPathChooser }))} style={{ background: "none", border: `1px solid ${C.line}`, borderRadius: 6, color: C.sub, cursor: "pointer", fontSize: 10, padding: "2px 8px" }}>🔀 生き方を変える</button>
-                        </div>
-                        {ml.showPathChooser && (
-                          <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
-                            {ML_AMBITION_PATH_KEYS.map(pk => { const p = ML_AMBITION_PATHS[pk]; const cur = (ml.ambitionPath || "victory") === pk; return (
-                              <button key={pk} onClick={() => setMl(s => ({ ...s, ambitionPath: pk, ambitionIdx: mlFirstUnmetRung(s, pk), showPathChooser: false }))}
-                                style={{ textAlign: "left", padding: "6px 9px", borderRadius: 8, cursor: "pointer", background: cur ? "rgba(255,210,63,0.1)" : C.panel, border: `1.5px solid ${cur ? p.color : C.line}` }}>
-                                <div style={{ fontSize: 11.5, fontWeight: 700, color: p.color }}>{p.icon} {p.label}{cur ? "（選択中）" : ""}</div>
-                                <div style={{ fontSize: 10, color: C.sub }}>{p.desc}</div>
-                              </button>
-                            ); })}
-                          </div>
-                        )}
-                        {amb ? (
-                          <>
-                            <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>🎯 いま目指す目標</div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 2 }}>
-                              <span style={{ fontFamily: FONT_D, fontSize: 13, color: "#e8a13c", fontWeight: 700 }}>{amb.label}</span>
-                              <span style={{ fontFamily: FONT_M, fontSize: 12, color: C.text }}>{mlAmbitionProgressText(ml, amb)}</span>
-                            </div>
-                            <div style={{ fontSize: 10, color: C.sub, marginTop: 2 }}>達成報酬：{[amb.reward.money ? `資金+${amb.reward.money}万` : null, amb.reward.pop ? `人気+${amb.reward.pop}` : null, amb.reward.ab ? `全能力+${amb.reward.ab}` : null, amb.reward.growth ? `成長力+${amb.reward.growth}段` : null].filter(Boolean).join("・")}</div>
-                          </>
-                        ) : (
-                          <div style={{ fontSize: 12, color: C.yellow, fontWeight: 700, marginTop: 6 }}>🏆 「{path.label}」を極めた！別の生き方に挑戦できます</div>
-                        )}
-                        <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>{path.label}の達成度 {Math.min(idx, path.rungs.length)} / {path.rungs.length}</div>
-                      </div>
-                    </div>
-                  );
-                })()}
-                {ml.flags?.mentorActive && (
-                  <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.green}` }}>
-                    <Eyebrow color={C.green}>🧑‍🏫 恩師の指導</Eyebrow>
-                    <div style={{ fontSize: 11.5, color: C.text, marginTop: 4 }}>{ml.flags.mentorName}が新人指導中（練習・出走経験の伸び+15%）</div>
-                    <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>3年目を迎えると一区切りを迎えます</div>
-                  </div>
-                )}
-                <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-                  <Eyebrow color={"#e8a13c"}>個人スポンサー・人気度</Eyebrow>
-                  <div style={{ fontSize: 11.5, color: C.sub, marginTop: 4 }}>
-                    人気度 <span style={{ fontFamily: FONT_M, color: "#e8a13c", fontWeight: 700 }}>{Math.round(ml.player.popularity || 0)}</span>/100
-                    （個人スポンサー収入 月+{Math.floor((ml.player.popularity || 0) / 10) * 2}万円）
-                  </div>
-                  <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>好成績を残すほど上がり、25/50/75/100到達で一時金の契約ボーナスも入ります</div>
-                </div>
-                {ml.rival && (() => {
-                  const ht = rivalHeatTier(ml.rivalRecord?.heat ?? ml.rivalRecord?.meetings ?? 0);
-                  return (
-                  <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ht.color}` }}>
-                    <Eyebrow color={ht.color}>🔥 {ht.label}</Eyebrow>
-                    <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.rival.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{ml.rival.team}・{TYPES[ml.rival.type].label}）</span></div>
-                    <div style={{ fontSize: 11, color: C.sub }}>
-                      通算対戦成績：{ml.rivalRecord?.meetings || 0}戦 <span style={{ color: C.green }}>{ml.rivalRecord?.wins || 0}勝</span> <span style={{ color: C.red }}>{ml.rivalRecord?.losses || 0}敗</span>
-                    </div>
-                    {race.rivalPresent && <div style={{ fontSize: 11, color: C.yellow, marginTop: 3 }}>🔥 今月のレースにライバルも出走してくる</div>}
-                  </div>
-                  );
-                })()}
-                {ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0 && (() => {
-                  const ht2 = rivalHeatTier(ml.rivalRecord2?.heat ?? ml.rivalRecord2?.meetings ?? 0);
-                  return (
-                  <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ht2.color}` }}>
-                    <Eyebrow color={ht2.color}>🔥 {ht2.label}（好敵手）</Eyebrow>
-                    <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "4px 0 2px" }}>{ml.rival2.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>（{ml.rival2.team}・{TYPES[ml.rival2.type].label}）</span></div>
-                    <div style={{ fontSize: 11, color: C.sub }}>
-                      通算対戦成績：{ml.rivalRecord2?.meetings || 0}戦 <span style={{ color: C.green }}>{ml.rivalRecord2?.wins || 0}勝</span> <span style={{ color: C.red }}>{ml.rivalRecord2?.losses || 0}敗</span>
-                    </div>
-                    {race.rival2Present && <div style={{ fontSize: 11, color: C.blue, marginTop: 3 }}>🔥 今月のレースに好敵手も出走してくる</div>}
-                  </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-
-          <div style={{ fontFamily: FONT_B }}>
-            <Eyebrow color={C.sub}>📂 メニュー（月は進みません）</Eyebrow>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_shop" }))}>🛍 ショップ</Btn>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_achievements" }))}>🏆 実績 {computeAchievements(ml).filter(a => a.achieved).length}/{ML_ACHIEVEMENTS.length}</Btn>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_teamroster" }))}>👥 チーム名鑑</Btn>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_riderstats" }))}>📊 選手成績</Btn>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_graph" }))}>📈 キャリアグラフ</Btn>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_abilityfile" }))}>🗂 特殊能力図鑑</Btn>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_records" }))}>🏅 コースレコード</Btn>
-              <Btn small role="menu" onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}>📖 ヘルプ</Btn>
+          {/* 第13弾Phase3-A：レース作戦。出走前に決める＝「今月の決断」の一部なのでホームに残す。 */}
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>レース作戦</div>
+          <div style={{ background: T.color.surface }}>
+            {Object.entries(ML_TACTICS).map(([k, t], i) => {
+              const on = (ml.tactic || "balanced") === k;
+              return (
+                <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+                    background: on ? T.color.surfaceUp : "none", border: 0,
+                    borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                    color: on ? T.color.accent : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+                    padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+                  }}>
+                  <span>{t.label}</span>
+                  {on && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+                </button>
+              );
+            })}
+            <div style={{ fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>
+              {(ML_TACTICS[ml.tactic] || ML_TACTICS.balanced).desc}
             </div>
           </div>
-          {/* v46(UI): 頻度が低く、かつ一部は取り返しがつかない操作なので折りたたみへ収納。
-              「メンターになる」は前向きな意思決定で終了・消去の類ではないためdangerではなく
-              menu扱い（色の意味＝「戻れない」を、離脱・消去系操作だけに絞るため）。 */}
-          <div style={{ fontFamily: FONT_B }}>
-            <button onClick={() => setMl(s => ({ ...s, uiOtherOpen: !s.uiOtherOpen }))}
-              style={{ width: "100%", background: "none", border: `1px solid ${C.line}`, borderRadius: 8, color: C.sub, cursor: "pointer", padding: "9px 12px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5 }}>
-              <span>⚙ その他・キャリア管理</span>
-              <span style={{ fontWeight: 700 }}>{ml.uiOtherOpen ? "▲ 閉じる" : "▼ 開く"}</span>
+
+          {/* 練習メニュー。こちらも「今月どう過ごすか」の決断なのでホームに残す。 */}
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>練習メニュー</div>
+          <div style={{ background: T.color.surface }}>
+            {AB_KEYS.map((k, i) => {
+              const on = r.focus === k;
+              const rec = recKey === k;
+              return (
+                <button key={k} onClick={() => mlSetFocus(k)}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+                    background: on ? T.color.surfaceUp : "none", border: 0,
+                    borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                    color: on ? T.color.accent : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+                    padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+                  }}>
+                  <span>{AB_LABEL[k]}{rec ? "（おすすめ）" : ""}</span>
+                  <span style={{ fontSize: T.size.caption, color: T.color.sub }}>
+                    {Math.round(r[k] || 0)} <span style={{ color: roomOf(k) >= 10 ? T.color.good : T.color.sub }}>+{roomOf(k)}</span>
+                  </span>
+                </button>
+              );
+            })}
+            <button onClick={() => setMl(s => ({ ...s, uiSpecialOpen: !s.uiSpecialOpen }))}
+              style={{ width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
+              {ml.uiSpecialOpen ? "専門トレーニングを閉じる" : "専門トレーニングを見る"}
             </button>
-            {ml.uiOtherOpen && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, alignItems: "center" }}>
-                {ml.flags?.mentor
-                  ? <span style={{ fontSize: 11.5, color: C.yellow }}>🎖 チームの精神的支柱{ml.protege ? `・${ml.protege.name}の師` : ""}（毎月疲労-3／評価+0.3）</span>
-                  : r.age >= 30 && (
-                    <Btn small role="menu" onClick={() => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor)}>🎖 メンターになる（弟子を取る）</Btn>
+            {ml.uiSpecialOpen && Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
+              <button key={k} onClick={() => mlAdvanceMonth(k)} title={sp.desc}
+                style={{ display: "block", width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
+                {sp.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 先月の成長。直前の行動の手応えを返す情報なのでホームに残す。 */}
+          {ml.growthReport && (ml.growthReport.deltas.length > 0 || ml.growthReport.ovrUp > 0) && (() => {
+            const gr = ml.growthReport;
+            return (
+              <>
+                <div style={{ fontSize: T.size.caption, color: T.color.sub }}>先月の成長</div>
+                <div style={{ background: T.color.surface, padding: T.space.md }}>
+                  {gr.ovrUp > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body, marginBottom: T.space.sm }}>
+                      <span style={{ color: T.color.sub }}>総合力</span>
+                      <span>{gr.ovrBefore} → <span style={{ color: T.color.accent }}>{gr.ovrAfter}</span></span>
+                    </div>
                   )}
-                <Btn small role="danger" onClick={() => askConfirm(`ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。`, mlStartLastRace)}>🏁 ラストレースで引退</Btn>
-                {/* v49(第11弾続き): 殿堂記録(mlRecordLegend)はここで直接呼ばない。以前はここでも
-                    呼んでおり、"mylife_retired"遷移を検知するuseMyLifeGame.js側のuseEffectとの
-                    二重呼び出しで、静かに引退するたび同じ選手が殿堂へ2回登録されるバグになっていた。
-                    他の引退経路（ラストレース／引退勧告）と同じくuseEffect側の一本化した処理に委ねる。 */}
-                <Btn small role="danger" onClick={() => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => setMl(s => ({ ...s, screen: "mylife_retired" })))}>🚪 静かに引退</Btn>
-                {/* v36(#6): ライバル会話ドラマ（紙芝居/VN風）の on/off トグル */}
-                <Btn small role="menu" onClick={() => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false }))}>🎭 会話ドラマ：{ml.rivalDramaOn === false ? "非表示" : "表示中"}</Btn>
-                <Btn small role="danger" onClick={() => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); })}>🔄 最初からやり直す</Btn>
-                <Btn small role="menu" onClick={() => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null))}>← タイトルに戻る</Btn>
-              </div>
-            )}
+                  {gr.deltas.map((d, i) => (
+                    <div key={d.key} style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.body, padding: `${T.space.xs}px 0`, borderTop: i === 0 && !gr.ovrUp ? "none" : `1px solid ${T.color.rule}` }}>
+                      <span style={{ color: T.color.sub }}>{d.label}</span>
+                      <span>{d.before} → {d.after} <span style={{ color: T.color.good }}>+{d.up}</span></span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+          {/* 第13弾Phase3-A：ヘルプと、頻度が低く一部は取り返しがつかないキャリア操作。
+              5つのタブのどれにも属さない性質（設定・生涯の区切り）なのでホーム末尾の折りたたみに置く。
+              取り返しがつかない操作だけは赤（T.color.bad）で示す。 */}
+          <div>
+            <button onClick={() => setMl(s => ({ ...s, uiOtherOpen: !s.uiOtherOpen }))}
+              style={{ width: "100%", background: "none", border: `1px solid ${T.color.rule}`, color: T.color.sub, cursor: "pointer", padding: `${T.space.sm}px ${T.space.md}px`, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: FONT_DOT, fontSize: T.size.caption }}>
+              <span>その他</span>
+              <span>{ml.uiOtherOpen ? "閉じる" : "開く"}</span>
+            </button>
+            {ml.uiOtherOpen && (() => {
+              const item = (label, onClick, color) => (
+                <button onClick={onClick}
+                  style={{ display: "block", width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: color || T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
+                  {label}
+                </button>
+              );
+              return (
+                <div style={{ background: T.color.surface }}>
+                  {item("ヘルプ", () => setMl(s => ({ ...s, screen: "mylife_help" })))}
+                  {item(`会話ドラマ：${ml.rivalDramaOn === false ? "非表示" : "表示中"}`, () => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false })))}
+                  {ml.flags?.mentor
+                    ? <div style={{ borderTop: `1px solid ${T.color.rule}`, color: T.color.sub, fontSize: T.size.caption, padding: `${T.space.sm}px ${T.space.md}px` }}>
+                        チームの精神的支柱{ml.protege ? `・${ml.protege.name}の師` : ""}（毎月 疲労-3／評価+0.3）
+                      </div>
+                    : r.age >= 30 && item("メンターになる（弟子を取る）", () => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor))}
+                  {item("ラストレースで引退", () => askConfirm("ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。", mlStartLastRace), T.color.bad)}
+                  {/* v49(第11弾続き): 殿堂記録(mlRecordLegend)はここで直接呼ばない。以前はここでも
+                      呼んでおり、"mylife_retired"遷移を検知するuseMyLifeGame.js側のuseEffectとの
+                      二重呼び出しで、静かに引退するたび同じ選手が殿堂へ2回登録されるバグになっていた。
+                      他の引退経路（ラストレース／引退勧告）と同じくuseEffect側の一本化した処理に委ねる。 */}
+                  {item("静かに引退", () => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => setMl(s => ({ ...s, screen: "mylife_retired" }))), T.color.bad)}
+                  {item("最初からやり直す", () => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); }), T.color.bad)}
+                  {item("タイトルに戻る", () => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null)))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       );

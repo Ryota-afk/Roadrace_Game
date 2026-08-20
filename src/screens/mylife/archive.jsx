@@ -1,0 +1,57 @@
+// 「記録」タブ（第13弾Phase3-A で新設）。
+// 実績・コースレコード・殿堂・系譜・因子図鑑・特殊能力図鑑への入口をまとめた索引。
+// 各画面の中身自体はまだ旧デザインのまま（Phase3-B以降で作り直す）。
+import React from "react";
+import { FONT_DOT, T } from "../../data/theme.js";
+import { ML_ACHIEVEMENTS, computeAchievements } from "../../state/state.js";
+
+export function renderMyLifeArchiveScreen(ctx) {
+  const { ml, mlWrap, setMl } = ctx;
+  if (!ml.player) return null;
+  const done = computeAchievements(ml).filter(a => a.achieved).length;
+  const r = ml.player;
+  const log = r.raceLog || [];
+  const wins = log.filter(e => e.rank === 1).length;
+  const podiums = log.filter(e => e.rank <= 3).length;
+  const best = log.length ? Math.min(...log.map(e => e.rank)) : null;
+
+  const items = [
+    { label: "実績", note: `${done} / ${ML_ACHIEVEMENTS.length}`, screen: "mylife_achievements" },
+    { label: "コースレコード", note: "", screen: "mylife_records" },
+    { label: "歴代選手の殿堂", note: "", screen: "mylife_legends" },
+    { label: "系譜", note: "", screen: "mylife_lineage" },
+    { label: "因子図鑑", note: "", screen: "mylife_factors" },
+    { label: "特殊能力図鑑", note: "", screen: "mylife_abilityfile" },
+  ];
+
+  return mlWrap(
+    <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+      <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>記録</div>
+
+      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>これまでの戦績</div>
+      <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+        {[["出走", log.length], ["優勝", wins], ["表彰台", podiums], ["最高着順", best == null ? "—" : `${best}位`]].map(([k, v], i) => (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.body, padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+            <span style={{ color: T.color.sub }}>{k}</span>
+            <span style={{ color: i === 1 && wins > 0 ? T.color.accent : T.color.text }}>{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: T.color.surface }}>
+        {items.map((it, i) => (
+          <button key={it.screen} onClick={() => setMl(s => ({ ...s, screen: it.screen }))}
+            style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+              background: "none", border: 0, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+              color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+              padding: `${T.space.md}px`, cursor: "pointer", textAlign: "left",
+            }}>
+            <span>{it.label}</span>
+            {it.note && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{it.note}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

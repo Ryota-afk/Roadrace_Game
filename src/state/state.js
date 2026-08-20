@@ -772,14 +772,14 @@ export function mlTeammatesFromRoster(worldRosters, teamName, n = ML_TEAMMATE_CO
 // 博打だが集団ゴールで勝てない脚質の唯一の一発（起伏・山岳で逃げ切りやすい）／積極＝非スプリント型が
 // 終盤に仕掛けて先着を狙う（スプリント型は末脚を消して不利）。
 export const ML_TACTICS = {
-  balanced:   { label: "🚩 標準（流れに任せる）",       tag: "無難", tagColor: "#9aa3b5", chaseMode: "normal", aceEarly: false, desc: "特別な仕掛けはせず、脚質と展開に任せる。迷ったらまずこれ" },
-  wait:       { label: "⏳ 末脚温存（集団スプリント狙い）", tag: "堅実・平坦向き", tagColor: "#4fbf6b", chaseMode: "push",   aceEarly: false, desc: "逃げを潰して集団を保ち、ゴールスプリントで勝負。スプリント型・平坦/クリテで最も安定して上位に入る" },
-  early:      { label: "💨 早めに逃げる",               tag: "博打・起伏向き", tagColor: "#e8734a", chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "ハイリスクな作戦で、多くは吸収されて平均着順は落ちる。だが集団スプリントで勝てない脚質が「一発」を狙える唯一の手。平坦より起伏・山岳の方が逃げ切りやすい" },
-  aggressive: { label: "⚔ 積極的に仕掛ける",            tag: "非スプリント型向き", tagColor: "#e8a13c", chaseMode: "normal", aceEarly: true,  desc: "終盤にエース自ら加速して先着を狙う。集団ゴールで分が悪い登坂・独走・パンチャー型向き。スプリント型は末脚を消すので不利" },
+  balanced:   { label: "標準（流れに任せる）",       tag: "無難", tagColor: "#9aa3b5", chaseMode: "normal", aceEarly: false, desc: "特別な仕掛けはせず、脚質と展開に任せる。迷ったらまずこれ" },
+  wait:       { label: "末脚温存（集団スプリント狙い）", tag: "堅実・平坦向き", tagColor: "#4fbf6b", chaseMode: "push",   aceEarly: false, desc: "逃げを潰して集団を保ち、ゴールスプリントで勝負。スプリント型・平坦/クリテで最も安定して上位に入る" },
+  early:      { label: "早めに逃げる",               tag: "博打・起伏向き", tagColor: "#e8734a", chaseMode: "normal", aceEarly: false, playerBreakaway: true, desc: "ハイリスクな作戦で、多くは吸収されて平均着順は落ちる。だが集団スプリントで勝てない脚質が「一発」を狙える唯一の手。平坦より起伏・山岳の方が逃げ切りやすい" },
+  aggressive: { label: "積極的に仕掛ける",            tag: "非スプリント型向き", tagColor: "#e8a13c", chaseMode: "normal", aceEarly: true,  desc: "終盤にエース自ら加速して先着を狙う。集団ゴールで分が悪い登坂・独走・パンチャー型向き。スプリント型は末脚を消すので不利" },
   // v48(第10弾): chaseMode:"push"を撤去。実測でこれ自体がチーム成績を悪化させる主犯だった
   // （集団のローテを速める効果で献身の意味論には無関係）。献身の効果はチームドラフト
   // （sim/race.js）に一本化する。
-  assist:     { label: "🤝 アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "normal", aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを風除けで支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
+  assist:     { label: "アシストに徹する",            tag: "献身", tagColor: "#5aa9e6", chaseMode: "normal", aceEarly: false, playerAssist: true, desc: "自分の勝ちを捨ててエースを風除けで支える献身の走り。監督指示に関わらず必ずアシスト戦としてカウントされ、監督評価も下がらない（献身の道向き）" },
 };
 
 export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege) {

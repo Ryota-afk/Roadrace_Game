@@ -8,6 +8,10 @@ import { renderMyLifeHelpScreens } from "./mylife/help.jsx";
 import { renderMyLifeRaceScreens } from "./mylife/race.jsx";
 import { renderMyLifeEventScreens } from "./mylife/events.jsx";
 import { renderMyLifeCareerScreens } from "./mylife/career.jsx";
+// 第13弾Phase3-A：下部タブ5分類のうち新設した3画面（選手・世界・記録）
+import { renderMyLifeRiderScreen } from "./mylife/rider.jsx";
+import { renderMyLifeWorldScreen } from "./mylife/world.jsx";
+import { renderMyLifeArchiveScreen } from "./mylife/archive.jsx";
 
 const CREATE_SCREENS = new Set(["mylife_create", "mylife_scout"]);
 const HUB_SCREENS = new Set(["mylife_main", "mylife_achievements", "mylife_abilityfile", "mylife_riderstats", "mylife_worldstats", "mylife_records"]);
@@ -18,6 +22,9 @@ const CAREER_SCREENS = new Set(["mylife_retire_advice", "mylife_retired", "mylif
 export function renderMyLifeScreens(ctx) {
   const { ml, mlWrap } = ctx;
   if (CREATE_SCREENS.has(ml.screen)) return renderMyLifeCreateScreens(ctx);
+  if (ml.screen === "mylife_rider") return renderMyLifeRiderScreen(ctx);
+  if (ml.screen === "mylife_world") return renderMyLifeWorldScreen(ctx);
+  if (ml.screen === "mylife_archive") return renderMyLifeArchiveScreen(ctx);
   if (HUB_SCREENS.has(ml.screen)) return renderMyLifeHubScreen(ctx);
   if (ml.screen === "mylife_help") return renderMyLifeHelpScreens(ctx);
   if (RACE_SCREENS.has(ml.screen)) return renderMyLifeRaceScreens(ctx);

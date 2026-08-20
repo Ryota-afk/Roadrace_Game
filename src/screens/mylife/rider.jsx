@@ -1,0 +1,112 @@
+// 「選手」タブ（第13弾Phase3-A で新設）。
+// Phase 2でホームの「その他」へ仮置きしていた選手の詳細——能力・コース適性・素質・
+// 性格と成長・経歴——をここへ集約した。図の形（レーダー）はそのまま、フォントと色だけ
+// 新トークンへ寄せている（ユーザー指示：「レーダーのままフォントのみ変更」）。
+import React from "react";
+import { DisciplineGrid } from "../../components/panels.jsx";
+import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
+import { RiderPortrait } from "../../components/RiderPortrait.jsx";
+import { overall } from "../../core/core.js";
+import { ABILITIES, GROWTH, PERSONALITIES, TYPES } from "../../data/abilities.js";
+import { FONT_DOT, T } from "../../data/theme.js";
+import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
+import { riderNickname } from "../../state/state.js";
+
+const Section = ({ title, children }) => (
+  <>
+    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>{title}</div>
+    <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>{children}</div>
+  </>
+);
+
+const Row = ({ k, v, first }) => (
+  <div style={{
+    display: "flex", justifyContent: "space-between", alignItems: "baseline",
+    fontSize: T.size.body, padding: `${T.space.sm}px 0`,
+    borderTop: first ? "none" : `1px solid ${T.color.rule}`,
+  }}>
+    <span style={{ color: T.color.sub }}>{k}</span>
+    <span style={{ textAlign: "right", marginLeft: T.space.sm }}>{v}</span>
+  </div>
+);
+
+export function renderMyLifeRiderScreen(ctx) {
+  const { ml, mlWrap, setMl } = ctx;
+  const r = ml.player;
+  if (!r) return null;
+  const race = ml.races[0];
+  const ph = growthPhase(r);
+  const powRevealed = mlGrowthPowRevealed(ml);
+  const cap = mlGrowthCap(ml.year, r, ml);
+  const pot = potentialHint(r, powRevealed);
+  const abils = [...(r.abilities || [])];
+  const golds = new Set(r.goldAbilities || []);
+
+  return mlWrap(
+    <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+      <div style={{ display: "flex", gap: T.space.md, alignItems: "flex-end", background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+        <div style={{ flex: "none" }}><RiderPortrait color={T.color.accent} size={64} /></div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: T.size.title, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+          {riderNickname(r) && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.xs }}>{riderNickname(r)}</div>}
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{r.age}歳 / {TYPES[r.type]?.label}</div>
+        </div>
+        <div style={{ textAlign: "right", flex: "none" }}>
+          <div style={{ fontSize: T.size.display, lineHeight: 1, color: T.color.accent }}>{overall(r)}</div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>総合力</div>
+        </div>
+      </div>
+
+      <Section title="能力と素質">
+        <AbilitySoshitsuRadarPair r={r} cap={cap} size={140} />
+      </Section>
+
+      <Section title="コース適性">
+        <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
+      </Section>
+
+      <Section title="性格と成長">
+        <Row first k="性格" v={PERSONALITIES[r.personality]?.label || "普通"} />
+        <Row k="成長型" v={GROWTH[r.growth]?.label} />
+        <Row k="いまの時期" v={ph.tag} />
+        <Row k="成長力" v={powRevealed ? r.growthPow : "3年目に判明"} />
+        {/* pot.labelは「伸びしろ中」のように項目名を含むため、行の見出しと重複しないよう剥がす */}
+        <Row k="伸びしろ" v={pot.label.replace(/^伸びしろ/, "")} />
+        {r.talentCap ? <Row k="才能による上限" v={`+${r.talentCap}`} /> : null}
+      </Section>
+
+      {abils.length > 0 && (
+        <Section title="特殊能力">
+          {abils.map((id, i) => {
+            const a = ABILITIES[id];
+            if (!a) return null;
+            return (
+              <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                  <span style={{ color: a.bad ? T.color.bad : T.color.text }}>{a.label}</span>
+                  {golds.has(id) && <span style={{ fontSize: T.size.caption, color: T.color.accent }}>金</span>}
+                </div>
+                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, lineHeight: 1.6 }}>{a.desc}</div>
+              </div>
+            );
+          })}
+        </Section>
+      )}
+
+      <Section title="経歴">
+        {r.lineageName && <Row first k="系統" v={r.lineageName} />}
+        {r.master && <Row k="師" v={r.master} />}
+        {r.partner && <Row k="配合" v={`${r.master}×${r.partner}`} />}
+        {ml.flags?.married && <Row k="家庭" v={ml.flags.hasChild ? "既婚・子あり" : "既婚"} />}
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm, paddingTop: T.space.sm, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.7 }}>
+          {riderFlavorText(r)}
+        </div>
+      </Section>
+
+      <button onClick={() => setMl(s => ({ ...s, screen: "mylife_graph" }))}
+        style={{ width: "100%", background: "none", border: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.sm, cursor: "pointer" }}>
+        キャリアの推移を見る
+      </button>
+    </div>
+  );
+}
