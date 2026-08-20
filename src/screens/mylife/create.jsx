@@ -159,7 +159,7 @@ export function renderMyLifeCreateScreens(ctx) {
             const pIdx = ml.partnerIdx ?? -1;
             const partner = (master && pIdx >= 0 && pIdx !== mIdx) ? legends[pIdx] : null;
             const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice, ml.bgChoice, master, partner); };
-            if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate);
+            if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate, "新しく始める");
             else doCreate();
           }}>この内容でデビュー →</PrimaryBtn>
           <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>歴代選手の殿堂を見る</QuietBtn>

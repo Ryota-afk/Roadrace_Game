@@ -19,7 +19,10 @@ export function useAppShell() {
   // （リセットできていないように見える）。ブラウザ標準のconfirm()に頼らず、
   // アプリ内で完結する確認モーダルに置き換える
   const [confirmDialog, setConfirmDialog] = useState(null);
-  const askConfirm = (message, onConfirm) => setConfirmDialog({ message, onConfirm });
+  // v51(第13弾Phase3-D-3): confirmLabelを追加。「OK」だけでは取り返しのつかない操作
+  // （引退・データ消去等）でも何が起きるか言わないままだったため、呼び出し元がボタンの
+  // 文言（例：「引退する」）を指定できるようにした。未指定時は従来通り「OK」。
+  const askConfirm = (message, onConfirm, confirmLabel) => setConfirmDialog({ message, onConfirm, confirmLabel });
   // v29: 選手名の変更用モーダル（アプリ内完結のテキスト入力）
   // 第13弾: maxLengthを可変化（チーム名16文字／選手名12文字など呼び出し元ごとに異なるため）
   const [renameState, setRenameState] = useState(null); // { title, value, onCommit, maxLength }

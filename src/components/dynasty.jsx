@@ -1,88 +1,94 @@
 // 系譜ツリー／因子図鑑の共通ビュー。生涯評価（screens/meta.jsx）とマイライフ殿堂
 // （screens/mylife/career.jsx）の両方から呼ばれる、ほぼ同一だったJSXをStep7第11弾で統合した。
-// 差分（見出し要素・空状態文言・戻るボタン等）はvariant/footerで吸収する。
+// 第13弾Phase3-D-3: 新トークンへ全面移行。系譜ツリーはnetkeibaの血統表を参考に、罫線グリッドで
+// 世代を並べる表形式へ再設計した——ただし現在のデータ（mlLineageForest）は1系統内の直系1本を
+// 世代順に並べたものであり、netkeibaのような5代・両親を再帰的に遡る血統表そのものではない
+// （父方/母方の区別も無い＝parentsは[師匠,配合相手]の役割で、性別による父母の区分ではない）。
+// 祖先を再帰的に遡る5代グリッドの実装はデータ層の拡張が要るため次弾へ送る（devlog/wave13.md）。
+// variantは「見出しの出し方」の差分吸収だった旧設計を廃止し、空状態の文言差分のみ残す
+// （見出し自体はmlUi.jsxのScreenが担うため、呼び出し側でのheadingAsH2切替が不要になった）。
 import React from "react";
-import { C, FONT_D, FONT_M } from "../data/theme.js";
+import { T } from "../data/theme.js";
 import { TYPES } from "../data/abilities.js";
-import { Eyebrow } from "./ui.jsx";
+import { Screen } from "./mlUi.jsx";
 
-// 呼び出し元ごとの見た目差分。将来どちらかへ寄せる余地を残すための表。
-const LINEAGE_VARIANT = {
-  dynasty: { headingAsH2: true, descMarginTop: undefined, memberPosition: undefined, emptyText: "まだ殿堂選手がいません。マイライフで選手を引退させると系譜が始まります。" },
-  mylife: { headingAsH2: false, descMarginTop: 4, memberPosition: "relative", emptyText: "まだ殿堂選手がいません。選手を引退させると系譜が始まります。" },
-};
-const FACTOR_VARIANT = {
-  dynasty: { headingAsH2: true, descMarginTop: undefined, emptyText: "まだ殿堂選手がいません。マイライフで選手を引退させると因子が集まり始めます。" },
-  mylife: { headingAsH2: false, descMarginTop: 4, emptyText: "まだ殿堂選手がいません。選手を引退させると因子が集まり始めます。" },
+const EMPTY_TEXT = {
+  lineage: {
+    dynasty: "まだ殿堂選手がいません。マイライフで選手を引退させると系譜が始まります。",
+    mylife: "まだ殿堂選手がいません。選手を引退させると系譜が始まります。",
+  },
+  factor: {
+    dynasty: "まだ殿堂選手がいません。マイライフで選手を引退させると因子が集まり始めます。",
+    mylife: "まだ殿堂選手がいません。選手を引退させると因子が集まり始めます。",
+  },
 };
 
 export function LineageForestView({ forest, totalLeg, variant, footer }) {
-  const v = LINEAGE_VARIANT[variant];
-  const tierColor = ["#7c8aa5", "#6fbf73", "#4f8fe8", "#ffd23f"];
+  const tierColor = [T.color.sub, T.color.good, T.color.accent, T.color.accent];
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ background: "linear-gradient(180deg,#233026,#1d2a22)", borderRadius: 12, padding: 16, borderTop: `4px solid ${C.green}` }}>
-        {v.headingAsH2
-          ? <h2 style={{ fontFamily: FONT_D, color: C.green, fontSize: 20, margin: "0 0 4px" }}>🌳 系譜ツリー</h2>
-          : <Eyebrow color={C.green}>🌳 系譜ツリー</Eyebrow>}
-        <div style={{ fontSize: 12, color: C.sub, marginTop: v.descMarginTop, lineHeight: 1.6 }}>歴代選手{totalLeg}名を、血の流れごとにまとめました。</div>
-      </div>
-      {totalLeg === 0 && <div style={{ fontSize: 12.5, color: C.sub, padding: 10 }}>{v.emptyText}</div>}
+    <Screen>
+      <div style={{ fontSize: T.size.title, marginBottom: T.space.xs }}>系譜ツリー</div>
+      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>歴代選手{totalLeg}名を、血の流れごとにまとめました。</div>
+      {totalLeg === 0 && <div style={{ fontSize: T.size.body, color: T.color.sub, marginBottom: T.space.md }}>{EMPTY_TEXT.lineage[variant]}</div>}
       {forest.map(g => (
-        <div key={g.lineageName} style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", border: `1px solid ${tierColor[g.tier.tier]}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
-            <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{g.lineageName}</span>
-            <span style={{ fontSize: 11, color: tierColor[g.tier.tier], fontWeight: 700 }}>{g.tier.label}{g.tier.tier > 0 ? `（因子+${g.tier.tier}）` : ""}・{g.size}名</span>
+        <div key={g.lineageName} style={{ marginBottom: T.space.lg }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", fontSize: T.size.body }}>
+            <span style={{ color: T.color.text }}>{g.lineageName}</span>
+            <span style={{ fontSize: T.size.caption, color: tierColor[g.tier.tier] }}>{g.tier.label}{g.tier.tier > 0 ? `・因子+${g.tier.tier}` : ""}・{g.size}名</span>
           </div>
-          <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+          <div style={{ background: T.color.surface, marginTop: T.space.sm, border: `1px solid ${T.color.rule}` }}>
+            <div style={{ display: "flex", fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.xs}px ${T.space.sm}px`, borderBottom: `1px solid ${T.color.rule}` }}>
+              <span style={{ width: 48, flex: "none" }}>世代</span>
+              <span style={{ flex: 1 }}>名前</span>
+              <span style={{ width: 60, flex: "none", textAlign: "right" }}>総合力</span>
+            </div>
             {g.members.map((m, i) => (
-              <div key={i} style={{ paddingLeft: Math.min(4, m.generation) * 14, position: v.memberPosition }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 12.5 }}>
-                  <span style={{ color: C.sub, fontFamily: FONT_M, fontSize: 10 }}>{m.generation > 0 ? "└" : "●"}</span>
-                  <span style={{ fontFamily: FONT_D, color: C.text, fontWeight: 700 }}>{m.name}</span>
-                  <span style={{ fontSize: 10, color: TYPES[m.type]?.color }}>{TYPES[m.type]?.label}</span>
-                  {m.generation > 0 && <span style={{ fontSize: 10, color: "#e56cc8" }}>🧬{m.generation}代目{m.plusValue > 0 ? `+${m.plusValue}` : ""}</span>}
-                  <span style={{ fontSize: 10, color: C.sub }}>OVR{m.overall}</span>
+              <div key={i} style={{ padding: `${T.space.sm}px ${T.space.sm}px`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                <div style={{ display: "flex", alignItems: "baseline", fontSize: T.size.body }}>
+                  <span style={{ width: 48, flex: "none", fontSize: T.size.caption, color: T.color.sub }}>{m.generation > 0 ? `${m.generation}代目` : "元祖"}</span>
+                  <span style={{ flex: 1, color: T.color.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {m.name}<span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>{TYPES[m.type]?.label}</span>
+                    {m.plusValue > 0 && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>+{m.plusValue}</span>}
+                  </span>
+                  <span style={{ width: 60, flex: "none", textAlign: "right", color: T.color.sub }}>{m.overall}</span>
                 </div>
-                {m.nickname && <div style={{ fontSize: 10, color: C.purple, fontStyle: "italic", paddingLeft: 16 }}>「{m.nickname}」</div>}
-                {m.parents.length > 0 && <div style={{ fontSize: 9.5, color: C.sub, paddingLeft: 16 }}>親：{m.parents.join(" × ")}</div>}
+                {m.nickname && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2, paddingLeft: 48 }}>「{m.nickname}」</div>}
+                {m.parents.length > 0 && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, paddingLeft: 48 }}>系統：{m.parents.join(" × ")}</div>}
               </div>
             ))}
           </div>
         </div>
       ))}
       {footer}
-    </div>
+    </Screen>
   );
 }
 
 export function FactorCollectionView({ cats, totalLeg, variant, footer }) {
-  const v = FACTOR_VARIANT[variant];
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ background: "linear-gradient(180deg,#2e2436,#241d2c)", borderRadius: 12, padding: 16, borderTop: `4px solid #e56cc8` }}>
-        {v.headingAsH2
-          ? <h2 style={{ fontFamily: FONT_D, color: "#e56cc8", fontSize: 20, margin: "0 0 4px" }}>🧬 因子図鑑</h2>
-          : <Eyebrow color={"#e56cc8"}>🧬 因子図鑑</Eyebrow>}
-        <div style={{ fontSize: 12, color: C.sub, marginTop: v.descMarginTop, lineHeight: 1.6 }}>殿堂選手{totalLeg}名が残した「因子」。★＝その因子を持つ選手の数。</div>
-      </div>
-      {totalLeg === 0 && <div style={{ fontSize: 12.5, color: C.sub, padding: 10 }}>{v.emptyText}</div>}
+    <Screen>
+      <div style={{ fontSize: T.size.title, marginBottom: T.space.xs }}>因子図鑑</div>
+      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>殿堂選手{totalLeg}名が残した「因子」。★＝その因子を持つ選手の数。</div>
+      {totalLeg === 0 && <div style={{ fontSize: T.size.body, color: T.color.sub, marginBottom: T.space.md }}>{EMPTY_TEXT.factor[variant]}</div>}
       {cats.map(cat => (
-        <div key={cat.category} style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.line}` }}>
-          <Eyebrow color={C.purple}>{cat.icon} {cat.category}</Eyebrow>
-          {cat.items.length === 0 && <div style={{ fontSize: 11, color: C.sub, marginTop: 6 }}>まだこの種類の因子はありません。</div>}
-          <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
-            {cat.items.map(it => (
-              <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", background: C.bg, borderRadius: 8 }}>
-                <span style={{ fontFamily: FONT_D, fontSize: 13, color: it.color, fontWeight: 700, minWidth: 92 }}>{it.label}</span>
-                <span style={{ fontFamily: FONT_M, fontSize: 12, color: "#ffd23f", letterSpacing: -1 }}>{"★".repeat(Math.min(6, it.count))}{it.count > 6 ? ` ×${it.count}` : ""}</span>
-                <span style={{ flex: 1, fontSize: 10, color: C.sub, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.members.slice(0, 3).join("・")}{it.members.length > 3 ? "…" : ""}</span>
+        <div key={cat.category} style={{ marginBottom: T.space.lg }}>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>{cat.category}</div>
+          {cat.items.length === 0 && <div style={{ fontSize: T.size.caption, color: T.color.sub }}>まだこの種類の因子はありません。</div>}
+          <div style={{ background: T.color.surface }}>
+            {cat.items.map((it, i) => (
+              <div key={it.key} style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                {/* 脚質因子はTYPES色、適性因子はグレード色（どちらも実データが持つ意味色）。
+                    特能因子はmlFactorCollection()側で意味なくC.purpleが充てられているだけなので
+                    ここでは使わず本文色に統一する（単一アクセント原則） */}
+                <span style={{ fontSize: T.size.body, color: cat.category === "特能因子" ? T.color.text : (it.color || T.color.text), flex: "none", minWidth: 92 }}>{it.label}</span>
+                <span style={{ fontSize: T.size.caption, color: T.color.accent, letterSpacing: -1 }}>{"★".repeat(Math.min(6, it.count))}{it.count > 6 ? ` ×${it.count}` : ""}</span>
+                <span style={{ flex: 1, fontSize: T.size.caption, color: T.color.sub, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.members.slice(0, 3).join("・")}{it.members.length > 3 ? "…" : ""}</span>
               </div>
             ))}
           </div>
         </div>
       ))}
       {footer}
-    </div>
+    </Screen>
   );
 }

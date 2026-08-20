@@ -250,15 +250,15 @@ export function renderMyLifeHubScreen(ctx) {
                     ? <div style={{ borderTop: `1px solid ${T.color.rule}`, color: T.color.sub, fontSize: T.size.caption, padding: `${T.space.sm}px ${T.space.md}px` }}>
                         チームの精神的支柱{ml.protege ? `・${ml.protege.name}の師` : ""}（毎月 疲労-3／評価+0.3）
                       </div>
-                    : r.age >= 30 && item("メンターになる（弟子を取る）", () => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor))}
-                  {item("ラストレースで引退", () => askConfirm("ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。", mlStartLastRace), T.color.bad)}
+                    : r.age >= 30 && item("メンターになる（弟子を取る）", () => askConfirm("若手のメンターになり、弟子を1人取りますか？弟子はあなたの地力に導かれて育っていきます。加えて毎月の疲労回復と監督評価の伸びも恒常的に上がります（一度なると元には戻せません）。", mlBecomeMentor, "メンターになる"))}
+                  {item("ラストレースで引退", () => askConfirm("ラストレースに出場してから引退しますか？あなたの脚質に合ったグレード4のエキシビションで、ライバルたちも駆けつける最高の舞台です。走り終えるとそのまま引退となります。", mlStartLastRace, "出走する"), T.color.bad)}
                   {/* v49(第11弾続き): 殿堂記録(mlRecordLegend)はここで直接呼ばない。以前はここでも
                       呼んでおり、"mylife_retired"遷移を検知するuseMyLifeGame.js側のuseEffectとの
                       二重呼び出しで、静かに引退するたび同じ選手が殿堂へ2回登録されるバグになっていた。
                       他の引退経路（ラストレース／引退勧告）と同じくuseEffect側の一本化した処理に委ねる。 */}
-                  {item("静かに引退", () => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => setMl(s => ({ ...s, screen: "mylife_retired" }))), T.color.bad)}
-                  {item("最初からやり直す", () => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); }), T.color.bad)}
-                  {item("タイトルに戻る", () => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null)))}
+                  {item("静かに引退", () => askConfirm(`${r.age}歳で現役を引退しますか？この操作は取り消せません（キャリアの記録はセレモニー画面で振り返れます）。`, () => setMl(s => ({ ...s, screen: "mylife_retired" })), "引退する"), T.color.bad)}
+                  {item("最初からやり直す", () => askConfirm("マイライフを最初からやり直しますか？現在の選手の保存データは消えます（歴代の殿堂記録は残ります）。", () => { clearMyLifeSave(); setMl(initMyLife()); }, "最初からやり直す"), T.color.bad)}
+                  {item("タイトルに戻る", () => askConfirm("マイライフモードを終了してタイトルに戻りますか？（自動セーブ済み）", () => setSuperMode(null), "タイトルに戻る"))}
                 </div>
               );
             })()}
@@ -287,10 +287,8 @@ export function renderMyLifeHubScreen(ctx) {
 
     if (ml.screen === "mylife_abilityfile") return mlWrap(
       <Screen>
-        <Section title="特殊能力図鑑" padded>
-          <AbilityFileList file={loadAbilityFile()} />
-        </Section>
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn>
+        <AbilityFileList file={loadAbilityFile()} />
+        <div style={{ marginTop: T.space.md }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn></div>
       </Screen>
     );
 
@@ -355,12 +353,8 @@ export function renderMyLifeHubScreen(ctx) {
 
     if (ml.screen === "mylife_records") return mlWrap(
       <Screen>
-        <Section title="通算タイトル" padded>
-          <TitlesPanel />
-        </Section>
-        <Section title="コースレコード" padded>
-          <CourseRecordsPanel />
-        </Section>
+        <div style={{ marginBottom: T.space.md }}><TitlesPanel /></div>
+        <div style={{ marginBottom: T.space.md }}><CourseRecordsPanel /></div>
         <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn>
       </Screen>
     );

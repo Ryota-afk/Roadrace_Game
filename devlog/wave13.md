@@ -617,3 +617,91 @@ Playwrightで実プレイ（マイライフ開始→キャラ作成→デビュ�
 
 **残課題（Phase 3-D-3へ）**：`panels.jsx`（15コンポーネント）・`dynasty.jsx`・`chrome.jsx`は
 まだ旧トークンのまま。これらはseason側と共有のため影響範囲が広く、次ラウンドへ持ち越し。
+
+## Phase 3-D-3: 共有部品17個（panels.jsx/dynasty.jsx/chrome.jsx）の新トークン化（完了）
+
+**実測でわかった構造的な問題**：D-3着手時に改めて実測したところ、D-2で「マイライフは全画面が
+新トークンで閉じた」としたのは画面ファイル単位の話に過ぎず、`panels.jsx`の15部品は**マイライフ
+専用のものが1つも無く全て`season`とも共有**（`panels.jsx`にマイライフ専用部品は0個。
+`AbilityGrid`はマイライフのcreate.jsx／season の scout.jsx・transfer.jsx・race.jsx から、
+`TitlesPanel`はマイライフのhub.jsx／season の archive.jsx・scheduleBoard.jsxから、という具合に
+全部品が両モードから呼ばれている）。つまり画面の中にはまだ絵文字16個（panels.jsx）・8個
+（dynasty.jsx）が埋まったままだった。season側画面（riders/list.jsx・scheduleBoard.jsx・
+meta.jsx・race.jsx）は装飾密度（`C.xxx`参照48〜165箇所）が高く、部品だけ新トークン化すると
+「部品だけ浮く」問題が起きる一方、`records/archive.jsx`（`C.xxx`参照1箇所＝中身の100%が
+共有部品）はほぼそのまま完成することも実測で判明。詳細な比較表は当時の設計仕様（Artifact）に
+記載。
+
+**設計プロセス**：Opusで実測→AskUserQuestion3問（①共有部品はD-1同様シムのみか全面新トークン化
+か→**全面新トークン化を選択**（マイライフ専用の新規部品を別建てすると二重実装になり、
+`records/archive.jsx`のように部品だけで画面の大半が完成する例もあったため）②絵文字の線引き
+→D-2と同じ基準（装飾のみ撤去、→★●等の機能記号は残す）③スコープ→共有部品まで、season画面
+本体は次弾）。続けて実データ（`ABILITIES`・`APT_GRADE_COLOR`・`raceForecast()`の`mark`構造・
+`TITLE_DEFS`・`mlLineageForest()`の戻り値等）を実測し、17部品全てのデータ取得元・空状態・
+撤去する絵文字を確定した設計仕様をArtifactとして提示（現状/新案の比較モック・実機ズーム機能
+つき）。
+
+**ユーザーからの追加指示（3点）**：①能力バーの5色（AB_COLOR）は維持 ②適性グレードの8色
+（APT_GRADE_COLOR）は維持 ③金の特殊能力・「★2倍」表記の黄金色は必ず維持——単一アクセント
+原則の中で「実データが意味を持つ色」は例外として残す方針が確定した。④系譜ツリーはnetkeibaの
+血統表（5代・罫線グリッド）を参考にすることを指示され、現在のデータで再現可能な範囲
+（`mlLineageForest()`が返す1系統内1本の世代チェーン。父方/母方の区別は無く`parents`は
+[師匠,配合相手]の役割）を確認のうえ、罫線グリッドの表形式へ再設計する方針で合意。
+
+**実装（`src/components/panels.jsx`全面書き換え）**：
+- 構造上の分類：「ゲージ型・バッジ型」9部品（FatigueBar/SubStatLine/TraitLine/PersonaLine/
+  AbilityGrid/DisciplineGrid/ScoutBadge/BlurGrid/CondFc）は元々自前の背景枠を持たない断片
+  ——season/mylife双方の呼び出し元が用意した面に乗せる前提のまま維持（変更なし）。
+  「リスト型」4部品（StartListPanel/TitlesPanel/CourseRecordsPanel/AbilityFileList）は
+  自前の面（`T.color.surface`）を持ち続ける設計に据え置いた——season側の呼び出し元
+  （`records/archive.jsx`等）はSectionのような外枠を持たないため、面を剥がすと素のテキストに
+  なってしまうため。マイライフ側はこれらをSectionで二重に囲わず直接呼ぶよう`hub.jsx`を修正
+  （`mylife_abilityfile`/`mylife_records`の外側`Section`ラップを撤去）。
+- 色：`AB_COLOR`（5色）・`APT_GRADE_COLOR`（8色）は既存の値をそのまま維持（新トークンの背景
+  でも視認性は変わらないため変更不要と実測）。金の特殊能力・★2倍は`T.color.accent`。
+  下馬評◎○▲の3色は撤去し「自分の行のみaccent」に統一。絵文字（👑🏛📊🔒⚠️✦）は全廃し、
+  「エース」「殿堂」「未発見」等の文字ラベルに置換。`ScoutBadge`の「OVR」→「総合力」
+  （§7・他画面と表記統一）。`AbilityFileList`の未発見行にあった「まだ発見されていない特殊
+  能力です。」という全行同一の説明文を削除し、右端「未発見」の状態語のみに整理。
+
+**実装（`src/components/dynasty.jsx`全面書き換え）**：
+- `LineageForestView`：netkeiba風の罫線グリッド表へ再設計。系統ごとに見出し行（系統名／確立
+  段階／因子/人数）＋世代・名前・総合力の3列テーブル。ニックネーム・継承元（師/配合相手）は
+  行の下にキャプションで表示。5代・両親再帰グリッドは次弾送り（データ層拡張が必要）。
+- `FactorCollectionView`：因子カテゴリごとに★カウントの一覧。特能因子の色は`mlFactorCollection()`
+  側で意味なく`C.purple`が割り当てられているだけだったため、表示層で`T.color.text`へ上書き
+  （脚質因子＝TYPES色、適性因子＝グレード色はそのまま——実データが持つ意味色のため）。
+- 旧`variant`の`headingAsH2`/`descMarginTop`/`memberPosition`差分吸収を廃止——見出しは
+  `mlUi.jsx`の`Screen`が担うようになったため呼び出し側での出し分けが不要になった。`variant`は
+  空状態文言の出し分けだけに縮小。`career.jsx`（mylife）・`meta.jsx`（season非依存）どちらの
+  呼び出しも無改修で動作（`Screen`のマージン相殺値が両者の外枠paddingと一致するため）。
+
+**実装（`src/components/chrome.jsx`）**：`RenameModal`/`ConfirmDialog`を新トークン化
+（角丸撤去・`T.color.surface`・ボタンをフル幅2択へ）。入力欄のフォントだけは入力中の文字が
+読める必要があるため`FONT_B`のまま維持。season専用の`SeasonHeader`/`makeWrap`は無改修
+（`makeMlWrap`は既にPhase 3-Aで新トークン化済みと判明）。
+
+**`askConfirm`に`confirmLabel`引数を追加**（`useAppShell.js`）：取り返しのつかない操作
+（引退・データ消去・殿堂記録削除等）でも従来は確認ボタンが一律「OK」だった問題への対応。
+未指定時は従来通り「OK」を維持するため既存の全呼び出しは無改修で動く。マイライフの
+destructiveな呼び出し6箇所（`hub.jsx`5箇所・`create.jsx`1箇所・`career.jsx`2箇所）に
+「メンターになる」「出走する」「引退する」「最初からやり直す」「タイトルに戻る」「削除する」
+「新しく始める」を指定。season/meta側の呼び出しは今回のスコープ外のため無改修。
+
+**データ層の修正**：`data/progression.js`の`TITLE_DEFS`から絵文字（🌍🏆🌐🥇）の`icon`
+フィールドを削除（`TitlesPanel`が直接表示していたため）。
+
+**検証**：ビルド成功（各ファイル変更後に都度確認）。絵文字カウント（コメント行除外・機能記号
+除く）：`panels.jsx`16→0、`dynasty.jsx`8→0、`chrome.jsx`2（`SeasonHeader`内・対象外の据え置き
+分）。Playwrightで①マイライフ実プレイ（デビュー→選手タブ→ショップ→記録タブの実績/特殊能力
+図鑑/コースレコード）②合成セーブ注入（`roadrace_v12_mylife_legends`に殿堂データ2件を注入）で
+系譜ツリー・因子図鑑・全チーム名鑑を検証③season側はオンボーディング（スカウト方針→契約）を
+実際にクリックで通し、記録メニュー→通算タイトル・コースレコード・特能図鑑、選手メニューを
+確認——3系統すべてでコンソールエラー0・NaN/undefined無しを確認。season の
+`records/archive.jsx`は実測どおり大きく改善（旧`Eyebrow`見出しのみ旧デザインで残存、
+中身の共有部品は新トークンで統一されて見える）。
+
+**残課題（Phase 3-D-4以降）**：season画面本体（21画面のインラインstyle、特に`race.jsx`の
+`C.xxx`参照165箇所）とdata層の残り絵文字（`ML_ACHIEVEMENTS`のicon等）は次弾以降。系譜ツリーの
+5代祖先グリッド（netkeiba完全準拠）は`buildBloodMap`の再帰的な祖先探索というデータ層拡張が
+要るため、需要があれば別タスクとして起票する。

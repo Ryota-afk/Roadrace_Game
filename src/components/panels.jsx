@@ -1,12 +1,21 @@
 // 表示用サブコンポーネント（Phase 4-1で main.jsx から分離）。
+// 第13弾Phase3-D-3: 新トークン(T/FONT_DOT)へ全面移行。season側とも共有しているため、
+// 「ゲージ型・バッジ型」（FatigueBar/AbilityGrid/DisciplineGrid/BlurGrid/TraitLine/PersonaLine/
+// SubStatLine/ScoutBadge/CondFc）は元々自前の面（背景枠）を持たない断片であり、呼び出し側
+// （season/mylife双方）が用意した面に載せる前提のまま。「リスト型」（StartListPanel/TitlesPanel/
+// CourseRecordsPanel/AbilityFileList）は自前の面を持ち続ける——season側の呼び出し元
+// （records/archive.jsx等）がSectionのような外枠を持たないため、面を剥がすとseasonが素の
+// テキストになってしまう。マイライフ側はこれらをSectionで二重に囲わず直接呼ぶ（hub.jsx参照）。
+// 色の方針（ユーザー決定・2026-08）：AB_COLOR（能力5色）・APT_GRADE_COLOR（適性8色）・
+// 金の特殊能力/★2倍表記の黄金色は維持。それ以外の装飾色（下馬評◎○▲の3色等）は撤去し、
+// 「自分の行だけアクセント」に一本化。絵文字は撤去、→★●等の機能記号は維持。
 import React from "react";
 import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, DISCIPLINES, DISCIPLINE_KEYS, aptGrade, buildDesc, disciplineScore, loadCourseRecords, raceForecast } from "../logic/support.js";
-import { Eyebrow } from "./ui.jsx";
 import { GOLD_CONDITIONS } from "../core/core.js";
 import { ABILITIES, AB_COLOR, AB_KEYS, AB_LABEL, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL, PERSONALITIES, TYPES } from "../data/abilities.js";
 import { SEG_COLOR, TEMPLATES, UNLOCK_TEMPLATES } from "../data/course.js";
 import { TITLE_DEFS } from "../data/progression.js";
-import { C, FONT_D, FONT_M } from "../data/theme.js";
+import { FONT_DOT, T } from "../data/theme.js";
 import { PARTS, PART_SLOTS, generateCourse } from "../sim/race.js";
 import { loadTitles, totalTitleCount } from "../state/state.js";
 
@@ -15,33 +24,33 @@ import { loadTitles, totalTitleCount } from "../state/state.js";
 // 回復させる必要はありません）」という注釈を添えて同じことを文章で二重に説明していた
 // （CLAUDE.md §7(c)）。注釈は削除し、代わりに90以上を薄い赤の危険域として塗って
 // 「目盛りの右側＝危ない領域」が一目で分かるようにした。文章ではなく図で伝える。
+// 疲労は良し悪しのある指標なので、good/accent/badの意味色を使う（単一アクセントの例外）。
 export function FatigueBar({ v }) {
-  const col = v >= 90 ? C.red : v >= 60 ? "#e8a13c" : C.green;
+  const col = v >= 90 ? T.color.bad : v >= 60 ? T.color.accent : T.color.good;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <div style={{ flex: 1, height: 5, background: C.line, borderRadius: 3, position: "relative" }}>
-        <div style={{ position: "absolute", left: "90%", right: 0, top: 0, height: 5, background: C.red, opacity: 0.28, borderRadius: "0 3px 3px 0" }} />
-        <div style={{ width: `${v}%`, height: 5, background: col, borderRadius: 3, position: "relative" }} />
-        <div style={{ position: "absolute", left: "90%", top: -2, width: 1.5, height: 9, background: C.red }} />
+    <div style={{ display: "flex", alignItems: "center", gap: T.space.sm }}>
+      <div style={{ flex: 1, height: 4, background: T.color.rule, position: "relative" }}>
+        <div style={{ position: "absolute", left: "90%", right: 0, top: 0, height: 4, background: T.color.bad, opacity: 0.3 }} />
+        <div style={{ width: `${v}%`, height: 4, background: col, position: "relative" }} />
+        <div style={{ position: "absolute", left: "90%", top: -2, width: 1, height: 8, background: T.color.bad }} />
       </div>
-      <span style={{ fontFamily: FONT_M, fontSize: 11, color: col, width: 26, textAlign: "right" }}>{Math.round(v)}</span>
+      <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: col, width: 26, textAlign: "right" }}>{Math.round(v)}</span>
     </div>
   );
 }
 
 export function SubStatLine({ r }) {
   if (r.accel == null && r.build == null && r.mental == null) return null;
-  const col = (v) => v >= 75 ? C.yellow : v >= 55 ? C.green : v >= 40 ? C.sub : "#c86";
+  const col = (v) => v >= 75 ? T.color.accent : v >= 55 ? T.color.good : v >= 40 ? T.color.sub : T.color.bad;
   const item = (label, v) => (
-    <span key={label} style={{ fontSize: 10.5, color: C.sub }}>
-      {label}<span style={{ fontFamily: FONT_M, color: col(v), marginLeft: 2, fontWeight: 700 }}>{Math.round(v)}</span>
+    <span key={label} style={{ fontSize: T.size.caption, color: T.color.sub }}>
+      {label}<span style={{ color: col(v), marginLeft: 2 }}>{Math.round(v)}</span>
     </span>
   );
   return (
-    <div style={{ display: "flex", gap: 10, marginTop: 2, flexWrap: "wrap", alignItems: "center" }}>
+    <div style={{ display: "flex", gap: T.space.md, marginTop: T.space.xs, flexWrap: "wrap", alignItems: "center" }}>
       {item("加速力", r.accel ?? 50)}
-      <span style={{ fontSize: 10.5, color: C.sub }}>体格<span style={{ fontFamily: FONT_M, color: col(r.build ?? 50), marginLeft: 2, fontWeight: 700 }}>{Math.round(r.build ?? 50)}</span><span style={{ color: C.sub, marginLeft: 2 }}>({buildDesc(r.build ?? 50)})</span></span>
-      {item("メンタル", r.mental ?? 50)}
+      <span style={{ fontSize: T.size.caption, color: T.color.sub }}>体格<span style={{ color: col(r.build ?? 50), marginLeft: 2 }}>{Math.round(r.build ?? 50)}</span><span style={{ marginLeft: 2 }}>（{buildDesc(r.build ?? 50)}）</span></span>
       {/* v43(マイライフ難易度調整Phase 1/2): 突破力・安定感・運（固定ステータス、buildと同じく非成長）をSeason/MyLife共通で表示 */}
       {item("突破力", r.breakthrough ?? 50)}
       {item("安定感", r.stability ?? 50)}
@@ -64,38 +73,29 @@ export function StartListPanel({ entrants, favors }) {
   const me = hasForecast ? entrants.find(e => e.isPlayerChar) : null;
   const myFc = me ? forecast.get(me) : null;
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ fontSize: 11, color: C.sub }}>出走 {entrants.length}名 / {rows.length}チーム（👑=エース）</div>
+    <div style={{ background: T.color.surface, padding: T.space.md }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm, flexWrap: "wrap", gap: T.space.xs }}>
+        <span>出走 {entrants.length}名・{rows.length}チーム</span>
+        {myFc && <span>あなたは <span style={{ color: T.color.text }}>{myFc.mark ? myFc.mark.icon : "無印"}{myFc.mark ? myFc.mark.label : ""}</span>（{myFc.rank}番手）</span>}
+      </div>
       {hasForecast && (
-        <div style={{ background: C.panel2, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}` }}>
-          <div style={{ fontSize: 11.5, color: C.sub }}>
-            📊 下馬評：
-            <span style={{ color: "#ffd23f", fontWeight: 700, marginLeft: 4 }}>◎本命</span>{" "}
-            <span style={{ color: "#4f8fe8", fontWeight: 700 }}>○対抗</span>{" "}
-            <span style={{ color: "#35c07e", fontWeight: 700 }}>▲注目</span>
-          </div>
-          {myFc && (
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: 4, fontWeight: 700 }}>
-              あなたの評価：
-              <span style={{ color: myFc.mark ? myFc.mark.color : C.sub, marginLeft: 4 }}>
-                {myFc.mark ? `${myFc.mark.icon} ${myFc.mark.label}` : "無印"}（{myFc.rank}番手／{entrants.length}人中）
-              </span>
-            </div>
-          )}
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>
+          下馬評　<span style={{ color: T.color.text }}>◎ 本命</span>　<span style={{ color: T.color.text }}>○ 対抗</span>　<span style={{ color: T.color.text }}>▲ 注目</span>
         </div>
       )}
-      {rows.map(([tn, t]) => {
+      {rows.map(([tn, t], i) => {
         const isPlayerTeam = t.list.some(e => e.team === "PLAYER");
         return (
-          <div key={tn} style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", borderLeft: `3px solid ${t.color}` }}>
-            <div style={{ fontFamily: FONT_D, fontWeight: 700, color: isPlayerTeam ? C.yellow : C.text, fontSize: 13 }}>{tn}</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 3 }}>
-              {t.list.map((e, i) => {
+          <div key={tn} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`, borderLeft: `3px solid ${t.color}`, paddingLeft: T.space.sm, marginLeft: -T.space.sm }}>
+            <div style={{ fontSize: T.size.body, color: isPlayerTeam ? T.color.accent : T.color.text }}>{tn}</div>
+            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.8 }}>
+              {t.list.map((e, j) => {
                 const fc = forecast.get(e);
                 return (
-                  <span key={i} style={{ fontSize: 11.5, color: e.isPlayerChar ? C.yellow : e.isLegend ? C.purple : (e.isRival || e.isRival2) ? C.red : C.text }}>
-                    {fc && fc.mark ? <span style={{ color: fc.mark.color, fontWeight: 700, marginRight: 1 }}>{fc.mark.icon}</span> : ""}
-                    {e.isAce ? "👑 " : ""}{e.isLegend ? "🏛 " : ""}{e.name}<span style={{ color: C.sub, fontSize: 10, marginLeft: 2 }}>{TYPES[e.type].label}</span>
+                  <span key={j} style={{ color: e.isPlayerChar ? T.color.accent : T.color.sub, marginRight: T.space.sm }}>
+                    {fc && fc.mark ? `${fc.mark.icon} ` : ""}{e.name}
+                    {(e.isAce || e.isLegend) && <span> （{[e.isAce ? "エース" : null, e.isLegend ? "殿堂" : null].filter(Boolean).join("・")}）</span>}
+                    <span style={{ marginLeft: 2 }}>{TYPES[e.type].label}</span>
                   </span>
                 );
               })}
@@ -110,16 +110,15 @@ export function StartListPanel({ entrants, favors }) {
 export function TraitLine({ abilities, goldAbilities }) {
   if (!abilities || abilities.length === 0) return null;
   return (
-    <div style={{ marginTop: 2 }}>
+    <div style={{ marginTop: T.space.xs }}>
       {abilities.map(id => {
         const t = ABILITIES[id];
         if (!t) return null;
         const isGold = !!(goldAbilities && goldAbilities.includes(id));
-        const col = isGold ? C.yellow : t.bad ? C.red : "#e8a13c";
         return (
-          <div key={id} style={{ fontSize: 10.5, color: C.sub, marginTop: 1 }}>
-            <span style={{ color: col, border: `1px solid ${col}`, borderRadius: 4, padding: "0px 5px", marginRight: 5, fontWeight: isGold ? 700 : 400 }}>
-              {isGold ? "★" : ""}{t.label}
+          <div key={id} style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
+            <span style={{ color: isGold ? T.color.accent : t.bad ? T.color.bad : T.color.text, marginRight: T.space.xs }}>
+              {isGold ? "★ " : ""}{t.label}
             </span>
             {t.desc}{isGold ? "（★効果2倍）" : ""}
           </div>
@@ -133,20 +132,16 @@ export function TitlesPanel() {
   const t = loadTitles();
   const total = totalTitleCount();
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.7 }}>全プレイ・両モードを通じた通算です。</div>
-      <div style={{ background: C.panel, borderRadius: 12, padding: "12px 14px", textAlign: "center", border: `1px solid ${total > 0 ? "#e8a13c" : C.line}` }}>
-        <div style={{ fontSize: 11, color: C.sub }}>通算タイトル</div>
-        <div style={{ fontFamily: FONT_M, fontSize: 28, color: "#e8a13c", fontWeight: 700 }}>{total}</div>
+    <div style={{ background: T.color.surface, padding: T.space.md }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>
+        <span>全プレイ・両モード通算</span><span style={{ color: T.color.accent }}>{total}</span>
       </div>
-      <div style={{ display: "grid", gap: 6 }}>
-        {TITLE_DEFS.map(d => (
-          <div key={d.key} style={{ background: C.panel, borderRadius: 10, padding: "8px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 12.5, color: C.text }}>{d.icon} {d.label}</span>
-            <span style={{ fontFamily: FONT_M, fontSize: 15, color: (t[d.key] || 0) > 0 ? C.yellow : C.sub }}>{t[d.key] || 0}<span style={{ fontSize: 10, color: C.sub }}> 回</span></span>
-          </div>
-        ))}
-      </div>
+      {TITLE_DEFS.map((d, i) => (
+        <div key={d.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body, padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+          <span style={{ color: T.color.sub }}>{d.label}</span>
+          <span style={{ color: (t[d.key] || 0) > 0 ? T.color.accent : T.color.sub }}>{t[d.key] || 0}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -154,7 +149,7 @@ export function TitlesPanel() {
 export function CondFc({ dir }) {
   if (dir == null) return null;
   const i = dir + 1;
-  return <span style={{ fontSize: 10, color: COND_FC_COLOR[i], marginLeft: 4 }} title={`来月の調子予報：${COND_FC_LABEL[i]}`}>予報{COND_FC_ARROW[i]}</span>;
+  return <span style={{ fontSize: T.size.caption, color: COND_FC_COLOR[i], marginLeft: T.space.xs }} title={`来月の調子予報：${COND_FC_LABEL[i]}`}>予報{COND_FC_ARROW[i]}</span>;
 }
 
 export function CourseRecordsPanel() {
@@ -162,23 +157,25 @@ export function CourseRecordsPanel() {
   const kinds = [...TEMPLATES, ...UNLOCK_TEMPLATES].map(t => t.kind);
   const anyRec = kinds.some(k => recs[k]);
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.7 }}>
-        コース種別ごとの最速記録（レコード指数＝コース距離÷勝者タイム×100。数値が大きいほど速い）。全プレイ・両モードで共有され、更新されるたびに達成者が刻まれます。
+    <div style={{ background: T.color.surface, padding: T.space.md }}>
+      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm, lineHeight: 1.7 }}>
+        コース種別ごとの最速記録（レコード指数＝コース距離÷勝者タイム×100）。全プレイ・両モードで共有されます。
       </div>
-      {!anyRec && <div style={{ fontSize: 12.5, color: C.sub }}>まだ記録はありません。レースを走ると刻まれていきます。</div>}
-      {kinds.map(k => {
+      {!anyRec && <div style={{ fontSize: T.size.body, color: T.color.sub }}>まだ記録はありません。レースを走ると刻まれていきます。</div>}
+      {kinds.map((k, i) => {
         const r = recs[k];
         return (
-          <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${r && r.isPlayer ? C.yellow : C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
-            <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 13 }}>{k}</span>
-            {r ? (
-              <span style={{ fontSize: 11.5, color: C.sub }}>
-                指数<span style={{ color: C.yellow, fontFamily: FONT_M, marginLeft: 3 }}>{r.speed}</span>
-                <span style={{ marginLeft: 8, color: r.isPlayer ? C.yellow : C.text }}>{r.holder}{r.isPlayer ? " ★" : ""}</span>
-                <span style={{ marginLeft: 6, color: C.sub }}>({r.year}年目)</span>
-              </span>
-            ) : <span style={{ fontSize: 11.5, color: C.sub }}>記録なし</span>}
+          <div key={k} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+              <span style={{ color: T.color.text }}>{k}</span>
+              {r ? (
+                <span style={{ fontSize: T.size.caption, color: T.color.sub }}>
+                  指数<span style={{ color: T.color.accent, marginLeft: 3 }}>{r.speed}</span>
+                  <span style={{ marginLeft: T.space.sm, color: r.isPlayer ? T.color.accent : T.color.text }}>{r.holder}</span>
+                  <span style={{ marginLeft: T.space.xs }}>（{r.year}年目）</span>
+                </span>
+              ) : <span style={{ fontSize: T.size.caption, color: T.color.sub }}>記録なし</span>}
+            </div>
           </div>
         );
       })}
@@ -192,48 +189,33 @@ export function AbilityFileList({ file }) {
   const allIds = Object.keys(ABILITIES);
   const discoveredCount = allIds.filter(id => normalSet.has(id)).length;
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div style={{ background: C.panel, borderRadius: 12, padding: 14, borderTop: `4px solid ${C.purple}` }}>
-        <div style={{ fontFamily: FONT_D, fontSize: 18, color: C.text }}>{discoveredCount} / {allIds.length} 発見済み</div>
-        <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>その能力を持つ選手を保有すると解禁されます。</div>
+    <div style={{ background: T.color.surface, padding: T.space.md }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>
+        <span>特殊能力図鑑</span><span style={{ color: T.color.accent }}>{discoveredCount} / {allIds.length} 発見済み</span>
       </div>
       {ABILITY_CATEGORY_ORDER.map(cat => {
         const ids = allIds.filter(id => ABILITIES[id].category === cat);
         if (ids.length === 0) return null;
         return (
-          <div key={cat}>
-            <Eyebrow color={C.purple}>{cat}</Eyebrow>
-            <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-              {ids.map(id => {
-                const t = ABILITIES[id];
-                const found = normalSet.has(id);
-                const gold = goldSet.has(id);
-                const goldable = !!GOLD_CONDITIONS[id];
-                const col = t.bad ? C.red : "#e8a13c";
-                return (
-                  <div key={id} style={{
-                    background: found ? C.panel : C.panel2, borderRadius: 10, padding: "9px 12px",
-                    border: `1px solid ${found ? col : C.line}`, opacity: found ? 1 : 0.6,
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 16 }}>{found ? (t.bad ? "⚠️" : "✦") : "🔒"}</span>
-                      <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: found ? col : C.sub }}>
-                        {found ? t.label : "???"}
-                      </span>
-                      {goldable && found && (
-                        <span style={{
-                          fontSize: 9.5, color: gold ? C.yellow : C.sub, border: `1px solid ${gold ? C.yellow : C.line}`,
-                          borderRadius: 4, padding: "0 4px",
-                        }}>{gold ? "★ 金あり" : "金に進化する"}</span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.sub, marginTop: 3 }}>
-                      {found ? t.desc : "まだ発見されていない特殊能力です。"}
-                    </div>
+          <div key={cat} style={{ marginBottom: T.space.md }}>
+            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>{cat}</div>
+            {ids.map((id, i) => {
+              const t = ABILITIES[id];
+              const found = normalSet.has(id);
+              const gold = goldSet.has(id);
+              const goldable = !!GOLD_CONDITIONS[id];
+              return (
+                <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                    <span style={{ color: found ? (t.bad ? T.color.bad : T.color.text) : T.color.sub }}>{found ? t.label : "???"}</span>
+                    <span style={{ fontSize: T.size.caption, color: gold ? T.color.accent : T.color.sub }}>
+                      {found ? (goldable ? (gold ? "★ 金" : "金に進化する") : "") : "未発見"}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  {found && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{t.desc}</div>}
+                </div>
+              );
+            })}
           </div>
         );
       })}
@@ -244,10 +226,9 @@ export function AbilityFileList({ file }) {
 export function PersonaLine({ p }) {
   const per = PERSONALITIES[p];
   if (!per) return null;
-  const col = p === "genius" ? C.yellow : C.blue;
   return (
-    <div style={{ fontSize: 10.5, color: C.sub, marginTop: 2 }}>
-      <span style={{ color: col, border: `1px solid ${col}`, borderRadius: 4, padding: "0px 5px", marginRight: 5 }}>性格：{per.label}</span>
+    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>
+      <span style={{ color: p === "genius" ? T.color.accent : T.color.text, marginRight: T.space.xs }}>性格：{per.label}</span>
       {per.desc}
     </div>
   );
@@ -255,7 +236,7 @@ export function PersonaLine({ p }) {
 
 export function AbilityGrid({ r, cap = 88 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, marginTop: 6 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: T.space.sm, marginTop: T.space.sm }}>
       {AB_KEYS.map(k => {
         const partBonus = r.parts ? PART_SLOTS.reduce((s, sl) => s + ((r.parts[sl] && PARTS[r.parts[sl]].ab[k]) || 0), 0) : 0;
         const broke = r[k] >= cap;
@@ -265,15 +246,15 @@ export function AbilityGrid({ r, cap = 88 }) {
         const room = Math.max(0, Math.round(cap - r[k]));
         return (
           <div key={k}>
-            <div style={{ fontSize: 9.5, color: C.sub }}>{AB_LABEL[k]}</div>
-            <div style={{ fontFamily: FONT_M, fontSize: 12.5, color: broke ? C.yellow : C.text }}>
-              {Math.round(r[k])}{partBonus > 0 && <span style={{ color: C.purple, fontSize: 10 }}>+{partBonus}</span>}
-              {!broke && room > 0 && <span style={{ color: C.sub, fontSize: 9 }}> +{room}</span>}
+            <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{AB_LABEL[k]}</div>
+            <div style={{ fontSize: T.size.body, color: broke ? T.color.accent : T.color.text }}>
+              {Math.round(r[k])}{partBonus > 0 && <span style={{ color: T.color.accent, fontSize: T.size.caption }}>+{partBonus}</span>}
+              {!broke && room > 0 && <span style={{ color: T.color.sub, fontSize: T.size.caption }}> +{room}</span>}
             </div>
-            <div style={{ position: "relative", height: 4, background: C.line, borderRadius: 2 }} title={broke ? "限界突破" : `伸びしろ +${room}（上限${Math.round(cap)}）`}>
-              {!broke && capPct > valPct && <div style={{ position: "absolute", left: `${valPct}%`, width: `${capPct - valPct}%`, height: 4, background: AB_COLOR[k], opacity: 0.28, borderRadius: 2 }} />}
-              <div style={{ position: "absolute", left: 0, width: `${valPct}%`, height: 4, background: broke ? C.yellow : AB_COLOR[k], borderRadius: 2 }} />
-              <div style={{ position: "absolute", left: `${capPct}%`, top: -1, width: 1.5, height: 6, background: broke ? C.yellow : C.sub, transform: "translateX(-1px)" }} />
+            <div style={{ position: "relative", height: 4, background: T.color.rule, marginTop: 3 }} title={broke ? "限界突破" : `伸びしろ +${room}（上限${Math.round(cap)}）`}>
+              {!broke && capPct > valPct && <div style={{ position: "absolute", left: `${valPct}%`, width: `${capPct - valPct}%`, height: 4, background: AB_COLOR[k], opacity: 0.3 }} />}
+              <div style={{ position: "absolute", left: 0, width: `${valPct}%`, height: 4, background: broke ? T.color.accent : AB_COLOR[k] }} />
+              <div style={{ position: "absolute", left: `${capPct}%`, top: -2, width: 1, height: 8, background: broke ? T.color.accent : T.color.sub, transform: "translateX(-1px)" }} />
             </div>
           </div>
         );
@@ -284,22 +265,22 @@ export function AbilityGrid({ r, cap = 88 }) {
 
 export function DisciplineGrid({ r, highlightKey }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, marginTop: 4 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: T.space.sm, marginTop: T.space.xs }}>
       {DISCIPLINE_KEYS.map(k => {
         const score = disciplineScore(r, k);
         const hi = k === highlightKey;
         // v38(#9 B-1): ウイポ風の S〜G 適性グレードを併記（一目でどの地形が得意か読める）
         const grade = aptGrade(score);
-        const gc = APT_GRADE_COLOR[grade] || C.sub;
+        const gc = APT_GRADE_COLOR[grade] || T.color.sub;
         return (
           <div key={k}>
-            <div style={{ fontSize: 9.5, color: hi ? C.yellow : C.sub }}>{DISCIPLINES[k].label}{hi ? " ★" : ""}</div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 800, color: gc, lineHeight: 1 }}>{grade}</span>
-              <span style={{ fontFamily: FONT_M, fontSize: 11, color: hi ? C.yellow : C.sub }}>{score}</span>
+            <div style={{ fontSize: T.size.caption, color: hi ? T.color.accent : T.color.sub }}>{DISCIPLINES[k].label}{hi ? " ★" : ""}</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: T.space.xs }}>
+              <span style={{ fontSize: T.size.head, fontWeight: 700, color: gc, lineHeight: 1 }}>{grade}</span>
+              <span style={{ fontSize: T.size.caption, color: hi ? T.color.accent : T.color.sub }}>{score}</span>
             </div>
-            <div style={{ height: 3, background: C.line, borderRadius: 2, marginTop: 1 }}>
-              <div style={{ height: 3, width: `${Math.min(100, score)}%`, background: hi ? C.yellow : gc, borderRadius: 2 }} />
+            <div style={{ height: 3, background: T.color.rule, marginTop: 3 }}>
+              <div style={{ height: 3, width: `${Math.min(100, score)}%`, background: gc }} />
             </div>
           </div>
         );
@@ -311,30 +292,30 @@ export function DisciplineGrid({ r, highlightKey }) {
 // v51(第11弾Phase3・3-C/3-D): 他チーム選手の査定バッジ。段階（scout.stage）ごとに粒度だけを
 // 変える（帯→適性グレード→数値）。乱数のブレは使わない（画面を開くたび数字が揺れて
 // 壊れて見える事故を構造的に防ぐため。詳細はdevlog/wave11.md Phase3参照）。
-// 未開示（stage0）は🔒一言で示し、長い説明文は書かない（CLAUDE.md §7）。
+// 未開示（stage0）は一言で示し、長い説明文は書かない（CLAUDE.md §7）。
 export function ScoutBadge({ scout, compact }) {
   if (!scout || scout.stage < 1) {
-    return <span style={{ fontSize: 10, color: C.sub }}>🔒未分析</span>;
+    return <span style={{ fontSize: T.size.caption, color: T.color.sub }}>未分析</span>;
   }
   if (scout.stage === 1) {
-    return <span style={{ fontSize: 10.5, fontFamily: FONT_M, color: C.sub }}>OVR<span style={{ color: C.text }}>{scout.ovrBand}</span></span>;
+    return <span style={{ fontSize: T.size.caption, color: T.color.sub }}>総合力 <span style={{ color: T.color.text }}>{scout.ovrBand}</span></span>;
   }
   if (scout.stage === 2) {
     return (
-      <span style={{ display: "inline-flex", gap: 4 }}>
+      <span style={{ display: "inline-flex", gap: T.space.xs }}>
         {DISCIPLINE_KEYS.map(k => {
           const g = scout.grades[k];
-          return <span key={k} title={DISCIPLINES[k].label} style={{ fontFamily: FONT_D, fontSize: 10.5, fontWeight: 700, color: APT_GRADE_COLOR[g] || C.sub }}>{g}</span>;
+          return <span key={k} title={DISCIPLINES[k].label} style={{ fontSize: T.size.caption, fontWeight: 700, color: APT_GRADE_COLOR[g] || T.color.sub }}>{g}</span>;
         })}
       </span>
     );
   }
   // stage3: 実数値
   if (compact) {
-    return <span style={{ fontSize: 10.5, fontFamily: FONT_M, color: C.text }}>OVR<span style={{ color: C.yellow, fontWeight: 700 }}>{scout.ovr}</span></span>;
+    return <span style={{ fontSize: T.size.caption, color: T.color.text }}>総合力 <span style={{ color: T.color.accent }}>{scout.ovr}</span></span>;
   }
   return (
-    <span style={{ display: "inline-flex", gap: 6, fontFamily: FONT_M, fontSize: 10.5, color: C.sub }}>
+    <span style={{ display: "inline-flex", gap: T.space.sm, fontSize: T.size.caption, color: T.color.sub }}>
       <span>平{scout.flat}</span><span>登{scout.climb}</span><span>スプ{scout.sprint}</span><span>スタ{scout.stamina}</span><span>独{scout.solo}</span>
     </span>
   );
@@ -342,15 +323,15 @@ export function ScoutBadge({ scout, compact }) {
 
 export function BlurGrid({ blur }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, marginTop: 6 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: T.space.sm, marginTop: T.space.sm }}>
       {AB_KEYS.map(k => (
         <div key={k}>
-          <div style={{ fontSize: 9.5, color: C.sub }}>{AB_LABEL[k]}</div>
-          <div style={{ fontFamily: FONT_M, fontSize: 11.5, color: C.sub }}>{blur[k].min}〜{blur[k].max}</div>
-          <div style={{ height: 4, background: C.line, borderRadius: 2, position: "relative" }}>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{AB_LABEL[k]}</div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{blur[k].min}〜{blur[k].max}</div>
+          <div style={{ height: 4, background: T.color.rule, position: "relative", marginTop: 2 }}>
             <div style={{
               position: "absolute", left: `${blur[k].min}%`, width: `${blur[k].max - blur[k].min}%`,
-              height: 4, background: AB_COLOR[k], opacity: 0.55, borderRadius: 2,
+              height: 4, background: AB_COLOR[k], opacity: 0.55,
             }} />
           </div>
         </div>
@@ -370,14 +351,14 @@ export function ElevationChart({ course }) {
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 56, display: "block" }}>
-        <polyline points={`${pad},${H - pad} ${pts} ${W - pad},${H - pad}`} fill="rgba(255,210,63,0.18)" stroke="none" />
-        <polyline points={pts} fill="none" stroke={C.yellow} strokeWidth="2" />
+        <polyline points={`${pad},${H - pad} ${pts} ${W - pad},${H - pad}`} fill="rgba(242,201,76,0.16)" stroke="none" />
+        <polyline points={pts} fill="none" stroke={T.color.accent} strokeWidth="2" />
       </svg>
-      <div style={{ display: "flex", gap: 10, fontSize: 10.5, color: C.sub, marginTop: 2 }}>
+      <div style={{ display: "flex", gap: T.space.md, fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
         <span>獲得標高目安 {Math.round(course.totalElevationGain)}</span>
         <span>山岳区間 {course.climbCount}</span>
         <span>難易度指数 {course.raceDifficultyRating}</span>
-        {course.laps > 1 && <span style={{ color: C.yellow }}>周回コース 全{course.laps}周</span>}
+        {course.laps > 1 && <span style={{ color: T.color.accent }}>周回コース 全{course.laps}周</span>}
       </div>
     </div>
   );
@@ -399,11 +380,11 @@ export function MultiStageCourseView({ race }) {
       <div style={{ display: "flex", gap: 3, margin: "6px 0 3px" }}>
         {dayCourses.map(dc => (
           <div key={dc.day} style={{ flex: 1, display: "flex", gap: 2 }}>
-            {dc.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
+            {dc.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, background: SEG_COLOR[s[0]] }} />)}
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", fontSize: 10, color: C.sub, marginBottom: 2 }}>
+      <div style={{ display: "flex", fontSize: T.size.caption, color: T.color.sub, marginBottom: 2 }}>
         {dayCourses.map(dc => (
           <div key={dc.day} style={{ flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {dc.day}日目・{dc.tmpl.kind}
@@ -420,17 +401,17 @@ export function MultiStageCourseView({ race }) {
           }).join(" ");
           return (
             <g key={dc.day}>
-              <polyline points={`${x0.toFixed(1)},${H - pad} ${pts} ${(x0 + dayW).toFixed(1)},${H - pad}`} fill="rgba(255,210,63,0.18)" stroke="none" />
-              <polyline points={pts} fill="none" stroke={C.yellow} strokeWidth="2" />
+              <polyline points={`${x0.toFixed(1)},${H - pad} ${pts} ${(x0 + dayW).toFixed(1)},${H - pad}`} fill="rgba(242,201,76,0.16)" stroke="none" />
+              <polyline points={pts} fill="none" stroke={T.color.accent} strokeWidth="2" />
             </g>
           );
         })}
         {days.slice(1).map(d => {
           const x = pad + (d - 1) * dayW;
-          return <line key={d} x1={x} y1="0" x2={x} y2={H} stroke="#5b6272" strokeWidth="1.5" strokeDasharray="3,3" opacity="0.8" />;
+          return <line key={d} x1={x} y1="0" x2={x} y2={H} stroke={T.color.rule} strokeWidth="1.5" strokeDasharray="3,3" opacity="0.9" />;
         })}
       </svg>
-      <div style={{ display: "flex", gap: 10, fontSize: 10.5, color: C.sub, marginTop: 2, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: T.space.md, fontSize: T.size.caption, color: T.color.sub, marginTop: 2, flexWrap: "wrap" }}>
         <span>全{stageCount}日間ステージレース（縦線＝日の区切り）</span>
         <span>獲得標高目安 {Math.round(dayCourses.reduce((s, dc) => s + dc.course.totalElevationGain, 0))}（総合）</span>
       </div>

@@ -40,23 +40,25 @@ export function SeasonHeader({ g, cls }) {
 }
 
 // v29: 選手名変更モーダル（wrap/mlWrap両方で表示する共用JSX）
+// 第13弾Phase3-D-3: 新トークンへ移行。角丸を撤去し、面はT.color.surfaceの単色区切りに統一。
+// 入力欄のフォントは入力中の文字が読める必要があるためFONT_Bのまま維持する。
 export function RenameModal({ renameState, setRenameState }) {
   if (!renameState) return null;
   const badChars = findUnsupportedChars(renameState.value);
   const canCommit = badChars.length === 0 && (renameState.value || "").trim().length > 0;
   const commitRename = () => { const v = (renameState.value || "").trim(); if (v && badChars.length === 0) renameState.onCommit(v); setRenameState(null); };
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
-      <div style={{ background: C.panel, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", border: `1px solid ${C.line}` }}>
-        <div style={{ color: C.text, fontSize: 14, marginBottom: 12 }}>{renameState.title}</div>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: T.space.lg, zIndex: 1000 }}>
+      <div style={{ background: T.color.surface, padding: T.space.lg, maxWidth: 380, width: "100%" }}>
+        <div style={{ color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, marginBottom: T.space.md }}>{renameState.title}</div>
         <input type="text" autoFocus value={renameState.value} maxLength={renameState.maxLength ?? 12}
           onChange={e => setRenameState(s => ({ ...s, value: e.target.value }))}
           onKeyDown={e => { if (e.key === "Enter" && canCommit) commitRename(); }}
-          style={{ width: "100%", boxSizing: "border-box", background: C.panel2, color: C.text, border: `1.5px solid ${badChars.length ? C.red : C.line}`, borderRadius: 8, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
-        {badChars.length > 0 && <div style={{ color: C.red, fontSize: 11.5, marginTop: 6 }}>「{badChars.join("")}」は使えません</div>}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-          <Btn small outline color={C.sub} onClick={() => setRenameState(null)}>キャンセル</Btn>
-          <Btn small color={C.green} disabled={!canCommit} onClick={commitRename}>変更</Btn>
+          style={{ width: "100%", boxSizing: "border-box", background: T.color.surfaceUp, color: T.color.text, border: `1px solid ${badChars.length ? T.color.bad : T.color.rule}`, padding: "10px 12px", fontSize: 15, fontFamily: FONT_B }} />
+        {badChars.length > 0 && <div style={{ color: T.color.bad, fontSize: T.size.caption, marginTop: T.space.xs }}>「{badChars.join("")}」は使えません</div>}
+        <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.lg }}>
+          <button onClick={() => setRenameState(null)} style={{ flex: 1, background: T.color.surfaceUp, color: T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer" }}>やめる</button>
+          <button onClick={commitRename} disabled={!canCommit} style={{ flex: 1, background: canCommit ? T.color.accent : T.color.surfaceUp, color: canCommit ? T.color.bg : T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: canCommit ? "pointer" : "default" }}>変更する</button>
         </div>
       </div>
     </div>
@@ -64,15 +66,17 @@ export function RenameModal({ renameState, setRenameState }) {
 }
 
 // v12バグ修正: window.confirm()に頼らない、アプリ内完結の確認モーダル
+// 第13弾Phase3-D-3: confirmDialog.confirmLabelでボタンの文言を呼び出し元から指定できるように
+// した（未指定時は「OK」）。取り返しのつかない操作でも「OK」しか言わない問題への対応。
 export function ConfirmDialog({ confirmDialog, setConfirmDialog }) {
   if (!confirmDialog) return null;
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}>
-      <div style={{ background: C.panel, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", border: `1px solid ${C.line}` }}>
-        <div style={{ color: C.text, fontSize: 14, lineHeight: 1.7, marginBottom: 16, whiteSpace: "pre-wrap" }}>{confirmDialog.message}</div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <Btn small outline color={C.sub} onClick={() => setConfirmDialog(null)}>キャンセル</Btn>
-          <Btn small color={C.red} onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); fn(); }}>OK</Btn>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: T.space.lg, zIndex: 1000 }}>
+      <div style={{ background: T.color.surface, padding: T.space.lg, maxWidth: 380, width: "100%" }}>
+        <div style={{ color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, lineHeight: 1.9, marginBottom: T.space.lg, whiteSpace: "pre-wrap" }}>{confirmDialog.message}</div>
+        <div style={{ display: "flex", gap: T.space.sm }}>
+          <button onClick={() => setConfirmDialog(null)} style={{ flex: 1, background: T.color.surfaceUp, color: T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer" }}>やめる</button>
+          <button onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); fn(); }} style={{ flex: 1, background: T.color.bad, color: T.color.bg, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer" }}>{confirmDialog.confirmLabel || "OK"}</button>
         </div>
       </div>
     </div>

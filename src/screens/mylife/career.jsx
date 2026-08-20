@@ -47,7 +47,7 @@ export function renderMyLifeCareerScreens(ctx) {
             <div style={{ fontSize: T.size.caption, color: T.color.sub, margin: `-${T.space.xs}px 0 ${T.space.md}px` }}>レースの負荷が15%下がり、選手寿命が延びます</div>
           </>
         )}
-        <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${r.age}歳で引退しますか？この操作は取り消せません。`, mlRetireAdviceAccept)}>今季限りで引退する</QuietBtn>
+        <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${r.age}歳で引退しますか？この操作は取り消せません。`, mlRetireAdviceAccept, "引退する")}>今季限りで引退する</QuietBtn>
       </Screen>
     );
   }
@@ -502,7 +502,7 @@ export function renderMyLifeCareerScreens(ctx) {
                     <span style={{ fontSize: T.size.caption, color: T.color.bad, cursor: "pointer" }}
                       onClick={() => askConfirm(`殿堂記録から「${leg.name}」を削除しますか？この操作は取り消せません（血統の親として選べなくなります）。`, () => {
                         const list = loadMlLegends(); const oi = allLegends.length - 1 - i; if (oi >= 0 && oi < list.length) { list.splice(oi, 1); saveMlLegends(list); setMl(s => ({ ...s })); }
-                      })}>この記録を削除</span>
+                      }, "削除する")}>この記録を削除</span>
                   </div>
                 </div>
               )}

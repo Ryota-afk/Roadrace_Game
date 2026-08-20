@@ -38,10 +38,10 @@ export const DIFFICULTIES = [
 ];
 
 export const TITLE_DEFS = [
-  { key: "grandTour", label: "グランツール総合優勝", icon: "🌍" },
-  { key: "grandFinal", label: "グランファイナル制覇", icon: "🏆" },
-  { key: "worlds", label: "世界選手権優勝", icon: "🌐" },
-  { key: "olympics", label: "オリンピック優勝", icon: "🥇" },
+  { key: "grandTour", label: "グランツール総合優勝" },
+  { key: "grandFinal", label: "グランファイナル制覇" },
+  { key: "worlds", label: "世界選手権優勝" },
+  { key: "olympics", label: "オリンピック優勝" },
 ];
 
 // ── 種目・成長・チーム関連の分類テーブル（Phase 4-1後の support.js から分離）──
