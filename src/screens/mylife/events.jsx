@@ -1,13 +1,47 @@
 // mylife.jsx より分割（Step8）：ショップ・イベント系（shop/event/protege_event/offseason/crossroads/contract）
+// 第13弾Phase3-D-2: 新トークン(T/FONT_DOT)へ全面移行。FatigueBar（panels.jsx）は
+// season側と共有のため中身は据え置き（Phase3-D-3担当）。
 import React from "react";
 import { FatigueBar } from "../../components/panels.jsx";
-import { Btn, Eyebrow } from "../../components/ui.jsx";
+import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
 import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
-import { C, FONT_D, FONT_M } from "../../data/theme.js";
-import { CLASS_TIER_COLOR, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
+import { FONT_DOT, T } from "../../data/theme.js";
+import { ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
 import { PARTS, PART_SLOTS } from "../../sim/race.js";
+
+// ショップ専用の行（見出し＋補足＋購入ボタン。Itemでは表現できない「ボタン付き行」）。
+const ShopBtn = ({ children, onClick, disabled, outline }) => (
+  <button onClick={onClick} disabled={disabled} style={{
+    flex: "none", background: disabled ? T.color.surfaceUp : outline ? "transparent" : T.color.accent,
+    color: disabled ? T.color.sub : outline ? T.color.accent : T.color.bg,
+    border: outline ? `1px solid ${disabled ? T.color.sub : T.color.accent}` : "none",
+    fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: disabled ? "default" : "pointer", whiteSpace: "nowrap",
+  }}>{children}</button>
+);
+
+const ShopRow = ({ label, badge, detail, locked, buyLabel, onBuy, buyDisabled, secondaryLabel, onSecondary, secondaryDisabled, first }) => (
+  <div style={{ padding: `${T.space.sm}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: T.size.body, color: T.color.text }}>{label}{badge && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>{badge}</span>}</div>
+        {detail && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.5 }}>{detail}</div>}
+      </div>
+      <div style={{ flex: "none", display: "flex", gap: T.space.xs }}>
+        {locked && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{locked}</span>}
+        {secondaryLabel && <ShopBtn onClick={onSecondary} disabled={secondaryDisabled} outline>{secondaryLabel}</ShopBtn>}
+        {buyLabel && <ShopBtn onClick={onBuy} disabled={buyDisabled}>{buyLabel}</ShopBtn>}
+      </div>
+    </div>
+  </div>
+);
+
+// mlEventResultText等は複数行の生成テキスト（\n区切り）を含むため、Proseではなく
+// whiteSpace:pre-wrapを明示したこの専用ブロックで改行を保持する。
+const ResultText = ({ children }) => (
+  <div style={{ fontSize: T.size.body, color: T.color.text, lineHeight: 1.9, padding: T.space.md, background: T.color.surface, marginBottom: T.space.md, whiteSpace: "pre-wrap" }}>{children}</div>
+);
 
 export function renderMyLifeEventScreens(ctx) {
   const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyGrowthPowUp, mlBuyGrowthShift, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUpgradePart, mlUseStockConfirm, mlWrap, setMl } = ctx;
@@ -15,211 +49,168 @@ export function renderMyLifeEventScreens(ctx) {
       const r = ml.player;
       const availPartsMl = (pid) => (ml.partsInv[pid] || 0) - (Object.values(r.parts || {}).includes(pid) ? 1 : 0);
       const shopCat = ml.shopCat || "parts";
+      const CATS = [["parts", "パーツ"], ["items", "消耗品・合宿"], ["perm", "恒久投資"]];
+      const maxLv = ML_PART_LV_MAX + (ml.partLvMaxBonus || 0);
       return mlWrap(
-        <div style={{ display: "grid", gap: 16 }}>
-          <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-            <Eyebrow color={C.green}>ショップ — 所持金 {ml.money}万円</Eyebrow>
-            <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます・生活費/税 -{mlLivingCost(ml)}万/月）</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-              <span style={{ fontSize: 11, color: C.sub }}>現在の疲労</span>
+        <Screen>
+          <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontSize: T.size.head }}>所持金</span>
+              <span style={{ fontSize: T.size.title, color: T.color.accent }}>{ml.money}万円</span>
+            </div>
+            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます・生活費/税 -{mlLivingCost(ml)}万/月）</div>
+            <div style={{ display: "flex", alignItems: "center", gap: T.space.sm, marginTop: T.space.sm }}>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>疲労</span>
               <div style={{ width: 90 }}><FatigueBar v={r.fatigue} /></div>
-              <span style={{ fontSize: 11, color: C.sub }}>フォーム <span style={{ color: (r.form ?? 50) >= 80 ? C.yellow : (r.form ?? 50) >= 62 ? C.green : C.sub, fontFamily: FONT_M }}>{Math.round(r.form ?? 50)}</span></span>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>フォーム <span style={{ color: T.color.text }}>{Math.round(r.form ?? 50)}</span></span>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {[["parts", "🔧 パーツ", C.purple], ["items", "🧪 消耗品・合宿", C.green], ["perm", "⭐ 恒久投資", "#e8a13c"]].map(([k, label, col]) => (
+
+          <div style={{ display: "flex", gap: T.space.lg, marginBottom: T.space.md, borderBottom: `1px solid ${T.color.rule}`, paddingBottom: T.space.sm }}>
+            {CATS.map(([k, label]) => (
               <button key={k} onClick={() => setMl(x => ({ ...x, shopCat: k }))}
-                style={{ flex: "1 1 auto", minWidth: 0, background: shopCat === k ? col : C.panel2, color: shopCat === k ? "#14171d" : C.sub, border: `1px solid ${shopCat === k ? col : C.line}`, borderRadius: 8, padding: "7px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{label}</button>
+                style={{ background: "none", border: 0, padding: 0, cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.body, color: shopCat === k ? T.color.accent : T.color.sub }}>{label}</button>
             ))}
           </div>
-          {shopCat === "parts" && (<section>
-            <Eyebrow color={C.purple}>マシンパーツ（クラス昇格で上位解禁）</Eyebrow>
-            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-              {Object.entries(PARTS).map(([pid, p]) => {
-                const lockedByClass = p.tier > ml.classIdx + 1;
-                return (
-                  <div key={pid} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, opacity: lockedByClass ? 0.5 : 1 }}>
-                    <div>
-                      <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>
-                        {p.label} <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.purple }}>所持{ml.partsInv[pid] || 0}（空き{Math.max(0, availPartsMl(pid))}）</span>
-                      </div>
-                      <div style={{ color: C.sub, fontSize: 11 }}>（{SLOT_LABEL[p.slot]}）{Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}</div>
-                    </div>
-                    {lockedByClass
-                      ? <span style={{ fontSize: 11, color: C.red, whiteSpace: "nowrap" }}>🔒 {CLASSES[p.tier - 1].id}で解禁</span>
-                      : <Btn small color={C.purple} disabled={ml.money < p.price} onClick={() => mlBuyPart(pid)}>{p.price}万</Btn>}
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
-              {PART_SLOTS.map(slot => (
-                <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ fontSize: 11, color: C.purple }}>{SLOT_LABEL[slot]}:</span>
-                  <select value={r.parts[slot] || ""} onChange={e => mlSetPart(slot, e.target.value)}
-                    style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "3px 5px", fontSize: 11.5, maxWidth: 140 }}>
-                    <option value="">— なし —</option>
-                    {Object.entries(PARTS).filter(([pid, p]) => p.slot === slot && (availPartsMl(pid) > 0 || r.parts[slot] === pid))
-                      .map(([pid, p]) => <option key={pid} value={pid}>{p.label}</option>)}
-                  </select>
-                </span>
-              ))}
-            </div>
-            <div style={{ marginTop: 14 }}>
-              {(() => { const maxLv = ML_PART_LV_MAX + (ml.partLvMaxBonus || 0); return (<>
-              <Eyebrow color={C.purple}>装着中パーツの強化（買い切り・Lv{maxLv}まで）</Eyebrow>
-              <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-                {PART_SLOTS.filter(slot => r.parts[slot]).map(slot => {
+
+          {shopCat === "parts" && (
+            <>
+              <Section title="マシンパーツ" right="クラス昇格で上位解禁">
+                {Object.entries(PARTS).map(([pid, p], i) => {
+                  const lockedByClass = p.tier > ml.classIdx + 1;
+                  return (
+                    <ShopRow key={pid} first={i === 0}
+                      label={`${p.label}　所持${ml.partsInv[pid] || 0}（空き${Math.max(0, availPartsMl(pid))}）`}
+                      detail={`${SLOT_LABEL[p.slot]}・${Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}`}
+                      locked={lockedByClass ? `${CLASSES[p.tier - 1].id}で解禁` : null}
+                      buyLabel={lockedByClass ? null : `${p.price}万`} buyDisabled={ml.money < p.price} onBuy={() => mlBuyPart(pid)} />
+                  );
+                })}
+              </Section>
+
+              <div style={{ display: "flex", gap: T.space.sm, marginTop: `-${T.space.sm}px`, marginBottom: T.space.md, flexWrap: "wrap" }}>
+                {PART_SLOTS.map(slot => (
+                  <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: T.space.xs, fontSize: T.size.caption }}>
+                    <span style={{ color: T.color.sub }}>{SLOT_LABEL[slot]}:</span>
+                    <select value={r.parts[slot] || ""} onChange={e => mlSetPart(slot, e.target.value)}
+                      style={{ background: T.color.surfaceUp, color: T.color.text, border: `1px solid ${T.color.rule}`, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: "3px 5px", maxWidth: 140 }}>
+                      <option value="">— なし —</option>
+                      {Object.entries(PARTS).filter(([pid, p]) => p.slot === slot && (availPartsMl(pid) > 0 || r.parts[slot] === pid))
+                        .map(([pid, p]) => <option key={pid} value={pid}>{p.label}</option>)}
+                    </select>
+                  </span>
+                ))}
+              </div>
+
+              <Section title="装着中パーツの強化" right={`買い切り・Lv${maxLv}まで`}>
+                {PART_SLOTS.filter(slot => r.parts[slot]).map((slot, i) => {
                   const pid = r.parts[slot];
                   const p = PARTS[pid];
                   const lv = (r.partLv && r.partLv[slot]) || 0;
                   const maxed = lv >= maxLv;
                   const cost = maxed ? null : ML_PART_UPGRADE_COST[lv];
                   return (
-                    <div key={slot} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <div>
-                        <div style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>
-                          {p.label} <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.purple }}>Lv{lv}/{maxLv}</span>
-                        </div>
-                        <div style={{ color: C.sub, fontSize: 11 }}>{Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${Math.round(v * (1 + ML_PART_LV_MUL * lv) * 10) / 10}`).join(" / ")}</div>
-                      </div>
-                      {maxed
-                        ? <span style={{ fontSize: 11, color: C.purple, whiteSpace: "nowrap" }}>✔ 最大強化</span>
-                        : <Btn small color={C.purple} disabled={ml.money < cost} onClick={() => mlUpgradePart(slot)}>{cost}万</Btn>}
-                    </div>
+                    <ShopRow key={slot} first={i === 0}
+                      label={`${p.label}　Lv${lv}/${maxLv}`}
+                      detail={Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${Math.round(v * (1 + ML_PART_LV_MUL * lv) * 10) / 10}`).join(" / ")}
+                      locked={maxed ? "最大強化" : null}
+                      buyLabel={maxed ? null : `${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
                   );
                 })}
-                {PART_SLOTS.every(slot => !r.parts[slot]) && <div style={{ color: C.sub, fontSize: 11.5 }}>パーツを装着すると、ここで強化できます</div>}
-              </div>
-              </>); })()}
-            </div>
-          </section>)}
-          {shopCat === "items" && (<section>
-            <Eyebrow color={C.green}>消耗品（在庫制）</Eyebrow>
-            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-              {Object.entries(ML_STOCK_ITEMS).map(([k, it]) => (
-                <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div>
-                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{it.label} <span style={{ fontFamily: FONT_M, color: C.green }}>×{ml.stock[k] || 0}</span></div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>{it.desc}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <Btn small outline color={C.green} disabled={ml.money < it.price} onClick={() => mlBuyStock(k)}>{it.price}万で購入</Btn>
-                    <Btn small color={C.green} disabled={(ml.stock[k] || 0) <= 0} onClick={() => mlUseStockConfirm(k)}>使う</Btn>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>)}
-          {shopCat === "items" && (<section>
-            <Eyebrow color={"#e8a13c"}>私設強化合宿（何度でも・資金の使い道）</Eyebrow>
-            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
-              <div>
-                <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>私設強化合宿</div>
-                <div style={{ color: C.sub, fontSize: 11 }}>資金を注ぎ込み{AB_LABEL[r.focus]}を中心に鍛える（{AB_LABEL[r.focus]}+6・他+2、疲労+12）。伸びしろが尽きた選手には効きにくい</div>
-              </div>
-              <Btn small color={"#e8a13c"} disabled={ml.money < mlPrivateCampCost(ml)} onClick={mlPrivateCamp}>{mlPrivateCampCost(ml)}万で実施</Btn>
-            </div>
-          </section>)}
-          {shopCat === "perm" && (<section>
-            <Eyebrow color={C.blue}>永続トレーニング用品（買い切り）</Eyebrow>
-            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-              {Object.entries(ML_GEAR).map(([k, it]) => (
-                <div key={k} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div>
-                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{it.label}</div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>{it.desc}</div>
-                  </div>
-                  {ml.gear[k]
-                    ? <span style={{ fontSize: 11, color: C.green, whiteSpace: "nowrap" }}>✔ 購入済み</span>
-                    : <Btn small color={C.blue} disabled={ml.money < it.price} onClick={() => mlBuyGear(k)}>{it.price}万</Btn>}
-                </div>
-              ))}
-            </div>
-          </section>)}
-          {shopCat === "perm" && (<section>
-            <Eyebrow color={"#e8a13c"}>車（レース参加の疲労蓄積を軽減）</Eyebrow>
-            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-              {ML_CARS.map((c, i) => (
-                <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ml.carLv === i ? "#e8a13c" : C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div>
-                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{c.label}{ml.carLv === i && <span style={{ marginLeft: 6, fontSize: 10.5, color: "#e8a13c" }}>（所有中）</span>}</div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>{c.desc}</div>
-                  </div>
-                  {ml.carLv >= i ? null : <Btn small color={"#e8a13c"} disabled={ml.money < c.price || ml.carLv !== i - 1} onClick={mlBuyCar}>{c.price}万</Btn>}
-                </div>
-              ))}
-            </div>
-          </section>)}
-          {shopCat === "perm" && (<section>
-            <Eyebrow color={C.red}>家（毎月の疲労回復を底上げ）</Eyebrow>
-            <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-              {ML_HOUSES.map((h, i) => (
-                <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${ml.houseLv === i ? C.red : C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div>
-                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>{h.label}{ml.houseLv === i && <span style={{ marginLeft: 6, fontSize: 10.5, color: C.red }}>（所有中）</span>}</div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>{h.desc}</div>
-                  </div>
-                  {ml.houseLv >= i ? null : <Btn small color={C.red} disabled={ml.money < h.price || ml.houseLv !== i - 1} onClick={mlBuyHouse}>{h.price}万</Btn>}
-                </div>
-              ))}
-            </div>
-          </section>)}
-          {shopCat === "perm" && (<section>
-            <Eyebrow color={C.yellow}>才能開花プログラム（成長力を1段階アップ・買い切り）</Eyebrow>
-            {mlGrowthPowRevealed(ml)
-              ? <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
-                  <div>
-                    <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>現在の成長力：<span style={{ fontFamily: FONT_M }}>{r.growthPow}</span></div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>現在の段階に応じて価格が上がる、後戻りできない買い切り強化</div>
-                  </div>
-                  {GROWTHPOW_ORDER.indexOf(r.growthPow) >= GROWTHPOW_ORDER.length - 1
-                    ? <span style={{ fontSize: 11, color: C.yellow, whiteSpace: "nowrap" }}>✔ 最高段階</span>
-                    : <Btn small color={C.yellow} disabled={ml.money < ML_GROWTH_POW_UP_PRICE[r.growthPow]} onClick={mlBuyGrowthPowUp}>{ML_GROWTH_POW_UP_PRICE[r.growthPow]}万</Btn>}
-                </div>
-              : <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, marginTop: 6, opacity: 0.7 }}>
-                  <div style={{ color: C.sub, fontSize: 13.5, fontWeight: 700 }}>🔒 成長力 ???</div>
-                  <div style={{ color: C.sub, fontSize: 11 }}>デビュー3年目に成長力が判明してから購入できます</div>
-                </div>}
-          </section>)}
-          {shopCat === "perm" && (<section>
-            <Eyebrow color={C.blue}>成長タイプ変更（キャリア通じて1回限り）</Eyebrow>
-            <div style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ color: C.text, fontSize: 13.5, fontWeight: 700 }}>現在の成長タイプ：<span style={{ fontFamily: FONT_M }}>{GROWTH[r.growth]?.label ?? r.growth}</span></div>
-                <div style={{ color: C.sub, fontSize: 11 }}>早熟寄り・晩成寄りのどちらか一方向のみ、キャリアで1回だけ選び直せる</div>
-              </div>
-              {ml.player.growthShiftUsed
-                ? <span style={{ fontSize: 11, color: C.blue, whiteSpace: "nowrap" }}>✔ 使用済み</span>
-                : (() => {
-                    const gIdx = GROWTH_ORDER.indexOf(r.growth);
-                    const affordable = ml.money >= ML_GROWTH_SHIFT_PRICE;
-                    return (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <Btn small outline color={C.blue} disabled={!affordable || gIdx <= 0} onClick={() => mlBuyGrowthShift(-1)}>早熟寄りへ（{ML_GROWTH_SHIFT_PRICE}万）</Btn>
-                        <Btn small color={C.blue} disabled={!affordable || gIdx < 0 || gIdx >= GROWTH_ORDER.length - 1} onClick={() => mlBuyGrowthShift(1)}>晩成寄りへ（{ML_GROWTH_SHIFT_PRICE}万）</Btn>
-                      </div>
-                    );
-                  })()}
-            </div>
-          </section>)}
-          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
-        </div>
+                {PART_SLOTS.every(slot => !r.parts[slot]) && <Item first label="—" value="" detail="パーツを装着すると、ここで強化できます" />}
+              </Section>
+            </>
+          )}
+
+          {shopCat === "items" && (
+            <>
+              <Section title="消耗品" right="在庫制">
+                {Object.entries(ML_STOCK_ITEMS).map(([k, it], i) => (
+                  <ShopRow key={k} first={i === 0}
+                    label={`${it.label}　×${ml.stock[k] || 0}`} detail={it.desc}
+                    secondaryLabel="使う" onSecondary={() => mlUseStockConfirm(k)} secondaryDisabled={(ml.stock[k] || 0) <= 0}
+                    buyLabel={`${it.price}万`} buyDisabled={ml.money < it.price} onBuy={() => mlBuyStock(k)} />
+                ))}
+              </Section>
+
+              <Section title="私設強化合宿" right="何度でも可">
+                <ShopRow first label="私設強化合宿"
+                  detail={`資金を注ぎ込み${AB_LABEL[r.focus]}を中心に鍛える（${AB_LABEL[r.focus]}+6・他+2、疲労+12）。伸びしろが尽きた選手には効きにくい`}
+                  buyLabel={`${mlPrivateCampCost(ml)}万で実施`} buyDisabled={ml.money < mlPrivateCampCost(ml)} onBuy={mlPrivateCamp} />
+              </Section>
+            </>
+          )}
+
+          {shopCat === "perm" && (
+            <>
+              <Section title="永続トレーニング用品" right="買い切り">
+                {Object.entries(ML_GEAR).map(([k, it], i) => (
+                  <ShopRow key={k} first={i === 0} label={it.label} detail={it.desc}
+                    locked={ml.gear[k] ? "購入済み" : null}
+                    buyLabel={ml.gear[k] ? null : `${it.price}万`} buyDisabled={ml.money < it.price} onBuy={() => mlBuyGear(k)} />
+                ))}
+              </Section>
+
+              <Section title="車" right="レースの疲労蓄積を軽減">
+                {ML_CARS.map((c, i) => (
+                  <ShopRow key={i} first={i === 0} label={c.label} detail={c.desc}
+                    badge={ml.carLv === i ? "所有中" : null}
+                    buyLabel={ml.carLv >= i ? null : `${c.price}万`} buyDisabled={ml.money < c.price || ml.carLv !== i - 1} onBuy={mlBuyCar} />
+                ))}
+              </Section>
+
+              <Section title="家" right="毎月の疲労回復を底上げ">
+                {ML_HOUSES.map((h, i) => (
+                  <ShopRow key={i} first={i === 0} label={h.label} detail={h.desc}
+                    badge={ml.houseLv === i ? "所有中" : null}
+                    buyLabel={ml.houseLv >= i ? null : `${h.price}万`} buyDisabled={ml.money < h.price || ml.houseLv !== i - 1} onBuy={mlBuyHouse} />
+                ))}
+              </Section>
+
+              <Section title="才能開花プログラム" right="成長力を1段階アップ">
+                {mlGrowthPowRevealed(ml) ? (
+                  <ShopRow first label={`現在の成長力：${r.growthPow}`} detail="現在の段階に応じて価格が上がる、後戻りできない買い切り強化"
+                    locked={GROWTHPOW_ORDER.indexOf(r.growthPow) >= GROWTHPOW_ORDER.length - 1 ? "最高段階" : null}
+                    buyLabel={GROWTHPOW_ORDER.indexOf(r.growthPow) >= GROWTHPOW_ORDER.length - 1 ? null : `${ML_GROWTH_POW_UP_PRICE[r.growthPow]}万`}
+                    buyDisabled={ml.money < ML_GROWTH_POW_UP_PRICE[r.growthPow]} onBuy={mlBuyGrowthPowUp} />
+                ) : (
+                  <Item first label="成長力 ???" value="" detail="デビュー3年目に成長力が判明してから購入できます" />
+                )}
+              </Section>
+
+              <Section title="成長タイプ変更" right="キャリアで1回限り">
+                {ml.player.growthShiftUsed ? (
+                  <Item first label={`現在の成長タイプ：${GROWTH[r.growth]?.label ?? r.growth}`} value="" valueColor={T.color.sub} detail="使用済み" />
+                ) : (() => {
+                  const gIdx = GROWTH_ORDER.indexOf(r.growth);
+                  const affordable = ml.money >= ML_GROWTH_SHIFT_PRICE;
+                  return (
+                    <ShopRow first label={`現在の成長タイプ：${GROWTH[r.growth]?.label ?? r.growth}`}
+                      detail="早熟寄り・晩成寄りのどちらか一方向のみ、キャリアで1回だけ選び直せる"
+                      secondaryLabel={`早熟寄りへ（${ML_GROWTH_SHIFT_PRICE}万）`} onSecondary={() => mlBuyGrowthShift(-1)} secondaryDisabled={!affordable || gIdx <= 0}
+                      buyLabel={`晩成寄りへ（${ML_GROWTH_SHIFT_PRICE}万）`} onBuy={() => mlBuyGrowthShift(1)} buyDisabled={!affordable || gIdx < 0 || gIdx >= GROWTH_ORDER.length - 1} />
+                  );
+                })()}
+              </Section>
+            </>
+          )}
+
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>選手画面に戻る</QuietBtn>
+        </Screen>
       );
     }
 
     if (ml.screen === "mylife_event" && ml.pendingEvent) {
       const ev = ml.pendingEvent;
       return mlWrap(
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "12px 14px" }}>
-            <Eyebrow color={C.purple}>できごと — {ev.title}</Eyebrow>
-            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0" }}>{ev.text}</p>
-          </div>
+        <Screen>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>できごと</div>
+          <div style={{ fontSize: T.size.title, marginTop: T.space.xs, marginBottom: T.space.md }}>{ev.title}</div>
+          <Prose>{ev.text}</Prose>
           {ev.choices.map((c, i) => (
-            <Btn key={i} color={C.purple} onClick={() => mlResolveEvent(i)}>{c.label}</Btn>
+            <QuietBtn key={i} onClick={() => mlResolveEvent(i)}>{c.label}</QuietBtn>
           ))}
-        </div>
+        </Screen>
       );
     }
 
@@ -227,116 +218,104 @@ export function renderMyLifeEventScreens(ctx) {
       const ev = ml.pendingProtegeEvent;
       const t = ml.protege ? TYPES[ml.protege.type] : null;
       return mlWrap(
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: "linear-gradient(180deg, rgba(53,192,126,0.10), #232a26)", border: `1px solid ${C.green}`, borderRadius: 10, padding: "12px 14px" }}>
-            <Eyebrow color={C.green}>🎓 弟子との時間 — {ev.title}</Eyebrow>
-            {ml.protege && <div style={{ fontFamily: FONT_D, fontSize: 14, color: C.text, margin: "6px 0 2px" }}>{ml.protege.name}<span style={{ marginLeft: 6, fontSize: 10.5, color: t?.color }}>{t?.label}</span></div>}
-            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "6px 0 0" }}>{ev.text}</p>
-          </div>
+        <Screen>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>弟子との時間</div>
+          <div style={{ fontSize: T.size.title, marginTop: T.space.xs }}>{ev.title}</div>
+          {ml.protege && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{ml.protege.name}・{t?.label}</div>}
+          <div style={{ marginTop: T.space.md }}><Prose>{ev.text}</Prose></div>
           {ev.choices.map((c, i) => (
-            <Btn key={i} color={C.green} onClick={() => mlResolveProtegeEvent(i)}>{c.label}</Btn>
+            <QuietBtn key={i} onClick={() => mlResolveProtegeEvent(i)}>{c.label}</QuietBtn>
           ))}
-        </div>
+        </Screen>
       );
     }
 
     if (ml.screen === "mylife_event_result") return mlWrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 16, border: `1px solid ${C.line}` }}>
-          <Eyebrow color={C.purple}>結果</Eyebrow>
-          <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.eventResultText}</p>
-        </div>
+      <Screen>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>結果</div>
+        <ResultText>{ml.eventResultText}</ResultText>
         {ml.eventAdvanced
-          ? <Btn onClick={() => setMl(s => ({ ...s, eventAdvanced: false, screen: "mylife_main" }))}>戻る →</Btn>
-          : <Btn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</Btn>}
-      </div>
+          ? <PrimaryBtn onClick={() => setMl(s => ({ ...s, eventAdvanced: false, screen: "mylife_main" }))}>戻る →</PrimaryBtn>
+          : <PrimaryBtn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</PrimaryBtn>}
+      </Screen>
     );
 
     if (ml.screen === "mylife_offseason" && ml.pendingOffseason) {
       return mlWrap(
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: "#1e2b24", border: `2px solid ${C.green}`, borderRadius: 10, padding: "12px 14px" }}>
-            <Eyebrow color={C.green}>オフシーズン</Eyebrow>
-            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0" }}>新シーズンまでの間、どのように過ごしますか？</p>
-          </div>
+        <Screen>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>オフシーズン</div>
+          <div style={{ marginTop: T.space.sm, marginBottom: T.space.md }}><Prose>新シーズンまでの間、どのように過ごしますか？</Prose></div>
           {ML_OFFSEASON_CHOICES.map((c, i) => (
-            <div key={c.key} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-              <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 14, color: C.text }}>{c.label}</div>
-              <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>{c.desc}</div>
-              <Btn small color={C.green} style={{ marginTop: 8 }} onClick={() => mlResolveOffseason(i)}>これを選ぶ</Btn>
+            <div key={c.key} style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.sm }}>
+              <div style={{ fontSize: T.size.body }}>{c.label}</div>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6 }}>{c.desc}</div>
+              <div style={{ marginTop: T.space.sm }}><QuietBtn onClick={() => mlResolveOffseason(i)}>これを選ぶ</QuietBtn></div>
             </div>
           ))}
-        </div>
+        </Screen>
       );
     }
 
     if (ml.screen === "mylife_offseason_result") return mlWrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.green}` }}>
-          <Eyebrow color={C.green}>結果</Eyebrow>
-          <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.offseasonResultText}</p>
-        </div>
-        <Btn onClick={mlContinueAfterOffseason}>続ける →</Btn>
-      </div>
+      <Screen>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>結果</div>
+        <ResultText>{ml.offseasonResultText}</ResultText>
+        <PrimaryBtn onClick={mlContinueAfterOffseason}>続ける →</PrimaryBtn>
+      </Screen>
     );
 
     if (ml.screen === "mylife_crossroads" && ml.pendingCrossroads) {
       const cr = ML_CROSSROADS[ml.pendingCrossroads.key];
       return mlWrap(
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: "#2b1e1e", border: `2px solid ${C.red}`, borderRadius: 10, padding: "12px 14px" }}>
-            <Eyebrow color={C.red}>{cr.title}</Eyebrow>
-            <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0" }}>{cr.text}</p>
-          </div>
+        <Screen>
+          <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>{cr.title}</div>
+          <Prose>{cr.text}</Prose>
           {cr.choices.map((c, i) => (
-            <Btn key={i} color={C.red} onClick={() => mlResolveCrossroads(i)}>{c.label}</Btn>
+            <QuietBtn key={i} onClick={() => mlResolveCrossroads(i)}>{c.label}</QuietBtn>
           ))}
-        </div>
+        </Screen>
       );
     }
 
     if (ml.screen === "mylife_crossroads_result") return mlWrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.red}` }}>
-          <Eyebrow color={C.red}>結果</Eyebrow>
-          <p style={{ color: C.text, fontSize: 13.5, lineHeight: 1.7, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{ml.crossroadsResultText}</p>
-        </div>
-        <Btn onClick={mlContinueAfterCrossroads}>続ける →</Btn>
-      </div>
+      <Screen>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>結果</div>
+        <ResultText>{ml.crossroadsResultText}</ResultText>
+        <PrimaryBtn onClick={mlContinueAfterCrossroads}>続ける →</PrimaryBtn>
+      </Screen>
     );
 
     if (ml.screen === "mylife_contract" && ml.contractOffers) return mlWrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: ml.biddingWar ? "#3a2a12" : "#2b2436", border: `1px solid ${ml.biddingWar ? "#e8a13c" : C.purple}`, borderRadius: 10, padding: "10px 14px" }}>
-          <Eyebrow color={ml.biddingWar ? "#e8a13c" : C.purple}>{ml.biddingWar ? "🔥 争奪戦！ — 移籍オファー" : "契約 — 移籍オファー"}</Eyebrow>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>
-            {ml.biddingWar
-              ? "圧倒的な成績にチーム間で争奪戦が勃発！各チームが競って年俸・契約金・エース確約を吊り上げてきています。最高の条件を選び取りましょう。"
-              : "好成績を残したあなたに、複数チームから声がかかっています。条件を見比べて来季の所属先を選んでください。"}
-          </div>
+      <Screen>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{ml.biddingWar ? "争奪戦！ — 移籍オファー" : "契約 — 移籍オファー"}</div>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, marginBottom: T.space.md, lineHeight: 1.7 }}>
+          {ml.biddingWar
+            ? "圧倒的な成績にチーム間で争奪戦が勃発。各チームが競って年俸・契約金・エース確約を吊り上げてきています。最高の条件を選び取りましょう。"
+            : "好成績を残したあなたに、複数チームから声がかかっています。条件を見比べて来季の所属先を選んでください。"}
         </div>
         {ml.contractOffers.map((offer, i) => {
           const isStay = i === 0;
           const previewSalary = Math.round(ml.salary * offer.salaryMul);
           const classDelta = offer.tier - ml.classIdx;
           return (
-            <div key={i} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1.5px solid ${isStay ? C.line : C.purple}` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  fontFamily: FONT_M, fontSize: 11, fontWeight: 700, color: "#14171d", background: CLASS_TIER_COLOR[offer.tier],
-                  borderRadius: 5, padding: "1px 6px",
-                }}>{CLASSES[offer.tier].id}</span>
-                <span style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 14, color: C.text }}>{offer.team}{isStay ? "（残留）" : "（移籍）"}</span>
-                {classDelta > 0 && <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>⬆ 昇格</span>}
-                {classDelta < 0 && <span style={{ fontSize: 11, color: C.red, fontWeight: 700 }}>⬇ 降格</span>}
+            <div key={i} style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.sm }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, flexWrap: "wrap" }}>
+                <span style={{ fontSize: T.size.caption, color: T.color.accent }}>{CLASSES[offer.tier].id}</span>
+                <span style={{ fontSize: T.size.head }}>{offer.team}{isStay ? "（残留）" : "（移籍）"}</span>
+                {classDelta > 0 && <span style={{ fontSize: T.size.caption, color: T.color.good }}>昇格</span>}
+                {classDelta < 0 && <span style={{ fontSize: T.size.caption, color: T.color.bad }}>降格</span>}
               </div>
-              <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>年俸 {previewSalary}万円{offer.bonus > 0 && <span style={{ color: C.green }}>／契約金 +{offer.bonus}万円</span>}</div>
-              {offer.aceGuarantee && <div style={{ fontSize: 11, color: C.yellow, marginTop: 2 }}>👑 来季開幕戦はエースとして起用を確約</div>}
-              <Btn small outline={isStay} color={C.purple} onClick={() => mlChooseTeam(offer)} style={{ marginTop: 8 }}>この条件で契約する</Btn>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>
+                年俸 {previewSalary}万円{offer.bonus > 0 && <span style={{ color: T.color.accent }}>／契約金 +{offer.bonus}万円</span>}
+              </div>
+              {offer.aceGuarantee && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2 }}>来季開幕戦はエースとして起用を確約</div>}
+              <div style={{ marginTop: T.space.sm }}>
+                <QuietBtn onClick={() => mlChooseTeam(offer)}>この条件で契約する</QuietBtn>
+              </div>
             </div>
           );
         })}
-      </div>
+      </Screen>
     );
 
     // v28: 引退勧告の駆け引き画面

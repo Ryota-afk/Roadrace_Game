@@ -5,16 +5,7 @@ import React from "react";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { TYPES } from "../../data/abilities.js";
 import { mlAmbitionPath, mlCurrentAmbition, mlAmbitionProgressText, mlMediaHeadline, mlWorldBoard, rivalHeatTier, worldRankTier } from "../../logic/support.js";
-
-const Section = ({ title, children, action }) => (
-  <>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: T.space.sm }}>
-      <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{title}</span>
-      {action}
-    </div>
-    <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>{children}</div>
-  </>
-);
+import { Screen, Section } from "../../components/mlUi.jsx";
 
 const RivalPanel = ({ rival, record, present }) => {
   const ht = rivalHeatTier(record?.heat ?? record?.meetings ?? 0);
@@ -56,7 +47,7 @@ export function renderMyLifeWorldScreen(ctx) {
   );
 
   return mlWrap(
-    <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+    <Screen>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: T.space.md }}>
         <div>
           <div style={{ fontSize: T.size.title, lineHeight: 1.1 }}>世界</div>
@@ -68,7 +59,7 @@ export function renderMyLifeWorldScreen(ctx) {
         </div>
       </div>
 
-      <Section title="いま目指す目標">
+      <Section title="いま目指す目標" padded>
         {amb ? (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -84,7 +75,7 @@ export function renderMyLifeWorldScreen(ctx) {
         )}
       </Section>
 
-      <Section title="世界ランキング">
+      <Section title="世界ランキング" padded>
         {board.top.map((e, i) => (
           <div key={i} style={{
             display: "flex", alignItems: "baseline", gap: T.space.sm, fontSize: T.size.body,
@@ -114,13 +105,13 @@ export function renderMyLifeWorldScreen(ctx) {
         )}
       </Section>
 
-      {ml.rival && <Section title="好敵手"><RivalPanel rival={ml.rival} record={ml.rivalRecord} present={race?.rivalPresent} /></Section>}
+      {ml.rival && <Section title="好敵手" padded><RivalPanel rival={ml.rival} record={ml.rivalRecord} present={race?.rivalPresent} /></Section>}
       {ml.rival2 && (ml.rivalRecord2?.meetings || 0) > 0 && (
-        <Section title="好敵手"><RivalPanel rival={ml.rival2} record={ml.rivalRecord2} present={race?.rival2Present} /></Section>
+        <Section title="好敵手" padded><RivalPanel rival={ml.rival2} record={ml.rivalRecord2} present={race?.rival2Present} /></Section>
       )}
 
       {media && (
-        <Section title="ロードレース・タイムズ">
+        <Section title="ロードレース・タイムズ" padded>
           <div style={{ fontSize: T.size.head, lineHeight: 1.3 }}>{media.headline}</div>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm, lineHeight: 1.7 }}>{media.body}</div>
         </Section>
@@ -130,6 +121,6 @@ export function renderMyLifeWorldScreen(ctx) {
       {linkBtn("全チームの名鑑を見る", "mylife_worldstats")}
       {linkBtn("選手の成績を見る", "mylife_riderstats")}
       {linkBtn("チームメイトを見る", "mylife_teamroster")}
-    </div>
+    </Screen>
   );
 }

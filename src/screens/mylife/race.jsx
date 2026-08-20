@@ -7,32 +7,7 @@ import { StartListPanel } from "../../components/panels.jsx";
 import { fmtTime } from "../../core/core.js";
 import { TYPES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-
-const Section = ({ title, children }) => (
-  <>
-    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>{title}</div>
-    <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>{children}</div>
-  </>
-);
-
-// 見出し語＋短い値（必ず1行）＋任意の補足行（キャプションサイズ・下段・全幅）
-const Item = ({ label, value, valueColor, detail, detailColor, first }) => (
-  <div style={{ padding: `${T.space.sm}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-      <span style={{ color: T.color.sub, flex: "none" }}>{label}</span>
-      <span style={{ color: valueColor || T.color.text, flex: "none", marginLeft: T.space.sm }}>{value}</span>
-    </div>
-    {detail && <div style={{ fontSize: T.size.caption, color: detailColor || T.color.sub, marginTop: 2 }}>{detail}</div>}
-  </div>
-);
-
-const PrimaryBtn = ({ children, onClick }) => (
-  <button onClick={onClick} style={{ width: "100%", background: T.color.accent, color: T.color.bg, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer", marginBottom: T.space.sm }}>{children}</button>
-);
-
-const QuietBtn = ({ children, onClick }) => (
-  <button onClick={onClick} style={{ width: "100%", background: T.color.surfaceUp, color: T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer", marginBottom: T.space.sm }}>{children}</button>
-);
+import { Item, PrimaryBtn, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
 
 function resultTitle(rank) {
   return rank === 1 ? "優勝" : rank <= 3 ? "表彰台" : rank <= 10 ? "上位入賞" : "フィニッシュ";
@@ -100,7 +75,7 @@ export function renderMyLifeRaceScreens(ctx) {
     const skipWatch = ml.result.teamTT || raceMeta.tmpl.soloTT;
     const startLabel = ml.result.teamTT ? "チームタイムトライアルに挑む" : skipWatch ? "個人タイムトライアルに挑む" : "レースを始める";
     return mlWrap(
-      <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+      <Screen>
         <div style={{ marginBottom: T.space.lg }}>
           <div style={{ fontSize: T.size.caption, color: T.color.sub }}>出走表</div>
           <div style={{ fontSize: T.size.title, marginTop: T.space.xs, lineHeight: 1.3 }}>{raceMeta.name}</div>
@@ -113,13 +88,13 @@ export function renderMyLifeRaceScreens(ctx) {
           <PrimaryBtn onClick={() => { if (skipWatch) { mlRaceFinish(); } else setMl(s => ({ ...s, screen: "mylife_race" })); }}>{startLabel}</PrimaryBtn>
           <QuietBtn onClick={() => setMl(s => ({ ...s, result: null, screen: "mylife_main" }))}>出走を取りやめる</QuietBtn>
         </div>
-      </div>
+      </Screen>
     );
   }
 
   // ---- LIVE中継 ----
   if (ml.screen === "mylife_race" && ml.result) return mlWrap(
-    <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+    <Screen>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: T.space.md }}>
         <span style={{ fontSize: T.size.head }}>{ml.result.raceMeta.name}</span>
         <span style={{ fontSize: T.size.caption, color: T.color.accent, flex: "none", marginLeft: T.space.sm }}>{ml.inLastRace ? "引退レース" : "中継"}</span>
@@ -128,7 +103,7 @@ export function renderMyLifeRaceScreens(ctx) {
         <RaceView sim={ml.result} onFinish={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish} />
       </RaceErrorBoundary>
       <div style={{ marginTop: T.space.sm, fontSize: T.size.caption, color: T.color.sub }}>● 印があなた</div>
-    </div>
+    </Screen>
   );
 
   // ---- 結果：チームタイムトライアル ----
@@ -138,7 +113,7 @@ export function renderMyLifeRaceScreens(ctx) {
     const rank = myTeam ? myTeam.rank : 1;
     const timeStr = myTeam ? (myTeam.rank === 1 ? fmtTime(myTeam.time) : `+${fmtTime(myTeam.gap)}`) : null;
     return mlWrap(
-      <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+      <Screen>
         <ResultHero eyebrow="チームタイムトライアル" raceName={race.name} rank={rank} total={totalTeams} timeStr={timeStr} />
         <Section title="この一戦の成果">
           <Item first label="獲得ポイント" value={`+${pts}pt`} valueColor={T.color.accent} />
@@ -164,7 +139,7 @@ export function renderMyLifeRaceScreens(ctx) {
           ))}
         </Section>
         <PrimaryBtn onClick={() => mlAdvanceMonth("race")}>翌月へ進む</PrimaryBtn>
-      </div>
+      </Screen>
     );
   }
 
@@ -180,7 +155,7 @@ export function renderMyLifeRaceScreens(ctx) {
     const hasAmbitionOrDirective = ambitionCleared || directive || natRole || assistOutcome;
 
     return mlWrap(
-      <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+      <Screen>
         <ResultHero eyebrow={eyebrow} raceName={race.name} rank={rank} total={total} timeStr={timeStr} />
 
         <Section title="この一戦の成果">
@@ -267,7 +242,7 @@ export function renderMyLifeRaceScreens(ctx) {
           : newspaper
             ? <PrimaryBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_newspaper" }))}>号外が届いた →</PrimaryBtn>
             : <PrimaryBtn onClick={() => mlAdvanceMonth("race")}>翌月へ進む →</PrimaryBtn>}
-      </div>
+      </Screen>
     );
   }
 
@@ -277,7 +252,7 @@ export function renderMyLifeRaceScreens(ctx) {
     const oc = ml.resultInfo.rivalOutcome;
     const reply = ml.rivalSceneReply;
     return mlWrap(
-      <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+      <Screen>
         <div style={{ marginBottom: T.space.lg }}>
           <div style={{ fontSize: T.size.caption, color: T.color.sub }}>好敵手との一幕</div>
           <div style={{ fontSize: T.size.title, marginTop: T.space.xs }}>{oc.name}</div>
@@ -317,7 +292,7 @@ export function renderMyLifeRaceScreens(ctx) {
             <PrimaryBtn onClick={mlRivalSceneContinue}>{ml.resultInfo.newspaper ? "号外が届いた →" : "続ける →"}</PrimaryBtn>
           </>
         )}
-      </div>
+      </Screen>
     );
   }
 
@@ -326,7 +301,7 @@ export function renderMyLifeRaceScreens(ctx) {
     const np = ml.resultInfo.newspaper;
     const paper = "#EDE9DF", ink = "#1A1A1A", subInk = "#5A574F";
     return mlWrap(
-      <div style={{ background: T.color.bg, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+      <Screen>
         <div style={{ background: paper, color: ink, padding: T.space.lg, marginBottom: T.space.md }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: `3px double ${ink}`, paddingBottom: T.space.sm }}>
             <span style={{ fontSize: T.size.head, letterSpacing: 1 }}>{np.masthead}</span>
@@ -340,7 +315,7 @@ export function renderMyLifeRaceScreens(ctx) {
           <div style={{ fontSize: T.size.body, lineHeight: 1.9, textAlign: "justify" }}>{np.body}</div>
         </div>
         <PrimaryBtn onClick={() => mlAdvanceMonth("race")}>読み終えて翌月へ進む</PrimaryBtn>
-      </div>
+      </Screen>
     );
   }
 }

@@ -9,11 +9,11 @@ import { AbilityFileList, CourseRecordsPanel, DisciplineGrid, PersonaLine, Scout
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { CourseProfile } from "../../components/CourseProfile.jsx";
 import { RiderPortrait } from "../../components/RiderPortrait.jsx";
-import { Btn, Eyebrow } from "../../components/ui.jsx";
 import { overall } from "../../core/core.js";
 import { AB_KEYS, AB_LABEL, POW, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
-import { C, FONT_B, FONT_D, FONT_DOT, FONT_M, T } from "../../data/theme.js";
+import { FONT_DOT, T } from "../../data/theme.js";
+import { Item, Prose, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
 import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGrowthCap, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 
@@ -271,77 +271,55 @@ export function renderMyLifeHubScreen(ctx) {
       const achievements = computeAchievements(ml);
       const achievedCount = achievements.filter(a => a.achieved).length;
       return mlWrap(
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
-            <Eyebrow color={C.yellow}>🏆 実績</Eyebrow>
-            <div style={{ fontFamily: FONT_D, fontSize: 18, color: C.text, margin: "4px 0" }}>{achievedCount} / {achievements.length} 達成</div>
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {achievements.map(a => (
-              <div key={a.id} style={{
-                background: a.achieved ? "rgba(255,210,63,0.1)" : C.panel, borderRadius: 10, padding: "10px 12px",
-                border: `1.5px solid ${a.achieved ? C.yellow : C.line}`, opacity: a.achieved ? 1 : 0.55,
-                display: "flex", alignItems: "center", gap: 10,
-              }}>
-                <span style={{ fontSize: 22 }}>{a.achieved ? a.icon : "🔒"}</span>
-                <div>
-                  <div style={{ fontFamily: FONT_D, fontWeight: 700, fontSize: 13.5, color: a.achieved ? C.yellow : C.text }}>{a.label}</div>
-                  <div style={{ fontSize: 11, color: C.sub }}>{a.desc}</div>
-                  {formatAchievementReward(a) && <div style={{ fontSize: 10.5, color: C.green, marginTop: 1 }}>{formatAchievementReward(a)}</div>}
-                </div>
-              </div>
+        <Screen>
+          <Section title="実績" right={`${achievedCount} / ${achievements.length}`}>
+            {achievements.map((a, i) => (
+              <Item key={a.id} first={i === 0} label={a.label} value={a.achieved ? "達成" : "未達成"}
+                valueColor={a.achieved ? T.color.good : T.color.sub}
+                detail={formatAchievementReward(a) ? `${a.desc}　${formatAchievementReward(a)}` : a.desc}
+                detailColor={a.achieved ? T.color.accent : T.color.sub} />
             ))}
-          </div>
-          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
-        </div>
+          </Section>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn>
+        </Screen>
       );
     }
 
     if (ml.screen === "mylife_abilityfile") return mlWrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <Eyebrow color={C.purple}>🗂 特殊能力図鑑</Eyebrow>
-        <AbilityFileList file={loadAbilityFile()} />
-        <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
-      </div>
+      <Screen>
+        <Section title="特殊能力図鑑" padded>
+          <AbilityFileList file={loadAbilityFile()} />
+        </Section>
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn>
+      </Screen>
     );
 
     // v27: コースレコード一覧（シーズンモードと共有の永続記録）
     // v37: 選手成績台帳（自分・ライバル・チームメイトの今季／通算スタッツ）
     if (ml.screen === "mylife_riderstats" && ml.player) {
       const rows = mlRiderStatsRows(ml);
-      const kindLabel = { self: { t: "あなた", c: C.yellow }, rival: { t: "ライバル", c: C.red }, protege: { t: "弟子", c: C.green }, teammate: { t: "チームメイト", c: C.blue } };
+      const kindLabel = { self: "あなた", rival: "ライバル", protege: "弟子", teammate: "チームメイト" };
       return mlWrap(
-        <div style={{ display: "grid", gap: 10 }}>
-          <Eyebrow color={C.red}>📊 選手成績 — {ml.year}年目 時点</Eyebrow>
-          <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>同じレースを走った相手との成績（今季／通算）。</div>
-          <div style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, overflow: "hidden" }}>
-            <div style={{ display: "flex", gap: 6, padding: "6px 10px", fontSize: 10, color: C.sub, borderBottom: `1px solid ${C.line}`, background: C.panel2 }}>
-              <span style={{ flex: 1 }}>選手</span>
-              <span style={{ width: 62, textAlign: "center" }}>今季</span>
-              <span style={{ width: 96, textAlign: "center" }}>通算（勝／表彰台）</span>
-              <span style={{ width: 40, textAlign: "right" }}>最高</span>
-            </div>
-            {rows.map((r) => {
-              const kl = kindLabel[r.kind] || kindLabel.teammate;
-              return (
-                <div key={r.id} style={{ display: "flex", gap: 6, alignItems: "center", padding: "7px 10px", borderBottom: `1px solid ${C.bg}`, background: r.kind === "self" ? "rgba(255,210,63,0.10)" : "transparent" }}>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ color: kl.c, fontWeight: r.kind === "self" ? 700 : 500, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
-                      {r.kind === "self" ? "🚴 " : r.kind === "rival" ? "🔥 " : r.kind === "protege" ? "🎓 " : "🤝 "}{r.name}
-                    </span>
-                    <span style={{ fontSize: 9.5, color: C.sub }}>{kl.t}・{r.team}</span>
-                  </span>
-                  <span style={{ width: 62, textAlign: "center", fontFamily: FONT_M, fontSize: 11, color: C.text }}>{r.yr ? `${r.yr.races}走${r.yr.wins}勝` : "—"}</span>
-                  <span style={{ width: 96, textAlign: "center", fontFamily: FONT_M, fontSize: 11, color: C.text }}>{r.races}走 <span style={{ color: C.yellow }}>{r.wins}</span>/<span style={{ color: "#e8a13c" }}>{r.podiums}</span></span>
-                  <span style={{ width: 40, textAlign: "right", fontFamily: FONT_M, fontSize: 11, color: r.bestRank === 1 ? C.yellow : C.sub }}>{r.bestRank >= 99 ? "—" : `${r.bestRank}位`}</span>
+        <Screen>
+          <Section title="選手成績" right={`${ml.year}年目`}>
+            {rows.map((r, i) => (
+              <div key={r.id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                  <span style={{ color: r.kind === "self" ? T.color.accent : T.color.text }}>{r.name}</span>
+                  <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>{kindLabel[r.kind] || kindLabel.teammate}・{r.team}</span>
                 </div>
-              );
-            })}
-            {rows.length <= 1 && <div style={{ padding: "12px", fontSize: 11.5, color: C.sub, textAlign: "center" }}>レースを重ねると、ライバルや仲間の成績がここに蓄積されます。</div>}
-          </div>
-          <Btn outline color={C.green} onClick={() => setMl(s => ({ ...s, screen: "mylife_worldstats" }))}>🌍 全チーム名鑑・成績を見る</Btn>
-          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 戻る</Btn>
-        </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
+                  <span>今季 {r.yr ? `${r.yr.races}走${r.yr.wins}勝` : "—"}</span>
+                  <span>通算 {r.races}走{r.wins}勝・{r.podiums}表彰台</span>
+                  <span>{r.bestRank >= 99 ? "最高—" : `最高${r.bestRank}位`}</span>
+                </div>
+              </div>
+            ))}
+            {rows.length <= 1 && <Item first label="—" value="" detail="レースを重ねると、ライバルや仲間の成績がここに蓄積されます。" />}
+          </Section>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_worldstats" }))}>全チームの名鑑を見る</QuietBtn>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>世界の画面に戻る</QuietBtn>
+        </Screen>
       );
     }
 
@@ -349,40 +327,42 @@ export function renderMyLifeHubScreen(ctx) {
     if (ml.screen === "mylife_worldstats" && ml.player) {
       const teams = mlWorldTeamStats(ml);
       return mlWrap(
-        <div style={{ display: "grid", gap: 10 }}>
-          <Eyebrow color={C.green}>🌍 全チーム名鑑・成績 — {ml.year}年目</Eyebrow>
-          <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>各チームの選手団と、対戦成績（通算 勝/表彰台、今季）。</div>
-          {teams.length === 0 && <div style={{ fontSize: 12, color: C.sub, padding: 12 }}>まだデータがありません（旧セーブは新規キャラから反映されます）。</div>}
-          {teams.map((t) => (
-            <div key={t.teamName} style={{ background: C.panel, borderRadius: 10, border: `1px solid ${C.line}`, borderLeft: `3px solid ${t.color}`, overflow: "hidden" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "7px 12px", background: C.panel2 }}>
-                <span style={{ fontFamily: FONT_D, fontSize: 14, color: C.text }}>{t.isMyTeam ? "⭐ " : ""}{t.teamName}<span style={{ fontSize: 10, color: C.sub, marginLeft: 6 }}>{t.trait}</span></span>
-                <span style={{ fontFamily: FONT_M, fontSize: 11, color: C.sub }}>通算 <b style={{ color: C.yellow }}>{t.teamWins}</b>勝/{t.teamPodiums}表彰台</span>
-              </div>
-              {t.riders.map((r) => (
-                <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: "5px 12px", borderTop: `1px solid ${C.bg}`, fontSize: 12 }}>
-                  <span style={{ flex: 1, color: r.self ? C.yellow : C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.self ? "🚴 " : ""}{r.name}<span style={{ fontSize: 9.5, color: TYPES[r.type]?.color, marginLeft: 4 }}>{TYPES[r.type]?.label}</span></span>
-                  <span style={{ width: 54, textAlign: "center", fontFamily: FONT_M, fontSize: 10.5, color: C.sub }}>今{r.yr.races}走{r.yr.wins}勝</span>
-                  <span style={{ width: 88, textAlign: "center", fontFamily: FONT_M, fontSize: 10.5, color: C.text }}>通{r.races}走 <span style={{ color: C.yellow }}>{r.wins}</span>/<span style={{ color: "#e8a13c" }}>{r.podiums}</span></span>
-                  <span style={{ width: 34, textAlign: "right", fontFamily: FONT_M, fontSize: 10.5, color: r.bestRank === 1 ? C.yellow : C.sub }}>{r.bestRank >= 99 ? "—" : `${r.bestRank}位`}</span>
-                  {!r.self && <ScoutBadge scout={r.scout} compact />}
+        <Screen>
+          {teams.length === 0 ? (
+            <Prose>まだデータがありません。レースを重ねると増えていきます。</Prose>
+          ) : teams.map((t) => (
+            <Section key={t.teamName} title={t.isMyTeam ? `${t.teamName}（あなたのチーム）` : t.teamName} right={`通算 ${t.teamWins}勝・${t.teamPodiums}表彰台`}>
+              {t.riders.map((r, i) => (
+                <div key={r.id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                    <span style={{ color: r.self ? T.color.accent : T.color.text }}>{r.name}<span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>{TYPES[r.type]?.label}</span></span>
+                    {!r.self && <ScoutBadge scout={r.scout} compact />}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
+                    <span>今季 {r.yr.races}走{r.yr.wins}勝</span>
+                    <span>通算 {r.races}走{r.wins}勝・{r.podiums}表彰台</span>
+                    <span>{r.bestRank >= 99 ? "最高—" : `最高${r.bestRank}位`}</span>
+                  </div>
                 </div>
               ))}
-            </div>
+            </Section>
           ))}
-          <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_riderstats" }))}>← 戻る</Btn>
-        </div>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_riderstats" }))}>選手成績を見る</QuietBtn>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>世界の画面に戻る</QuietBtn>
+        </Screen>
       );
     }
 
     if (ml.screen === "mylife_records") return mlWrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <Eyebrow color={"#e8a13c"}>👑 通算タイトル</Eyebrow>
-        <TitlesPanel />
-        <Eyebrow color={"#e8a13c"}>🏅 コースレコード</Eyebrow>
-        <CourseRecordsPanel />
-        <Btn outline color={C.sub} onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 選手画面に戻る</Btn>
-      </div>
+      <Screen>
+        <Section title="通算タイトル" padded>
+          <TitlesPanel />
+        </Section>
+        <Section title="コースレコード" padded>
+          <CourseRecordsPanel />
+        </Section>
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn>
+      </Screen>
     );
 
     // v25: マイライフ専用ヘルプ。毎月のアクションから細かな仕様まで一覧できるようにする

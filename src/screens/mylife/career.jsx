@@ -11,41 +11,7 @@ import { CLASSES } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlSetAutobiography, mlCareerTimeline, mlWorldBoard, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { initMyLife, mlCareerArchetype, computeAchievements, ML_ACHIEVEMENTS } from "../../state/state.js";
-
-const Section = ({ title, right, children }) => (
-  <>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>
-      <span>{title}</span>{right != null && <span style={{ color: T.color.accent }}>{right}</span>}
-    </div>
-    <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>{children}</div>
-  </>
-);
-
-const Item = ({ label, value, valueColor, detail, first }) => (
-  <div style={{ padding: `${T.space.sm}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-      <span style={{ color: T.color.sub, flex: "none" }}>{label}</span>
-      <span style={{ color: valueColor || T.color.text, flex: "none", marginLeft: T.space.sm }}>{value}</span>
-    </div>
-    {detail && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{detail}</div>}
-  </div>
-);
-
-const PrimaryBtn = ({ children, onClick }) => (
-  <button onClick={onClick} style={{ width: "100%", background: T.color.accent, color: T.color.bg, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer", marginBottom: T.space.sm }}>{children}</button>
-);
-
-const QuietBtn = ({ children, onClick, color }) => (
-  <button onClick={onClick} style={{ width: "100%", background: T.color.surfaceUp, color: color || T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer", marginBottom: T.space.sm }}>{children}</button>
-);
-
-const Prose = ({ children }) => (
-  <div style={{ fontSize: T.size.body, color: T.color.text, lineHeight: 1.9, padding: T.space.md, background: T.color.surface, marginBottom: T.space.md }}>{children}</div>
-);
-
-const Screen = ({ children }) => (
-  <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>{children}</div>
-);
+import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
 
 export function renderMyLifeCareerScreens(ctx) {
   const { askConfirm, becomeManager, ml, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlWrap, setMl, setSuperMode } = ctx;

@@ -11,13 +11,7 @@ import { ABILITIES, GROWTH, PERSONALITIES, TYPES } from "../../data/abilities.js
 import { FONT_DOT, T } from "../../data/theme.js";
 import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
-
-const Section = ({ title, children }) => (
-  <>
-    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>{title}</div>
-    <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>{children}</div>
-  </>
-);
+import { Screen, Section } from "../../components/mlUi.jsx";
 
 const Row = ({ k, v, first }) => (
   <div style={{
@@ -43,7 +37,7 @@ export function renderMyLifeRiderScreen(ctx) {
   const golds = new Set(r.goldAbilities || []);
 
   return mlWrap(
-    <div style={{ background: T.color.bg, color: T.color.text, fontFamily: FONT_DOT, margin: "-6px -14px 0", padding: T.space.lg }}>
+    <Screen>
       <div style={{ display: "flex", gap: T.space.md, alignItems: "flex-end", background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
         <div style={{ flex: "none" }}><RiderPortrait color={T.color.accent} size={64} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -57,15 +51,15 @@ export function renderMyLifeRiderScreen(ctx) {
         </div>
       </div>
 
-      <Section title="能力と素質">
+      <Section title="能力と素質" padded>
         <AbilitySoshitsuRadarPair r={r} cap={cap} size={140} />
       </Section>
 
-      <Section title="コース適性">
+      <Section title="コース適性" padded>
         <DisciplineGrid r={r} highlightKey={race?.tmpl?.favors ? (FAVORS_TO_DISCIPLINE[race.tmpl.favors] || "flat") : undefined} />
       </Section>
 
-      <Section title="性格と成長">
+      <Section title="性格と成長" padded>
         <Row first k="性格" v={PERSONALITIES[r.personality]?.label || "普通"} />
         <Row k="成長型" v={GROWTH[r.growth]?.label} />
         <Row k="いまの時期" v={ph.tag} />
@@ -76,7 +70,7 @@ export function renderMyLifeRiderScreen(ctx) {
       </Section>
 
       {abils.length > 0 && (
-        <Section title="特殊能力">
+        <Section title="特殊能力" padded>
           {abils.map((id, i) => {
             const a = ABILITIES[id];
             if (!a) return null;
@@ -93,7 +87,7 @@ export function renderMyLifeRiderScreen(ctx) {
         </Section>
       )}
 
-      <Section title="経歴">
+      <Section title="経歴" padded>
         {r.lineageName && <Row first k="系統" v={r.lineageName} />}
         {r.master && <Row k="師" v={r.master} />}
         {r.partner && <Row k="配合" v={`${r.master}×${r.partner}`} />}
@@ -107,6 +101,6 @@ export function renderMyLifeRiderScreen(ctx) {
         style={{ width: "100%", background: "none", border: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.sm, cursor: "pointer" }}>
         キャリアの推移を見る
       </button>
-    </div>
+    </Screen>
   );
 }

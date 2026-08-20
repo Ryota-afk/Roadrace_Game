@@ -557,3 +557,63 @@ CLAUDE.md §8が対象とする装飾絵文字ではない）。Playwrightで実
 コンソールエラー0・NaN/undefined無しを確認。挫折年表（大舞台二桁着順・3年勝利空白）・自伝3択・
 エピローグ自動生成・好敵手フォールバック表示（ランキング表に載らない順位の好敵手/ライバル）も
 すべて意図通りの分岐で表示されることを確認済み。
+
+## Phase 3-D: 共有部品の新トークン化＋マイライフ残り4画面（完了）
+
+**設計の経緯**：当初「共有`ui.jsx`/`panels.jsx`は据え置き、season側との共有を理由に触らない」と
+提案したところユーザーから「再質問して」と差し戻された。実測せずに下した判断だったため、
+season側のAI臭さの発生源を`components/`と`screens/season/`で分けて実測（色/角丸/枠線/絵文字の
+出現箇所を集計）→ season側の装飾密度の85〜90%は`screens/season/`自身のインライン`style`が
+原因で、共有部品の寄与は10〜15%と判明。この実測を踏まえ再度AskUserQuestionで提示し、
+以下が決定された：①共有`ui.jsx`/`panels.jsx`は今すぐ着手する ②`career/race/rider/world.jsx`に
+4つに分岐していた`Section`等を`mlUi.jsx`へ集約し、同じラウンドでマイライフ残り4画面
+（`hub.jsx`の旧5画面・`events.jsx`・`create.jsx`・`help.jsx`）も変換する ③装飾色は紫のみ例外で
+アクセントに残す ④スコープが大きいのでD-1/D-2/D-3の3ラウンドへ分割する。
+
+**D-1（`src/components/ui.jsx`）**：`Btn`/`Eyebrow`の呼び出し側231箇所（Btn111・Eyebrow120）は
+無改修のまま、`color`プロップの写像シム（`COLOR_MAP`/`mapColor()`）を追加。旧`C.yellow`→
+`T.color.accent`、`C.purple`→`T.color.accent`（紫のみの例外）、`C.green`→`good`、`C.red`→
+`bad`、それ以外（青・桃・橙・sub等）はすべて`T.color.sub`へ収束。形状（角丸・枠線・フォント）は
+このラウンドでは変えない（season側の装飾密度の主因ではないと実測済みのため）。
+
+**D-2（`src/components/mlUi.jsx`新設＋マイライフ残り4画面）**：
+- `mlUi.jsx`：`career/race/rider/world.jsx`にファイルごとに再定義されていた`Section`/`Item`/
+  `PrimaryBtn`/`QuietBtn`/`Prose`/`Screen`を1箇所へ統合。`Section`のpadding差異（career/raceは
+  `0 mdpx`の非paddedスタイル、rider/worldは`md`全周のpaddedスタイル）は`padded`propで両立。
+  加えて`create.jsx`の選択式UI（脚質・経歴・難易度等）向けに`SelectRow`を新設。
+- `career/race/rider/world.jsx`は各ファイルのローカル定義を削除し`mlUi.jsx`からimportするよう
+  差し替え（race.jsxは同一パターンの`Screen`相当インラインdivが6箇所あり、すべて`<Screen>`に
+  統一）。
+- `hub.jsx`の旧5画面（実績・特殊能力図鑑・選手成績・全チーム名鑑・タイトル/コースレコード）を
+  新トークンへ変換。あわせて「戻る」導線のバグを修正——下部タブ新設（Phase 3-A）後もこれらの
+  画面は一律`mylife_main`へ戻る旧仕様のままで、タブの現在地表示（`BottomTabs.jsx`の
+  `TAB_MEMBERS`）と食い違っていた。実績/特殊能力図鑑/コースレコードは`mylife_archive`（記録タブ）
+  へ、選手成績/全チーム名鑑は`mylife_world`（世界タブ）へ戻すよう修正。
+- `events.jsx`（ショップ9カテゴリ＋できごと/弟子イベント/オフシーズン/人生の岐路/契約の8画面）：
+  `Item`では表現できない「購入ボタン付き行」用にファイルローカルの`ShopRow`/`ShopBtn`を新設。
+  複数行の生成テキスト（`\n`区切りの`eventResultText`等）は`Prose`だと改行が潰れるため
+  `whiteSpace:pre-wrap`を明示したファイルローカルの`ResultText`で対応（`Prose`本体は変更せず、
+  他画面での挙動に影響を与えない）。
+- `create.jsx`（キャラ作成＋配合プレビュー＋素質診断）：脚質/経歴/難易度/師匠/配合相手の選択UIを
+  すべて`SelectRow`へ統一。配合の相性パネル（爆発力・配合評価・危険度・配合相性・血統ボーナス・
+  受け継ぐ特能・金の特殊能力・配合限定特能・継承する系統・血の格）は情報を一切削らず`Item`の
+  縦積みへ再構成し、旧デザインの8色（黄/紫/桃/赤/橙等）を単一アクセント＋`bad`（危険度のみ）へ
+  収束。
+- `help.jsx`（20セクション）：局所`Section`/`Card`をファイルローカルの`HelpCard`へ置き換え。
+  絵文字（📖🌍🥇🏆🎌🤝🔩✨🔀💚🏔️🎯🧬🌳🪨等、約35個）を全廃し、強調用の6色の装飾色（黄緑赤紫青橙桃）
+  を「太字＋`T.color.text`」への統一と「降格の警告のみ`T.color.bad`」の2択へ収束。文章量・
+  説明内容そのものは変更していない（トークン移行のスコープであり、§7の内容見直しは別タスク）。
+- 画面変換中に見つかったデータ層の絵文字漏れ（`data/events.js`の`ML_BACKGROUNDS.meritLabel`
+  3件：🌱叩き上げ／🎓文武両道／💼即戦力）は`create.jsx`の経歴選択カードに直接表示されるため
+  合わせて除去。データ層全体の絵文字一掃はPhase 3-F（最終掃討）の担当範囲。
+
+**検証**：ビルド成功（4回、各ファイル変換後に都度確認）。絵文字カウント（コメント行除外）：
+`hub.jsx` 13→0（→/★等の機能記号のみ残存）、`events.jsx` 11→0、`create.jsx` 14→0、
+`help.jsx` 35→0（B1→A→PRO等の文中の→矢印のみ残存、装飾ではなく文脈上の遷移記号）。
+Playwrightで実プレイ（マイライフ開始→キャラ作成→デビュー→ショップ3カテゴリ→記録タブ
+（実績/特殊能力図鑑/コースレコード）→世界タブ（選手成績/全チーム名鑑）→ヘルプ）を通し、
+コンソールエラー0・NaN/undefined無しを確認。D-1の`ui.jsx`シムは既存231箇所のBtn/Eyebrow
+呼び出しを無改修のまま通した後にスクリーンショットで確認済み。
+
+**残課題（Phase 3-D-3へ）**：`panels.jsx`（15コンポーネント）・`dynasty.jsx`・`chrome.jsx`は
+まだ旧トークンのまま。これらはseason側と共有のため影響範囲が広く、次ラウンドへ持ち越し。
