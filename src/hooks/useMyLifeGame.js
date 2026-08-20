@@ -23,6 +23,7 @@ import {
   mlContinueAfterOffseason as mcContinueAfterOffseason, mlResolveCrossroads as mcResolveCrossroads,
   mlContinueAfterCrossroads as mcContinueAfterCrossroads,
 } from "../controllers/mylife/career.js";
+import { mlEpilogueDirector, mlEpilogueAway, mlSetEpilogue } from "../domain/mylife/career.js";
 import {
   mlResolveProtegeEvent as meResolveProtegeEvent, mlResolveRivalScene as meResolveRivalScene,
   mlRivalSceneContinue as meRivalSceneContinue,
@@ -74,7 +75,12 @@ export function useMyLifeGame({ superMode, askConfirm }) {
       const res = computeMyLifeClearPoints(ml);
       if (res.total > 0) { const meta = loadMeta(); saveMeta({ ...meta, totalEarnedCP: meta.totalEarnedCP + res.total }); }
       mlRecordLegend(ml);
-      const next = { ...ml, awardedCP: res };
+      // 第13弾Phase3-C: エピローグの選択制（「監督としてチームに残る」／「競技から静かに離れる」）を
+      // 廃止し、弟子の有無で自動生成する。文章が変わるだけの選択肢と、実際にシーズンモードへ
+      // 遷移する「監督として新チームを率いる」ボタンが並んで紛らわしかったため（ユーザー指摘）。
+      const epilogueText = ml.protege ? mlEpilogueDirector(ml) : mlEpilogueAway(ml);
+      mlSetEpilogue(epilogueText);
+      const next = { ...ml, awardedCP: res, epilogueText };
       saveMyLife(next);
       setMl(() => next);
     }

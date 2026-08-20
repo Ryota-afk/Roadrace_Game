@@ -126,6 +126,7 @@ export function renderMyLifeWorldScreen(ctx) {
         </Section>
       )}
 
+      {linkBtn("ランキングをすべて見る", "mylife_ranking")}
       {linkBtn("全チームの名鑑を見る", "mylife_worldstats")}
       {linkBtn("選手の成績を見る", "mylife_riderstats")}
       {linkBtn("チームメイトを見る", "mylife_teamroster")}

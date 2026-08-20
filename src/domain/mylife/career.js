@@ -44,28 +44,45 @@ export function mlEpilogueAway(s) {
 // v35(UI): キャリアの軌跡。raceLog から「語る価値のある一戦」だけを時系列で抽出し、
 // 選手詳細（キャリアグラフ画面）に年表として並べる。勝利・モニュメント・格上レースの表彰台・
 // 初勝利/初表彰台を拾う。純関数。
+// 第13弾Phase3-C: iconフィールドを撤去（絵文字ゼロの原則。表示側はdownフラグの有無で
+// 文字色を分ける）。あわせて「勝利しか記録されない」というユーザー指摘を受け、大舞台での
+// 二桁着順・3年以上の勝利空白という2種類の挫折も拾うようにした。
 export function mlCareerTimeline(ml) {
   if (!ml || !ml.player) return [];
   const log = ml.player.raceLog || [];
   const out = [];
   let firstWinDone = false, firstPodiumDone = false;
   const isBig = (e) => /世界選手権|オリンピック|グランツール|ツアー|世界選手/.test(e.name || "");
-  log.forEach((e, i) => {
+  log.forEach((e) => {
     const rank = e.rank;
     const when = { year: e.year, month: e.month };
     if (rank === 1) {
       const first = !firstWinDone; firstWinDone = true;
-      if (e.monument) out.push({ ...when, icon: "🏛", color: "#ffd24a", text: `${e.name}を制覇（クラシックの勝者）` });
-      else if (isBig(e)) out.push({ ...when, icon: "🌍", color: "#ffd23f", text: `${e.name}で優勝！世界の頂点に立った` });
-      else out.push({ ...when, icon: first ? "✨" : "🏆", color: "#ffd23f", text: first ? `プロ初勝利（${e.name}）` : `${e.name}で優勝` });
+      if (e.monument) out.push({ ...when, text: `${e.name}を制覇（クラシックの勝者）` });
+      else if (isBig(e)) out.push({ ...when, text: `${e.name}で優勝！世界の頂点に立った` });
+      else out.push({ ...when, text: first ? `プロ初勝利（${e.name}）` : `${e.name}で優勝` });
     } else if (rank <= 3) {
-      if (e.monument) out.push({ ...when, icon: "🏛", color: "#e8a13c", text: `${e.name}で${rank}位（クラシック表彰台）` });
-      else if (isBig(e)) out.push({ ...when, icon: "🥈", color: "#cfd6e4", text: `${e.name}で${rank}位（大舞台の表彰台）` });
-      else if (!firstPodiumDone) { firstPodiumDone = true; out.push({ ...when, icon: "🎖", color: "#4fbf6b", text: `キャリア初表彰台（${e.name}で${rank}位）` }); }
+      if (e.monument) out.push({ ...when, text: `${e.name}で${rank}位（クラシック表彰台）` });
+      else if (isBig(e)) out.push({ ...when, text: `${e.name}で${rank}位（大舞台の表彰台）` });
+      else if (!firstPodiumDone) { firstPodiumDone = true; out.push({ ...when, text: `キャリア初表彰台（${e.name}で${rank}位）` }); }
+    } else if (isBig(e) && rank >= 11) {
+      out.push({ ...when, text: `${e.name}で${rank}位。世界の壁は高かった`, down: true });
     }
   });
+  // 3年以上の勝利空白を挫折として拾う（勝利の無い年が連続した区間の始点を記録）
+  const raceYears = log.map(e => e.year);
+  const winYears = [...new Set(log.filter(e => e.rank === 1).map(e => e.year))].sort((a, b) => a - b);
+  if (raceYears.length > 0) {
+    const firstYear = Math.min(...raceYears), lastYear = Math.max(...raceYears);
+    let prev = firstYear;
+    for (const wy of winYears) {
+      if (wy - prev >= 3) out.push({ year: prev, month: null, text: `${prev}年目から${wy - prev}年間、勝利から遠ざかった`, down: true });
+      prev = wy;
+    }
+    if (lastYear - prev >= 3) out.push({ year: prev, month: null, text: `${prev}年目から${lastYear - prev}年間、勝利から遠ざかった`, down: true });
+  }
   // 直近が上に来るよう新しい順。多すぎる場合は上位（最近）30件に留める
-  return out.reverse().slice(0, 30);
+  return out.sort((a, b) => (b.year - a.year) || ((b.month ?? -1) - (a.month ?? -1))).slice(0, 30);
 }
 
 // v35(逆メンター): 弟子（プロテジェ）の現在の状態を、弟子入りからの経過年数から算出する純関数。
