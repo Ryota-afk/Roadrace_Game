@@ -11,7 +11,7 @@ import { ABILITIES, GROWTH, PERSONALITIES, TYPES } from "../../data/abilities.js
 import { FONT_DOT, T } from "../../data/theme.js";
 import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
-import { Screen, Section } from "../../components/mlUi.jsx";
+import { Screen, Section } from "../../components/kit.jsx";
 
 const Row = ({ k, v, first }) => (
   <div style={{

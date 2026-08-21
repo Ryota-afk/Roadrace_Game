@@ -6,11 +6,11 @@
 // （父方/母方の区別も無い＝parentsは[師匠,配合相手]の役割で、性別による父母の区分ではない）。
 // 祖先を再帰的に遡る5代グリッドの実装はデータ層の拡張が要るため次弾へ送る（devlog/wave13.md）。
 // variantは「見出しの出し方」の差分吸収だった旧設計を廃止し、空状態の文言差分のみ残す
-// （見出し自体はmlUi.jsxのScreenが担うため、呼び出し側でのheadingAsH2切替が不要になった）。
+// （見出し自体はkit.jsxのScreenが担うため、呼び出し側でのheadingAsH2切替が不要になった）。
 import React from "react";
 import { T } from "../data/theme.js";
 import { TYPES } from "../data/abilities.js";
-import { Screen } from "./mlUi.jsx";
+import { Screen } from "./kit.jsx";
 
 const EMPTY_TEXT = {
   lineage: {

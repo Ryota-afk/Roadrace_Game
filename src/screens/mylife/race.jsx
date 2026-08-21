@@ -7,7 +7,7 @@ import { StartListPanel } from "../../components/panels.jsx";
 import { fmtTime } from "../../core/core.js";
 import { TYPES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { Item, PrimaryBtn, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
+import { Item, PrimaryBtn, QuietBtn, Screen, Section } from "../../components/kit.jsx";
 
 function resultTitle(rank) {
   return rank === 1 ? "優勝" : rank <= 3 ? "表彰台" : rank <= 10 ? "上位入賞" : "フィニッシュ";

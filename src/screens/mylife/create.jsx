@@ -4,7 +4,7 @@
 import React from "react";
 import { loadBloodlines, loadMlLegends, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { AbilityGrid, TraitLine } from "../../components/panels.jsx";
-import { Item, PrimaryBtn, QuietBtn, Screen, Section, SelectRow } from "../../components/mlUi.jsx";
+import { Item, PrimaryBtn, QuietBtn, Screen, Section, SelectRow } from "../../components/kit.jsx";
 import { fmtRelTime, overall } from "../../core/core.js";
 import { ABILITIES, AB_LABEL, TYPES } from "../../data/abilities.js";
 import { DIFFICULTIES } from "../../data/progression.js";

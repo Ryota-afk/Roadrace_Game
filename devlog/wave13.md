@@ -921,7 +921,7 @@ value=head+tabular-nums・unit=caption）を新設し3行構成へ。旧`teamPay
 のまま残っており、ヘッダだけが新トークンで浮いて見える状態だが、これはD-4-bで解消する
 想定どおりの中間状態。
 
-## Phase 3-D-4-b: hub配下17画面の作り直し（設計確定・実装待ち）
+## Phase 3-D-4-b: hub配下17画面の作り直し（完了）
 
 **設計案**：買い物行 https://claude.ai/code/artifact/b9d8a5da-e48d-4c71-9be1-ffcaa5457871
 ／選手カード・記録 https://claude.ai/code/artifact/c4cf93b2-6dd8-433b-a420-77d6ee3fdf7d
@@ -1003,3 +1003,60 @@ CLAUDE.md §5が防ごうとしている構造の腐りなので、実態に合�
 **絵文字を残す例外は2つだけ**：`race/calendar`のコース断面セグメントバー（絵文字ではなく
 色分けした図形で、地形の起伏を示す本来の役割を果たしている）と、レースグレードの「★★★」
 （数の多寡が一目で分かる記号）。CLAUDE.md §8の「記号のほうが一覧で速い」少数例外に当たる。
+
+### 実装
+
+設計どおり17画面＋共有部品を実装。
+
+- `components/mlUi.jsx` → **`components/kit.jsx`へ`git mv`**。冒頭コメントを
+  「season/mylife両モード共有」に改め、import元10ファイルのパスを一括書き換え。
+  `ShopRow`/`ShopBtn`を`events.jsx`のローカル定義から`kit.jsx`へ移設し、
+  `gauge={{lv, max}}`（任意プロパティ・段のセグメントバー）を追加。
+- `components/riderCard.jsx`新設：ヘッダ（名前・バッジ・OVR）＋副次行（脚質・sub文字列・
+  調子）＋`children`（本文はscreenごとに異なる内容を渡す）＋任意`footer`＋任意の展開領域、
+  という5スロットの骨格だけを共有する設計。中身（性格・特能・適性・戦績等）は呼び出し側が
+  既存の共有部品（`PersonaLine`/`TraitLine`/`DisciplineGrid`等）で組み立てる。
+- **P1買い物行5画面**：`facility/equip.jsx`はダッシュボードを削除し`ShopRow`＋`gauge`のみに
+  （機材3種のLv重複表示を解消）。`facility/staff.jsx`・`ob.jsx`・`room.jsx`・
+  `market/shop.jsx`も`ShopRow`へ。`market/shop`のパーツ行は`countLabel="未装着"`
+  （旧「所持N（空きN）」を撤去）。
+- **P2選手カード4画面**：`riders/list.jsx`は`RiderCard`＋常時9要素（名前・主将・OVR・脚質・
+  成長フェーズ・調子・疲労・能力レーダー・練習指定）＋展開領域（改名・お気に入り・主将任命・
+  解雇・性格・特能・コース適性・パーツ4スロット・ニックネーム・フレーバー・戦績）へ全面書き換え。
+  `market/scout.jsx`（新人＝推定OVR範囲＋タグ／FA＝確定OVR）・`market/transfer.jsx`
+  （トレード提案＋相手カード。引き抜き市場は`Section`＋ボタンのみで`RiderCard`不使用）・
+  `records/hall.jsx`（引退年・`riderCareerSummary`）も`RiderCard`で統一。
+- **P3記録・状況8画面**：`race/status.jsx`は4カードの`borderLeft`色分けを撤去し
+  `Section`/`Item`へ（D-4-aの`SponsorAndSpendingSections`はそのまま維持）。
+  `race/calendar.jsx`は絵文字接頭辞4つを名前下のcaption行の文字列へ、セグメントバーと
+  ★グレードは維持。`riders/youth.jsx`は配合詳細の1行連結を`Item`の行へ分離。
+  `riders/team.jsx`はスタッフ陣の`join`連結を`Item`へ（未雇用時はセクション自体を非表示）。
+  `records/career.jsx`は実績アイコンを撤去し達成/未達成を文字色+`opacity`で表現、年度別
+  記録を固定幅列へ。`records/standings.jsx`・`records/archive.jsx`（list-type共有部品の
+  二重包装を避けるため`Section`ではなく軽量`Heading`を使用）・`misc.jsx`も変換。
+- **help.jsx**（214行）：15トピックすべてを`Section`＋`TextRow`（プレーンな段落行、
+  `first`以外は罫線区切り）へ機械的変換。役割・作戦のpros/consは「◎/▲」記号ではなく
+  「強み：」「弱点：」の文字ラベル＋`good`/`bad`色に置換（記号より明示的で、CLAUDE.md §7の
+  「開発語彙ではなく初見の人に伝わる言葉」の精神に合う）。
+
+**実装中に見つけた副次的な修正**：`facility/staff.jsx`の雇用済み表示名が
+`STAFF_META[k].title`（正式な役職名「チームドクター」等）ではなく`STAFF_ROLES[k].label`
+（短い呼称「ドクター」）を使っていた実装ミスを、旧コードの挙動を再確認して踏襲・修正。
+
+### 検証
+
+ビルド成功（各バッチ変更後に都度確認、最終dist 1,204.76kB≒旧比-23kB）。dev serverが
+コンテナ再起動で停止していたため再起動して検証。Playwrightでシーズン実プレイ
+（オンボーディング→敷地画面→メニュー経由で全17画面を実データで巡回）を実施：
+コンソールエラー0件・NaN/undefined 0件・「所持N（空きN）」の残存0件・撤去対象絵文字
+（🏭🎓🛋⛺🔒🧑‍💼🌱🧬✨💎🌟⚠️🩸🎖🌳☘⛰🍂🏥✏️🎯🏆🔁👑🌍🏠🚩🌧🥵🟢🔴⚪📅📊🔍🏳）の残存0件を確認。
+スクリーンショットで①`riders/list`の選手カードが1人あたり約340px（旧560pxから4割減、
+6人でも1画面弱に収まる）②`market/shop`の「未装着 0」が右揃え・パーツ名の長さに関係なく
+整列③`race/calendar`のセグメントバー・★グレードが維持されたまま絵文字接頭辞のみ撤去
+④`records/hall`・`riders/team`の空状態（殿堂0名／スタッフ未雇用でセクション非表示）が
+正しく動作、を目視確認。
+
+**verify_d4a.mjsで踏んだ落とし穴の再発**：メニューのカテゴリボタン「レース」への
+`hasText`部分一致クリックが、背後の「このレースに出場」ボタン（同じく「レース」を含む）に
+誤ってマッチしオーバーレイに阻まれてタイムアウトした。メニュー系のクリックは正規表現の
+完全一致（`^...$`）に切り替えて解消——アプリ側のバグではなくテストスクリプト側の問題。

@@ -1,118 +1,106 @@
 // hub/riders.jsxより分割（Step13第7弾）：選手カード一覧（能力・練習指定・パーツ・戦績）。
-// 中身は一切変更していない（byte-for-byte照合済み）。
+// 第13弾Phase3-D-4-b（案B）：RiderCardへ移行。実測でカード1枚が25要素・1人約560pxあり、
+// 「どれだけ伸びるか」を示す指標（成長ランク・伸びしろ・成長フェーズ）が同じ行に3つ
+// 重複していた。毎月の判断（練習指定）に要る9要素だけを常時表示し（名前・主将・OVR・
+// 脚質・成長フェーズ・調子・疲労・能力レーダー・練習指定）、残りは「くわしく見る」へ
+// 逃がす。ユースバッジ（age<=18）は年齢表示と重複するため廃止（詳細はdevlog/wave13.md）。
 import React from "react";
-import { CondFc, DisciplineGrid, FatigueBar, PersonaLine, TraitLine } from "../../../../components/panels.jsx";
+import { DisciplineGrid, PersonaLine, TraitLine } from "../../../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../../../components/RadarChart.jsx";
-import { Btn } from "../../../../components/ui.jsx";
+import { Item, QuietBtn } from "../../../../components/kit.jsx";
+import { RiderCard } from "../../../../components/riderCard.jsx";
 import { overall } from "../../../../core/core.js";
-import { AB_KEYS, AB_LABEL, COND_ARROW, COND_COLOR, GROWTH, POW, TYPES } from "../../../../data/abilities.js";
+import { AB_KEYS, AB_LABEL, GROWTH, POW } from "../../../../data/abilities.js";
 import { MONTHS } from "../../../../data/course.js";
 import { DIFFICULTIES } from "../../../../data/progression.js";
-import { C, FONT_D, FONT_M } from "../../../../data/theme.js";
+import { FONT_DOT, T } from "../../../../data/theme.js";
 import { SLOT_LABEL, growthPhase, potentialHint, riderFlavorText } from "../../../../logic/support.js";
 import { PARTS, PART_SLOTS } from "../../../../sim/race.js";
 import { riderNickname } from "../../../../state/state.js";
 
 export function renderRidersListSection(ctx) {
   const { askConfirm, availParts, expandedRiderId, g, growthCap, openRename, releaseRider, rosterMax, setCaptain, setExpandedRiderId, setFocus, setG, setPart, toggleFavorite, useSupp, useTune } = ctx;
-  return (
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontSize: 12, color: C.sub }}>
-            所属 {g.roster.length}/{rosterMax}名　／　成長上限 <span style={{ color: C.yellow }}>{growthCap}</span>（難易度「{(DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label}」）
-          </div>
-          {g.month === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>4月は選手を解雇できます。</div>}
-          {g.roster.map(r => {
-            const t = TYPES[r.type], ph = growthPhase(r);
-            return (
-              <div key={r.id} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${r.injury > 0 ? C.red : C.line}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
-                  <div>
-                    <span style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{r.name}</span>
-                    <button onClick={() => openRename("選手名を変更", r.name, v => setG(s => ({ ...s, roster: s.roster.map(x => x.id === r.id ? { ...x, name: v } : x) })))} title="名前を変更" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, marginLeft: 4, padding: 0, opacity: 0.7 }}>✏️</button>
-                    {r.id === g.captainId && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.yellow, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🎖 主将</span>}
-                    {r.age <= 18 && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: C.green, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>🌱 ユース</span>}
-                    {r.isLegendRecruit && <span style={{ marginLeft: 5, fontSize: 10.5, color: "#14171d", background: "#e56cc8", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }} title={r.legendNickname ? `「${r.legendNickname}」` : ""}>🌳 伝説の招待選手</span>}
-                    <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color, border: `1px solid ${t.color}`, borderRadius: 4, padding: "1px 5px" }}>{t.label}</span>
-                    <span style={{ marginLeft: 5, fontFamily: FONT_M, fontSize: 12, color: POW[r.growthPow].color }}>成長{r.growthPow}</span>
-                    <span style={{ marginLeft: 5, fontSize: 11, color: potentialHint(r).color }}>{potentialHint(r).label}</span>
-                    {/* v35(シーズン深掘り): 現在の成長フェーズを明示（育成の手応え） */}
-                    <span style={{ marginLeft: 5, fontSize: 10.5, color: ph.tag === "成長期" ? C.green : ph.tag === "全盛期" ? C.yellow : "#e8734a" }}>
-                      {ph.tag === "成長期" ? "☘ 成長期" : ph.tag === "全盛期" ? "⛰ 全盛期" : "🍂 衰え期"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button onClick={() => setCaptain(r.id)} title="主将に任命（自分より2歳以上若い選手の練習効果+10%）"
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 0, color: r.id === g.captainId ? C.yellow : C.sub }}>
-                      🎖
-                    </button>
-                    <button onClick={() => toggleFavorite(r.id)} title="お気に入り登録（殿堂入りが確約されます）"
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 0, color: r.favorite ? C.yellow : C.sub }}>
-                      {r.favorite ? "★" : "☆"}
-                    </button>
-                    <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.yellow }}>{overall(r)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></div>
-                    {g.month === 0 && <Btn small outline color={C.red} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id))}>解雇</Btn>}
-                  </div>
-                </div>
-                {riderNickname(r) && <div style={{ fontSize: 12, color: C.purple, fontStyle: "italic", marginTop: 1 }}>「{riderNickname(r)}」</div>}
-                <PersonaLine p={r.personality} />
-                <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
-                <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.sub, margin: "4px 0", flexWrap: "wrap" }}>
-                  <span>{r.age}歳・{GROWTH[r.growth].label}・<span style={{ color: ph.tag === "全盛期" ? C.yellow : ph.tag === "衰え期" ? C.red : C.green }}>{ph.tag}</span></span>
-                  <span>調子 <span style={{ color: COND_COLOR[r.cond - 1], fontFamily: FONT_M }}>{COND_ARROW[r.cond - 1]}</span><CondFc dir={r.condForecast} /></span>
-                  {r.streak > 0 && <span style={{ color: r.streak >= 2 ? C.red : "#e8a13c" }}>連闘{r.streak}{r.streak >= 2 ? "（次で故障！）" : ""}</span>}
-                  {r.injury > 0 && <span style={{ color: C.red }}>🏥 故障 残{r.injury}ヶ月</span>}
-                </div>
-                <div style={{ fontSize: 10.5, color: C.sub }}>疲労</div>
-                <FatigueBar v={r.fatigue} />
-                <div style={{ fontSize: 10.5, color: C.sub, marginTop: 6 }}>コース適性</div>
-                <DisciplineGrid r={r} />
-                <div style={{ marginTop: 8 }}>
-                  <AbilitySoshitsuRadarPair r={r} cap={growthCap} size={140} />
-                </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 11, color: C.sub }}>練習:</span>
-                  <select value={r.focus} onChange={e => setFocus(r.id, e.target.value)}
-                    style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "4px 6px", fontSize: 12 }}>
-                    {AB_KEYS.map(k => <option key={k} value={k}>{AB_LABEL[k]}強化</option>)}
-                    <option value="rest">休養（疲労-15）</option>
-                  </select>
-                  {g.inv.supp > 0 && r.fatigue > 30 && <Btn small outline color={C.green} onClick={() => useSupp(r.id)}>サプリ（疲労-40）</Btn>}
-                  {g.inv.tune > 0 && r.cond < 5 && <Btn small outline color={C.green} onClick={() => useTune(r.id)}>調律（調子+2）</Btn>}
-                </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-                  {PART_SLOTS.map(slot => (
-                    <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ fontSize: 11, color: C.purple }}>{SLOT_LABEL[slot]}:</span>
-                      <select value={r.parts[slot] || ""} onChange={e => setPart(r.id, slot, e.target.value)}
-                        style={{ background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 6, padding: "3px 5px", fontSize: 11.5, maxWidth: 140 }}>
-                        <option value="">— なし —</option>
-                        {Object.entries(PARTS).filter(([pid, p]) => p.slot === slot && (availParts(pid) > 0 || r.parts[slot] === pid))
-                          .map(([pid, p]) => <option key={pid} value={pid}>{p.label}</option>)}
-                      </select>
-                    </span>
-                  ))}
-                </div>
-                {/* v30: フレーバーテキストは特能と能力値の間から、カード末尾の独立欄へ移動 */}
-                <div style={{ fontSize: 11, color: C.sub, fontStyle: "italic", marginTop: 8, paddingTop: 6, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>{riderFlavorText(r)}</div>
-                <Btn small outline color={C.sub} onClick={() => setExpandedRiderId(expandedRiderId === r.id ? null : r.id)}
-                  style={{ marginTop: 8 }}>
-                  {expandedRiderId === r.id ? "▲ 戦績を閉じる" : `▼ 戦績を見る（${(r.raceLog || []).length}戦）`}
-                </Btn>
-                {expandedRiderId === r.id && (
-                  <div style={{ marginTop: 6, background: C.panel2, borderRadius: 8, padding: "6px 10px", maxHeight: 200, overflowY: "auto" }}>
-                    {(!r.raceLog || r.raceLog.length === 0) && <div style={{ fontSize: 11.5, color: C.sub }}>まだ出走記録がありません。</div>}
-                    {[...(r.raceLog || [])].reverse().map((e, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, padding: "3px 0", borderBottom: i < r.raceLog.length - 1 ? `1px solid ${C.line}` : "none" }}>
-                        <span style={{ color: C.sub }}>{e.year}年目 {MONTHS[e.month]}</span>
-                        <span style={{ color: C.text, flex: 1, margin: "0 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
-                        <span style={{ fontFamily: FONT_M, color: e.rank === 1 ? C.yellow : e.rank <= 3 ? C.green : C.sub, fontWeight: 700 }}>{e.rank}位</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+
+  const expandedContentFor = (r, isCaptain) => (
+      <>
+        <div style={{ display: "flex", gap: T.space.sm, flexWrap: "wrap", marginBottom: T.space.sm }}>
+          <QuietBtn onClick={() => openRename("選手名を変更", r.name, v => setG(s => ({ ...s, roster: s.roster.map(x => x.id === r.id ? { ...x, name: v } : x) })))}>名前を変更</QuietBtn>
+          {!isCaptain && <QuietBtn onClick={() => setCaptain(r.id)}>主将に任命</QuietBtn>}
+          <QuietBtn color={r.favorite ? T.color.accent : T.color.sub} onClick={() => toggleFavorite(r.id)}>{r.favorite ? "お気に入り解除" : "お気に入り登録"}</QuietBtn>
+          {g.month === 0 && <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id), "解雇する")}>解雇</QuietBtn>}
         </div>
+        {riderNickname(r) && <div style={{ fontSize: T.size.caption, color: T.color.sub, fontStyle: "italic", marginBottom: T.space.sm }}>「{riderNickname(r)}」</div>}
+        <PersonaLine p={r.personality} />
+        <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
+        <Item label="年齢・成長タイプ" value={`${r.age}歳・${GROWTH[r.growth].label}`} />
+        <Item label="成長ランク・伸びしろ" value={`${POW[r.growthPow].label}・${potentialHint(r).label}`} />
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>コース適性</div>
+        <DisciplineGrid r={r} />
+        <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.sm, flexWrap: "wrap" }}>
+          {PART_SLOTS.map(slot => (
+            <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{SLOT_LABEL[slot]}</span>
+              <select value={r.parts[slot] || ""} onChange={e => setPart(r.id, slot, e.target.value)}
+                style={{ background: T.color.surfaceUp, color: T.color.text, border: "none", padding: `3px ${T.space.xs}px`, fontSize: T.size.caption, maxWidth: 140, fontFamily: FONT_DOT }}>
+                <option value="">— なし —</option>
+                {Object.entries(PARTS).filter(([pid, p]) => p.slot === slot && (availParts(pid) > 0 || r.parts[slot] === pid))
+                  .map(([pid, p]) => <option key={pid} value={pid}>{p.label}</option>)}
+              </select>
+            </span>
+          ))}
+        </div>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, fontStyle: "italic", marginTop: T.space.sm, paddingTop: T.space.sm, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>{riderFlavorText(r)}</div>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>戦績（{(r.raceLog || []).length}戦）</div>
+        {(!r.raceLog || r.raceLog.length === 0) && <div style={{ fontSize: T.size.caption, color: T.color.sub }}>まだ出走記録がありません。</div>}
+        <div style={{ maxHeight: 200, overflowY: "auto" }}>
+          {[...(r.raceLog || [])].reverse().map((e, j) => (
+            <div key={j} style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, padding: "3px 0", borderBottom: j < r.raceLog.length - 1 ? `1px solid ${T.color.rule}` : "none" }}>
+              <span style={{ color: T.color.sub }}>{e.year}年目 {MONTHS[e.month]}</span>
+              <span style={{ color: T.color.text, flex: 1, margin: "0 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
+              <span style={{ color: e.rank === 1 ? T.color.accent : T.color.sub, fontVariantNumeric: "tabular-nums" }}>{e.rank}位</span>
+            </div>
+          ))}
+        </div>
+      </>
+  );
+
+  return (
+    <>
+      <Item first label="所属" value={`${g.roster.length}/${rosterMax}名`}
+        detail={`成長上限 ${growthCap}（難易度「${(DIFFICULTIES.find(d => d.id === g.difficulty) || DIFFICULTIES[0]).label}」）${g.month === 0 ? "・4月は選手を解雇できます" : ""}`} />
+      {g.roster.map((r, i) => {
+        const ph = growthPhase(r);
+        const isCaptain = r.id === g.captainId;
+        return (
+          <RiderCard key={r.id} r={r} first={i === 0}
+            ovr={overall(r)}
+            badge={isCaptain ? "主将" : r.isLegendRecruit ? "伝説の招待選手" : null}
+            sub={ph.tag}
+            cond={r.cond}
+            fatigue={r.fatigue}
+            expanded={expandedRiderId === r.id}
+            onToggleExpand={() => setExpandedRiderId(expandedRiderId === r.id ? null : r.id)}
+            expandedContent={expandedContentFor(r, isCaptain)}
+          >
+            <AbilitySoshitsuRadarPair r={r} cap={growthCap} size={140} />
+            <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.sm, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>練習</span>
+              <select value={r.focus} onChange={e => setFocus(r.id, e.target.value)}
+                style={{ flex: 1, background: T.color.surfaceUp, color: T.color.text, border: "none", padding: `${T.space.xs}px ${T.space.sm}px`, fontSize: T.size.caption, fontFamily: FONT_DOT }}>
+                {AB_KEYS.map(k => <option key={k} value={k}>{AB_LABEL[k]}強化</option>)}
+                <option value="rest">休養（疲労-15）</option>
+              </select>
+            </div>
+            {((g.inv.supp > 0 && r.fatigue > 30) || (g.inv.tune > 0 && r.cond < 5)) && (
+              <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.sm }}>
+                {g.inv.supp > 0 && r.fatigue > 30 && <QuietBtn color={T.color.accent} onClick={() => useSupp(r.id)}>サプリ（疲労-40）</QuietBtn>}
+                {g.inv.tune > 0 && r.cond < 5 && <QuietBtn color={T.color.accent} onClick={() => useTune(r.id)}>調律（調子+2）</QuietBtn>}
+              </div>
+            )}
+            {r.injury > 0 && <div style={{ fontSize: T.size.caption, color: T.color.bad, marginTop: T.space.sm }}>故障 残{r.injury}ヶ月</div>}
+          </RiderCard>
+        );
+      })}
+    </>
   );
 }

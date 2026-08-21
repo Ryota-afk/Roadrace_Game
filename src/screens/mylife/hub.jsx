@@ -13,7 +13,7 @@ import { overall } from "../../core/core.js";
 import { AB_KEYS, AB_LABEL, POW, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { Item, Prose, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
+import { Item, Prose, QuietBtn, Screen, Section } from "../../components/kit.jsx";
 import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGrowthCap, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 

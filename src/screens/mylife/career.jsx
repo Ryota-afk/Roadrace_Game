@@ -11,7 +11,7 @@ import { CLASSES } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlSetAutobiography, mlCareerTimeline, mlWorldBoard, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { initMyLife, mlCareerArchetype, computeAchievements, ML_ACHIEVEMENTS } from "../../state/state.js";
-import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
+import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section } from "../../components/kit.jsx";
 
 export function renderMyLifeCareerScreens(ctx) {
   const { askConfirm, becomeManager, ml, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlWrap, setMl, setSuperMode } = ctx;

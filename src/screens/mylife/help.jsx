@@ -2,7 +2,7 @@
 // 第13弾Phase3-D-2: 新トークン(T/FONT_DOT)へ全面移行。絵文字を全廃し、装飾色を単一アクセント
 // （T.color.accent）＋警告用のT.color.badへ集約した（CLAUDE.md §7/§8：多色の乱立の解消）。
 import React from "react";
-import { QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
+import { QuietBtn, Screen, Section } from "../../components/kit.jsx";
 import { T } from "../../data/theme.js";
 
 const HelpCard = ({ children, first }) => (

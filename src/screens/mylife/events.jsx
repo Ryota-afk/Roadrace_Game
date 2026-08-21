@@ -3,49 +3,13 @@
 // season側と共有のため中身は据え置き（Phase3-D-3担当）。
 import React from "react";
 import { FatigueBar } from "../../components/panels.jsx";
-import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section } from "../../components/mlUi.jsx";
+import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopBtn, ShopRow } from "../../components/kit.jsx";
 import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
 import { PARTS, PART_SLOTS } from "../../sim/race.js";
-
-// ショップ専用の行（見出し＋補足＋購入ボタン。Itemでは表現できない「ボタン付き行」）。
-// 第13弾Phase3-D-0（可読性ルール）：
-//   R1 数値を文字列に連結しない → count/countLabelで「未装着/所持/現在」の値を独立させ、
-//      パーツ名の長さに関係なく右揃えの列に揃える。
-//   R4 一覧行の主役はhead(16px) → labelをhead、detail/countはcaption(12px)。
-const ShopBtn = ({ children, onClick, disabled, outline, minWidth }) => (
-  <button onClick={onClick} disabled={disabled} style={{
-    flex: "none", minWidth, textAlign: minWidth ? "center" : undefined,
-    background: disabled ? T.color.surfaceUp : outline ? "transparent" : T.color.accent,
-    color: disabled ? T.color.sub : outline ? T.color.accent : T.color.bg,
-    border: outline ? `1px solid ${disabled ? T.color.sub : T.color.accent}` : "none",
-    fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: disabled ? "default" : "pointer", whiteSpace: "nowrap",
-  }}>{children}</button>
-);
-
-const ShopRow = ({ label, badge, detail, count, countLabel, locked, buyLabel, onBuy, buyDisabled, secondaryLabel, onSecondary, secondaryDisabled, first }) => (
-  <div style={{ padding: `${T.space.sm}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
-      <span style={{ fontSize: T.size.head, color: T.color.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {label}{badge && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>{badge}</span>}
-      </span>
-      <span style={{ flex: "none", display: "flex", gap: T.space.xs, alignItems: "center" }}>
-        {locked && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{locked}</span>}
-        {secondaryLabel && <ShopBtn onClick={onSecondary} disabled={secondaryDisabled} outline>{secondaryLabel}</ShopBtn>}
-        {buyLabel && <ShopBtn onClick={onBuy} disabled={buyDisabled} minWidth={56}>{buyLabel}</ShopBtn>}
-      </span>
-    </div>
-    {(detail || count != null) && (
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, marginTop: 2 }}>
-        <span style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.5 }}>{detail}</span>
-        {count != null && <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", fontVariantNumeric: "tabular-nums" }}>{countLabel} {count}</span>}
-      </div>
-    )}
-  </div>
-);
 
 // mlEventResultText等は複数行の生成テキスト（\n区切り）を含むため、Proseではなく
 // whiteSpace:pre-wrapを明示したこの専用ブロックで改行を保持する。

@@ -5,7 +5,7 @@ import React from "react";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { TYPES } from "../../data/abilities.js";
 import { mlAmbitionPath, mlCurrentAmbition, mlAmbitionProgressText, mlMediaHeadline, mlWorldBoard, rivalHeatTier, worldRankTier } from "../../logic/support.js";
-import { Screen, Section } from "../../components/mlUi.jsx";
+import { Screen, Section } from "../../components/kit.jsx";
 
 const RivalPanel = ({ rival, record, present }) => {
   const ht = rivalHeatTier(record?.heat ?? record?.meetings ?? 0);
