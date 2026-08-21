@@ -1340,3 +1340,75 @@ actionへ移った結果**——黄+action の合計（3.42%）は変更前の�
 riders/listのスクリーンショットで、成長フェーズ（「全盛期」等）が灰色の脚質ラベルから
 明確に黄で浮き上がって見えることを確認。race/calendar・race/statusでは主ボタンが紫、
 セクション見出し・数値が黄という統一感を確認。
+
+## Phase 3-D-4-c: intro・scheduleBoard・transferEvents・yearend 15画面（設計確定・実装待ち）
+
+**設計案**：https://claude.ai/code/artifact/c5f2bc1e-983e-4e2a-abf6-f441594fe21e
+（実データ・実フォント埋め込み。§8の手順1〜3を実施し、争点3件すべて合意済み）
+
+### 実測（着手時）
+
+| ファイル | 行数 | 画面 | 旧`C.xx` | fontSize | 角丸/枠線 | 絵文字 |
+|---|---|---|---|---|---|---|
+| intro.jsx | 264 | intro/newgame_setup/scoutpolicy_initial/sponsor | 80 | 12種(10〜23) | 12/6 | 11個 |
+| scheduleBoard.jsx | 149 | program/standings/trophy/rivals | 52 | 12種(9.5〜34) | 8/6 | 11個 |
+| transferEvents.jsx | 145 | event/transferRequest/poachOffer/poachMarket/event_result | 41 | 11種(9〜20) | 6/1 | 1個 |
+| yearend.jsx | 82 | yearend/clear | 20 | 9種(10.5〜44) | 3/0 | 7個 |
+
+4ファイルとも`T`使用0。本ラウンド完了で旧`C`の残りはPhase 3-E対象（race.jsx/RaceView/
+DecisionCard）＋ui.jsx本体＋BaseView.jsxズームボタン3箇所のみになる（season.jsx/
+mylife.jsxの「読み込み中…」各1箇所は本ラウンドで移行）。
+
+### 確定仕様（ユーザー合意・2026-08）
+
+**争点1＝案A「今回の開幕内容だけを要約」**（newgame_setup）
+- CP_MILESTONES16件＋コース3件の全列挙を廃止。解禁済み特典を**集計した要約Item**
+  （開幕資金+800万円／初期選手の能力+23／チーム設備Lv+3／逸材新人2名／開幕アイテム各2個
+  ——累計128pt時の実値）＋「次の解禁まであと2pt（開幕資金+600万円）。全一覧は「生涯評価」に
+  あります。」1行に置き換える。
+- **要改修**：`CP_MILESTONES`の効果が`apply`クロージャで不透明なため、各件に集計用の
+  構造化フィールド`fx`を併記（例：`fx:{budget:100}`／`fx:{abAll:8}`／`fx:{equipLv:1}`／
+  `fx:{rookie:1}`／`fx:{items:1}`）し、`cpMilestoneSummary(totalCP)`（domain/mylife/cp.js）で
+  解禁済み分を合算する。0の項目は行ごと非表示。CP0なら開幕ボーナスセクション自体を出さない。
+- 上部は共通確定：累計CP Item→チーム名input（surfaceUp・使用不可文字はbad色caption＋開始
+  disabled）→難易度SelectRow×4（ロック行は薄く＋「累計Npt必要」）→レジェンド招聘SelectRow
+  （殿堂0名ならセクション非表示）→開幕ボーナス→PrimaryBtn「この内容でゲーム開始」→戻る。
+
+**争点2＝案B「表で比較して選ぶ」**（sponsor）
+- 3社を固定幅列の比較表へ（R2）：見出し行=社名＋タイプ語、行=月額/ノルマ/達成/未達/指定。
+  列幅実測：値最長5文字=70px、3列＋左見出し52px=388px<392pxで収まる。
+- 中期目標は表の下に3行（label＋right=社名＋desc・達成/未達の数値）。
+- 選択は**SelectRow×3＋PrimaryBtn1つ**（「クレセント自転車と契約する」と社名を入れた動的
+  ラベル）。従来の「各社に契約ボタン」を廃止し、D-5の「主ボタンは1画面1つ」に揃える。
+- 選択状態は`g.sponsorChoiceIdx`（初期値0・契約確定時に破棄される一時フィールド）。
+- 金額は符号のみで色分けしない（good/badは結果専用。契約条件は「これから」の値）。
+
+**争点3＝案A「言葉が主役」**（yearend/clear）
+- 絵文字（🎉😞🏆44px等）と色付き上枠線を廃止し、**出来事の言葉をdisplay(28px)に**：
+  yearend=「{cls.label}へ昇格」(good)／「{cls.label}へ降格」(bad)／「残留 — 来季へ」(text)、
+  clear=「グランファイナル制覇」(accent・10文字280px<392pxで1行)。
+- yearend構成：hero（caption「N年目 終了」＋display＋caption CS結果）→Section最終成績
+  （Item：最終順位 N/M位・detail順位ボーナス＋昇格ライン緩和）→Sectionスポンサー精算
+  （right=社名。達成/未達は**結果なのでgood/bad**で塗る）→中期目標Item→Section引退セレモニー
+  （「{名前}（N歳）が引退」行）→新年度caption→PrimaryBtn「スポンサー契約へ」。
+  各データ無し（CS不出場・精算無し・引退者0）は該当セクション非表示。
+- clear構成：hero（caption「PROクラス N年目」＋display＋経緯body）→Sectionクリア報酬
+  （Item：獲得クリアポイント +Npt accent・detail自動反映説明）→PrimaryBtn「この轍を継いで
+  さらなる高みへ」＋caption「N周目へ。他チームがさらに強化されます」→QuietBtn「新たな
+  チームで最初から」＋確認。
+
+**争点によらず確定（変換ルール適用）**
+- 天候はアイコン→**文字**（「雨・」「猛暑・」accent色）。D-4-b済みcalendar.jsxと同形式。
+  ★グレードは維持（データ層の記号）。
+- イベント通知3画面（event/transferRequest/poachOffer）の色付き上枠線廃止。種別は見出しの
+  言葉で伝える。選択肢：推奨行動=PrimaryBtn／失うものがある行動=QuietBtn(bad)＋確認／
+  等価な選択肢（event）=QuietBtn(action)縦並び。
+- 順位表=R2固定幅列（順位・チームカラー■(データ層維持)・名前・特色・pt右揃え。自チーム=
+  accent）。最終順位ボーナスはItem×3（1位+150万/2位+90万/3位+40万・B1実値）＋昇格ライン
+  caption。
+- trophy=D-4-a2生涯評価と同型（スコアdisplay 28px＋TitlesPanel＋殿堂行。殿堂0名の空文言
+  維持）。rivals=チームごとSection＋ScoutBadge行。poachMarket=RiderCard（market/transferと
+  同型・footer=ShopBtn「移籍金N万で引き抜く」）。
+- introの「最初から」確認に`confirmLabel="消して始める"`。セーブ無し時は「スカウト方針の
+  確認へ」をPrimaryBtnに昇格（続きからが無い画面の主ボタンは開始のみ）。
+- 全15画面の要素列挙・データ取得元・空状態は設計Artifactの§6仕様表が正。
