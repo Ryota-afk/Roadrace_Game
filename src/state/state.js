@@ -13,7 +13,7 @@ import { CLASSES, DIFFICULTIES, TITLE_DEFS, seasonNeed } from "../data/progressi
 import { RIVAL_TEAMS, MYLIFE_TEAMS, WORLD_ROSTER_SIZE, teamsForClass } from "../data/teams.js";
 import { raceEntryPlan } from "../domain/season/entryPlan.js";
 import { aiPowerFor, mlAiCapFor, scoutedAbilities, scoutStageFromLv, scoutStageFromRaces, ovrBandLabel } from "../domain/shared/scouting.js";
-import { C } from "../data/theme.js";
+import { T } from "../data/theme.js";
 import { SUB_STAT_KEYS, aiFormRoll, idYearSeed, mulberry, newRider, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, rollWeather, simulateTicks } from "../sim/race.js";
 import { loadMlLegends, ML_ACHIEVEMENTS, computeAchievements, mlCareerArchetype, riderCareerSummary, riderNickname } from "../breeding/breeding.js";
@@ -976,7 +976,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const playerRole = tac.playerBreakaway ? "breakaway" : (playerIsAce ? "lead" : "sub");
       riders.push({
         id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: player.goldAbilities, ...playerEff,
-        team: "PLAYER", teamName: myTeamName, color: C.yellow,
+        team: "PLAYER", teamName: myTeamName, color: T.color.accent,
         isAce: playerIsAce, role: playerRole, isPlayerChar: true,
         // v35: アシストに徹する選手は脚を賢く使い自滅しない（energyDrainで消耗軽減）
         isAssisting: !!(tac.playerAssist && !playerIsAce),

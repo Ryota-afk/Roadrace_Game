@@ -16,11 +16,16 @@ export function RiderCard({
   r, ovr, ovrLabel = "OVR", badge, sub, subColor, cond, fatigue,
   children, footer, expanded, onToggleExpand,
   expandLabel = "くわしく見る", collapseLabel = "閉じる", expandedContent,
-  first,
+  first, onClick, selected, disabled,
 }) {
   const t = TYPES[r.type];
   return (
-    <div style={{ padding: `${T.space.md}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
+    <div onClick={!disabled ? onClick : undefined} style={{
+      padding: `${T.space.md}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}`,
+      cursor: onClick && !disabled ? "pointer" : "default",
+      background: selected ? T.color.surfaceUp : "transparent",
+      opacity: disabled ? 0.45 : 1,
+    }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
         <span style={{ fontSize: T.size.head, color: T.color.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {r.name}{badge && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>{badge}</span>}

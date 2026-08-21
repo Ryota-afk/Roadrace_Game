@@ -1,5 +1,4 @@
 // 静的データ（Phase 1で src/main.jsx から分離）。純粋な定数のみ。
-import { C } from "./theme.js";
 
 export const MONTHS = ["4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
 
@@ -100,6 +99,6 @@ export const GRAND_TOURS = [
 
 export const SEG_LABEL = { flat: "平坦", hill: "丘陵", climb: "山岳", sprint: "ゴールスプリント", mtn: "山頂フィニッシュ", tt: "TT区間" };
 
-export const SEG_COLOR = { flat: C.blue, hill: C.purple, climb: C.red, sprint: C.green, mtn: C.red, tt: "#e8a13c" };
+export const SEG_COLOR = { flat: "#4f8fe8", hill: "#c98bf0", climb: "#e8544f", sprint: "#35c07e", mtn: "#e8544f", tt: "#e8a13c" };
 
 export const SEG_AB = { flat: "flat", hill: "climb", climb: "climb", sprint: "sprint", mtn: "climb", tt: "solo" };

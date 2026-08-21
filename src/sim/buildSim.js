@@ -5,7 +5,7 @@
 import { aiFormRoll, idYearSeed, mulberry, newRider } from "../core/core.js";
 import { CHEMISTRY_TIERS, DIFFICULTIES } from "../data/progression.js";
 import { VENUE_REGION } from "../data/course.js";
-import { C } from "../data/theme.js";
+import { T } from "../data/theme.js";
 import { teamsForClass } from "../state/state.js";
 import { aiPowerFor } from "../domain/shared/scouting.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "./race.js";
@@ -46,7 +46,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
     const role = roles[r.id] || "lead";
     riders.push({
       id: r.id, name: r.name, type: r.type, abilities: r.abilities, age: r.age, chemMul: chemTier.mul, ...e,
-      team: "PLAYER", teamName: teamName || "あなたのチーム", color: C.yellow,
+      team: "PLAYER", teamName: teamName || "あなたのチーム", color: T.color.accent,
       isAce: r.id === aceId, role,
     });
   });

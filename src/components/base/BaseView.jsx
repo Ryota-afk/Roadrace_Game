@@ -14,7 +14,7 @@
 // メニュー全体（大ジャンル一覧）が開く（onRoomTap経由。当たり判定は持ち場を優先し、
 // 外れたら部屋全体のfloorへフォールバックする）。
 import React, { useEffect, useRef, useState } from "react";
-import { C, T, FONT_DOT } from "../../data/theme.js";
+import { T, FONT_DOT } from "../../data/theme.js";
 import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
@@ -178,7 +178,7 @@ export function BaseView({ g, paused, onRoomTap }) {
       flip: activityFacesLeft(r, elapsed, ACTIVITY_CTX, PROJ),
       dir: activityDir(r, elapsed, ACTIVITY_CTX, PROJ),
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
-      color: (TYPES[r.type] && TYPES[r.type].color) || C.yellow,
+      color: (TYPES[r.type] && TYPES[r.type].color) || T.color.accent,
       phase: riderHash01(r.id, 91) * 4, // 歩調・ペダリングが全員で揃わないようずらす
       // 立ち漕ぎ：選手ごとに違う周期で断続的に立つ（決定論的・Math.random不使用）。
       // Wave H-3（判断②）：ローラー台上(roomKey==="roller")でも周回中と同じく立ち漕ぎさせる。
@@ -285,10 +285,10 @@ export function BaseView({ g, paused, onRoomTap }) {
         <div style={{ position: "absolute", left: 8, bottom: 8, display: "flex", flexDirection: "column", gap: 6 }}>
           {[["＋", 1.35], ["－", 1 / 1.35]].map(([lbl, mul]) => (
             <button key={lbl} onClick={() => camera.zoomBy(mul)} aria-label={lbl === "＋" ? "ズームイン" : "ズームアウト"}
-              style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.line}`, background: "rgba(20,23,29,0.72)", color: C.text, fontSize: 16, lineHeight: 1, cursor: "pointer" }}>{lbl}</button>
+              style={{ width: 34, height: 34, border: `1px solid ${T.color.rule}`, background: "rgba(14,14,16,0.72)", color: T.color.text, fontSize: 16, lineHeight: 1, cursor: "pointer" }}>{lbl}</button>
           ))}
           <button onClick={camera.reset} aria-label="表示をリセット"
-            style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.line}`, background: "rgba(20,23,29,0.72)", color: C.text, fontSize: 13, lineHeight: 1, cursor: "pointer" }}>⌂</button>
+            style={{ width: 34, height: 34, border: `1px solid ${T.color.rule}`, background: "rgba(14,14,16,0.72)", color: T.color.text, fontSize: 13, lineHeight: 1, cursor: "pointer" }}>⌂</button>
         </div>
       </div>
       {/* 第13弾Phase3-D-4-a: 10pxは実測で漢字が潰れて読めないサイズだったためcaption(12px)へ、

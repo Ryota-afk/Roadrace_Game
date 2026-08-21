@@ -1,11 +1,10 @@
 // 静的データ（Phase 1で src/main.jsx から分離）。純粋な定数のみ。
-import { C } from "./theme.js";
 
 export const TYPES = {
-  SPR: { label: "スプリンター", color: C.green, affinity: { sprint: 5 } },
-  CLM: { label: "クライマー", color: C.red, affinity: { climb: 5, mtn: 5 } },
-  RUL: { label: "ルーラー", color: C.blue, affinity: { flat: 4 } },
-  PUN: { label: "パンチャー", color: C.purple, affinity: { hill: 5 } },
+  SPR: { label: "スプリンター", color: "#35c07e", affinity: { sprint: 5 } },
+  CLM: { label: "クライマー", color: "#e8544f", affinity: { climb: 5, mtn: 5 } },
+  RUL: { label: "ルーラー", color: "#4f8fe8", affinity: { flat: 4 } },
+  PUN: { label: "パンチャー", color: "#c98bf0", affinity: { hill: 5 } },
   TT:  { label: "独走屋（TT）", color: "#e8a13c", affinity: { tt: 6 } },
 };
 
@@ -18,7 +17,7 @@ export const AB_KEYS = ["flat", "climb", "sprint", "stamina", "solo"];
 
 export const AB_LABEL = { flat: "平坦", climb: "登坂", sprint: "スプリント", stamina: "スタミナ", solo: "独走" };
 
-export const AB_COLOR = { flat: C.blue, climb: C.red, sprint: C.green, stamina: "#c9a13c", solo: C.purple };
+export const AB_COLOR = { flat: "#4f8fe8", climb: "#e8544f", sprint: "#35c07e", stamina: "#c9a13c", solo: "#c98bf0" };
 
 // v43(マイライフ難易度調整Phase 1・柱0): gainMulはlogic/support.jsのgrowthPhase()が
 // 返すgain（練習・出走経験の伸び倍率）に掛かるタイプ別係数。従来は成長期・全盛期・

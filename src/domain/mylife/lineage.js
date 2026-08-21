@@ -3,7 +3,7 @@ import { legendBloodId, loadMlLegends, loadBloodlines, mlBloodlineTier } from ".
 import { ABILITIES, TYPES } from "../../data/abilities.js";
 import { BREED_NICKS } from "../../data/breeding.js";
 import { APT_GRADE_COLOR, DISCIPLINES } from "../../data/progression.js";
-import { C } from "../../data/theme.js";
+import { T } from "../../data/theme.js";
 import { riderAptitudes } from "../shared/growth.js";
 
 export function mlGradeColor(g) {
@@ -78,10 +78,10 @@ export function mlFactorCollection(legends) {
     }
   });
   const sortItems = (obj, members, labelFn, colorFn) => Object.entries(obj)
-    .map(([k, count]) => ({ key: k, label: labelFn(k), count, color: colorFn ? colorFn(k) : C.purple, members: members[k] || [] }))
+    .map(([k, count]) => ({ key: k, label: labelFn(k), count, color: colorFn ? colorFn(k) : "#c98bf0", members: members[k] || [] }))
     .sort((a, b) => b.count - a.count);
   return [
-    { category: "脚質因子", icon: "🚴", items: sortItems(typeC, typeMembers, k => (TYPES[k] ? TYPES[k].label : k), k => (TYPES[k] ? TYPES[k].color : C.sub)) },
+    { category: "脚質因子", icon: "🚴", items: sortItems(typeC, typeMembers, k => (TYPES[k] ? TYPES[k].label : k), k => (TYPES[k] ? TYPES[k].color : T.color.sub)) },
     { category: "特能因子", icon: "✨", items: sortItems(abilC, abilMembers, k => (ABILITIES[k] ? ABILITIES[k].label : k)) },
     { category: "適性因子（S/A適性）", icon: "🏔️", items: sortItems(aptC, aptMembers, k => (DISCIPLINES[k] ? DISCIPLINES[k].label : k), k => APT_GRADE_COLOR.A) },
   ];

@@ -1,9 +1,15 @@
 // 第9弾：レース中の判断カードUI。RaceView.jsx（1595行）から切り出し。
 // レア度（虹＝大勝負／金＝手堅い／通常＝無難／不発＝今は効かない）はdomain/shared/moveEdge.jsが
 // simと同じ式（legsLeft01）で計算する。見た目はここだけの責務（CLAUDE.md §5）。
+// 第13弾Phase3-E：kit.jsxへ移行。争点E2・案A「文字のみ」——選択肢アイコン（約15種の絵文字）を
+// 撤去し文言だけに。レア度発光と「脚の残り」バーはデータ層の情報として維持（詳細はdevlog/wave13.md）。
 import React from "react";
-import { C, FONT_D } from "../data/theme.js";
+import { FONT_DOT, T } from "../data/theme.js";
 import { moveEdge } from "../domain/shared/moveEdge.js";
+
+// 虹（大勝負）は特定の意味色1つに割り当てられない「特別枠」の演出色なので、
+// T.color（accent/action/good/bad）とは別枠の固定パレットを使う（COND_COLOR等と同じ扱い）。
+const RAINBOW_STOPS = ["#e88bb0", "#F2C94C", "#7FB069", "#4f8fe8", "#A76ADC"];
 
 // v39.10以来この画面の演出は一貫してSVGのanimate（CSSの@keyframesは未使用）。
 // カードの光り方もこれに揃える：出現の一瞬だけスイープ光が走り、虹／金は縁の発光が
@@ -11,18 +17,14 @@ import { moveEdge } from "../domain/shared/moveEdge.js";
 function CardGlow({ tier, delaySec }) {
   if (tier === "dud") return null;
   const gradId = `dcGrad`;
-  const ringColor = tier === "rainbow" ? `url(#${gradId})` : tier === "gold" ? C.yellow : C.line;
+  const ringColor = tier === "rainbow" ? `url(#${gradId})` : tier === "gold" ? T.color.accent : T.color.rule;
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none"
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
       {tier === "rainbow" && (
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={C.pink} />
-            <stop offset="28%" stopColor={C.yellow} />
-            <stop offset="52%" stopColor={C.green} />
-            <stop offset="76%" stopColor={C.blue} />
-            <stop offset="100%" stopColor={C.purple} />
+            {RAINBOW_STOPS.map((c, i) => <stop key={i} offset={`${Math.round(i / (RAINBOW_STOPS.length - 1) * 100)}%`} stopColor={c} />)}
           </linearGradient>
         </defs>
       )}
@@ -42,28 +44,21 @@ function CardGlow({ tier, delaySec }) {
   );
 }
 
-function cardIconName(label) {
-  const sp = label.indexOf(" ");
-  return sp < 0 ? ["", label] : [label.slice(0, sp), label.slice(sp + 1)];
-}
-
 function CardButton({ choice, tier, delaySec, disabled, onChoose }) {
-  const [icon, name] = cardIconName(choice.label);
   const dud = tier === "dud";
   return (
     <button disabled={disabled} onClick={() => onChoose(choice.move)} title={choice.desc}
       style={{
         position: "relative", overflow: "hidden", textAlign: "center", cursor: disabled ? "default" : "pointer",
-        background: C.panel2, color: C.text, border: `1px solid ${C.line}`, borderRadius: 9,
-        padding: "10px 8px", minHeight: 60, display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 3,
+        background: T.color.surfaceUp, color: T.color.text, border: "none",
+        padding: `${T.space.sm}px ${T.space.xs}px`, minHeight: 52, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
         opacity: disabled ? 0.5 : (dud ? 0.45 : 1), filter: dud ? "saturate(.3)" : "none",
       }}>
       <CardGlow tier={tier} delaySec={delaySec} />
-      <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
-      <span style={{ fontFamily: FONT_D, fontSize: 12.5, fontWeight: 700, color: dud ? C.sub : C.text }}>{name}</span>
+      <span style={{ fontFamily: FONT_DOT, fontSize: T.size.body, color: dud ? T.color.sub : T.color.text }}>{choice.label}</span>
       {dud && (
-        <span style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "2px 6px 3px", fontSize: 9.5, letterSpacing: "0.06em", color: C.sub, background: "rgba(0,0,0,0.35)", fontFamily: FONT_D }}>不発</span>
+        <span style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "2px 6px 3px", fontSize: 9.5, letterSpacing: "0.06em", color: T.color.sub, background: "rgba(0,0,0,0.35)", fontFamily: FONT_DOT }}>不発</span>
       )}
     </button>
   );
@@ -74,10 +69,10 @@ function CardRows({ choices, energy, disabled, onChoose }) {
   const rows = [];
   for (let i = 0; i < choices.length; i += 2) rows.push(choices.slice(i, i + 2));
   return (
-    <div style={{ display: "grid", gap: 7 }}>
+    <div style={{ display: "grid", gap: T.space.xs }}>
       {rows.map((row, ri) => (
         <div key={ri} style={{
-          display: "grid", gap: 7,
+          display: "grid", gap: T.space.xs,
           gridTemplateColumns: row.length === 1 ? "1fr" : "1fr 1fr",
           padding: row.length === 1 ? "0 25%" : 0,
         }}>
@@ -93,22 +88,24 @@ function CardRows({ choices, energy, disabled, onChoose }) {
 }
 
 // v46(#27): 脚の残り。仕掛け系の一手はこの残量で威力が決まるため、
-// 判断の material として必ず見せる（数値ではなくバーと一語で瞬時に読めるようにする）
+// 判断の material として必ず見せる（数値ではなくバーと一語で瞬時に読めるようにする）。
+// 4段階の色は「脚の消耗度」というデータ自体が持つ意味色なので、accent/action/good/badの
+// 意味役割とは別枠の専用パレット（#e8a13cのみ既存プロジェクト全体で使う警告色を流用）。
 function LegsBar({ energy }) {
   if (energy == null) return null;
   const raw = Math.max(-100, Math.min(100, energy));
   const pct = (raw + 100) / 2;
-  const tier = raw >= 40 ? { t: "十分", c: C.green }
-    : raw >= 0 ? { t: "やや消耗", c: C.yellow }
+  const tier = raw >= 40 ? { t: "十分", c: T.color.good }
+    : raw >= 0 ? { t: "やや消耗", c: T.color.accent }
       : raw >= -60 ? { t: "苦しい", c: "#e8a13c" }
-        : { t: "売り切れ", c: C.red };
+        : { t: "売り切れ", c: T.color.bad };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 10px" }}>
-      <span style={{ fontSize: 11, color: C.sub, flexShrink: 0 }}>脚の残り</span>
-      <div style={{ flex: 1, height: 8, background: C.panel2, borderRadius: 4, overflow: "hidden", border: `1px solid ${C.line}` }}>
+    <div style={{ display: "flex", alignItems: "center", gap: T.space.sm, margin: `0 0 ${T.space.sm}px` }}>
+      <span style={{ fontSize: T.size.caption, color: T.color.sub, flexShrink: 0 }}>脚の残り</span>
+      <div style={{ flex: 1, height: 6, background: T.color.surfaceUp, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: tier.c, transition: "width .2s" }} />
       </div>
-      <span style={{ fontSize: 11.5, fontFamily: FONT_D, fontWeight: 700, color: tier.c, flexShrink: 0 }}>{tier.t}</span>
+      <span style={{ fontSize: T.size.caption, fontFamily: FONT_DOT, color: tier.c, flexShrink: 0 }}>{tier.t}</span>
     </div>
   );
 }
@@ -116,12 +113,12 @@ function LegsBar({ energy }) {
 export function DecisionCard({ decision, focusName, resimBusy, onChoose }) {
   if (!decision) return null;
   return (
-    <div key={decision.id} style={{ background: "linear-gradient(180deg,#2a2018,#1c1712)", border: `2px solid ${C.yellow}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>
-      <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 800, color: C.yellow }}>{decision.title}</div>
-      <div style={{ fontSize: 12, color: C.sub, marginTop: 2, marginBottom: 8 }}>{decision.sub}{focusName ? `　—　${focusName}` : ""}</div>
+    <div key={decision.id} style={{ background: T.color.surface, padding: `${T.space.md}px ${T.space.lg}px` }}>
+      <div style={{ fontFamily: FONT_DOT, fontSize: T.size.head, color: T.color.accent }}>{decision.title}</div>
+      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, marginBottom: T.space.sm }}>{decision.sub}{focusName ? `　—　${focusName}` : ""}</div>
       <LegsBar energy={decision.energy} />
       <CardRows choices={decision.choices} energy={decision.energy} disabled={resimBusy} onChoose={onChoose} />
-      {resimBusy && <div style={{ fontSize: 11, color: C.yellow, marginTop: 8 }}>結果を計算しています…</div>}
+      {resimBusy && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.sm }}>結果を計算しています…</div>}
     </div>
   );
 }

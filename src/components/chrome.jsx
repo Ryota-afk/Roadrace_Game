@@ -4,7 +4,6 @@ import React from "react";
 import { FONT_B, FONT_DOT, T } from "../data/theme.js";
 import { CLASSES, seasonNeed } from "../data/progression.js";
 import { MONTHS } from "../data/course.js";
-import { Btn, Eyebrow } from "./ui.jsx";
 import { BottomTabs } from "./BottomTabs.jsx";
 import { seasonRank, mlLivingCost } from "../logic/support.js";
 import { findUnsupportedChars } from "../domain/shared/textInput.js";

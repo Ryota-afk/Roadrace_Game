@@ -1498,3 +1498,25 @@ kit.jsxのChipRow新設 → DecisionCard → RaceViewクローム → race.jsx 8
    `慰留する`ボタンが正しくdisabled表示されることを実データで確認。
 
 15画面中14画面を実撮確認、残り1画面（transferRequest）はコードレビューで確認。
+
+### 実装（3-E）
+
+- `components/kit.jsx`：`ChipRow`新設（横並び1タップ選択。地=surfaceUp・文字=sub、選択中=action文字＋action1pxアウトライン）。lineupの出走人数・役割・作戦、観戦中のカメラ・速度切替の計5箇所で使用。
+- `components/DecisionCard.jsx`：選択肢アイコン（約15種の絵文字）を全廃し文字のみに。カード地の茶系グラデーション・角丸を撤去しsurfaceUpの面へ。レア度発光（虹/金/不発）は維持——虹のグラデーションは`RAINBOW_STOPS`という専用の固定パレット（accent/action/good/badとは別枠、COND_COLOR等と同じ「データ層の意味色」扱い）に。「脚の残り」バー4段階も維持（十分=good/やや消耗=accent/苦しい=既存の警告色`#e8a13c`のみ非トークン/売り切れ=bad）。
+- `components/RaceView.jsx`：実況ティッカーの絵文字プレフィックス（約90箇所）を全廃し「実況」ラベル（caption・accent）を固定表示へ。composeCard()のtitle/label絵文字も全廃。HUD2枠・カメラ/速度をChipRow化・Eyebrow使用箇所をプレーンdivへ・地形アイコン(TERRAIN_ICON)削除・courseMarkersのicon削除（KOM/中間は文字のみ）・進捗バーの🏁flag→矩形マーカーに変更。旧`C.xx`50箇所・`FONT_D/M`を機械的にT/FONT_DOTへ置換（Pythonスクリプトで一括、その後手動でimport行・JSX直書きテキスト・courseMarkers等の構造的な箇所を個別修正）。SVGシーン自体（俯瞰・側面マップの構図、選手マーカー、集団ラベル等）は不変。
+- `components/riderCard.jsx`：`onClick`/`selected`/`disabled`の3プロップを追加（既存4画面は未指定でデフォルト動作、後方互換）。lineup・gc_role_setupの選手選択に使用。
+- `screens/season/race.jsx`：8画面を全面書き換え。lineupはRiderCard（選択=action・故障=bad「故障中」・連闘警告）+ChipRow（出走人数・役割・作戦）。結果画面（通常/チームTT/gc_final）は「言葉が主役」——自チーム優勝時「{選手名}、優勝」、それ以外は「自チーム最高{N}位」をdisplay(28px)に。最終順位・総合順位はスクロールボックス廃止・全行R2固定幅列表示。👑→「エース」、🔀→「OB」、gc_finalの副次タイトル🟢🔴⚪→色チップ■（緑/赤/白の実際のジャージ色を維持、UIトークンではなくデータ層の意味色として別枠）。
+- 後始末：`data/theme.js`から旧`C`・`FONT_D`・`FONT_M`のexportを削除（`FONT_B`は入力欄用の意図的な例外として維持）。`components/ui.jsx`（Btn/Eyebrow、他に参照0件と判明）を削除。`components/chrome.jsx`の未使用import除去。`components/base/BaseView.jsx`のズームボタン3箇所・エントラント色フォールバックをT化。`core/core.js`の未使用import除去。データ層の色定義元（`data/abilities.js`のTYPES/AB_COLOR/POW、`data/course.js`のSEG_COLOR、`data/progression.js`のCLASS_TIER_COLOR）は**旧C値と完全に同じ16進リテラルへ機械置換**（意味的な移行ではなく、値を変えない参照除去）。それらを消費する7つのロジック層ファイル（breeding.js・buildSim.js・state.js・useMyLifeGame.js・lineage.js・standings.js・achievements.js）はC.yellow→accent／C.green→good／C.red→bad／C.sub→sub／C.blue・C.purple→旧値のリテラルへ、文脈に応じて意味写像かリテラル保持かを判断。
+
+### 検証（3-E）
+
+`npm run build`を各ファイル編集後に都度成功確認（最終的に155→154モジュールへ、ui.jsx削除を反映）。Playwrightで実プレイ検証：
+1. lineup（RiderCard選択・ChipRow出走人数）→観戦（HUD・カメラ/速度ChipRow・実況ラベル・凡例）→結果（「自チーム最高4位」・コースレコード更新・全18行R2表示）→翌月への一連の流れを実撮確認、エラー0件。
+2. 後始末後の回帰確認：シーズンBaseView（ズームボタン3個・敷地シーン）とマイライフキャラクター作成画面を実撮、エラー0件。
+3. Node直接実行で色関連関数を検証：`TYPES`/`SEG_COLOR`/`CLASS_TIER_COLOR`が旧C値と完全一致（バイト単位）することを確認。`mlFactorCollection()`・`mlCareerArchetype()`・`managerEvalTier()`（breeding/lineage/achievements各ファイル）が例外なく実行され、意図した新トークン値（`managerEvalTier(90)`→`#F2C94C`＝accent等）を返すことを確認。
+
+gc_stage/gc_role_setup/gc_final（ステージレース）・チームTT結果・startlist・result_pendingは、lineup/通常結果で確認済みの部品（Section/Item/RiderCard/SelectRow/R2順位行）を同一パターンで再利用しているためコードレビューで確認（ビルド成功・型/構文エラー0が実測での裏付け）。
+
+## 第13弾（デザインの作り直し）— 完結
+
+Phase 0〜3-D-3（マイライフ全画面）→3-D-4-0（可読性ルールR1〜R5）→3-D-4-a／3-D-4-b（season額縁＋hub配下17画面）→3-D-5（配色トークン）→3-D-4-c（meta.jsx除くオンボーディング・記録・移籍イベント15画面）→3-E（レース観戦まわり・旧トークン後始末）まで全ラウンド完了。装飾除去・可読性・配色の3軸が全画面に行き渡り、旧トークン`C`/`FONT_D`/`FONT_M`と`ui.jsx`は削除済み。次の大型テーマに着手する際は改めて設計フェーズから（CLAUDE.md §1・§8）。

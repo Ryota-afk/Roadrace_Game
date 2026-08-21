@@ -78,7 +78,7 @@ export function FactorCollectionView({ cats, totalLeg, variant, footer }) {
             {cat.items.map((it, i) => (
               <div key={it.key} style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
                 {/* 脚質因子はTYPES色、適性因子はグレード色（どちらも実データが持つ意味色）。
-                    特能因子はmlFactorCollection()側で意味なくC.purpleが充てられているだけなので
+                    特能因子はmlFactorCollection()側で意味なく紫が充てられているだけなので
                     ここでは使わず本文色に統一する（単一アクセント原則） */}
                 <span style={{ fontSize: T.size.body, color: cat.category === "特能因子" ? T.color.text : (it.color || T.color.text), flex: "none", minWidth: 92 }}>{it.label}</span>
                 <span style={{ fontSize: T.size.caption, color: T.color.accent, letterSpacing: -1 }}>{"★".repeat(Math.min(6, it.count))}{it.count > 6 ? ` ×${it.count}` : ""}</span>

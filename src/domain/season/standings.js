@@ -3,7 +3,7 @@
 // 呼ぶ論理結合データのため、循環import回避のため support.js 側に残している。
 import { mulberry, strHash } from "../../core/core.js";
 import { CLASSES, DIFFICULTIES } from "../../data/progression.js";
-import { C } from "../../data/theme.js";
+import { T } from "../../data/theme.js";
 import { teamsForClass } from "../../data/teams.js";
 
 // v50(第11弾Phase1・1-C): g.rivalPointsが実際のレース結果から積み上がる実データになったため、
@@ -28,7 +28,7 @@ export function computeStandings(g) {
       return { name: t.name, color: t.color, spec: t.spec, trait: t.trait, pts: Math.round(seasonTotal * monthProg), isPlayer: false };
     });
   }
-  rows.push({ name: g.teamName || "あなたのチーム", color: C.yellow, pts: g.points, isPlayer: true });
+  rows.push({ name: g.teamName || "あなたのチーム", color: T.color.accent, pts: g.points, isPlayer: true });
   rows.sort((a, b) => b.pts - a.pts);
   return rows;
 }

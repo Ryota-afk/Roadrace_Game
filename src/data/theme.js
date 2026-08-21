@@ -1,23 +1,12 @@
 // 静的データ（Phase 1で src/main.jsx から分離）。純粋な定数のみ。
 
-export const C = {
-  bg: "#14171d", panel: "#1e232e", panel2: "#262c3a", line: "#3a4356",
-  text: "#f0efe9", sub: "#9aa3b5",
-  yellow: "#ffd23f", green: "#35c07e", red: "#e8544f", blue: "#4f8fe8", purple: "#c98bf0", pink: "#e88bb0",
-};
-
-export const FONT_D = "'Avenir Next Condensed','Arial Narrow','Noto Sans JP',sans-serif";
-
+// 第13弾Phase3-E: 第12弾までの旧トークンC・FONT_D・FONT_M・ui.jsxのBtn/Eyebrowは
+// 全画面のT移行が完了したため削除した（devlog/wave13.md参照）。FONT_Bだけは例外として残す
+// ——入力中の文字が読める必要がある入力欄（チーム名等）でchrome.jsxが今も使う、意図的な例外。
 export const FONT_B = "'Hiragino Sans','Noto Sans JP','Meiryo',sans-serif";
-
-export const FONT_M = "ui-monospace,'SF Mono',Menlo,monospace";
 
 // ---------------------------------------------------------------------------
 // 第13弾Phase1：新デザインのトークン（ユーザー合意済み）
-//
-// 上の C / FONT_D / FONT_B / FONT_M は第12弾までの旧トークン。Phase 2以降で画面を
-// 1つずつ下の T / FONT_DOT へ移し、全画面の移行が終わった時点で旧トークンを削除する。
-// 移行期間中は両方が同居するが、**新規のUIは必ず T を使う**こと。
 //
 // 決定の経緯・却下案は devlog/wave13.md を参照。要点のみ：
 //  - 骨格は「計器盤」。キーと値の表組みで、値は右揃え。

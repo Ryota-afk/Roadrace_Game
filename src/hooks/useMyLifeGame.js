@@ -2,7 +2,7 @@
 // 外部依存はsuperMode（自動保存/実績付与の画面ガード用）とaskConfirm（mlUseStockConfirmの
 // 確認ダイアログ）の2つのみ（詳細はDEVLOG §9参照）。
 import { useEffect, useRef, useState } from "react";
-import { C } from "../data/theme.js";
+import { T } from "../data/theme.js";
 import { ML_STOCK_ITEMS, computeMyLifeClearPoints, noteAbilityDiscovery, persistCourseRecord, protegeState } from "../logic/support.js";
 import { mlRecordLegend } from "../breeding/breeding.js";
 import { buildMyLifeSim, computeAchievements, advanceWorldYear, initMyLife, loadMeta, recordTitle, saveMeta, saveMyLife } from "../state/state.js";
@@ -122,7 +122,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   // ==== v14: マイライフモード専用ハンドラ ====
   // v41(§Step7第3弾): mlGenRace（月次レース生成）は domain/mylife/race.js へ移動（複数箇所から
   // 参照される純粋なジェネレータのため controllers/ ではなく domain/ に置いた）。
-  const ML_MILESTONE_LABEL = { worlds: { eyebrow: "世界選手権", color: C.blue }, olympics: { eyebrow: "オリンピック", color: C.yellow } };
+  const ML_MILESTONE_LABEL = { worlds: { eyebrow: "世界選手権", color: "#4f8fe8" }, olympics: { eyebrow: "オリンピック", color: T.color.accent } };
   // v41(§Step7第9弾): mlCreateChar本体（237行）を domain/mylife/createChar.js へ抽出。
   // loadMeta()（生涯CP特典の読み取り）はApp側で呼び、cpMetaとして純関数へ引数で渡す
   // （呼び出し側だけがlocalStorageに触れる形に統一。第5弾のprepareRaceInputsと同じ型）。

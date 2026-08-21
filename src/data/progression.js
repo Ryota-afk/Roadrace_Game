@@ -1,5 +1,4 @@
 // 静的データ（Phase 1で src/main.jsx から分離）。純粋な定数のみ。
-import { C } from "./theme.js";
 
 export const CLASSES = [
   { id: "B1", label: "クラス B1", prizeMul: 1.0, need: 45, scout: 58 },
@@ -46,7 +45,7 @@ export const TITLE_DEFS = [
 
 // ── 種目・成長・チーム関連の分類テーブル（Phase 4-1後の support.js から分離）──
 
-export const CLASS_TIER_COLOR = [C.sub, C.blue, C.yellow];
+export const CLASS_TIER_COLOR = ["#9aa3b5", "#4f8fe8", "#ffd23f"];
 
 export const GROWTHPOW_ORDER = ["C", "B", "A", "S"];
 

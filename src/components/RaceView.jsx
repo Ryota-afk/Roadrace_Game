@@ -1,8 +1,8 @@
 // レース演出（RaceView）＋エラーバウンダリ＋2D可視化ヘルパー・定数。Phase 3で分離。
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FINISH_COMMENTARY, SEG_COMMENTARY } from "../data/course.js";
-import { C, FONT_D, FONT_M } from "../data/theme.js";
-import { Btn, Eyebrow } from "./ui.jsx";
+import { FONT_DOT, T } from "../data/theme.js";
+import { ChipRow, PrimaryBtn, QuietBtn } from "./kit.jsx";
 import { DecisionCard } from "./DecisionCard.jsx";
 import { fmtGap, fmtTime, hasAbility, strHash } from "../core/core.js";
 import { TICK_SEC, riderHash01, riderWander, resumeSim } from "../sim/race.js";
@@ -39,23 +39,23 @@ export function composeCard(kind, focus, ctx) {
   if (ctx.manager) {
     const who = focus.name ? focus.name.split(" ")[0] : "エース";
     const mateN = ctx.mates || 0;
-    const base = kind === "sprint" ? { t: "🏁 最終スプリント — 監督指示", s: `${who}に最後の指示を出す` }
-      : kind === "finale" ? { t: "🔥 勝負所 — 監督指示", s: `無線で${who}へ。ここが仕掛けどころだ` }
-        : kind === "react" ? { t: "📻 状況が動いた — 監督指示", s: `${who}をどう動かす？` }
-          : { t: "⚡ 中盤 — 監督指示", s: `隊列が動いた。${who}への指示は？` };
+    const base = kind === "sprint" ? { t: "最終スプリント — 監督指示", s: `${who}に最後の指示を出す` }
+      : kind === "finale" ? { t: "勝負所 — 監督指示", s: `無線で${who}へ。ここが仕掛けどころだ` }
+        : kind === "react" ? { t: "状況が動いた — 監督指示", s: `${who}をどう動かす？` }
+          : { t: "中盤 — 監督指示", s: `隊列が動いた。${who}への指示は？` };
     const ch = [];
     if (kind === "sprint" || kind === "finale") {
-      ch.push({ move: "send", label: "🔥 仕掛けさせる", desc: `${who}に全開で踏ませる（脚を大きく使う）` });
-      ch.push({ move: "kick", label: "⏳ 待たせて差す", desc: "ギリギリまで温存させ、最後に伸ばす" });
+      ch.push({ move: "send", label: "仕掛けさせる", desc: `${who}に全開で踏ませる（脚を大きく使う）` });
+      ch.push({ move: "kick", label: "待たせて差す", desc: "ギリギリまで温存させ、最後に伸ばす" });
     } else {
-      ch.push({ move: "attack", label: "⚡ 攻めさせる", desc: `${who}を飛び出させる（決まれば独走）` });
-      ch.push({ move: "conserve", label: "🛡 脚を溜めさせる", desc: "集団後方で温存させ勝負所に備える" });
+      ch.push({ move: "attack", label: "攻めさせる", desc: `${who}を飛び出させる（決まれば独走）` });
+      ch.push({ move: "conserve", label: "脚を溜めさせる", desc: "集団後方で温存させ勝負所に備える" });
     }
     if (mateN >= 1) {
-      ch.push({ move: "teamShelter", label: "🛡 エースを守れ", desc: "僚友が風除け・位置取りを担い、エースの脚を守る" });
-      if (kind !== "sprint") ch.push({ move: "teamChase", label: "🔥 総動員で追え", desc: "僚友を放って前を追わせる（チーム全体が消耗）" });
+      ch.push({ move: "teamShelter", label: "エースを守れ", desc: "僚友が風除け・位置取りを担い、エースの脚を守る" });
+      if (kind !== "sprint") ch.push({ move: "teamChase", label: "総動員で追え", desc: "僚友を放って前を追わせる（チーム全体が消耗）" });
     } else {
-      ch.push({ move: "hold", label: "🚴 選手に任せる", desc: "指示を出さず選手の判断に委ねる" });
+      ch.push({ move: "hold", label: "選手に任せる", desc: "指示を出さず選手の判断に委ねる" });
     }
     return { title: base.t, sub: base.s, choices: ch.slice(0, 4) };
   }
@@ -65,74 +65,74 @@ export function composeCard(kind, focus, ctx) {
   const isAssist = !!focus.isAssisting;
   let title = "", sub = "", choices = [];
   if (kind === "react" && ctx.inBreak) {
-    title = "🚀 逃げの選択";
+    title = "逃げの選択";
     sub = "先頭で抜け出している——ここからどうする？";
     choices = [
-      { move: "attack", label: "🚀 このまま踏み倒す", desc: "逃げ切りを狙い、全開で回し続ける" },
-      { move: "conserve", label: "🛡 一度緩めて脚を溜める", desc: "ペースを落として最後まで脚を残す" },
-      { move: "hold", label: "🏳 集団に戻す", desc: "無理をやめて集団のペースに戻る" },
+      { move: "attack", label: "このまま踏み倒す", desc: "逃げ切りを狙い、全開で回し続ける" },
+      { move: "conserve", label: "一度緩めて脚を溜める", desc: "ペースを落として最後まで脚を残す" },
+      { move: "hold", label: "集団に戻す", desc: "無理をやめて集団のペースに戻る" },
     ];
     return { title, sub, choices };
   }
   if (kind === "react") {
-    title = "😤 苦しい局面";
+    title = "苦しい局面";
     sub = "脚が売り切れかけている——粘るか、立て直すか";
     choices = [
-      { move: "hangOn", label: "🦴 食いしばって残る", desc: A("grinder") ? "食らいつく脚で集団にしがみつく" : "歯を食いしばって集団に残る" },
-      { move: "conserve", label: "🛡 緩めて立て直す", desc: "一度ペースを落として脚の回復を待つ" },
-      { move: "hold", label: "🏳 自分のペースで", desc: "無理をやめて淡々と進む" },
+      { move: "hangOn", label: "食いしばって残る", desc: A("grinder") ? "食らいつく脚で集団にしがみつく" : "歯を食いしばって集団に残る" },
+      { move: "conserve", label: "緩めて立て直す", desc: "一度ペースを落として脚の回復を待つ" },
+      { move: "hold", label: "自分のペースで", desc: "無理をやめて淡々と進む" },
     ];
     return { title, sub, choices };
   }
   if (kind === "sprint") {
-    title = "🏁 最終スプリント！";
+    title = "最終スプリント！";
     sub = "ゴールが目前——ここで全てを出し切れ";
     if (A("kicker") || A("finisher") || A("closer"))
-      choices.push({ move: "kickBig", label: "🗡 会心の差し", desc: "満を持して差し切る、豪脚の一撃" });
+      choices.push({ move: "kickBig", label: "会心の差し", desc: "満を持して差し切る、豪脚の一撃" });
     else if (t === "SPR" || A("sprinter_sp"))
-      choices.push({ move: "sprintWait", label: "🏁 番手から爆発", desc: "前の選手を風除けに、最後に弾ける" });
+      choices.push({ move: "sprintWait", label: "番手から爆発", desc: "前の選手を風除けに、最後に弾ける" });
     else
-      choices.push({ move: "kick", label: "🎯 一気に差す", desc: "残った脚を全部ここで解き放つ" });
-    choices.push({ move: "send", label: "🔥 全開でもがく", desc: "とにかく先頭で踏み倒す（早駆け気味）" });
-    if (isAssist) choices.push({ move: "assistLaunch", label: "🤝 エースを発射", desc: "最後の力でエースを前へ弾き出す" });
-    else choices.push({ move: "hold", label: "🚴 流れで勝負", desc: "無理せず集団の勢いに乗る" });
+      choices.push({ move: "kick", label: "一気に差す", desc: "残った脚を全部ここで解き放つ" });
+    choices.push({ move: "send", label: "全開でもがく", desc: "とにかく先頭で踏み倒す（早駆け気味）" });
+    if (isAssist) choices.push({ move: "assistLaunch", label: "エースを発射", desc: "最後の力でエースを前へ弾き出す" });
+    else choices.push({ move: "hold", label: "流れで勝負", desc: "無理せず集団の勢いに乗る" });
     return { title, sub, choices: choices.slice(0, 3) };
   }
   if (kind === "mid") {
-    title = "⚡ 中盤の判断";
+    title = "中盤の判断";
     sub = onClimb ? "登りが牙を剥く。ここが勝負の分かれ目だ" : onHill ? "うねる丘で隊列が動き出した" : "隊列が動き出した。ここでどう動く？";
     // 攻めの一手（地形×脚質×特性で味付け）
     if (onClimb && (t === "CLM" || A("mount") || A("allclimber") || A("climbengine") || A("autumn_sp")))
-      choices.push({ move: "attack", label: "⛰ 登りで抜け出す", desc: "登坂適性を武器に単独で飛び出す" });
+      choices.push({ move: "attack", label: "登りで抜け出す", desc: "登坂適性を武器に単独で飛び出す" });
     else if (onHill && (t === "PUN" || A("puncheur") || A("ardennes_sp")))
-      choices.push({ move: "attack", label: "⛰ 丘でアタック", desc: "丘の申し子、パンチ力で抜け出す" });
+      choices.push({ move: "attack", label: "丘でアタック", desc: "丘の申し子、パンチ力で抜け出す" });
     else if (A("escape"))
-      choices.push({ move: "attack", label: "🚀 得意の逃げに持ち込む", desc: "逃げ屋の脚で集団を突き放す" });
+      choices.push({ move: "attack", label: "得意の逃げに持ち込む", desc: "逃げ屋の脚で集団を突き放す" });
     else
-      choices.push({ move: "attack", label: "⚡ 仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" });
-    if (A("grinder")) choices.push({ move: "hangOn", label: "🦴 食らいついて粘る", desc: "食らいつく脚で集団に残り、脚を温存する" });
-    choices.push({ move: "conserve", label: "🛡 脚を溜める", desc: "集団後方で温存し、勝負所に備える" });
-    if (isAssist) choices.push({ move: "assistLaunch", label: "🤝 エースの前で牽く", desc: "自分の脚を使ってエースを勝負所へ運ぶ" });
-    else choices.push({ move: "hold", label: "🚴 流れに任せる", desc: "展開に乗って様子を見る" });
+      choices.push({ move: "attack", label: "仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" });
+    if (A("grinder")) choices.push({ move: "hangOn", label: "食らいついて粘る", desc: "食らいつく脚で集団に残り、脚を温存する" });
+    choices.push({ move: "conserve", label: "脚を溜める", desc: "集団後方で温存し、勝負所に備える" });
+    if (isAssist) choices.push({ move: "assistLaunch", label: "エースの前で牽く", desc: "自分の脚を使ってエースを勝負所へ運ぶ" });
+    else choices.push({ move: "hold", label: "流れに任せる", desc: "展開に乗って様子を見る" });
     return { title, sub, choices: choices.slice(0, 4) };
   }
   // finale
-  title = "🔥 勝負所の判断";
+  title = "勝負所の判断";
   sub = "ゴールが近い。ここが仕掛けどころだ";
   if (A("kicker") || A("finisher") || A("closer"))
-    choices.push({ move: "kickBig", label: "🗡 会心の差し脚", desc: "最終直線、豪脚の切れ味で差し切る" });
+    choices.push({ move: "kickBig", label: "会心の差し脚", desc: "最終直線、豪脚の切れ味で差し切る" });
   else if (t === "SPR" || A("sprinter_sp"))
-    choices.push({ move: "sprintWait", label: "🏁 スプリント勝負", desc: "番手をキープし、集団スプリントで爆発させる" });
+    choices.push({ move: "sprintWait", label: "スプリント勝負", desc: "番手をキープし、集団スプリントで爆発させる" });
   else
-    choices.push({ move: "kick", label: "⏳ 差しにかける", desc: "ギリギリまで待ち、最終直線で鋭く伸びる" });
+    choices.push({ move: "kick", label: "差しにかける", desc: "ギリギリまで待ち、最終直線で鋭く伸びる" });
   if (onClimb && (t === "CLM" || A("mount") || A("allclimber")))
-    choices.push({ move: "send", label: "🔥 登りで抜け出す", desc: "最後の登りで一気に踏んで独走へ" });
+    choices.push({ move: "send", label: "登りで抜け出す", desc: "最後の登りで一気に踏んで独走へ" });
   else if (A("escape"))
-    choices.push({ move: "send", label: "🔥 早駆け", desc: "一気に抜け出してゴールまで踏み切る" });
+    choices.push({ move: "send", label: "早駆け", desc: "一気に抜け出してゴールまで踏み切る" });
   else
-    choices.push({ move: "send", label: "🔥 一気に踏む", desc: "ここから踏み倒して抜け出す" });
-  if (isAssist) choices.push({ move: "assistLaunch", label: "🤝 エースを射出", desc: "最終局面、エースのスプリントを援護する" });
-  else choices.push({ move: "hold", label: "🚴 集団で勝負", desc: "無理せず集団の決着に合わせる" });
+    choices.push({ move: "send", label: "一気に踏む", desc: "ここから踏み倒して抜け出す" });
+  if (isAssist) choices.push({ move: "assistLaunch", label: "エースを射出", desc: "最終局面、エースのスプリントを援護する" });
+  else choices.push({ move: "hold", label: "集団で勝負", desc: "無理せず集団の決着に合わせる" });
   return { title, sub, choices: choices.slice(0, 4) };
 }
 
@@ -377,12 +377,12 @@ export function riderTagKind(r) {
 // 別トーン＋🏛アイコンで区別する。
 const RIDER_TAG_STYLE = {
   selfAce: { fill: "#27d3ff", border: "#ffd23c", text: "#0c2430" },
-  self: { fill: "#14171d", border: "#27d3ff", text: "#27d3ff" },
-  ace: { fill: "#14171d", border: "#ffd23c", text: "#ffd23c" },
-  mate: { fill: "#14171d", border: "#7db8ff", text: "#7db8ff" },
-  rival: { fill: "#14171d", border: "#ff6b6b", text: "#ff6b6b" },
-  legend: { fill: "#14171d", border: "#e0637a", text: "#e0637a" },
-  other: { fill: "#14171d", border: "#8a8f98", text: "#eef0f5" },
+  self: { fill: "#0E0E10", border: "#27d3ff", text: "#27d3ff" },
+  ace: { fill: "#0E0E10", border: "#ffd23c", text: "#ffd23c" },
+  mate: { fill: "#0E0E10", border: "#7db8ff", text: "#7db8ff" },
+  rival: { fill: "#0E0E10", border: "#ff6b6b", text: "#ff6b6b" },
+  legend: { fill: "#0E0E10", border: "#e0637a", text: "#e0637a" },
+  other: { fill: "#0E0E10", border: "#8a8f98", text: "#eef0f5" },
 };
 // 俯瞰マップの名前ラベル用（先頭3名・ライバル・殿堂選手も対象に含む点が演出側と異なる）。
 export function mapTagKind(r) {
@@ -575,13 +575,13 @@ export function FinalSprintCinematic({ contenders }) {
           return <g key={"fc" + i}><rect x={l.x - 1.1} y={l.y - 7} width="2.2" height="7" fill={col} /><rect x={r.x - 1.1} y={r.y - 7} width="2.2" height="7" fill={col} /></g>;
         })}
         {/* ゴール：路面の市松ライン＋門＋市松バナー */}
-        {finLanes.map((l, i) => <polygon key={"fin" + i} points={finBand(l, laneStep / 2)} fill={i % 2 ? "#e9ecef" : "#14171d"} opacity="0.92" />)}
+        {finLanes.map((l, i) => <polygon key={"fin" + i} points={finBand(l, laneStep / 2)} fill={i % 2 ? "#e9ecef" : "#0E0E10"} opacity="0.92" />)}
         <line x1={gBaseL.x} y1={gBaseL.y} x2={gTopL.x} y2={gTopL.y} stroke="#8a8f98" strokeWidth="2.4" />
         <line x1={gBaseR.x} y1={gBaseR.y} x2={gTopR.x} y2={gTopR.y} stroke="#8a8f98" strokeWidth="2.4" />
         {Array.from({ length: 11 }, (_, i) => {
           const t = i / 10, x = gTopL.x + (gTopR.x - gTopL.x) * t, y = gTopL.y + (gTopR.y - gTopL.y) * t;
           const bw = Math.abs(gTopR.x - gTopL.x) / 10 + 0.6;
-          return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#14171d"} />;
+          return <rect key={"gb" + i} x={x - 0.3} y={y - 5} width={bw} height="8" fill={i % 2 ? "#e9ecef" : "#0E0E10"} />;
         })}
         {/* 選手（ドット絵スプライト。Wave H-4） */}
         {/* v43: 姿勢は postureOf で決まる（既定=sprint／仕掛けている数名=dancing／
@@ -608,8 +608,8 @@ export function FinalSprintCinematic({ contenders }) {
         })}
       </svg>
       {fade > 0.01 && <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />}
-      <div style={{ fontSize: 10.5, color: C.sub, textAlign: "center", marginTop: 4 }}>
-        {soloWin ? "🏁 独走フィニッシュ" : n > 1 ? (bunch ? `🏁 大集団のゴールスプリント（${n}名）` : "🏁 ゴールスプリント") : "🏁 単独ゴール"}{close && approaching ? " — スロー再生" : ""}
+      <div style={{ fontSize: 10.5, color: T.color.sub, textAlign: "center", marginTop: 4 }}>
+        {soloWin ? "独走フィニッシュ" : n > 1 ? (bunch ? `大集団のゴールスプリント（${n}名）` : "ゴールスプリント") : "単独ゴール"}{close && approaching ? " — スロー再生" : ""}
       </div>
       {/* Wave H-4（判断④）: リアルタイム順位表。色スウォッチが画面内の各選手のジャージ色と
           対応する。自分は水色枠、エースは★で強調（画面上のマーカーと共通）。 */}
@@ -618,12 +618,12 @@ export function FinalSprintCinematic({ contenders }) {
           {standingsShown.map(o => (
             <div key={o.c.id} style={{
               display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 6,
-              background: o.c.isPlayer ? "rgba(39,211,255,0.15)" : C.panel2,
+              background: o.c.isPlayer ? "rgba(39,211,255,0.15)" : T.color.surfaceUp,
               border: `1px solid ${o.c.isPlayer ? "#27d3ff" : "transparent"}`,
             }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: o.c.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: FONT_M, fontSize: 9.5, color: C.sub }}>{o.rank}</span>
-              <span style={{ fontSize: 10, color: C.text, maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontFamily: FONT_DOT, fontSize: 9.5, color: T.color.sub }}>{o.rank}</span>
+              <span style={{ fontSize: 10, color: T.color.text, maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {o.c.isAce ? "★" : ""}{o.c.name}
               </span>
             </div>
@@ -644,9 +644,9 @@ export class RaceErrorBoundary extends React.Component {
   render() {
     if (this.state.crashed) {
       return (
-        <div style={{ display: "grid", gap: 12, padding: 16, background: C.panel, borderRadius: 12, border: `1px solid ${C.line}` }}>
-          <div style={{ fontFamily: FONT_D, fontSize: 15, color: C.yellow, fontWeight: 700 }}>🏁 レースは終了しました</div>
-          <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
+        <div style={{ display: "grid", gap: 12, padding: 16, background: T.color.surface, borderRadius: 12, border: `1px solid ${T.color.rule}` }}>
+          <div style={{ fontFamily: FONT_DOT, fontSize: 15, color: T.color.accent, fontWeight: 700 }}>レースは終了しました</div>
+          <div style={{ fontSize: 12.5, color: T.color.sub, lineHeight: 1.6 }}>
             レース中継の描画で問題が発生しましたが、着順・記録はすでに確定しています。
             そのまま結果画面へお進みください（進行への影響はありません）。
           </div>
@@ -726,17 +726,17 @@ export function RaceView({ sim, onFinish }) {
       const who = focusEnt ? focusEnt.name.split(" ")[0] : "";
       const nowP = performance.now();
       // v39.3(演出): 選択に応じた実況＋「山場」演出。攻めの一手はスロー＆当該選手ズームで見せ場に。
-      const AGGR = { attack: `⚡ ${who}、ここで仕掛けた！単独で飛び出す！`, send: `🔥 ${who}、勝負を賭けた！一気に踏み込む！` };
+      const AGGR = { attack: `${who}、ここで仕掛けた！単独で飛び出す！`, send: `${who}、勝負を賭けた！一気に踏み込む！` };
       const CALM = {
-        conserve: `🛡 ${who}は脚を溜める。勝負所に賭ける構えだ`,
-        hangOn: `🦴 ${who}、歯を食いしばって食らいつく！`,
-        kick: `⏳ ${who}はギリギリまで待つ。差しにかける狙いだ`,
-        kickBig: `🗡 ${who}、会心の差し脚を狙う！`,
-        sprintWait: `🏁 ${who}は番手をキープ。ゴールスプリントに懸ける`,
-        assistLaunch: `🤝 ${who}がエースを勝負所へ運ぶ！`,
-        hold: `📻 ${who}は無理をせず展開に乗る`,
+        conserve: `${who}は脚を溜める。勝負所に賭ける構えだ`,
+        hangOn: `${who}、歯を食いしばって食らいつく！`,
+        kick: `${who}はギリギリまで待つ。差しにかける狙いだ`,
+        kickBig: `${who}、会心の差し脚を狙う！`,
+        sprintWait: `${who}は番手をキープ。ゴールスプリントに懸ける`,
+        assistLaunch: `${who}がエースを勝負所へ運ぶ！`,
+        hold: `${who}は無理をせず展開に乗る`,
       };
-      const line = AGGR[moveId] || CALM[moveId] || `📻 ${who}の判断：「${chosen ? chosen.label : "—"}」`;
+      const line = AGGR[moveId] || CALM[moveId] || `${who}の判断：「${chosen ? chosen.label : "—"}」`;
       liveRef.current = { text: line, until: nowP + 3400 };
       if (moveId === "attack" || moveId === "send") {
         beatRef.current = { until: nowP + 3200, slow: 0.30, focusId: focusEnt ? focusEnt.id : null };
@@ -758,8 +758,8 @@ export function RaceView({ sim, onFinish }) {
     const last = course.segs.length - 1;
     course.segs.forEach((s, j) => {
       const endFrac = course.cumFrac[j];
-      if ((s.type === "climb" || s.type === "mtn") && j < last) m.push({ frac: endFrac, icon: "⛰", label: "KOM", color: "#e0824f" });
-      else if (s.type === "sprint" && j < last) m.push({ frac: endFrac, icon: "🏅", label: "中間", color: "#4fb0e0" });
+      if ((s.type === "climb" || s.type === "mtn") && j < last) m.push({ frac: endFrac, label: "KOM", color: "#e0824f" });
+      else if (s.type === "sprint" && j < last) m.push({ frac: endFrac, label: "中間", color: "#4fb0e0" });
     });
     return m;
   }, [sim]);
@@ -851,7 +851,7 @@ export function RaceView({ sim, onFinish }) {
       e, frac: 0, mode: "draft", gid: e.id, slot: 0, dropStreak: 0, attackStreak: 0,
       // v12: エースのみ黄色を使い、他のAI含む何色とも被らないようにする。
       // 自チームのアシストは白系（他チームは赤/青/紫/橙）で「自分のチーム」だと一目でわかるようにする
-      color: e.team === "PLAYER" ? (e.isAce ? C.yellow : "#eef1f6") : e.color,
+      color: e.team === "PLAYER" ? (e.isAce ? T.color.accent : "#eef1f6") : e.color,
       biasX: -0.3, // v12: 前後バイアス（誰が前寄りか）。slotに応じて緩やかに追従する永続値
       elong: ELONGATION_BY_SEG.flat, tilt: 0, // v12バグ修正: 隊列の伸び・傾きも同様に緩やかに追従させる
     }));
@@ -861,13 +861,13 @@ export function RaceView({ sim, onFinish }) {
     course.segs.forEach((s, j) => {
       const fracStart = j === 0 ? 0 : course.cumFrac[j - 1];
       if (s.wind) {
-        baseEvents.push({ t: fracStart, text: `🌬 ${s.label}：横風区間！エシュロンで集団が分断されるか` });
+        baseEvents.push({ t: fracStart, text: `${s.label}：横風区間！エシュロンで集団が分断されるか` });
         return;
       }
       // v27: 区間タイプごとの実況パターンから決定的に1つ選ぶ（区間indexで循環）
       const pool = SEG_COMMENTARY[s.type];
       const line = pool ? pool[j % pool.length] : `${s.label}へ突入！`;
-      baseEvents.push({ t: fracStart, text: `🎙 ${line}` });
+      baseEvents.push({ t: fracStart, text: `${line}` });
     });
     baseEvents.push({ t: 0.985, text: FINISH_COMMENTARY[Math.floor(strHash(sim.raceMeta.name || "x") % FINISH_COMMENTARY.length)] });
     // v27: 実況の動的イベント検知用の状態（逃げとメインのギャップ変化を追う）
@@ -986,7 +986,7 @@ export function RaceView({ sim, onFinish }) {
             if (camModeRef.current !== "lead") {
               camModeRef.current = "lead";
               setCamMode("lead");
-              liveRef.current = { text: "📻 フィーチャー選手がゴール、先頭集団表示に切替", until: performance.now() + 3000 };
+              liveRef.current = { text: "フィーチャー選手がゴール、先頭集団表示に切替", until: performance.now() + 3000 };
             }
           } else {
             const sameGroup = riders.filter(r => r.gid === focus.gid);
@@ -1053,7 +1053,7 @@ export function RaceView({ sim, onFinish }) {
       if (!flammeRef.current && !finalSegRef.current && leadFrac >= flammeFrac) {
         flammeRef.current = true;
         beatRef.current = { until: now + 2800, slow: 0.38, focusId: null };
-        liveRef.current = { text: "🔴 フラムルージュ！残り1km、いよいよ勝負が動く", until: now + 2800 };
+        liveRef.current = { text: "フラムルージュ！残り1km、いよいよ勝負が動く", until: now + 2800 };
       }
       // 最終区間突入判定
       // v12: 位置ベース（最終区間に実際に入ったか）に加えて時間ベースの判定もOR条件で追加。
@@ -1068,7 +1068,7 @@ export function RaceView({ sim, onFinish }) {
         if (anyInFinal) {
           finalSegRef.current = true; setFinalSeg(true);
           // v11: 最終区間突入をはっきり体感できるよう、切り替わりの瞬間にバナー表示する
-          liveRef.current = { text: "🏁 ラストスパート突入！カメラをズームして追跡します", until: now + 3000 };
+          liveRef.current = { text: "ラストスパート突入！カメラをズームして追跡します", until: now + 3000 };
         }
       }
       // v12: シネマティックへの切り替えは最終区間突入よりさらに後（ゴール直前）に遅らせる。
@@ -1175,13 +1175,13 @@ export function RaceView({ sim, onFinish }) {
             if (prevFocusRank != null && now - lastDynCommentAt > 3500) {
               const up = prevFocusRank - focusRank; // 正＝順位を上げた
               if (soloBreak && (beatRef.current.until <= now)) {
-                liveRef.current = { text: pick([`🚀 ${focusName}、独走態勢だ！後続を突き放しにかかる`, `🚀 ${focusName}が抜け出した！このまま逃げ切れるか`, `🔥 ${focusName}、一人旅！集団は反応できるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId, now);
+                liveRef.current = { text: pick([`${focusName}、独走態勢だ！後続を突き放しにかかる`, `${focusName}が抜け出した！このまま逃げ切れるか`, `${focusName}、一人旅！集団は反応できるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId, now);
               } else if (focusRank === 1 && prevFocusRank > 1) {
-                liveRef.current = { text: pick([`📻 ${focusName}が${terr}先頭に立った！`, `📻 ${focusName}、ついに先頭に躍り出た！`, `📻 先頭は${focusName}だ！`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId, now);
+                liveRef.current = { text: pick([`${focusName}が${terr}先頭に立った！`, `${focusName}、ついに先頭に躍り出た！`, `先頭は${focusName}だ！`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true; actionCam(focusId, now);
               } else if (up >= 4 && focusRank <= 10) {
-                liveRef.current = { text: pick([`📻 ${focusName}が${terr}集団を縫って上がってきた！`, `📻 ${focusName}、ぐんぐん順位を上げる！`, `📻 ${focusName}が${terr}前方へポジションを押し上げる`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+                liveRef.current = { text: pick([`${focusName}が${terr}集団を縫って上がってきた！`, `${focusName}、ぐんぐん順位を上げる！`, `${focusName}が${terr}前方へポジションを押し上げる`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
               } else if (up <= -5) {
-                liveRef.current = { text: pick([`📻 ${focusName}が${terr}遅れ始めた…苦しい展開だ`, `📻 ${focusName}、ペースに乗れず後退…`, `📻 ${focusName}が${terr}千切れかけている！粘れるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
+                liveRef.current = { text: pick([`${focusName}が${terr}遅れ始めた…苦しい展開だ`, `${focusName}、ペースに乗れず後退…`, `${focusName}が${terr}千切れかけている！粘れるか`]), until: now + 2600 }; lastDynCommentAt = now; focusFired = true;
               }
             }
             prevFocusRank = focusRank;
@@ -1193,11 +1193,11 @@ export function RaceView({ sim, onFinish }) {
         if (!focusFired && !finalSegRef.current && curGapSec != null && prevGapSec != null && now - lastDynCommentAt > 4000) {
           const d = curGapSec - prevGapSec;
           if (curGapSec < 1.5 && prevGapSec >= 3) {
-            liveRef.current = { text: pick(["📻 逃げ吸収！集団は再び一つにまとまった", "📻 メイン集団が逃げを飲み込んだ！振り出しに戻る", "📻 ついに追いついた！集団はひとかたまりに"]), until: now + 2600 }; lastDynCommentAt = now;
+            liveRef.current = { text: pick(["逃げ吸収！集団は再び一つにまとまった", "メイン集団が逃げを飲み込んだ！振り出しに戻る", "ついに追いついた！集団はひとかたまりに"]), until: now + 2600 }; lastDynCommentAt = now;
           } else if (d >= 4) {
-            liveRef.current = { text: pick(["📻 逃げがリードを広げる！メイン集団は反応できるか", "📻 前を行く逃げがぐんぐんタイム差を稼ぐ！", "📻 逃げ切りが見えてきたか、リードは広がる一方だ"]), until: now + 2600 }; lastDynCommentAt = now; actionCam(null, now);
+            liveRef.current = { text: pick(["逃げがリードを広げる！メイン集団は反応できるか", "前を行く逃げがぐんぐんタイム差を稼ぐ！", "逃げ切りが見えてきたか、リードは広がる一方だ"]), until: now + 2600 }; lastDynCommentAt = now; actionCam(null, now);
           } else if (d <= -4 && curGapSec > 2) {
-            liveRef.current = { text: pick(["📻 メイン集団がペースを上げ、逃げを引き戻しにかかる", "📻 集団が本気だ！タイム差が見る間に縮まる", "📻 追走のペースアップ！逃げグループを射程に捉える"]), until: now + 2600 }; lastDynCommentAt = now;
+            liveRef.current = { text: pick(["メイン集団がペースを上げ、逃げを引き戻しにかかる", "集団が本気だ！タイム差が見る間に縮まる", "追走のペースアップ！逃げグループを射程に捉える"]), until: now + 2600 }; lastDynCommentAt = now;
           }
         }
         if (curGapSec != null) prevGapSec = curGapSec;
@@ -1231,16 +1231,15 @@ export function RaceView({ sim, onFinish }) {
   const TERRAIN_BG_SIDE = { climb: "#2b2419", mtn: "#22242a", hill: "#27301b", sprint: "#1e2830", flat: "#232a20", tt: "#203230" };
   const terrainBg = TERRAIN_BG[hud.segType] || "#3f5a3a";
   const terrainBgSide = TERRAIN_BG_SIDE[hud.segType] || "#232a20";
-  const TERRAIN_ICON = { climb: "⛰", mtn: "🏔", hill: "🌄", sprint: "🏁", flat: "🌾", tt: "🕐" };
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ background: C.panel2, borderLeft: `4px solid ${C.yellow}`, borderRadius: 6, padding: "6px 10px" }}>
-          <div style={{ fontFamily: FONT_D, fontSize: 12, color: C.yellow }}>{TERRAIN_ICON[hud.segType] || ""} {hud.seg}{hud.lap ? `（${hud.lap}/${sim.course.laps}周）` : ""}{hud.segSteep ? ` ▲${hud.segSteep}%` : ""}</div>
-          <div style={{ fontFamily: FONT_M, fontSize: 14, color: C.text }}>{fmtTime(hud.clock)}{hud.remain != null ? <span style={{ fontSize: 10.5, color: C.sub, marginLeft: 6 }}>ゴールまで残り{hud.remain}%</span> : null}</div>
-          {hud.gap && <div style={{ fontFamily: FONT_M, fontSize: 10.5, color: C.green, marginTop: 2 }}>{hud.gap}</div>}
+    <div style={{ display: "grid", gap: T.space.sm }}>
+      <div style={{ display: "flex", gap: T.space.sm, flexWrap: "wrap" }}>
+        <div style={{ background: T.color.surfaceUp, padding: T.space.sm, flex: 1, minWidth: 140 }}>
+          <div style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.accent }}>{hud.seg}{hud.lap ? `（${hud.lap}/${sim.course.laps}周）` : ""}{hud.segSteep ? ` ▲${hud.segSteep}%` : ""}</div>
+          <div style={{ fontFamily: FONT_DOT, fontSize: T.size.head, color: T.color.text, marginTop: 2 }}>{fmtTime(hud.clock)}{hud.remain != null ? <span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>残り{hud.remain}%</span> : null}</div>
+          {hud.gap && <div style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.good, marginTop: 2 }}>{hud.gap}</div>}
         </div>
-        <div style={{ background: C.panel2, borderRadius: 6, padding: "6px 10px", minWidth: 165 }}>
+        <div style={{ background: T.color.surfaceUp, padding: T.space.sm, flex: 1.3, minWidth: 165 }}>
           {/* v45.1: 最終スプリント演出中はhud.top（進行率frac差からの秒換算）が使えない。
               終盤に集団がfracでほぼ収束し、差がゼロ＝fmtGap(0)で全員「TOP」になってしまうため。
               cinematicは既にfinishTime確定後のgapSecを持つスナップショットなので、演出中は
@@ -1250,9 +1249,9 @@ export function RaceView({ sim, onFinish }) {
                 .map(c => ({ name: c.name, isPlayer: c.isPlayer, team: c.isMyTeam ? "PLAYER" : undefined, gap: c.gapSec }))
             : hud.top
           ).map((r, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
-              <span style={{ color: r.isPlayer ? C.yellow : (r.team === "PLAYER" ? "#bfe3ff" : C.text) }}>{i + 1}. {r.name}{r.isPlayer ? " 🚴" : (r.team === "PLAYER" ? " ●" : "")}</span>
-              <span style={{ fontFamily: FONT_M, color: r.isPlayer ? C.yellow : C.sub }}>{fmtGap(r.gap)}</span>
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: T.space.sm, fontSize: T.size.caption }}>
+              <span style={{ color: r.isPlayer ? T.color.accent : (r.team === "PLAYER" ? "#bfe3ff" : T.color.text) }}>{i + 1}. {r.name}</span>
+              <span style={{ fontFamily: FONT_DOT, color: r.isPlayer ? T.color.accent : T.color.sub }}>{fmtGap(r.gap)}</span>
             </div>
           ))}
         </div>
@@ -1260,26 +1259,20 @@ export function RaceView({ sim, onFinish }) {
       {/* v39(A案): レース中の判断カード。表示中は再生が止まり、選ぶと結果に反映される */}
       {/* v48(第9弾): カードUIはDecisionCard.jsxへ切り出し（レア度演出・2段レイアウト） */}
       <DecisionCard decision={decision} focusName={focusEnt?.name} resimBusy={resimBusy} onChoose={resolveDecision} />
-      {!cinematic && !decision && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {[{ id: "lead", label: "🎥 先頭集団" }, ...playerRoster.map(e => ({ id: e.id, label: `🎥 ${e.name.split(" ")[0]}${e.isAce ? " 👑" : ""}` }))].map(o => (
-          <button key={o.id} onClick={() => selectCam(o.id)}
-            style={{
-              padding: "4px 8px", borderRadius: 12, fontSize: 10.5, fontWeight: 700, fontFamily: FONT_D, cursor: "pointer",
-              background: camMode === o.id ? C.yellow : C.panel2, color: camMode === o.id ? "#14171d" : C.sub,
-              border: `1px solid ${camMode === o.id ? C.yellow : C.line}`,
-            }}>{o.label}</button>
-        ))}
-      </div>}
+      {!cinematic && !decision && (
+        <ChipRow value={camMode} onChange={selectCam}
+          options={[{ value: "lead", label: "先頭集団" }, ...playerRoster.map(e => ({ value: e.id, label: `${e.name.split(" ")[0]}${e.isAce ? "・エース" : ""}` }))]} />
+      )}
       {cinematic ? (
         <div>
-          <Eyebrow color={C.red}>{cinematic.contenders.length > 1 ? (cinematic.contenders.length >= 10 ? "🏁 大集団のゴールスプリント — 最終直線" : "🏁 ゴールスプリント — 最終直線") : "🏁 単独ゴール — 最終直線"}</Eyebrow>
+          <div style={{ fontSize: T.size.caption, color: T.color.bad }}>{cinematic.contenders.length > 1 ? (cinematic.contenders.length >= 10 ? "大集団のゴールスプリント — 最終直線" : "ゴールスプリント — 最終直線") : "単独ゴール — 最終直線"}</div>
           <FinalSprintCinematic contenders={cinematic.contenders} />
         </div>
       ) : (
         <>
           <div>
-            <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${TOP_H}`, background: terrainBg, borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "background-color 0.6s, border-color 0.2s" }}>
+            <div style={{ fontSize: T.size.caption, color: finalSeg ? T.color.bad : T.color.sub }}>{finalSeg ? "ラストスパートズーム — 俯瞰マップ" : "俯瞰マップ（コースの左右の揺れ）"}</div>
+            <svg viewBox={`0 0 ${MAP_W} ${TOP_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${TOP_H}`, background: terrainBg, borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${T.color.bad}` : "2px solid transparent", transition: "background-color 0.6s, border-color 0.2s" }}>
               {/* v12: 集団の2次元的な広がり（団子状〜エシュロン時の斜め隊列）に対して
                   道幅が狭すぎて選手がはみ出て見える問題を修正するため大幅に拡張。
                   さらに拡張してほしいという追加フィードバックを繰り返し受け再拡大。
@@ -1288,7 +1281,7 @@ export function RaceView({ sim, onFinish }) {
                   でviewBoxと同じ比率を強制する形に修正（あわせて道幅もさらに拡大） */}
               <polyline points={topPath} fill="none" stroke="#8a8f98" strokeWidth="190" strokeLinecap="round" />
               <polyline points={topPath} fill="none" stroke="#7a7f88" strokeWidth="1" strokeDasharray="6,5" opacity="0.5" />
-              <circle cx={mapX(1, cam.start, cam.end)} cy={riderTopY(1, 0)} r="4" fill={C.red} />
+              <circle cx={mapX(1, cam.start, cam.end)} cy={riderTopY(1, 0)} r="4" fill={T.color.bad} />
               {/* v39.17: 沿道の並木/柵を細かい間隔で置き、カメラが集団を追って進むほど高速に流れる＝
                   俯瞰マップにもスピード感を出す（選手は画面上ほぼ静止するので、速度は背景の流れで見せる）。 */}
               {(() => {
@@ -1330,8 +1323,8 @@ export function RaceView({ sim, onFinish }) {
               {courseMarkers.map((m, i) => (m.frac < cam.start - 0.02 || m.frac > cam.end + 0.02) ? null : (
                 <g key={"cm" + i} transform={`translate(${mapX(m.frac, cam.start, cam.end)},0)`}>
                   <line x1="0" y1={TOP_H * 0.14} x2="0" y2={TOP_H * 0.86} stroke={m.color} strokeWidth="1.6" strokeDasharray="5,4" opacity="0.5" />
-                  <rect x="-17" y={TOP_H * 0.05} width="34" height="15" rx="3" fill="#14171d" opacity="0.82" />
-                  <text x="0" y={TOP_H * 0.05 + 11} textAnchor="middle" fontSize="9" fill={m.color} fontWeight="700">{m.icon}{m.label}</text>
+                  <rect x="-17" y={TOP_H * 0.05} width="34" height="15" rx="3" fill="#0E0E10" opacity="0.82" />
+                  <text x="0" y={TOP_H * 0.05 + 11} textAnchor="middle" fontSize="9" fill={m.color} fontWeight="700">{m.label}</text>
                 </g>
               ))}
               {/* v39.19: 集団の役割ラベル（逃げ集団／追走集団／ペロトン／遅れ）。ロードレースの
@@ -1363,7 +1356,7 @@ export function RaceView({ sim, onFinish }) {
                       const w = lab.t.length * 9 + 20;
                       return (
                         <g key={"gl" + i}>
-                          <rect x={x - w / 2} y={y - 11} width={w} height="15" rx="7" fill="#14171d" opacity="0.72" />
+                          <rect x={x - w / 2} y={y - 11} width={w} height="15" rx="7" fill="#0E0E10" opacity="0.72" />
                           <text x={x} y={y} textAnchor="middle" fontSize="9.5" fill={lab.c} fontWeight="700">{lab.t} {g.n}名</text>
                         </g>
                       );
@@ -1388,7 +1381,7 @@ export function RaceView({ sim, onFinish }) {
                 return (
                   <g>
                     <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#ffd23f" strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
-                    <rect x={mx - 17} y={my - 8} width="34" height="14" rx="3" fill="#14171d" opacity="0.8" />
+                    <rect x={mx - 17} y={my - 8} width="34" height="14" rx="3" fill="#0E0E10" opacity="0.8" />
                     <text x={mx} y={my + 2.5} textAnchor="middle" fontSize="9.5" fill="#ffd23f" fontWeight="700">▲{sec}秒</text>
                   </g>
                 );
@@ -1409,7 +1402,7 @@ export function RaceView({ sim, onFinish }) {
               {/* v12（簡易リードアウト演出）：自チームのアシストがエースを牽引中なら線で結ぶ */}
               {playerLeadout && (() => {
                 const p1 = packPoint(playerLeadout), p2 = packPoint(playerAce);
-                return <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={C.yellow} strokeWidth="1.2" strokeDasharray="3,2" opacity="0.65" />;
+                return <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={T.color.accent} strokeWidth="1.2" strokeDasharray="3,2" opacity="0.65" />;
               })()}
               {ridersUi.map(r => {
                 // v12: 隊列シェイプ（楕円軌道）由来の2次元オフセット。千切れ演出・アタック誇張は
@@ -1426,26 +1419,26 @@ export function RaceView({ sim, onFinish }) {
                   && drawFrac >= cam.start - 0.01 && drawFrac <= cam.end + 0.01;
                 return (
                   <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${riderTopY(drawFrac + dx, dy)})`}>
-                    {camMode === r.id && <circle r="10" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
+                    {camMode === r.id && <circle r="10" fill="none" stroke={T.color.good} strokeWidth="1.5" opacity="0.9" />}
                     {isLaunching && (
-                      <circle r="9" fill="none" stroke={C.yellow} strokeWidth="2" opacity="0.9">
+                      <circle r="9" fill="none" stroke={T.color.accent} strokeWidth="2" opacity="0.9">
                         <animate attributeName="r" values="7;11;7" dur="0.8s" repeatCount="indefinite" />
                         <animate attributeName="opacity" values="0.9;0.3;0.9" dur="0.8s" repeatCount="indefinite" />
                       </circle>
                     )}
-                    {r.mode === "attack" && <circle r="8" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
-                    {r.nextPuller && r.mode === "draft" && <circle r={r.isAce ? 7.5 : 6} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
+                    {r.mode === "attack" && <circle r="8" fill="none" stroke={T.color.bad} strokeWidth="1.5" opacity="0.85" />}
+                    {r.nextPuller && r.mode === "draft" && <circle r={r.isAce ? 7.5 : 6} fill="none" stroke={T.color.accent} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
                     {/* v29バグ修正: 自分がエースでない（白マーカー）ときにアシスト仲間と見分けが
                         つかないという指摘に対応。自分の印には常に水色の識別リングを重ね、
                         エースかどうかに関わらず一目で自分だとわかるようにする */}
                     {r.isPlayer && <circle r={r.isAce ? 8 : 6.5} fill="none" stroke="#27d3ff" strokeWidth="1.8" />}
                     {/* v39.12: 俯瞰マーカーを真上から見た自転車アイコンに（フレーム＋前後輪＋ジャージ） */}
                     <g>
-                      <rect x="-5.4" y="-1" width="10.8" height="2" rx="1" fill="#14171d" opacity="0.9" />
-                      <circle cx="-4.4" cy="0" r="1.5" fill="#14171d" />
-                      <circle cx="4.4" cy="0" r="1.5" fill="#14171d" />
-                      <ellipse rx={r.isAce ? 4 : 3.3} ry={r.isAce ? 3 : 2.6} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.6 : 0.6} />
-                      {r.isPlayer && <circle r="1.5" fill="#14171d" />}
+                      <rect x="-5.4" y="-1" width="10.8" height="2" rx="1" fill="#0E0E10" opacity="0.9" />
+                      <circle cx="-4.4" cy="0" r="1.5" fill="#0E0E10" />
+                      <circle cx="4.4" cy="0" r="1.5" fill="#0E0E10" />
+                      <ellipse rx={r.isAce ? 4 : 3.3} ry={r.isAce ? 3 : 2.6} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#0E0E10"} strokeWidth={r.mode === "pull" ? 1.6 : 0.6} />
+                      {r.isPlayer && <circle r="1.5" fill="#0E0E10" />}
                     </g>
                     {/* v39.19: 役割バッジ。牽引（先頭交代の当番）／リードアウト／前待ち を用語で明示 */}
                     {(() => {
@@ -1464,7 +1457,7 @@ export function RaceView({ sim, onFinish }) {
                       if (!badge || (!r.isMyTeam && !r.isPlayer && r.mode !== "pull")) return null;
                       return (
                         <g>
-                          <rect x={-badge.t.length * 4.5 - 3} y={7} width={badge.t.length * 9 + 6} height="11" rx="5" fill="#14171d" opacity="0.7" />
+                          <rect x={-badge.t.length * 4.5 - 3} y={7} width={badge.t.length * 9 + 6} height="11" rx="5" fill="#0E0E10" opacity="0.7" />
                           <text y={15.5} textAnchor="middle" fontSize="8" fill={badge.c} fontWeight="700">{badge.t}</text>
                         </g>
                       );
@@ -1491,18 +1484,18 @@ export function RaceView({ sim, onFinish }) {
                 <svg viewBox={`0 0 ${BW} ${BH}`} preserveAspectRatio="none" style={{ width: "100%", aspectRatio: `${BW} / ${BH}`, display: "block", marginTop: 3 }}>
                   <rect x={pad} y={BH / 2 - 3} width={w} height="6" rx="3" fill="#2b2f36" />
                   {courseMarkers.map((m, i) => <rect key={"pm" + i} x={fx(m.frac) - 1} y={BH / 2 - 5} width="2" height="10" fill={m.color} opacity="0.8" />)}
-                  <rect x={viewA} y="1" width={Math.max(3, viewB - viewA)} height={BH - 2} rx="2" fill="none" stroke={C.yellow} strokeWidth="1.2" opacity="0.85" />
+                  <rect x={viewA} y="1" width={Math.max(3, viewB - viewA)} height={BH - 2} rx="2" fill="none" stroke={T.color.accent} strokeWidth="1.2" opacity="0.85" />
                   <circle cx={fx(0)} cy={BH / 2} r="2.4" fill="#8a8f98" />
-                  <text x={fx(1)} y={BH / 2 + 3.5} textAnchor="end" fontSize="9">🏁</text>
+                  <rect x={fx(1) - 1.5} y={BH / 2 - 5} width="3" height="10" fill="#eef1f6" />
                   <circle cx={fx(leadF)} cy={BH / 2} r="3" fill="#ff6b6b" />
-                  {meR && <circle cx={fx(meR.frac)} cy={BH / 2} r="3" fill="#27d3ff" stroke="#14171d" strokeWidth="0.8" />}
+                  {meR && <circle cx={fx(meR.frac)} cy={BH / 2} r="3" fill="#27d3ff" stroke="#0E0E10" strokeWidth="0.8" />}
                 </svg>
               );
             })()}
           </div>
           <div>
-            <Eyebrow color={finalSeg ? C.red : C.sub}>{finalSeg ? "🏁 ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</Eyebrow>
-            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${SIDE_H}`, background: terrainBgSide, borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${C.red}` : "2px solid transparent", transition: "background-color 0.6s, border-color 0.2s" }}>
+            <div style={{ fontSize: T.size.caption, color: finalSeg ? T.color.bad : T.color.sub }}>{finalSeg ? "ラストスパートズーム — 側面マップ" : "側面マップ（コースの上下の起伏）"}</div>
+            <svg viewBox={`0 0 ${MAP_W} ${SIDE_H}`} preserveAspectRatio="none" style={{ ...MAP_BLEED, boxSizing: "border-box", aspectRatio: `${MAP_W} / ${SIDE_H}`, background: terrainBgSide, borderRadius: 8, marginTop: 4, border: finalSeg ? `2px solid ${T.color.bad}` : "2px solid transparent", transition: "background-color 0.6s, border-color 0.2s" }}>
               <polyline points={`${MAP_PAD},${SIDE_H - 4} ${sidePath} ${MAP_W - MAP_PAD},${SIDE_H - 4}`} fill="rgba(255,210,63,0.12)" stroke="none" />
               <polyline points={sidePath} fill="none" stroke="#8a8f98" strokeWidth="16" />
               {ridersUi.map(r => {
@@ -1511,12 +1504,12 @@ export function RaceView({ sim, onFinish }) {
                 const drawFrac = Math.min(1, r.frac + attackBonus);
                 return (
                   <g key={r.id} transform={`translate(${mapX(drawFrac + dx, cam.start, cam.end)},${sideYAt(drawFrac) - Math.abs(dy) * 0.6})`}>
-                    {camMode === r.id && <circle r="9" fill="none" stroke={C.green} strokeWidth="1.5" opacity="0.9" />}
-                    {r.mode === "attack" && <circle r="7" fill="none" stroke={C.red} strokeWidth="1.5" opacity="0.85" />}
-                    {r.nextPuller && r.mode === "draft" && <circle r={r.isAce ? 6.5 : 5} fill="none" stroke={C.yellow} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
+                    {camMode === r.id && <circle r="9" fill="none" stroke={T.color.good} strokeWidth="1.5" opacity="0.9" />}
+                    {r.mode === "attack" && <circle r="7" fill="none" stroke={T.color.bad} strokeWidth="1.5" opacity="0.85" />}
+                    {r.nextPuller && r.mode === "draft" && <circle r={r.isAce ? 6.5 : 5} fill="none" stroke={T.color.accent} strokeWidth="1" strokeDasharray="2,2" opacity="0.7" />}
                     {r.isPlayer && <circle r={r.isAce ? 7 : 5.5} fill="none" stroke="#27d3ff" strokeWidth="1.6" />}
-                    <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#14171d"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
-                    {r.isPlayer && <circle r="1.5" fill="#14171d" />}
+                    <circle r={r.isAce ? 5 : 3.5} fill={r.color} stroke={r.mode === "pull" ? "#fff" : "#0E0E10"} strokeWidth={r.mode === "pull" ? 1.8 : 0.6} />
+                    {r.isPlayer && <circle r="1.5" fill="#0E0E10" />}
                     {/* v45: 側面マップにも上と同じ引き出し線タグを追加（従来はラベル自体が無かった） */}
                     {labelIds.has(r.id) && (
                       <RiderNameTag x={0} y={0} dx={13 + (riderHash01(r.id, 41) - 0.5) * 5} dy={-16 - riderHash01(r.id, 43) * 8}
@@ -1532,27 +1525,30 @@ export function RaceView({ sim, onFinish }) {
               役割は選手のすぐ下に役割バッジとして描かれているので凡例からは削除。集団の
               振る舞いを説明する一文も、見れば分かる内容なので削除した。残したのは
               「どの印が誰か」という、絵だけでは決して分からない対応関係だけ。 */}
-          <div style={{ fontSize: 10, color: C.sub, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <span><span style={{ color: C.yellow }}>●</span> エース</span>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, display: "flex", gap: T.space.sm, flexWrap: "wrap" }}>
+            <span><span style={{ color: T.color.accent }}>●</span> エース</span>
             <span>○ 自チーム</span>
             <span style={{ color: "#27d3ff" }}>◎ あなた</span>
-            <span style={{ color: C.red }}>◎ アタック中</span>
-            <span style={{ color: C.green }}>◎ カメラ追跡中</span>
+            <span style={{ color: T.color.bad }}>◎ アタック中</span>
+            <span style={{ color: T.color.good }}>◎ カメラ追跡中</span>
           </div>
         </>
       )}
       {hud.comment && (
-        <div style={{ background: C.panel2, borderRadius: 6, padding: "6px 10px", fontSize: 13, color: C.text }}>
-          {hud.comment}
+        <div style={{ background: T.color.surfaceUp, padding: T.space.sm, fontSize: T.size.body, color: T.color.text }}>
+          <span style={{ fontSize: T.size.caption, color: T.color.accent }}>実況　</span>{hud.comment}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8 }}>
-        {!hud.done && !decision && (<>
-          <Btn small outline color={C.text} onClick={() => { const nx = speedUi >= 8 ? 0.5 : speedUi * 2; speedRef.current = nx; setSpeedUi(nx); lastRaceSpeed = nx; }}>×{speedUi}</Btn>
-          <Btn small outline color={C.text} onClick={() => { skipRef.current = true; if (tickRef.current) tickRef.current(); }}>スキップ</Btn>
-        </>)}
-        {hud.done && <Btn small onClick={onFinish}>結果を見る →</Btn>}
-      </div>
+      {!hud.done && !decision && (
+        <div style={{ display: "flex", gap: T.space.sm, alignItems: "center" }}>
+          <ChipRow value={speedUi} onChange={nx => { speedRef.current = nx; setSpeedUi(nx); lastRaceSpeed = nx; }}
+            options={[0.5, 1, 2, 4, 8].map(v => ({ value: v, label: `×${v}` }))} />
+          <div style={{ flex: 1 }}>
+            <QuietBtn onClick={() => { skipRef.current = true; if (tickRef.current) tickRef.current(); }}>スキップ</QuietBtn>
+          </div>
+        </div>
+      )}
+      {hud.done && <PrimaryBtn onClick={onFinish}>結果を見る</PrimaryBtn>}
     </div>
   );
 }

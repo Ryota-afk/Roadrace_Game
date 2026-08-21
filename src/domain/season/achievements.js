@@ -3,7 +3,7 @@ import { hasAbility, mulberry } from "../../core/core.js";
 import { ABILITIES, AB_KEYS } from "../../data/abilities.js";
 import { MANAGER_DIRECTIVES } from "../../data/directives.js";
 import { ROOM_GRADE_MAX, ROOM_UPGRADE_KEYS } from "../../data/roomUpgrade.js";
-import { C } from "../../data/theme.js";
+import { T } from "../../data/theme.js";
 import { addAb } from "../shared/growth.js";
 import { mlGrowthCap } from "../mylife/growthCap.js";
 import { teamChemistryTier } from "../../sim/buildSim.js";
@@ -191,11 +191,11 @@ export function mlGenDirective(year, month, classIdx, managerEval) {
 }
 
 export function managerEvalTier(v) {
-  if (v >= 80) return { label: "絶大な信頼", color: C.yellow };
-  if (v >= 60) return { label: "高い評価", color: C.green };
-  if (v >= 40) return { label: "順調な評価", color: C.blue };
-  if (v >= 20) return { label: "様子見", color: C.sub };
-  return { label: "信頼不足", color: C.red };
+  if (v >= 80) return { label: "絶大な信頼", color: T.color.accent };
+  if (v >= 60) return { label: "高い評価", color: T.color.good };
+  if (v >= 40) return { label: "順調な評価", color: "#4f8fe8" };
+  if (v >= 20) return { label: "様子見", color: T.color.sub };
+  return { label: "信頼不足", color: T.color.bad };
 }
 
 export function pickMandateMonths(n, seed) {

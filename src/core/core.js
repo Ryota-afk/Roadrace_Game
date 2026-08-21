@@ -1,6 +1,5 @@
 // 共有の低レベルロジック（RNG・能力ヘルパー・選手/名前生成・OVR）。Phase 2で分離。
 import { ABILITIES, AB_KEYS, GROWTH, TYPES } from "../data/abilities.js";
-import { C } from "../data/theme.js";
 
 // 選手ID採番の共有可変カウンタ（旧 let ridState.value）。所有はcore、他モジュールは .value を読み書き。
 export const ridState = { value: 100 };

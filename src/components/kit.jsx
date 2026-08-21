@@ -114,3 +114,21 @@ export const ShopRow = ({ label, badge, detail, count, countLabel, gauge, locked
     )}
   </div>
 );
+
+// 第13弾Phase3-E: 横並び1タップ選択（出走人数・役割・作戦・観戦中のカメラ/速度切替で共用）。
+// 開かずに全選択肢が見えるチップ型。選択中はaction（バイオレット）で示す（CLAUDE.md §9）。
+export const ChipRow = ({ options, value, onChange }) => (
+  <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap" }}>
+    {options.map(o => {
+      const on = value === o.value;
+      return (
+        <button key={o.value} disabled={o.disabled} onClick={() => onChange(o.value)} style={{
+          background: T.color.surfaceUp, color: o.disabled ? T.color.rule : on ? T.color.action : T.color.sub,
+          border: `1px solid ${on ? T.color.action : "transparent"}`,
+          fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`,
+          cursor: o.disabled ? "default" : "pointer",
+        }}>{o.label}</button>
+      );
+    })}
+  </div>
+);

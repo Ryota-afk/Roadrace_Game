@@ -1,12 +1,17 @@
 // season.jsx より分割（Step8）：出走〜結果〜GC（startlist/lineup/race/result/gc_stage/gc_role_setup/gc_final）
+// 第13弾Phase3-E：kit.jsxへ全面移行。lineupの出走人数・役割・作戦はChipRow、メンバー選択は
+// RiderCard（選択=action・故障中=bad）。結果画面は「言葉が主役」（優勝/順位をdisplay 28pxに）で
+// 全行表示（スクロールボックス廃止）。👑→エース／🔀→OB／ジャージ🟢🔴⚪→色チップ。
+// 詳細はdevlog/wave13.md参照。
 import React from "react";
 import { RaceErrorBoundary, RaceView } from "../../components/RaceView.jsx";
-import { AbilityGrid, CondFc, ElevationChart, FatigueBar, MultiStageCourseView, StartListPanel, TraitLine } from "../../components/panels.jsx";
-import { Btn, Eyebrow } from "../../components/ui.jsx";
+import { AbilityGrid, ElevationChart, MultiStageCourseView, StartListPanel, TraitLine } from "../../components/panels.jsx";
+import { ChipRow, Item, PrimaryBtn, QuietBtn, Section, SelectRow } from "../../components/kit.jsx";
+import { RiderCard } from "../../components/riderCard.jsx";
 import { fmtGap, fmtTime, overall } from "../../core/core.js";
-import { AB_LABEL, COND_ARROW, COND_COLOR, TYPES, TYPE_ROLE_FIT } from "../../data/abilities.js";
+import { AB_LABEL, TYPES, TYPE_ROLE_FIT } from "../../data/abilities.js";
 import { CHASE_MODES, ROLES, SEG_AB, SEG_COLOR } from "../../data/course.js";
-import { C, FONT_D, FONT_M } from "../../data/theme.js";
+import { FONT_DOT, T } from "../../data/theme.js";
 import { DISCIPLINES, FAVORS_TO_DISCIPLINE, WEATHER, disciplineScore, groupModeFor, objectiveStatusText, t_label } from "../../logic/support.js";
 import { effAbilities, generateCourse } from "../../sim/race.js";
 
@@ -17,16 +22,17 @@ export function renderSeasonRaceScreens(ctx) {
     const playerEntrants = g.roster.filter(r => (g.sel.starters || []).includes(r.id))
       .map(r => {
         // v34(UI): 下馬評用に自チーム選手も実効能力を持たせる（AIと同じeffAbilitiesで公平に比較）
-        const meta = { id: r.id, name: r.name, type: r.type, teamName: g.teamName || "あなたのチーム", color: C.yellow, team: "PLAYER", isAce: r.id === g.sel.ace };
+        const meta = { id: r.id, name: r.name, type: r.type, teamName: g.teamName || "あなたのチーム", color: T.color.accent, team: "PLAYER", isAce: r.id === g.sel.ace };
         return race ? { ...effAbilities(r, g.equip, {}, race.grade, race.weather, race.monument), ...meta } : meta;
       });
     const aiEntrants = (g.pendingAiTeams || []).flat();
     return wrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <Eyebrow color={C.purple}>🏁 出走表 — {race ? race.name : ""}</Eyebrow>
-        {playerEntrants.length === 0 && <div style={{ fontSize: 11.5, color: C.sub }}>まだ自チームの出走メンバーを選んでいません。相手の布陣を見て編成を決めましょう。</div>}
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section title="出走表" right={race ? race.name : ""}>
+          {playerEntrants.length === 0 && <div style={{ fontSize: T.size.caption, color: T.color.sub }}>まだ自チームの出走メンバーを選んでいません。相手の布陣を見て編成を決めましょう。</div>}
+        </Section>
         <StartListPanel entrants={[...playerEntrants, ...aiEntrants]} favors={race && race.tmpl ? race.tmpl.favors : undefined} />
-        <Btn onClick={() => setG(s => ({ ...s, screen: "lineup" }))}>← 編成に戻る</Btn>
+        <QuietBtn onClick={() => setG(s => ({ ...s, screen: "lineup" }))}>← 編成に戻る</QuietBtn>
       </div>
     );
   }
@@ -52,162 +58,102 @@ export function renderSeasonRaceScreens(ctx) {
       : Object.entries(ROLES);
     const squadChoices = [];
     for (let n = race.tmpl.squadMin; n <= race.tmpl.squadMax; n++) squadChoices.push(n);
+    const tags = [
+      race.championship && "チャンピオンシップ", race.grandTour && "グランツール", race.sponsorMandate && "スポンサー指定レース",
+    ].filter(Boolean);
     return wrap(
-      <div style={{ display: "grid", gap: 14 }}>
-        <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.yellow}` }}>
-          <div style={{ fontFamily: FONT_D, fontSize: 16, fontWeight: 700, color: C.text }}>{race.championship ? "👑 " : ""}{race.sponsorMandate ? "🎯 " : ""}{race.name} {"★".repeat(race.grade)}</div>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section title="出走準備" right={"★".repeat(race.grade)}>
+          <div style={{ fontSize: T.size.title, color: T.color.text }}>{race.name}</div>
+          {tags.length > 0 && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2 }}>{tags.join("・")}</div>}
           {race.weather && race.weather !== "clear" && (
-            <div style={{ fontSize: 12, color: race.weather === "rain" ? C.blue : C.red, marginTop: 2 }}>
-              {WEATHER[race.weather].icon} 天候：{WEATHER[race.weather].label}
-              {race.weather === "rain" ? "（悪天候巧者以外は能力低下・落車リスク増）" : "（出走後の疲労蓄積が増える）"}
+            <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.xs }}>
+              {WEATHER[race.weather].label}：{race.weather === "rain" ? "悪天候巧者以外は能力低下・落車リスク増" : "出走後の疲労蓄積が増える"}
             </div>
           )}
           {!race.stageRace && (
-            <div style={{ display: "flex", gap: 3, margin: "6px 0 3px" }}>
-              {race.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
+            <div style={{ display: "flex", gap: 3, margin: `${T.space.sm}px 0 ${T.space.xs}px` }}>
+              {race.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 5, background: SEG_COLOR[s[0]] }} />)}
             </div>
           )}
-          <div style={{ fontSize: 11.5, color: C.sub }}>{race.stageRace && race.stageTmpls ? "日替わりコース" : race.tmpl.kind}・<span style={{ color: C.yellow }}>出走{N}名</span>・{TYPES[race.tmpl.favors].label}有利</div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{race.stageRace && race.stageTmpls ? "日替わりコース" : race.tmpl.kind}・<span style={{ color: T.color.accent }}>出走{N}名</span>・{TYPES[race.tmpl.favors].label}有利</div>
           {squadChoices.length > 1 && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 10.5, color: C.sub, marginBottom: 4 }}>出走人数（少ないほど疲労を温存でき、多いほど作戦の幅が広がる）</div>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {squadChoices.map(n => {
-                  const dis = healthy.length < n;
-                  return (
-                    <button key={n} disabled={dis} onClick={() => setSquadN(n)}
-                      style={{
-                        fontFamily: FONT_D, fontWeight: 700, fontSize: 12.5, padding: "5px 11px", borderRadius: 6, cursor: dis ? "default" : "pointer",
-                        background: N === n ? C.yellow : C.panel2, color: N === n ? "#14171d" : dis ? "#5b6272" : C.sub,
-                        border: `1px solid ${N === n ? C.yellow : C.line}`, opacity: dis ? 0.5 : 1,
-                      }}>{n}名</button>
-                  );
-                })}
-              </div>
+            <div style={{ marginTop: T.space.sm }}>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>出走人数（少ないほど疲労を温存でき、多いほど作戦の幅が広がる）</div>
+              <ChipRow value={N} onChange={setSquadN} options={squadChoices.map(n => ({ value: n, label: `${n}名`, disabled: healthy.length < n }))} />
             </div>
           )}
-          <div style={{ marginTop: 6 }}>
+          <div style={{ marginTop: T.space.sm }}>
             {race.stageRace ? <MultiStageCourseView race={race} /> : <ElevationChart course={previewCourse} />}
           </div>
-        </div>
-        <section>
-          <Eyebrow>出走{N}名を選択（{sel.starters.length}/{N}）</Eyebrow>
-          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-            {g.roster.map(r => {
-              const t = TYPES[r.type];
-              const dis = r.injury > 0;
-              const on = sel.starters.includes(r.id);
-              const fitKey = FAVORS_TO_DISCIPLINE[race.tmpl.favors];
-              const fitScore = disciplineScore(r, fitKey);
+        </Section>
+        <Section title="出走メンバー" right={`${sel.starters.length}/${N}名`}>
+          {g.roster.map((r, i) => {
+            const dis = r.injury > 0;
+            const on = sel.starters.includes(r.id);
+            const fitKey = FAVORS_TO_DISCIPLINE[race.tmpl.favors];
+            const fitScore = disciplineScore(r, fitKey);
+            return (
+              <RiderCard key={r.id} r={r} first={i === 0} ovr={overall(r)}
+                selected={on} disabled={dis} onClick={() => toggle(r.id)}
+                sub={`${DISCIPLINES[fitKey].label}適性${fitScore}`}
+                cond={r.cond} fatigue={r.fatigue}>
+                {dis && <div style={{ fontSize: T.size.caption, color: T.color.bad, marginBottom: T.space.xs }}>故障中</div>}
+                {!dis && r.streak >= 1 && <div style={{ fontSize: T.size.caption, color: r.streak >= 2 ? T.color.bad : T.color.accent, marginBottom: T.space.xs }}>連闘{r.streak}{r.streak >= 2 ? "（出すと故障）" : ""}</div>}
+                <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
+                <AbilityGrid r={r} cap={growthCap} />
+              </RiderCard>
+            );
+          })}
+        </Section>
+        {sel.starters.length === N && N > 1 && (
+          <Section title="エース指名" right={`残り${N - 1}名がエースを支える`}>
+            {g.roster.filter(r => sel.starters.includes(r.id)).map((r, i) => (
+              <SelectRow key={r.id} first={i === 0} label={r.name} selected={sel.ace === r.id}
+                onClick={() => setG(s => ({ ...s, sel: { ...s.sel, ace: r.id } }))} />
+            ))}
+          </Section>
+        )}
+        {sel.starters.length === N && (N === 1 || sel.ace) && groupMode !== "solo" && (
+          <Section title="役割指定" right="エースを支える残りのメンバーのみ">
+            {g.roster.filter(r => sel.starters.includes(r.id) && r.id !== sel.ace).map((r, i) => {
+              const role = sel.roles[r.id] || "lead";
+              const mismatch = (role === "mountain" || role === "flat") && TYPE_ROLE_FIT[role] && !TYPE_ROLE_FIT[role].includes(r.type);
               return (
-                <div key={r.id} onClick={() => !dis && toggle(r.id)}
-                  style={{
-                    background: on ? "#2b3141" : C.panel, borderRadius: 10, padding: "9px 12px", cursor: dis ? "default" : "pointer",
-                    border: `1.5px solid ${on ? C.yellow : C.line}`, opacity: dis ? 0.45 : 1,
-                  }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{r.name}
-                      <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
-                      {dis && <span style={{ marginLeft: 6, fontSize: 10.5, color: C.red }}>🏥故障中</span>}
-                      {r.streak >= 1 && !dis && <span style={{ marginLeft: 6, fontSize: 10.5, color: r.streak >= 2 ? C.red : "#e8a13c" }}>連闘{r.streak}{r.streak >= 2 ? "（出すと故障）" : ""}</span>}
-                    </span>
-                    <span style={{ fontFamily: FONT_M, fontSize: 12, color: COND_COLOR[r.cond - 1] }}>
-                      {COND_ARROW[r.cond - 1]}<CondFc dir={r.condForecast} /> <span style={{ color: C.yellow }}>{overall(r)}</span>
-                      <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
-                    </span>
-                  </div>
-                  <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
-                  <FatigueBar v={r.fatigue} />
-                  <AbilityGrid r={r} cap={growthCap} />
+                <div key={r.id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                  <div style={{ fontSize: T.size.body, color: T.color.text, marginBottom: T.space.xs }}>{r.name}</div>
+                  <ChipRow value={role} onChange={k => setG(s => ({ ...s, sel: { ...s.sel, roles: { ...s.sel.roles, [r.id]: k } } }))}
+                    options={roleOptions.map(([k, rl]) => ({ value: k, label: rl.label }))} />
+                  {mismatch && <div style={{ fontSize: T.size.caption, color: T.color.bad, marginTop: T.space.xs }}>{t_label(r.type)}には不向きな役割（適性ボーナスなし）</div>}
                 </div>
               );
             })}
-          </div>
-        </section>
-        {sel.starters.length === N && N > 1 && (
-          <section>
-            <Eyebrow color={C.yellow}>エース指名（残り{N - 1}名がエースを支える）</Eyebrow>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              {g.roster.filter(r => sel.starters.includes(r.id)).map(r => (
-                <button key={r.id} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, ace: r.id } }))}
-                  style={{
-                    fontFamily: FONT_D, fontWeight: 700, fontSize: 14, padding: "9px 13px", borderRadius: 8, cursor: "pointer",
-                    background: sel.ace === r.id ? C.yellow : C.panel, color: sel.ace === r.id ? "#14171d" : C.text,
-                    border: `1.5px solid ${sel.ace === r.id ? C.yellow : C.line}`,
-                  }}>{sel.ace === r.id ? "👑 " : ""}{r.name}</button>
-              ))}
-            </div>
-          </section>
-        )}
-        {sel.starters.length === N && (N === 1 || sel.ace) && groupMode !== "solo" && (
-          <section>
-            <Eyebrow color={C.green}>役割指定（エースを支える残りのメンバーのみ。コースに合わせて細かく指定できます）</Eyebrow>
-            <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
-              {g.roster.filter(r => sel.starters.includes(r.id) && r.id !== sel.ace).map(r => {
-                const role = sel.roles[r.id] || "lead";
-                const mismatch = (role === "mountain" || role === "flat") && TYPE_ROLE_FIT[role] && !TYPE_ROLE_FIT[role].includes(r.type);
-                return (
-                  <div key={r.id} style={{ background: C.panel, borderRadius: 8, padding: "6px 10px", border: `1px solid ${C.line}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
-                      <span style={{ fontFamily: FONT_D, fontSize: 13, color: C.text }}>{r.name}</span>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {roleOptions.map(([k, rl]) => (
-                          <button key={k} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, roles: { ...s.sel.roles, [r.id]: k } } }))}
-                            title={rl.desc}
-                            style={{
-                              fontFamily: FONT_D, fontSize: 10.5, fontWeight: 700, padding: "4px 7px", borderRadius: 6, cursor: "pointer",
-                              background: role === k ? (k === "breakaway" ? C.red : C.blue) : C.panel2,
-                              color: role === k ? "#14171d" : C.sub,
-                              border: `1px solid ${role === k ? (k === "breakaway" ? C.red : C.blue) : C.line}`,
-                            }}>{rl.label}</button>
-                        ))}
-                      </div>
-                    </div>
-                    {mismatch && <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>⚠ {t_label(r.type)}には不向きな役割（適性ボーナスなし）</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+          </Section>
         )}
         {ready && N > 1 && (
-          <section>
-            <Eyebrow color={C.green}>作戦（レース全体で1つ選択。観戦中の指示変更はできません）</Eyebrow>
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              {["normal", "push", "hold"].map(k => {
-                const active = (sel.chaseMode || "normal") === k;
-                return (
-                  <button key={k} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, chaseMode: k } }))}
-                    style={{
-                      flex: 1, padding: "8px 4px", borderRadius: 6, fontSize: 12, fontWeight: 700, fontFamily: FONT_D, cursor: "pointer",
-                      background: active ? C.green : C.panel2, color: active ? "#14171d" : C.text,
-                      border: `1px solid ${active ? C.green : C.line}`,
-                    }}>🚩 {CHASE_MODES[k].label}</button>
-                );
-              })}
+          <Section title="作戦" right="レース全体で1つ選択">
+            <ChipRow value={sel.chaseMode || "normal"} onChange={k => setG(s => ({ ...s, sel: { ...s.sel, chaseMode: k } }))}
+              options={["normal", "push", "hold"].map(k => ({ value: k, label: CHASE_MODES[k].label }))} />
+            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>{CHASE_MODES[sel.chaseMode || "normal"].desc}</div>
+            <div style={{ marginTop: T.space.sm }}>
+              <QuietBtn color={sel.aceEarly ? T.color.action : T.color.sub} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, aceEarly: !s.sel.aceEarly } }))}>
+                {CHASE_MODES.ace_early.label}{sel.aceEarly ? "・選択中" : ""}
+              </QuietBtn>
             </div>
-            <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>{CHASE_MODES[sel.chaseMode || "normal"].desc}</div>
-            <Btn small outline={!sel.aceEarly} color={C.red} style={{ marginTop: 8 }}
-              onClick={() => setG(s => ({ ...s, sel: { ...s.sel, aceEarly: !s.sel.aceEarly } }))}>
-              {sel.aceEarly ? "✔ " : ""}🚩 {CHASE_MODES.ace_early.label}
-            </Btn>
-            <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>{CHASE_MODES.ace_early.desc}</div>
-          </section>
+            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: -T.space.xs }}>{CHASE_MODES.ace_early.desc}</div>
+          </Section>
         )}
-        {ready && (
-          <section>
-            <Eyebrow color={C.green}>決戦機材</Eyebrow>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              {g.inv.wheel > 0 && <Btn small outline={!sel.useWheel} color={C.purple} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, useWheel: !s.sel.useWheel } }))}>{sel.useWheel ? "✔ " : ""}決戦ホイール（登坂+15%）</Btn>}
-              {g.inv.suit > 0 && <Btn small outline={!sel.useSuit} color={C.purple} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, useSuit: !s.sel.useSuit } }))}>{sel.useSuit ? "✔ " : ""}エアロスーツ（平坦+15%）</Btn>}
-            </div>
-          </section>
+        {ready && (g.inv.wheel > 0 || g.inv.suit > 0) && (
+          <Section title="決戦機材">
+            {g.inv.wheel > 0 && <QuietBtn color={sel.useWheel ? T.color.action : T.color.sub} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, useWheel: !s.sel.useWheel } }))}>決戦ホイール（登坂+15%）{sel.useWheel ? "・使用する" : ""}</QuietBtn>}
+            {g.inv.suit > 0 && <QuietBtn color={sel.useSuit ? T.color.action : T.color.sub} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, useSuit: !s.sel.useSuit } }))}>エアロスーツ（平坦+15%）{sel.useSuit ? "・使用する" : ""}</QuietBtn>}
+          </Section>
         )}
-        <div style={{ display: "grid", gap: 8 }}>
-          {g.pendingAiTeams && <Btn outline color={C.purple} onClick={() => setG(s => ({ ...s, screen: "startlist" }))}>🏁 出走表（他チームの布陣）を見る</Btn>}
-          <Btn disabled={!ready} onClick={() => startRace(true)}>観戦しながらスタート 🏁</Btn>
-          <Btn outline disabled={!ready} onClick={() => startRace(false)}>結果だけ見る（スキップ）</Btn>
-          <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
+        <div style={{ display: "grid", gap: T.space.sm }}>
+          {g.pendingAiTeams && <QuietBtn onClick={() => setG(s => ({ ...s, screen: "startlist" }))}>出走表（他チームの布陣）を見る</QuietBtn>}
+          <PrimaryBtn disabled={!ready} onClick={() => startRace(true)}>観戦しながらスタート</PrimaryBtn>
+          <QuietBtn disabled={!ready} onClick={() => startRace(false)}>結果だけ見る（スキップ）</QuietBtn>
+          <QuietBtn onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</QuietBtn>
         </div>
       </div>
     );
@@ -215,57 +161,52 @@ export function renderSeasonRaceScreens(ctx) {
 
   if (g.screen === "race" && g.result) return wrap(
     <div>
-      <div style={{ marginBottom: 8 }}>
-        <Eyebrow color={C.red}>LIVE — {g.result.raceMeta.name}{g.result.raceMeta.stageRace ? `（${g.gc.stage}日目）` : ""}</Eyebrow>
+      <div style={{ marginBottom: T.space.sm, fontSize: T.size.caption, color: T.color.bad }}>
+        LIVE — {g.result.raceMeta.name}{g.result.raceMeta.stageRace ? `（${g.gc.stage}日目）` : ""}
       </div>
       <RaceErrorBoundary onRecover={raceFinishHandler}>
         <RaceView sim={g.result} onFinish={raceFinishHandler} />
       </RaceErrorBoundary>
-      <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>
-        ● 印＝あなたのチーム／黄ジャージ＝エース。位置が近い選手同士が自然にグループを作り、千切れ・吸収・ローテーションが発生します。
-      </div>
     </div>
   );
 
-  if (g.screen === "result_pending") return wrap(<div style={{ color: C.sub }}>結果集計中…</div>);
+  if (g.screen === "result_pending") return wrap(<div style={{ color: T.color.sub, fontSize: T.size.body }}>結果集計中…</div>);
 
   // v35(チームTT): チームTT専用の結果画面（チーム順位＝合算タイムで並べる）
   if (g.screen === "result" && g.result && g.prizeInfo && g.prizeInfo.teamTT) {
     const { race, prize, pts, teamTT, teamRank, totalTeams, mandateHit } = g.prizeInfo;
     const winner = teamTT[0];
+    const om = objectiveStatusText(g.prizeInfo.objectiveResult);
     return wrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
-          <Eyebrow>RESULT — {race.name}（チームTT）</Eyebrow>
-          <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>
-            🏆 優勝：{winner.teamName}<span style={{ fontSize: 12, color: winner.isPlayer ? C.yellow : C.sub }}> {fmtTime(winner.time)}</span>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <div style={{ textAlign: "center", padding: `${T.space.lg}px 0` }}>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{race.name}（チームTT）</div>
+          <div style={{ fontSize: T.size.display, color: winner.isPlayer ? T.color.accent : T.color.text }}>
+            {winner.isPlayer ? `${winner.teamName}、優勝` : `自チーム ${teamRank}位`}
           </div>
-          <div style={{ fontSize: 13.5, color: C.text }}>自チーム：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{teamRank}位</span> / {totalTeams}チーム</div>
-          <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{race.championship ? "" : ` ／ ポイント +${pts}pt${mandateHit ? "（指定レースボーナス込）" : ""}`}</div>
-          {(() => {
-            const om = objectiveStatusText(g.prizeInfo.objectiveResult);
-            if (!om) return null;
-            return (
-              <div style={{ marginTop: 4, fontSize: 12.5, color: g.prizeInfo.objectiveDone ? C.green : C.purple, fontWeight: g.prizeInfo.objectiveDone ? 700 : 400 }}>
-                {g.prizeInfo.objectiveDone ? `🎉 中期目標「${om.icon} ${om.label}」達成！` : `🎯 中期目標「${om.icon} ${om.label}」進捗 ${om.tail}`}
-              </div>
-            );
-          })()}
-          <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと、チームの連携が効きます。</div>
+          {!winner.isPlayer && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>優勝：{winner.teamName}</div>}
         </div>
-        <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px" }}>
-          {teamTT.map((t) => (
-            <div key={t.team} style={{ display: "flex", justifyContent: "space-between", padding: "6px 8px", borderRadius: 6, fontSize: 13, background: t.isPlayer ? "rgba(255,210,63,0.12)" : "transparent", borderBottom: `1px solid ${C.line}` }}>
-              <span style={{ color: t.isPlayer ? C.yellow : C.text, fontWeight: t.isPlayer ? 700 : 400 }}>
-                <span style={{ fontFamily: FONT_M, display: "inline-block", width: 26 }}>{t.rank}.</span>
-                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: t.color, marginRight: 6 }} />
-                {t.teamName}{t.isPlayer ? "（自チーム）" : ""}
+        <Section title="獲得">
+          <Item first label="自チーム順位" value={`${teamRank} / ${totalTeams}チーム`} />
+          <Item label="タイム" value={teamRank === 1 ? fmtTime(winner.time) : fmtGap((teamTT.find(t => t.isPlayer) || {}).time - winner.time)} />
+          <Item label="賞金" value={`+${prize}万円`} />
+          {!race.championship && <Item label="チームポイント" value={`+${pts}pt`} detail={mandateHit ? "指定レースボーナス込み" : undefined} />}
+          {om && <Item label={`中期目標「${om.label}」`} value={g.prizeInfo.objectiveDone ? "達成" : `進捗 ${om.tail}`} valueColor={g.prizeInfo.objectiveDone ? T.color.good : undefined} />}
+        </Section>
+        <Section title="チーム順位" right={`出走${totalTeams}チーム`}>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと、チームの連携が効きます。</div>
+          {teamTT.map((t, i) => (
+            <div key={t.team} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+              <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
+                <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{t.rank}</span>
+                <span style={{ width: 10, height: 10, background: t.color, flex: "none" }} />
+                <span style={{ fontSize: T.size.body, color: t.isPlayer ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.teamName}{t.isPlayer ? "（自チーム）" : ""}</span>
               </span>
-              <span style={{ fontFamily: FONT_M, color: C.sub }}>{t.rank === 1 ? fmtTime(t.time) : fmtGap(t.time - winner.time)}</span>
+              <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{t.rank === 1 ? fmtTime(t.time) : fmtGap(t.time - winner.time)}</span>
             </div>
           ))}
-        </div>
-        <Btn onClick={() => { const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))]; advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId }); }}>翌月へ進む →</Btn>
+        </Section>
+        <PrimaryBtn onClick={() => { const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))]; advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId }); }}>翌月へ進む</PrimaryBtn>
       </div>
     );
   }
@@ -273,54 +214,53 @@ export function renderSeasonRaceScreens(ctx) {
     const { race, prize, pts, best, mandateHit, breakSurvived, hadBreak, courseRecord } = g.prizeInfo;
     const res = g.result;
     const expKeys = [...new Set(res.course.segs.map(s => SEG_AB[s.type]))];
+    const winnerIsPlayer = res.ranked[0].team === "PLAYER";
+    const om = objectiveStatusText(g.prizeInfo.objectiveResult);
     return wrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
-          <Eyebrow>RESULT — {race.name}</Eyebrow>
-          <div style={{ fontFamily: FONT_D, fontSize: 20, color: C.text, fontWeight: 700, margin: "6px 0" }}>
-            🏆 優勝：{res.ranked[0].name}
-            <span style={{ fontSize: 12, color: res.ranked[0].team === "PLAYER" ? C.yellow : C.sub }}>（{res.ranked[0].teamName}）</span>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <div style={{ textAlign: "center", padding: `${T.space.lg}px 0` }}>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{race.name}</div>
+          <div style={{ fontSize: T.size.display, color: winnerIsPlayer ? T.color.accent : T.color.text }}>
+            {winnerIsPlayer ? `${res.ranked[0].name}、優勝` : `自チーム最高 ${best.rank}位`}
           </div>
-          <div style={{ fontSize: 13.5, color: C.text }}>自チーム最高位：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{best.rank}位</span>（{best.name}）</div>
-          <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{race.championship ? "" : ` ／ ポイント +${pts}pt${mandateHit ? "（指定レースボーナス込）" : ""}`}</div>
+          {!winnerIsPlayer && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>優勝：{res.ranked[0].name}（{res.ranked[0].teamName}）</div>}
           {hadBreak && (
-            <div style={{ fontSize: 12, color: breakSurvived ? C.yellow : C.sub, marginTop: 3 }}>
-              {breakSurvived ? "🚴 逃げ切り成功！逃げ集団内でのスプリント決着" : "🏃 メイン集団に吸収され、ゴールスプリント決着"}
-            </div>
-          )}
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>出走経験：{expKeys.map(k => AB_LABEL[k]).join("・")}が成長</div>
-          {courseRecord && courseRecord.isNew && (
-            <div style={{ fontSize: 12.5, color: courseRecord.isPlayer ? C.yellow : C.text, marginTop: 4, fontWeight: 700 }}>
-              🏅 {courseRecord.kind}のコースレコード更新！（記録値{courseRecord.speed}／達成：{courseRecord.holder}{courseRecord.isPlayer ? "・自チーム" : ""}）
+            <div style={{ fontSize: T.size.caption, color: breakSurvived ? T.color.accent : T.color.sub, marginTop: T.space.xs }}>
+              {breakSurvived ? "逃げ切り成功——逃げ集団内でのスプリント決着" : "メイン集団に吸収され、ゴールスプリント決着"}
             </div>
           )}
           {race.championship && (
-            <div style={{ marginTop: 6, fontSize: 13, color: best.rank <= 3 ? C.yellow : C.red }}>
+            <div style={{ fontSize: T.size.body, color: best.rank <= 3 ? T.color.good : T.color.bad, marginTop: T.space.sm }}>
               {g.classIdx === 2 && best.rank === 1 ? "グランファイナル制覇！！" : best.rank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
             </div>
           )}
-          {(() => {
-            const om = objectiveStatusText(g.prizeInfo.objectiveResult);
-            if (!om) return null;
-            return (
-              <div style={{ marginTop: 6, fontSize: 13, color: g.prizeInfo.objectiveDone ? C.green : C.purple, fontWeight: g.prizeInfo.objectiveDone ? 700 : 400 }}>
-                {g.prizeInfo.objectiveDone ? `🎉 中期目標「${om.icon} ${om.label}」達成！` : `🎯 中期目標「${om.icon} ${om.label}」進捗 ${om.tail}`}
-              </div>
-            );
-          })()}
         </div>
-        <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
-          {res.ranked.map(e => (
-            <div key={e.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", borderRadius: 6, fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
-              <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}>
-                <span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{e.rank}.</span>
-                {e.name}{e.isAce ? " 👑" : ""}{e.isAlumnus ? " 🔀" : ""}<span style={{ color: C.sub, fontSize: 10.5 }}> / {e.teamName}</span>
+        <Section title="獲得">
+          <Item first label="自チーム最高位" value={`${best.rank}位`} detail={best.name} />
+          <Item label="賞金" value={`+${prize}万円`} />
+          {!race.championship && <Item label="チームポイント" value={`+${pts}pt`} detail={mandateHit ? "指定レースボーナス込み" : undefined} />}
+          <Item label="出走経験" value={expKeys.map(k => AB_LABEL[k]).join("・")} detail="が成長" />
+          {courseRecord && courseRecord.isNew && (
+            <Item label={`${courseRecord.kind}のコースレコード`} value="更新！" valueColor={T.color.accent}
+              detail={`記録値${courseRecord.speed}／達成：${courseRecord.holder}${courseRecord.isPlayer ? "・自チーム" : ""}`} />
+          )}
+          {om && <Item label={`中期目標「${om.label}」`} value={g.prizeInfo.objectiveDone ? "達成" : `進捗 ${om.tail}`} valueColor={g.prizeInfo.objectiveDone ? T.color.good : undefined} />}
+        </Section>
+        <Section title="最終順位" right={`出走${res.ranked.length}名`}>
+          {res.ranked.map((e, i) => (
+            <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+              <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
+                <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{e.rank}</span>
+                <span style={{ fontSize: T.size.body, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}
+                </span>
+                <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{e.teamName}</span>
               </span>
-              <span style={{ fontFamily: FONT_M, color: C.sub }}>{e.rank === 1 ? fmtTime(e.finishTime) : fmtGap(e.finishTime - res.ranked[0].finishTime)}</span>
+              <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{e.rank === 1 ? fmtTime(e.finishTime) : fmtGap(e.finishTime - res.ranked[0].finishTime)}</span>
             </div>
           ))}
-        </div>
-        <Btn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む →</Btn>
+        </Section>
+        <PrimaryBtn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む</PrimaryBtn>
       </div>
     );
   }
@@ -343,38 +283,33 @@ export function renderSeasonRaceScreens(ctx) {
     const gcOrderSoFar = Object.entries(gcTimesSoFar).sort((a, b) => a[1] - b[1]);
     const gcBestIdx = gcOrderSoFar.findIndex(([id]) => idToEntrant[id].team === "PLAYER");
     return wrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.purple}` }}>
-          <Eyebrow color={C.purple}>第{stageNo}日 完了 — {g.gc.race.name}</Eyebrow>
-          <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>{stageNo}日目 自チーム最高位：<span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestIdx + 1}位</span></div>
-          <div style={{ fontSize: 13.5, color: C.text, marginTop: 3 }}>
-            総合成績（{stageNo}日目終了時点）：自チーム最高
-            <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}> {gcBestIdx + 1}位</span>
-            {gcBestIdx >= 0 && (
-              <span style={{ fontFamily: FONT_M, color: C.sub, marginLeft: 6 }}>
-                {gcBestIdx === 0 ? fmtTime(gcOrderSoFar[0][1]) : fmtGap(gcOrderSoFar[gcBestIdx][1] - gcOrderSoFar[0][1])}
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>総合成績は{totalStages}日目終了後に確定します。まずは休息・疲労回復（-20）をしてから{stageNo + 1}日目へ。</div>
-        </div>
-        <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
-          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>総合順位（{stageNo}日目終了時点）</div>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section title={`第${stageNo}日 完了`} right={g.gc.race.name}>
+          <Item first label={`${stageNo}日目 自チーム最高位`} value={`${bestIdx + 1}位`} />
+          <Item label="総合成績 自チーム最高"
+            value={`${gcBestIdx + 1}位`}
+            detail={gcBestIdx >= 0 ? (gcBestIdx === 0 ? fmtTime(gcOrderSoFar[0][1]) : fmtGap(gcOrderSoFar[gcBestIdx][1] - gcOrderSoFar[0][1])) : undefined} />
+        </Section>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: -T.space.sm }}>総合成績は{totalStages}日目終了後に確定します。まずは休息・疲労回復（-20）をしてから{stageNo + 1}日目へ。</div>
+        <Section title="総合順位" right={`${stageNo}日目終了時点`}>
           {gcOrderSoFar.map(([id, t], i) => {
             const e = idToEntrant[id];
             return (
-              <div key={id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
-                <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}{e.isAlumnus ? " 🔀" : ""}</span>
-                <span style={{ fontFamily: FONT_M, color: C.sub }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrderSoFar[0][1])}</span>
+              <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
+                  <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
+                  <span style={{ fontSize: T.size.body, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}</span>
+                </span>
+                <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrderSoFar[0][1])}</span>
               </div>
             );
           })}
-        </div>
-        <Btn onClick={() => {
+        </Section>
+        <PrimaryBtn onClick={() => {
           // v14.8: 出走1名（solo）は役割自体が存在しないため再設定画面を経由せず直接次日程へ
           if (g.gc.starters.length === 1) startNextStage();
           else setG(s => ({ ...s, screen: "gc_role_setup" }));
-        }}>{stageNo + 1}日目へ進む →</Btn>
+        }}>{stageNo + 1}日目へ進む</PrimaryBtn>
       </div>
     );
   }
@@ -397,87 +332,52 @@ export function renderSeasonRaceScreens(ctx) {
     const dayTmpl = gc.race.stageTmpls ? gc.race.stageTmpls[nextStageNo - 1] : gc.race.tmpl;
     const dayCourse = generateCourse(gc.race, `day${nextStageNo}`);
     return wrap(
-      <div style={{ display: "grid", gap: 14 }}>
-        <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid ${C.purple}` }}>
-          <div style={{ fontFamily: FONT_D, fontSize: 15, fontWeight: 700, color: C.text }}>{nextStageNo}日目に向けて作戦変更</div>
-          <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>この日だけエース・役割を変更できます（メンバーは変更不可）。</div>
-          <div style={{ display: "flex", gap: 3, margin: "8px 0 3px" }}>
-            {dayTmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 7, borderRadius: 3, background: SEG_COLOR[s[0]] }} />)}
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section title={`${nextStageNo}日目に向けて作戦変更`} padded>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>この日だけエース・役割を変更できます（メンバーは変更不可）。</div>
+          <div style={{ display: "flex", gap: 3, margin: `0 0 ${T.space.xs}px` }}>
+            {dayTmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 5, background: SEG_COLOR[s[0]] }} />)}
           </div>
-          <div style={{ fontSize: 11.5, color: C.sub }}>{nextStageNo}日目・{dayTmpl.kind}・{TYPES[dayTmpl.favors].label}有利</div>
-          <div style={{ marginTop: 6 }}><ElevationChart course={dayCourse} /></div>
-        </div>
-        <section>
-          {/* v14.14: 作戦変更画面でも選手の能力を見た上でエース・役割を決められるよう、
-              その日のコース適性（disciplineScore）と能力グリッドを一覧表示する */}
-          <Eyebrow color={C.sub}>出走メンバーの能力（{nextStageNo}日目のコース適性）</Eyebrow>
-          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-            {squad.map(r => {
-              const t = TYPES[r.type];
-              const fitKey = FAVORS_TO_DISCIPLINE[dayTmpl.favors];
-              const fitScore = disciplineScore(r, fitKey);
-              return (
-                <div key={r.id} style={{ background: C.panel, borderRadius: 10, padding: "9px 12px", border: `1.5px solid ${sel.ace === r.id ? C.yellow : C.line}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text }}>{sel.ace === r.id ? "👑 " : ""}{r.name}
-                      <span style={{ marginLeft: 6, fontSize: 10.5, color: t.color }}>{t.label}</span>
-                    </span>
-                    <span style={{ fontFamily: FONT_M, fontSize: 12, color: COND_COLOR[r.cond - 1] }}>
-                      {COND_ARROW[r.cond - 1]}<CondFc dir={r.condForecast} /> <span style={{ color: C.yellow }}>{overall(r)}</span>
-                      <span style={{ marginLeft: 6, fontSize: 10.5, color: C.sub }}>{DISCIPLINES[fitKey].label}適性<span style={{ color: C.yellow, fontFamily: FONT_M }}> {fitScore}</span></span>
-                    </span>
-                  </div>
-                  <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
-                  <FatigueBar v={r.fatigue} />
-                  <AbilityGrid r={r} cap={growthCap} />
-                </div>
-              );
-            })}
-          </div>
-        </section>
-        <section>
-          <Eyebrow color={C.yellow}>エース指名</Eyebrow>
-          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-            {squad.map(r => (
-              <button key={r.id} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, ace: r.id } }))}
-                style={{
-                  fontFamily: FONT_D, fontWeight: 700, fontSize: 14, padding: "9px 13px", borderRadius: 8, cursor: "pointer",
-                  background: sel.ace === r.id ? C.yellow : C.panel, color: sel.ace === r.id ? "#14171d" : C.text,
-                  border: `1.5px solid ${sel.ace === r.id ? C.yellow : C.line}`,
-                }}>{sel.ace === r.id ? "👑 " : ""}{r.name}</button>
-            ))}
-          </div>
-        </section>
-        <section>
-          <Eyebrow color={C.green}>役割指定（エースを支える残りのメンバーのみ）</Eyebrow>
-          <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
-            {squad.filter(r => r.id !== sel.ace).map(r => {
-              const role = sel.roles[r.id] || "lead";
-              const mismatch = (role === "mountain" || role === "flat") && TYPE_ROLE_FIT[role] && !TYPE_ROLE_FIT[role].includes(r.type);
-              return (
-                <div key={r.id} style={{ background: C.panel, borderRadius: 8, padding: "6px 10px", border: `1px solid ${C.line}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
-                    <span style={{ fontFamily: FONT_D, fontSize: 13, color: C.text }}>{r.name}</span>
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {roleOptions.map(([k, rl]) => (
-                        <button key={k} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, roles: { ...s.sel.roles, [r.id]: k } } }))}
-                          title={rl.desc}
-                          style={{
-                            fontFamily: FONT_D, fontSize: 10.5, fontWeight: 700, padding: "4px 7px", borderRadius: 6, cursor: "pointer",
-                            background: role === k ? (k === "breakaway" ? C.red : C.blue) : C.panel2,
-                            color: role === k ? "#14171d" : C.sub,
-                            border: `1px solid ${role === k ? (k === "breakaway" ? C.red : C.blue) : C.line}`,
-                          }}>{rl.label}</button>
-                      ))}
-                    </div>
-                  </div>
-                  {mismatch && <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>⚠ {t_label(r.type)}には不向きな役割（適性ボーナスなし）</div>}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-        <Btn onClick={startNextStage}>{nextStageNo}日目のレースへ →</Btn>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{nextStageNo}日目・{dayTmpl.kind}・{TYPES[dayTmpl.favors].label}有利</div>
+          <div style={{ marginTop: T.space.sm }}><ElevationChart course={dayCourse} /></div>
+        </Section>
+        {/* v14.14: 作戦変更画面でも選手の能力を見た上でエース・役割を決められるよう、
+            その日のコース適性（disciplineScore）と能力グリッドを一覧表示する */}
+        <Section title="出走メンバーの能力" right={`${nextStageNo}日目のコース適性`}>
+          {squad.map((r, i) => {
+            const fitKey = FAVORS_TO_DISCIPLINE[dayTmpl.favors];
+            const fitScore = disciplineScore(r, fitKey);
+            return (
+              <RiderCard key={r.id} r={r} first={i === 0} ovr={overall(r)} selected={sel.ace === r.id}
+                badge={sel.ace === r.id ? "エース" : undefined}
+                sub={`${DISCIPLINES[fitKey].label}適性${fitScore}`} cond={r.cond} fatigue={r.fatigue}>
+                <TraitLine abilities={r.abilities} goldAbilities={r.goldAbilities} />
+                <AbilityGrid r={r} cap={growthCap} />
+              </RiderCard>
+            );
+          })}
+        </Section>
+        <Section title="エース指名">
+          {squad.map((r, i) => (
+            <SelectRow key={r.id} first={i === 0} label={r.name} selected={sel.ace === r.id}
+              onClick={() => setG(s => ({ ...s, sel: { ...s.sel, ace: r.id } }))} />
+          ))}
+        </Section>
+        <Section title="役割指定" right="エースを支える残りのメンバーのみ">
+          {squad.filter(r => r.id !== sel.ace).map((r, i) => {
+            const role = sel.roles[r.id] || "lead";
+            const mismatch = (role === "mountain" || role === "flat") && TYPE_ROLE_FIT[role] && !TYPE_ROLE_FIT[role].includes(r.type);
+            return (
+              <div key={r.id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                <div style={{ fontSize: T.size.body, color: T.color.text, marginBottom: T.space.xs }}>{r.name}</div>
+                <ChipRow value={role} onChange={k => setG(s => ({ ...s, sel: { ...s.sel, roles: { ...s.sel.roles, [r.id]: k } } }))}
+                  options={roleOptions.map(([k, rl]) => ({ value: k, label: rl.label }))} />
+                {mismatch && <div style={{ fontSize: T.size.caption, color: T.color.bad, marginTop: T.space.xs }}>{t_label(r.type)}には不向きな役割（適性ボーナスなし）</div>}
+              </div>
+            );
+          })}
+        </Section>
+        <PrimaryBtn onClick={startNextStage}>{nextStageNo}日目のレースへ</PrimaryBtn>
       </div>
     );
   }
@@ -490,61 +390,54 @@ export function renderSeasonRaceScreens(ctx) {
     // 総合タイム（差）を明示し、一覧も全員表示にスクロールで対応する
     const leaderTime = gcOrder[0][1];
     const bestEntry = gcOrder[bestRank - 1];
+    const om = objectiveStatusText(g.gc.objectiveResult);
     return wrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 16, borderTop: `4px solid ${C.yellow}` }}>
-          <Eyebrow>総合順位確定 — {g.gc.race.name}</Eyebrow>
-          <div style={{ fontSize: 13.5, color: C.text, marginTop: 6 }}>
-            総合成績：自チーム最高位 <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 17 }}>{bestRank}位</span>
-            {bestEntry && (
-              <span style={{ fontFamily: FONT_M, color: C.sub, marginLeft: 8 }}>
-                総合タイム {bestRank === 1 ? fmtTime(bestEntry[1]) : fmtGap(bestEntry[1] - leaderTime)}
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: 13.5, color: C.green, marginTop: 3 }}>賞金 +{prize}万円{!g.gc.race.championship ? ` ／ ポイント +${pts || 0}pt` : ""}</div>
-          {(() => {
-            const om = objectiveStatusText(g.gc.objectiveResult);
-            if (!om) return null;
-            return (
-              <div style={{ marginTop: 6, fontSize: 13, color: g.gc.objectiveDone ? C.green : C.purple, fontWeight: g.gc.objectiveDone ? 700 : 400 }}>
-                {g.gc.objectiveDone ? `🎉 中期目標「${om.icon} ${om.label}」達成！` : `🎯 中期目標「${om.icon} ${om.label}」進捗 ${om.tail}`}
-              </div>
-            );
-          })()}
-          <div style={{ marginTop: 6, fontSize: 13, color: bestRank <= 3 ? C.yellow : C.red }}>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <div style={{ textAlign: "center", padding: `${T.space.lg}px 0` }}>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{g.gc.race.name}</div>
+          <div style={{ fontSize: T.size.display, color: bestRank === 1 ? T.color.accent : T.color.text }}>総合 {bestRank}位</div>
+          {bestEntry && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>総合タイム {bestRank === 1 ? fmtTime(bestEntry[1]) : fmtGap(bestEntry[1] - leaderTime)}</div>}
+          <div style={{ fontSize: T.size.body, color: bestRank <= 3 ? T.color.good : T.color.bad, marginTop: T.space.sm }}>
             {bestRank <= 3 ? "昇格圏内でフィニッシュ！年度末処理で昇格します" : "昇格ならず…来季に再挑戦"}
           </div>
         </div>
+        <Section title="獲得">
+          <Item first label="賞金" value={`+${prize}万円`} />
+          {!g.gc.race.championship && <Item label="ポイント" value={`+${pts || 0}pt`} />}
+          {jerseyBonus > 0 && <Item label="副次タイトルボーナス" value={`+${jerseyBonus}万円`} detail="賞金に上乗せ済み" />}
+          {om && <Item label={`中期目標「${om.label}」`} value={g.gc.objectiveDone ? "達成" : `進捗 ${om.tail}`} valueColor={g.gc.objectiveDone ? T.color.good : undefined} />}
+        </Section>
         {jerseyInfo && (
-          <div style={{ background: C.panel, borderRadius: 12, padding: 14, borderTop: `4px solid ${"#e8a13c"}` }}>
-            <Eyebrow color={"#e8a13c"}>副次タイトル</Eyebrow>
-            <div style={{ display: "grid", gap: 5, marginTop: 6 }}>
-              <div style={{ fontSize: 12.5, color: jerseyInfo.pointsLeaderIsPlayer ? C.yellow : C.text }}>
-                🟢 ポイント賞：{jerseyInfo.pointsLeaderName || "—"}{jerseyInfo.pointsLeaderIsPlayer && " （自チーム！+50万円）"}
+          <Section title="副次タイトル">
+            {[
+              { color: "#35c07e", label: "ポイント賞", name: jerseyInfo.pointsLeaderName, isPlayer: jerseyInfo.pointsLeaderIsPlayer, bonus: 50 },
+              { color: "#e8544f", label: "山岳賞", name: jerseyInfo.komLeaderName, isPlayer: jerseyInfo.komLeaderIsPlayer, bonus: 50 },
+              { color: "#eef1f6", label: "新人賞（26歳未満）", name: jerseyInfo.youthLeaderName, isPlayer: jerseyInfo.youthLeaderIsPlayer, bonus: 30 },
+            ].map((row, i) => (
+              <div key={row.label} style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                <span style={{ width: 8, height: 8, background: row.color, flex: "none" }} />
+                <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{row.label}</span>
+                <span style={{ fontSize: T.size.body, color: row.isPlayer ? T.color.accent : T.color.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.name || "該当者なし"}</span>
+                {row.isPlayer && <span style={{ fontSize: T.size.caption, color: T.color.accent, flex: "none" }}>自チーム！+{row.bonus}万円</span>}
               </div>
-              <div style={{ fontSize: 12.5, color: jerseyInfo.komLeaderIsPlayer ? C.yellow : C.text }}>
-                🔴 山岳賞：{jerseyInfo.komLeaderName || "—"}{jerseyInfo.komLeaderIsPlayer && " （自チーム！+50万円）"}
-              </div>
-              <div style={{ fontSize: 12.5, color: jerseyInfo.youthLeaderIsPlayer ? C.yellow : C.text }}>
-                ⚪ 新人賞（26歳未満）：{jerseyInfo.youthLeaderName || "該当者なし"}{jerseyInfo.youthLeaderIsPlayer && " （自チーム！+30万円）"}
-              </div>
-            </div>
-            {jerseyBonus > 0 && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 6 }}>副次タイトルボーナスとして賞金に+{jerseyBonus}万円を上乗せ済み</div>}
-          </div>
+            ))}
+          </Section>
         )}
-        <div style={{ background: C.panel, borderRadius: 12, padding: "8px 12px", maxHeight: 260, overflowY: "auto" }}>
+        <Section title="総合順位" right={`出走${gcOrder.length}名`}>
           {gcOrder.map(([id, t], i) => {
             const e = idToEntrant[id];
             return (
-              <div key={id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontSize: 12.5, background: e.team === "PLAYER" ? "rgba(255,210,63,0.1)" : "transparent" }}>
-                <span style={{ color: e.team === "PLAYER" ? C.yellow : C.text }}><span style={{ fontFamily: FONT_M, display: "inline-block", width: 24 }}>{i + 1}.</span>{e.name}{e.isAce ? " 👑" : ""}{e.isAlumnus ? " 🔀" : ""}</span>
-                <span style={{ fontFamily: FONT_M, color: C.sub }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrder[0][1])}</span>
+              <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
+                  <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
+                  <span style={{ fontSize: T.size.body, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}</span>
+                </span>
+                <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrder[0][1])}</span>
               </div>
             );
           })}
-        </div>
-        <Btn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, grade: g.gc.race.grade, weather: g.gc.race.weather, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む →</Btn>
+        </Section>
+        <PrimaryBtn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, grade: g.gc.race.grade, weather: g.gc.race.weather, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む</PrimaryBtn>
       </div>
     );
   }
