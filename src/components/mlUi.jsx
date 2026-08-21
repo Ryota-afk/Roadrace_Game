@@ -14,12 +14,15 @@ export const Section = ({ title, right, children, padded }) => (
   </>
 );
 
-// 見出し語＋短い値（必ず1行）＋任意の補足行（キャプションサイズ・下段・全幅）
+// 見出し語＋短い値（必ず1行）＋任意の補足行（キャプションサイズ・下段・全幅）。
+// 第13弾Phase3-D-0（可読性ルールR4）：主役はvalue側なのでhead(16px)、labelはcaption(12px)に
+// 落として比を1.33にする（bodyとcaptionの1.17では階層として認識されないと実測）。
+// valueはflex:noneをやめてtextAlign:rightにし、長い文字列でも折り返せるようにする。
 export const Item = ({ label, value, valueColor, detail, detailColor, first }) => (
   <div style={{ padding: `${T.space.sm}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-      <span style={{ color: T.color.sub, flex: "none" }}>{label}</span>
-      <span style={{ color: valueColor || T.color.text, flex: "none", marginLeft: T.space.sm }}>{value}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
+      <span style={{ color: T.color.sub, fontSize: T.size.caption, flex: "none" }}>{label}</span>
+      <span style={{ color: valueColor || T.color.text, fontSize: T.size.head, flex: "1 1 auto", minWidth: 0, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </div>
     {detail && <div style={{ fontSize: T.size.caption, color: detailColor || T.color.sub, marginTop: 2 }}>{detail}</div>}
   </div>

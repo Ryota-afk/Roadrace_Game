@@ -17,6 +17,41 @@ import { Item, Prose, QuietBtn, Screen, Section } from "../../components/mlUi.js
 import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGrowthCap, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 
+// 選手成績・全チーム名鑑で共通の行（第13弾Phase3-D-0・可読性ルールR2）：
+// 「今季／通算／最高」を可変幅のspace-betweenで並べると行ごとに位置がずれるため、
+// 列見出し＋固定幅の右揃え列にした。上段は勝利数・表彰台・最高着順にしぼり、
+// 出走数（今季/通算とも）は判断への寄与が小さいので下段の補足行へ落とす。
+const STAT_COL_W = { yr: 48, wins: 48, podiums: 56, best: 44 };
+const StatColHeader = () => (
+  <div style={{ display: "flex", fontSize: T.size.caption, color: T.color.sub, paddingBottom: T.space.xs, borderBottom: `1px solid ${T.color.rule}` }}>
+    <span style={{ flex: 1 }}>選手</span>
+    <span style={{ width: STAT_COL_W.yr, textAlign: "right" }}>今季</span>
+    <span style={{ width: STAT_COL_W.wins, textAlign: "right" }}>通算</span>
+    <span style={{ width: STAT_COL_W.podiums, textAlign: "right" }}>表彰台</span>
+    <span style={{ width: STAT_COL_W.best, textAlign: "right" }}>最高</span>
+  </div>
+);
+
+const StatRow = ({ name, nameColor, sub, badge, yrWins, wins, podiums, bestRank, first }) => {
+  const dim = wins === 0 && podiums === 0;
+  const numColor = dim ? T.color.sub : T.color.text;
+  return (
+    <div style={{ padding: `${T.space.sm}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
+      <div style={{ display: "flex", alignItems: "baseline" }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: T.size.head, color: nameColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+        <span style={{ width: STAT_COL_W.yr, textAlign: "right", fontSize: T.size.head, color: numColor, fontVariantNumeric: "tabular-nums" }}>{yrWins == null ? "—" : `${yrWins}勝`}</span>
+        <span style={{ width: STAT_COL_W.wins, textAlign: "right", fontSize: T.size.head, color: numColor, fontVariantNumeric: "tabular-nums" }}>{wins}勝</span>
+        <span style={{ width: STAT_COL_W.podiums, textAlign: "right", fontSize: T.size.head, color: numColor, fontVariantNumeric: "tabular-nums" }}>{podiums}</span>
+        <span style={{ width: STAT_COL_W.best, textAlign: "right", fontSize: T.size.head, color: bestRank === 1 ? T.color.accent : numColor, fontVariantNumeric: "tabular-nums" }}>{bestRank >= 99 ? "—" : `${bestRank}位`}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 2 }}>
+        <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{sub}</span>
+        {badge}
+      </div>
+    </div>
+  );
+};
+
 export function renderMyLifeHubScreen(ctx) {
   const { askConfirm, ml, mlAdvanceMonth, mlBecomeMentor, mlGenRace, mlSetFocus, mlStartLastRace, mlStartRace, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_main" && ml.player) {
@@ -300,18 +335,12 @@ export function renderMyLifeHubScreen(ctx) {
       return mlWrap(
         <Screen>
           <Section title="選手成績" right={`${ml.year}年目`}>
+            {rows.length > 1 && <StatColHeader />}
             {rows.map((r, i) => (
-              <div key={r.id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                  <span style={{ color: r.kind === "self" ? T.color.accent : T.color.text }}>{r.name}</span>
-                  <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>{kindLabel[r.kind] || kindLabel.teammate}・{r.team}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
-                  <span>今季 {r.yr ? `${r.yr.races}走${r.yr.wins}勝` : "—"}</span>
-                  <span>通算 {r.races}走{r.wins}勝・{r.podiums}表彰台</span>
-                  <span>{r.bestRank >= 99 ? "最高—" : `最高${r.bestRank}位`}</span>
-                </div>
-              </div>
+              <StatRow key={r.id} first={i === 0}
+                name={r.name} nameColor={r.kind === "self" ? T.color.accent : T.color.text}
+                sub={`${kindLabel[r.kind] || kindLabel.teammate}・${r.team}・今季${r.yr ? r.yr.races : 0}走／通算${r.races}走`}
+                yrWins={r.yr ? r.yr.wins : null} wins={r.wins} podiums={r.podiums} bestRank={r.bestRank} />
             ))}
             {rows.length <= 1 && <Item first label="—" value="" detail="レースを重ねると、ライバルや仲間の成績がここに蓄積されます。" />}
           </Section>
@@ -330,18 +359,13 @@ export function renderMyLifeHubScreen(ctx) {
             <Prose>まだデータがありません。レースを重ねると増えていきます。</Prose>
           ) : teams.map((t) => (
             <Section key={t.teamName} title={t.isMyTeam ? `${t.teamName}（あなたのチーム）` : t.teamName} right={`通算 ${t.teamWins}勝・${t.teamPodiums}表彰台`}>
+              <StatColHeader />
               {t.riders.map((r, i) => (
-                <div key={r.id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                    <span style={{ color: r.self ? T.color.accent : T.color.text }}>{r.name}<span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>{TYPES[r.type]?.label}</span></span>
-                    {!r.self && <ScoutBadge scout={r.scout} compact />}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
-                    <span>今季 {r.yr.races}走{r.yr.wins}勝</span>
-                    <span>通算 {r.races}走{r.wins}勝・{r.podiums}表彰台</span>
-                    <span>{r.bestRank >= 99 ? "最高—" : `最高${r.bestRank}位`}</span>
-                  </div>
-                </div>
+                <StatRow key={r.id} first={i === 0}
+                  name={r.name} nameColor={r.self ? T.color.accent : T.color.text}
+                  sub={`${TYPES[r.type]?.label}・今季${r.yr.races}走／通算${r.races}走`}
+                  badge={!r.self && <ScoutBadge scout={r.scout} compact />}
+                  yrWins={r.yr.wins} wins={r.wins} podiums={r.podiums} bestRank={r.bestRank} />
               ))}
             </Section>
           ))}

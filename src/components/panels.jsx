@@ -118,9 +118,9 @@ export function TraitLine({ abilities, goldAbilities }) {
         return (
           <div key={id} style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
             <span style={{ color: isGold ? T.color.accent : t.bad ? T.color.bad : T.color.text, marginRight: T.space.xs }}>
-              {isGold ? "★ " : ""}{t.label}
+              {t.label}
             </span>
-            {t.desc}{isGold ? "（★効果2倍）" : ""}
+            {t.desc}{isGold ? "（金は効果2倍）" : ""}
           </div>
         );
       })}
@@ -206,10 +206,10 @@ export function AbilityFileList({ file }) {
               const goldable = !!GOLD_CONDITIONS[id];
               return (
                 <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                    <span style={{ color: found ? (t.bad ? T.color.bad : T.color.text) : T.color.sub }}>{found ? t.label : "???"}</span>
-                    <span style={{ fontSize: T.size.caption, color: gold ? T.color.accent : T.color.sub }}>
-                      {found ? (goldable ? (gold ? "★ 金" : "金に進化する") : "") : "未発見"}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
+                    <span style={{ fontSize: T.size.head, color: !found ? T.color.sub : gold ? T.color.accent : t.bad ? T.color.bad : T.color.text }}>{found ? t.label : "???"}</span>
+                    <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>
+                      {!found ? "未発見" : goldable && !gold ? "金に進化する" : ""}
                     </span>
                   </div>
                   {found && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{t.desc}</div>}

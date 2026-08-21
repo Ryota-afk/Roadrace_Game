@@ -12,28 +12,38 @@ import { ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_ST
 import { PARTS, PART_SLOTS } from "../../sim/race.js";
 
 // ショップ専用の行（見出し＋補足＋購入ボタン。Itemでは表現できない「ボタン付き行」）。
-const ShopBtn = ({ children, onClick, disabled, outline }) => (
+// 第13弾Phase3-D-0（可読性ルール）：
+//   R1 数値を文字列に連結しない → count/countLabelで「未装着/所持/現在」の値を独立させ、
+//      パーツ名の長さに関係なく右揃えの列に揃える。
+//   R4 一覧行の主役はhead(16px) → labelをhead、detail/countはcaption(12px)。
+const ShopBtn = ({ children, onClick, disabled, outline, minWidth }) => (
   <button onClick={onClick} disabled={disabled} style={{
-    flex: "none", background: disabled ? T.color.surfaceUp : outline ? "transparent" : T.color.accent,
+    flex: "none", minWidth, textAlign: minWidth ? "center" : undefined,
+    background: disabled ? T.color.surfaceUp : outline ? "transparent" : T.color.accent,
     color: disabled ? T.color.sub : outline ? T.color.accent : T.color.bg,
     border: outline ? `1px solid ${disabled ? T.color.sub : T.color.accent}` : "none",
     fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: disabled ? "default" : "pointer", whiteSpace: "nowrap",
   }}>{children}</button>
 );
 
-const ShopRow = ({ label, badge, detail, locked, buyLabel, onBuy, buyDisabled, secondaryLabel, onSecondary, secondaryDisabled, first }) => (
+const ShopRow = ({ label, badge, detail, count, countLabel, locked, buyLabel, onBuy, buyDisabled, secondaryLabel, onSecondary, secondaryDisabled, first }) => (
   <div style={{ padding: `${T.space.sm}px 0`, borderTop: first ? "none" : `1px solid ${T.color.rule}` }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: T.size.body, color: T.color.text }}>{label}{badge && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>{badge}</span>}</div>
-        {detail && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.5 }}>{detail}</div>}
-      </div>
-      <div style={{ flex: "none", display: "flex", gap: T.space.xs }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
+      <span style={{ fontSize: T.size.head, color: T.color.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {label}{badge && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>{badge}</span>}
+      </span>
+      <span style={{ flex: "none", display: "flex", gap: T.space.xs, alignItems: "center" }}>
         {locked && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{locked}</span>}
         {secondaryLabel && <ShopBtn onClick={onSecondary} disabled={secondaryDisabled} outline>{secondaryLabel}</ShopBtn>}
-        {buyLabel && <ShopBtn onClick={onBuy} disabled={buyDisabled}>{buyLabel}</ShopBtn>}
-      </div>
+        {buyLabel && <ShopBtn onClick={onBuy} disabled={buyDisabled} minWidth={56}>{buyLabel}</ShopBtn>}
+      </span>
     </div>
+    {(detail || count != null) && (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, marginTop: 2 }}>
+        <span style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.5 }}>{detail}</span>
+        {count != null && <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", fontVariantNumeric: "tabular-nums" }}>{countLabel} {count}</span>}
+      </div>
+    )}
   </div>
 );
 
@@ -80,7 +90,7 @@ export function renderMyLifeEventScreens(ctx) {
                   const lockedByClass = p.tier > ml.classIdx + 1;
                   return (
                     <ShopRow key={pid} first={i === 0}
-                      label={`${p.label}　所持${ml.partsInv[pid] || 0}（空き${Math.max(0, availPartsMl(pid))}）`}
+                      label={p.label} countLabel="未装着" count={Math.max(0, availPartsMl(pid))}
                       detail={`${SLOT_LABEL[p.slot]}・${Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}`}
                       locked={lockedByClass ? `${CLASSES[p.tier - 1].id}で解禁` : null}
                       buyLabel={lockedByClass ? null : `${p.price}万`} buyDisabled={ml.money < p.price} onBuy={() => mlBuyPart(pid)} />
@@ -111,7 +121,7 @@ export function renderMyLifeEventScreens(ctx) {
                   const cost = maxed ? null : ML_PART_UPGRADE_COST[lv];
                   return (
                     <ShopRow key={slot} first={i === 0}
-                      label={`${p.label}　Lv${lv}/${maxLv}`}
+                      label={p.label} countLabel="Lv" count={`${lv}/${maxLv}`}
                       detail={Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${Math.round(v * (1 + ML_PART_LV_MUL * lv) * 10) / 10}`).join(" / ")}
                       locked={maxed ? "最大強化" : null}
                       buyLabel={maxed ? null : `${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
@@ -127,7 +137,7 @@ export function renderMyLifeEventScreens(ctx) {
               <Section title="消耗品" right="在庫制">
                 {Object.entries(ML_STOCK_ITEMS).map(([k, it], i) => (
                   <ShopRow key={k} first={i === 0}
-                    label={`${it.label}　×${ml.stock[k] || 0}`} detail={it.desc}
+                    label={it.label} countLabel="所持" count={ml.stock[k] || 0} detail={it.desc}
                     secondaryLabel="使う" onSecondary={() => mlUseStockConfirm(k)} secondaryDisabled={(ml.stock[k] || 0) <= 0}
                     buyLabel={`${it.price}万`} buyDisabled={ml.money < it.price} onBuy={() => mlBuyStock(k)} />
                 ))}
@@ -169,23 +179,23 @@ export function renderMyLifeEventScreens(ctx) {
 
               <Section title="才能開花プログラム" right="成長力を1段階アップ">
                 {mlGrowthPowRevealed(ml) ? (
-                  <ShopRow first label={`現在の成長力：${r.growthPow}`} detail="現在の段階に応じて価格が上がる、後戻りできない買い切り強化"
+                  <ShopRow first label="成長力" countLabel="現在" count={r.growthPow} detail="現在の段階に応じて価格が上がる、後戻りできない買い切り強化"
                     locked={GROWTHPOW_ORDER.indexOf(r.growthPow) >= GROWTHPOW_ORDER.length - 1 ? "最高段階" : null}
                     buyLabel={GROWTHPOW_ORDER.indexOf(r.growthPow) >= GROWTHPOW_ORDER.length - 1 ? null : `${ML_GROWTH_POW_UP_PRICE[r.growthPow]}万`}
                     buyDisabled={ml.money < ML_GROWTH_POW_UP_PRICE[r.growthPow]} onBuy={mlBuyGrowthPowUp} />
                 ) : (
-                  <Item first label="成長力 ???" value="" detail="デビュー3年目に成長力が判明してから購入できます" />
+                  <Item first label="成長力" value="???" valueColor={T.color.sub} detail="デビュー3年目に成長力が判明してから購入できます" />
                 )}
               </Section>
 
               <Section title="成長タイプ変更" right="キャリアで1回限り">
                 {ml.player.growthShiftUsed ? (
-                  <Item first label={`現在の成長タイプ：${GROWTH[r.growth]?.label ?? r.growth}`} value="" valueColor={T.color.sub} detail="使用済み" />
+                  <Item first label="成長タイプ" value={GROWTH[r.growth]?.label ?? r.growth} valueColor={T.color.sub} detail="使用済み" />
                 ) : (() => {
                   const gIdx = GROWTH_ORDER.indexOf(r.growth);
                   const affordable = ml.money >= ML_GROWTH_SHIFT_PRICE;
                   return (
-                    <ShopRow first label={`現在の成長タイプ：${GROWTH[r.growth]?.label ?? r.growth}`}
+                    <ShopRow first label="成長タイプ" countLabel="現在" count={GROWTH[r.growth]?.label ?? r.growth}
                       detail="早熟寄り・晩成寄りのどちらか一方向のみ、キャリアで1回だけ選び直せる"
                       secondaryLabel={`早熟寄りへ（${ML_GROWTH_SHIFT_PRICE}万）`} onSecondary={() => mlBuyGrowthShift(-1)} secondaryDisabled={!affordable || gIdx <= 0}
                       buyLabel={`晩成寄りへ（${ML_GROWTH_SHIFT_PRICE}万）`} onBuy={() => mlBuyGrowthShift(1)} buyDisabled={!affordable || gIdx < 0 || gIdx >= GROWTH_ORDER.length - 1} />
