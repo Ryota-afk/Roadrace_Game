@@ -1,7 +1,7 @@
 // マイライフモードの画面ディスパッチ（Phase 4-2で App から分離／2026-07 Step8で src/screens/mylife/* へさらに分割）。
 // ctx=App状態/ハンドラ。各 ml.screen の実体は src/screens/mylife/*.jsx にあり、ここは委譲するだけの薄い窓口。
 import React from "react";
-import { C } from "../data/theme.js";
+import { T } from "../data/theme.js";
 import { renderMyLifeCreateScreens } from "./mylife/create.jsx";
 import { renderMyLifeHubScreen } from "./mylife/hub.jsx";
 import { renderMyLifeHelpScreens } from "./mylife/help.jsx";
@@ -30,5 +30,5 @@ export function renderMyLifeScreens(ctx) {
   if (RACE_SCREENS.has(ml.screen)) return renderMyLifeRaceScreens(ctx);
   if (EVENT_SCREENS.has(ml.screen)) return renderMyLifeEventScreens(ctx);
   if (CAREER_SCREENS.has(ml.screen)) return renderMyLifeCareerScreens(ctx);
-  return mlWrap(<div style={{ color: C.sub }}>読み込み中…</div>);
+  return mlWrap(<div style={{ color: T.color.sub }}>読み込み中…</div>);
 }

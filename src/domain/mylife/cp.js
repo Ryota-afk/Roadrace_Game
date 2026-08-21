@@ -93,29 +93,44 @@ export const addProdigyRookie = (state) => {
   return { ...state, roster: [...state.roster, rookie] };
 };
 
+// 第13弾Phase3-D-4-c: 各件の効果を`fx`に構造化して併記（applyは不透明なクロージャで集計に
+// 使えないため）。newgame_setup画面が「今回何が効いているか」を集計表示するのに使う
+// （cpMilestoneSummary参照）。
 export const CP_MILESTONES = [
-  { cp: 5, label: "開幕資金 +100万円", desc: "毎シーズン開幕時の所持金へ自動加算される", apply: s => ({ ...s, budget: s.budget + 100 }) },
-  { cp: 10, label: "★ 初期選手 全員能力+8", desc: "初期ロースター全員の能力値+8してスタート", apply: s => bumpRosterAbAll(s, 8) },
-  { cp: 15, label: "チーム設備 Lv1底上げ", desc: "フレーム・ホイールの強化レベルが+1された状態でスタート", apply: s => bumpEquipLv(s, 1) },
-  { cp: 25, label: "★ 開幕資金 +400万円", desc: "毎シーズン開幕時の所持金へ自動加算される", apply: s => ({ ...s, budget: s.budget + 400 }) },
-  { cp: 35, label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持", apply: s => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + 2, suit: s.inv.suit + 2, supp: s.inv.supp + 2, tune: s.inv.tune + 2 } }) },
-  { cp: 50, label: "★★ 逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入", apply: s => addProdigyRookie(s) },
-  { cp: 65, label: "初期選手 全員能力+5", desc: "初期ロースター全員の能力値がさらに+5", apply: s => bumpRosterAbAll(s, 5) },
-  { cp: 75, label: "★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2", apply: s => bumpEquipLv(s, 2) },
-  { cp: 90, label: "開幕資金 +300万円", desc: "毎シーズン開幕時の所持金へ自動加算される", apply: s => ({ ...s, budget: s.budget + 300 }) },
-  { cp: 100, label: "★★★ 逸材新人をもう1名確保＋全員能力+10", desc: "成長ランクS確定の逸材がもう1名加入し、ロースター全員の能力値も+10", apply: s => bumpRosterAbAll(addProdigyRookie(s), 10) },
+  { cp: 5, label: "開幕資金 +100万円", desc: "毎シーズン開幕時の所持金へ自動加算される", fx: { budget: 100 }, apply: s => ({ ...s, budget: s.budget + 100 }) },
+  { cp: 10, label: "★ 初期選手 全員能力+8", desc: "初期ロースター全員の能力値+8してスタート", fx: { abAll: 8 }, apply: s => bumpRosterAbAll(s, 8) },
+  { cp: 15, label: "チーム設備 Lv1底上げ", desc: "フレーム・ホイールの強化レベルが+1された状態でスタート", fx: { equipLv: 1 }, apply: s => bumpEquipLv(s, 1) },
+  { cp: 25, label: "★ 開幕資金 +400万円", desc: "毎シーズン開幕時の所持金へ自動加算される", fx: { budget: 400 }, apply: s => ({ ...s, budget: s.budget + 400 }) },
+  { cp: 35, label: "開幕アイテム一式", desc: "決戦ホイール・エアロスーツ・リカバリーサプリ・コンディション調律を各2個ずつ所持", fx: { items: 2 }, apply: s => ({ ...s, inv: { ...s.inv, wheel: s.inv.wheel + 2, suit: s.inv.suit + 2, supp: s.inv.supp + 2, tune: s.inv.tune + 2 } }) },
+  { cp: 50, label: "★★ 逸材新人を1名確保", desc: "成長ランクS確定の逸材が1名、追加でロースターに加入", fx: { rookie: 1 }, apply: s => addProdigyRookie(s) },
+  { cp: 65, label: "初期選手 全員能力+5", desc: "初期ロースター全員の能力値がさらに+5", fx: { abAll: 5 }, apply: s => bumpRosterAbAll(s, 5) },
+  { cp: 75, label: "★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2", fx: { equipLv: 2 }, apply: s => bumpEquipLv(s, 2) },
+  { cp: 90, label: "開幕資金 +300万円", desc: "毎シーズン開幕時の所持金へ自動加算される", fx: { budget: 300 }, apply: s => ({ ...s, budget: s.budget + 300 }) },
+  { cp: 100, label: "★★★ 逸材新人をもう1名確保＋全員能力+10", desc: "成長ランクS確定の逸材がもう1名加入し、ロースター全員の能力値も+10", fx: { rookie: 1, abAll: 10 }, apply: s => bumpRosterAbAll(addProdigyRookie(s), 10) },
   // v37: 高CP帯の拡張（周回を重ねたプレイヤーへのさらなる開幕強化）
-  { cp: 130, label: "開幕資金 +600万円", desc: "毎シーズン開幕時の所持金へ自動加算される", apply: s => ({ ...s, budget: s.budget + 600 }) },
-  { cp: 160, label: "★★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2", apply: s => bumpEquipLv(s, 2) },
-  { cp: 200, label: "★★★★ 逸材新人をもう1名＋全員能力+12", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+12", apply: s => bumpRosterAbAll(addProdigyRookie(s), 12) },
+  { cp: 130, label: "開幕資金 +600万円", desc: "毎シーズン開幕時の所持金へ自動加算される", fx: { budget: 600 }, apply: s => ({ ...s, budget: s.budget + 600 }) },
+  { cp: 160, label: "★★★ チーム設備 Lv2底上げ", desc: "フレーム・ホイールの強化レベルがさらに+2", fx: { equipLv: 2 }, apply: s => bumpEquipLv(s, 2) },
+  { cp: 200, label: "★★★★ 逸材新人をもう1名＋全員能力+12", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+12", fx: { rookie: 1, abAll: 12 }, apply: s => bumpRosterAbAll(addProdigyRookie(s), 12) },
   // v38(#5): 200pt頭打ちの解消。さらに上のCP帯を追加し、周回の到達目標を延伸する。
-  { cp: 250, label: "開幕資金 +1000万円", desc: "毎シーズン開幕時の所持金へ自動加算される", apply: s => ({ ...s, budget: s.budget + 1000 }) },
-  { cp: 320, label: "★★★★ チーム設備 Lv3底上げ", desc: "フレーム・ホイールの強化レベルがさらに+3", apply: s => bumpEquipLv(s, 3) },
-  { cp: 400, label: "★★★★★ 逸材新人をもう1名＋全員能力+15", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+15", apply: s => bumpRosterAbAll(addProdigyRookie(s), 15) },
+  { cp: 250, label: "開幕資金 +1000万円", desc: "毎シーズン開幕時の所持金へ自動加算される", fx: { budget: 1000 }, apply: s => ({ ...s, budget: s.budget + 1000 }) },
+  { cp: 320, label: "★★★★ チーム設備 Lv3底上げ", desc: "フレーム・ホイールの強化レベルがさらに+3", fx: { equipLv: 3 }, apply: s => bumpEquipLv(s, 3) },
+  { cp: 400, label: "★★★★★ 逸材新人をもう1名＋全員能力+15", desc: "成長ランクS確定の逸材がさらに1名加入し、ロースター全員の能力値も+15", fx: { rookie: 1, abAll: 15 }, apply: s => bumpRosterAbAll(addProdigyRookie(s), 15) },
 ];
 
 export function applyCpMilestones(state, totalEarnedCP) {
   return CP_MILESTONES.filter(m => totalEarnedCP >= m.cp).reduce((s, m) => m.apply(s), state);
+}
+
+// 第13弾Phase3-D-4-c: newgame_setup画面用。解禁済みマイルストーンの`fx`を合算し、
+// 「今回の開幕で実際に何が効いているか」を1つの要約にする（争点1・案A）。
+export function cpMilestoneSummary(totalEarnedCP) {
+  const acc = { budget: 0, abAll: 0, equipLv: 0, rookie: 0, items: 0 };
+  CP_MILESTONES.filter(m => totalEarnedCP >= m.cp).forEach(m => {
+    const fx = m.fx || {};
+    acc.budget += fx.budget || 0; acc.abAll += fx.abAll || 0; acc.equipLv += fx.equipLv || 0;
+    acc.rookie += fx.rookie || 0; acc.items += fx.items || 0;
+  });
+  return acc;
 }
 
 export function mlCpPerks(totalCP) {

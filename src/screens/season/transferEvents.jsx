@@ -1,26 +1,28 @@
 // season.jsx より分割（Step8）：移籍・イベント系（event/transferRequest/poachOffer/poachMarket/event_result）
+// 第13弾Phase3-D-4-c：kit.jsxへ全面移行。通知3画面の色付き上枠線を廃止し種別は見出しの言葉で
+// 伝える。poachMarketはRiderCard（market/transferと同型）へ。詳細はdevlog/wave13.md参照。
 import React from "react";
 import { AbilityGrid, PersonaLine, TraitLine } from "../../components/panels.jsx";
-import { Btn, Eyebrow } from "../../components/ui.jsx";
+import { PrimaryBtn, QuietBtn, Section, ShopBtn } from "../../components/kit.jsx";
+import { RiderCard } from "../../components/riderCard.jsx";
 import { overall } from "../../core/core.js";
 import { TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
-import { C, FONT_D, FONT_M } from "../../data/theme.js";
+import { T } from "../../data/theme.js";
 
 export function renderSeasonTransferEventScreens(ctx) {
   const { askConfirm, g, grantTransferRequest, growthCap, resolveEvent, retainRider, poachRetain, poachAccept, poachSign, rosterMax, setG, wrap } = ctx;
   if (g.screen === "event" && g.pendingEvent) {
     const ev = g.pendingEvent;
     return wrap(
-      <div style={{ display: "grid", gap: 14 }}>
-        <div style={{ background: "#2b2436", borderRadius: 12, padding: 18, borderTop: `4px solid ${C.purple}` }}>
-          <Eyebrow color={C.purple}>チームの出来事 — {MONTHS[g.month]}</Eyebrow>
-          <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 20, margin: "6px 0 10px" }}>{ev.title}</h2>
-          <p style={{ color: C.sub, fontSize: 13.5, lineHeight: 1.8, margin: 0 }}>{ev.text}</p>
-        </div>
-        <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section padded title={`チームの出来事 — ${MONTHS[g.month]}`}>
+          <div style={{ fontSize: T.size.title, color: T.color.text }}>{ev.title}</div>
+          <div style={{ fontSize: T.size.body, color: T.color.sub, lineHeight: 1.8, marginTop: T.space.sm }}>{ev.text}</div>
+        </Section>
+        <div style={{ display: "grid", gap: T.space.sm }}>
           {ev.choices.map((c, i) => (
-            <Btn key={i} color={C.purple} onClick={() => resolveEvent(i)}>{c.label}</Btn>
+            <QuietBtn key={i} color={T.color.action} onClick={() => resolveEvent(i)}>{c.label}</QuietBtn>
           ))}
         </div>
       </div>
@@ -32,17 +34,16 @@ export function renderSeasonTransferEventScreens(ctx) {
     const req = g.transferRequest;
     const r = g.roster.find(x => x.id === req.riderId);
     return wrap(
-      <div style={{ display: "grid", gap: 14 }}>
-        <div style={{ background: "#2b1e1e", borderRadius: 12, padding: 18, borderTop: `4px solid ${C.red}` }}>
-          <Eyebrow color={C.red}>移籍志願 — {MONTHS[g.month]}</Eyebrow>
-          <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 19, margin: "6px 0 10px" }}>{req.name}が退団を申し出た</h2>
-          <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.8, margin: 0 }}>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section padded title={`移籍志願 — ${MONTHS[g.month]}`}>
+          <div style={{ fontSize: T.size.title, color: T.color.text }}>{req.name}が退団を申し出た</div>
+          <div style={{ fontSize: T.size.body, color: T.color.sub, lineHeight: 1.8, marginTop: T.space.sm }}>
             「最近ずっと出番がなく、このチームでは自分の力を発揮できない。もっと走れる場所へ移りたい」——長くベンチが続いた{req.name}{r ? `（${TYPES[r.type].label}・OVR${overall(r)}）` : ""}が、真剣な面持ちで移籍を願い出てきました。
-          </p>
-        </div>
-        <div style={{ display: "grid", gap: 8 }}>
-          <Btn color={C.green} disabled={g.budget < 30} onClick={retainRider}>慰留する（慰留費用30万・残留＆調子+1）{g.budget < 30 ? "／資金不足" : ""}</Btn>
-          <Btn outline color={C.red} onClick={() => askConfirm(`${req.name}の移籍志願を受け入れますか？この選手はチームを去ります。`, grantTransferRequest)}>志願を受け入れて送り出す</Btn>
+          </div>
+        </Section>
+        <div style={{ display: "grid", gap: T.space.sm }}>
+          <PrimaryBtn disabled={g.budget < 30} onClick={retainRider}>慰留する（慰留費用30万・残留＆調子+1）{g.budget < 30 ? "／資金不足" : ""}</PrimaryBtn>
+          <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${req.name}の移籍志願を受け入れますか？この選手はチームを去ります。`, grantTransferRequest, "送り出す")}>志願を受け入れて送り出す</QuietBtn>
         </div>
       </div>
     );
@@ -53,26 +54,22 @@ export function renderSeasonTransferEventScreens(ctx) {
     const o = g.poachOffer;
     const r = g.roster.find(x => x.id === o.riderId);
     return wrap(
-      <div style={{ display: "grid", gap: 14 }}>
-        <div style={{ background: "#2b1e1e", borderRadius: 12, padding: 18, borderTop: `4px solid #e8a13c` }}>
-          <Eyebrow color={"#e8a13c"}>引き抜きオファー — {MONTHS[g.month]}</Eyebrow>
-          <h2 style={{ fontFamily: FONT_D, color: C.text, fontSize: 19, margin: "6px 0 10px" }}>
-            <span style={{ color: o.teamColor }}>{o.team}</span>が{o.name}の獲得に動いた
-          </h2>
-          <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.8, margin: 0 }}>
-            強豪<span style={{ color: o.teamColor, fontWeight: 700 }}>{o.team}</span>が、あなたの主力
-            <span style={{ color: C.text, fontWeight: 700 }}>{o.name}</span>{r ? `（${TYPES[r.type].label}・OVR${overall(r)}）` : `（OVR${o.ovr}）`}
-            に破格の移籍金<span style={{ color: C.yellow, fontFamily: FONT_M }}>{o.fee}万円</span>を提示してきました。放出すれば大きな資金が手に入りますが、
-            主力を失い、しかも<span style={{ color: C.red }}>今後はライバルの一員として自チームの前に立ちはだかります</span>。引き止めるには慰留費用がかかります。
-          </p>
-        </div>
-        <div style={{ display: "grid", gap: 8 }}>
-          <Btn color={C.green} disabled={g.budget < o.retainCost} onClick={poachRetain}>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section padded title={`引き抜きオファー — ${MONTHS[g.month]}`}>
+          <div style={{ fontSize: T.size.title, color: T.color.text }}>{o.team}が{o.name}の獲得に動いた</div>
+          <div style={{ fontSize: T.size.body, color: T.color.sub, lineHeight: 1.8, marginTop: T.space.sm }}>
+            強豪{o.team}が、あなたの主力{o.name}{r ? `（${TYPES[r.type].label}・OVR${overall(r)}）` : `（OVR${o.ovr}）`}に破格の移籍金
+            <span style={{ color: T.color.accent }}> {o.fee}万円</span>を提示してきました。放出すれば大きな資金が手に入りますが、
+            主力を失い、今後はライバルの一員として自チームの前に立ちはだかります。引き止めるには慰留費用がかかります。
+          </div>
+        </Section>
+        <div style={{ display: "grid", gap: T.space.sm }}>
+          <PrimaryBtn disabled={g.budget < o.retainCost} onClick={poachRetain}>
             慰留する（慰留費用-{o.retainCost}万・残留＆調子+1）{g.budget < o.retainCost ? "／資金不足" : ""}
-          </Btn>
-          <Btn outline color={"#e8a13c"} onClick={() => askConfirm(`${o.name}を${o.team}へ放出し、移籍金${o.fee}万円を受け取りますか？この主力はチームを去ります。`, poachAccept)}>
+          </PrimaryBtn>
+          <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${o.name}を${o.team}へ放出し、移籍金${o.fee}万円を受け取りますか？この主力はチームを去ります。`, poachAccept, "放出する")}>
             放出して移籍金+{o.fee}万を受け取る
-          </Btn>
+          </QuietBtn>
         </div>
       </div>
     );
@@ -84,59 +81,43 @@ export function renderSeasonTransferEventScreens(ctx) {
     const done = g.poachDoneThisYear;
     const full = g.roster.length >= rosterMax;
     return wrap(
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ background: C.panel, borderRadius: 10, padding: "10px 14px", borderLeft: `4px solid #e8a13c` }}>
-          <Eyebrow color={"#e8a13c"}>🎯 引き抜き市場 — ライバルの主力を狙う</Eyebrow>
-          <div style={{ fontSize: 12, color: C.sub, marginTop: 4, lineHeight: 1.7 }}>
-            各ライバルチームの<span style={{ color: C.text }}>看板選手</span>を、移籍金を払って引き抜けます（<span style={{ color: C.yellow }}>1シーズンに1回まで</span>）。
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section title="引き抜き市場">
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.7 }}>
+            各ライバルチームの看板選手を、移籍金を払って引き抜けます（1シーズンに1回まで）。
             成立すると相手は主力を失い、その選手は今後あなたのチームで走ります。移籍金は選手の実力と移籍意欲で決まります。
           </div>
-          <div style={{ fontSize: 11.5, marginTop: 5, color: done ? C.red : full ? C.red : C.green }}>
+          <div style={{ fontSize: T.size.caption, marginTop: T.space.sm, color: done || full ? T.color.bad : T.color.good }}>
             {done ? "今季の引き抜き枠は使用済みです（年度末にリセット）" : full ? `ロースターが満員です（最大${rosterMax}名）` : `資金 ${g.budget}万円／枠 ${g.roster.length}/${rosterMax}名`}
           </div>
-        </div>
-        {targets.length === 0 && <div style={{ fontSize: 13, color: C.sub }}>現在、引き抜ける主力候補がいません。</div>}
-        {targets.map(t => {
-          const c = t.candidate, ty = TYPES[c.type];
+        </Section>
+        {targets.length === 0 && <div style={{ fontSize: T.size.body, color: T.color.sub }}>現在、引き抜ける主力候補がいません。</div>}
+        {targets.map((t, i) => {
+          const c = t.candidate;
           const afford = g.budget >= t.fee && !full && !done;
           return (
-            <div key={t.id} style={{ background: C.panel, borderRadius: 10, padding: "10px 12px", border: `1px solid ${C.line}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
-                <div>
-                  <span style={{ fontFamily: FONT_D, fontWeight: 700, color: C.text, fontSize: 15 }}>{c.name}</span>
-                  <span style={{ marginLeft: 6, fontSize: 10.5, color: ty.color }}>{ty.label}</span>
-                  <span style={{ marginLeft: 6, fontSize: 11, color: C.sub }}>{c.age}歳</span>
-                  <span style={{ marginLeft: 8, fontSize: 11, color: t.teamColor }}>● {t.team}</span>
-                </div>
-                <span style={{ fontFamily: FONT_M, color: C.yellow, fontSize: 14 }}>{overall(c)}<span style={{ fontSize: 9, color: C.sub }}> OVR</span></span>
-              </div>
-              <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>移籍意欲：<span style={{ color: t.willLabel === "移籍に前向き" ? C.green : t.willLabel === "チームの看板" ? C.red : C.text }}>{t.willLabel}</span></div>
+            <RiderCard key={t.id} r={c} first={i === 0} ovr={overall(c)}
+              sub={`${c.age}歳・${t.team}`} subColor={t.teamColor}
+              footer={<ShopBtn onClick={() => askConfirm(`${t.team}の${c.name}を移籍金${t.fee}万円で引き抜きますか？（今季の引き抜き枠を消費します）`, () => poachSign(t.id), "引き抜く")} disabled={!afford}>移籍金 {t.fee}万で引き抜く</ShopBtn>}>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub }}>移籍意欲：<span style={{ color: t.willLabel === "移籍に前向き" ? T.color.good : t.willLabel === "チームの看板" ? T.color.bad : T.color.text }}>{t.willLabel}</span></div>
               <PersonaLine p={c.personality} />
               <TraitLine abilities={c.abilities} goldAbilities={c.goldAbilities} />
               <AbilityGrid r={c} cap={growthCap} />
-              <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-                <Btn small color={"#e8a13c"} disabled={!afford}
-                  onClick={() => askConfirm(`${t.team}の${c.name}を移籍金${t.fee}万円で引き抜きますか？（今季の引き抜き枠を消費します）`, () => poachSign(t.id))}>
-                  移籍金 {t.fee}万で引き抜く
-                </Btn>
-                {!afford && !done && !full && <span style={{ fontSize: 11, color: C.red }}>資金不足</span>}
-              </div>
-            </div>
+            </RiderCard>
           );
         })}
-        <Btn outline color={C.sub} onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</Btn>
+        <QuietBtn onClick={() => setG(s => ({ ...s, screen: "main" }))}>← 戻る</QuietBtn>
       </div>
     );
   }
 
   if (g.screen === "event_result" && g.eventResult) {
     return wrap(
-      <div style={{ display: "grid", gap: 14 }}>
-        <div style={{ background: C.panel, borderRadius: 12, padding: 18, borderTop: `4px solid ${C.purple}` }}>
-          <Eyebrow color={C.purple}>{g.eventResult.title}</Eyebrow>
-          <p style={{ color: C.text, fontSize: 14, lineHeight: 1.8, margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{g.eventResult.text}</p>
-        </div>
-        <Btn onClick={() => setG(s => ({ ...s, eventResult: null, screen: "main" }))}>続ける →</Btn>
+      <div style={{ display: "grid", gap: T.space.lg }}>
+        <Section padded title={g.eventResult.title}>
+          <div style={{ fontSize: T.size.body, color: T.color.text, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{g.eventResult.text}</div>
+        </Section>
+        <PrimaryBtn onClick={() => setG(s => ({ ...s, eventResult: null, screen: "main" }))}>続ける</PrimaryBtn>
       </div>
     );
   }

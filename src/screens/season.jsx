@@ -1,7 +1,7 @@
 // シーズンモードの画面ディスパッチ（Phase 4-2で App から分離／2026-07 Step8で src/screens/season/* へさらに分割）。
 // ctx=App状態/ハンドラ。各 g.screen の実体は src/screens/season/*.jsx にあり、ここは委譲するだけの薄い窓口。
 import React from "react";
-import { C } from "../data/theme.js";
+import { T } from "../data/theme.js";
 import { renderSeasonIntroScreens } from "./season/intro.jsx";
 import { renderSeasonHubScreen } from "./season/hub.jsx";
 import { renderSeasonTransferEventScreens } from "./season/transferEvents.jsx";
@@ -23,5 +23,5 @@ export function renderSeasonScreens(ctx) {
   if (SCHEDULE_BOARD_SCREENS.has(g.screen)) return renderSeasonScheduleBoardScreens(ctx);
   if (RACE_SCREENS.has(g.screen)) return renderSeasonRaceScreens(ctx);
   if (YEAREND_SCREENS.has(g.screen)) return renderSeasonYearEndScreens(ctx);
-  return wrap(<div style={{ color: C.sub }}>読み込み中…</div>);
+  return wrap(<div style={{ color: T.color.sub }}>読み込み中…</div>);
 }

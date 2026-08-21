@@ -46,6 +46,7 @@ export {
   upgradeGoldAbilities, ACQUIRE_CONDITIONS, acquireNewAbility, ABILITY_FILE_KEY,
   loadAbilityFile, saveAbilityFile, noteAbilityDiscovery, bumpRosterAbAll, bumpEquipLv, addProdigyRookie,
   CP_MILESTONES, applyCpMilestones, mlCpPerks, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows,
+  cpMilestoneSummary,
 } from "../domain/mylife/cp.js";
 
 export {

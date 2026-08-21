@@ -1472,3 +1472,29 @@ mylife.jsxの「読み込み中…」各1箇所は本ラウンドで移行）。
 
 kit.jsxのChipRow新設 → DecisionCard → RaceViewクローム → race.jsx 8画面 → 後始末
 （旧トークン削除）→ 検証 → DEVLOG。
+
+### 実装（D-4-c）
+
+- `domain/mylife/cp.js`：`CP_MILESTONES`16件に集計用`fx`フィールドを追加し`cpMilestoneSummary(totalCP)`を新設。totalCP=128での実測値（budget:800/abAll:23/equipLv:3/rookie:2/items:2）が設計時の想定と完全一致することをNodeで確認。
+- `intro.jsx`：4画面を`kit.jsx`へ全面移行。newgame_setupは`cpMilestoneSummary()`による要約Item＋次解禁1行（CP0ならセクション非表示）。sponsorは3社比較表（月額/ノルマ/達成/未達/指定の5行×3列、388px<392pxで収まる）＋中期目標＋SelectRow＋動的ラベルのPrimaryBtn「{社名}と契約する」。`g.sponsorChoiceIdx`を選択状態の一時フィールドとして使用（SAVE_FIELDS対象外＝セーブ非対応の一時状態で仕様通り）。introの「最初から」に`confirmLabel="消して始める"`を追加。
+- `scheduleBoard.jsx`：4画面を`kit.jsx`へ。programは天候をWEATHER[].label文字（accent）へ、★グレードは維持。standingsはR2固定幅列＋最終順位ボーナスItem×3。trophyはD-4-a2の生涯評価と同型（display 28px＋TitlesPanel＋殿堂行）。rivalsはチームごとSection＋ScoutBadge。
+- `transferEvents.jsx`：5画面を`kit.jsx`へ。event/transferRequest/poachOfferの色付き上枠線を廃止しSection見出しの言葉で種別を示す。poachMarketはRiderCard＋ShopBtn（market/transferと同型）。
+- `yearend.jsx`：争点3・案A「言葉が主役」。昇格=good／降格=bad／残留=text の言葉をdisplay(28px)に。スポンサー精算・中期目標はItemで達成=good／未達=bad。clearは「グランファイナル制覇」をaccentのdisplayに。「新たなチームで最初から」に確認ダイアログを追加（原文になかった、設計で明示）。
+- `screens/season.jsx`・`screens/mylife.jsx`：「読み込み中…」の色を`C.sub`→`T.color.sub`へ。
+
+### 検証（D-4-c）
+
+`npm run build`各ファイル編集後に都度成功を確認。Playwrightで実プレイ検証：
+1. 新規ゲーム開始フロー（intro→newgame_setup→scoutpolicy_initial→sponsor→main）を実行し、
+   cpMilestoneSummaryの表示値（開幕資金+800万円／初期選手の能力+23／チーム設備Lv+3／
+   逸材新人2名／開幕アイテム各2個）が実データと一致することをスクリーンショットで確認。
+2. メニュー経由で記録→年間プログラム・順位表・トロフィールーム内の4画面（program/
+   standings/trophy/rivals）と、市場→引き抜き・トレード→poachMarketを実撮。
+3. 「翌月へ進む」を最大40回自動クリックする実プレイループで、event・event_result・
+   poachOffer・yearendの4画面を自然発火させて実撮（RNG頻度の低いtransferRequestのみ
+   未発火。poachOfferと同一の変換パターン——色枠廃止・PrimaryBtn/QuietBtn(bad)+確認——
+   であり、コードレビューとビルド成功で担保）。
+4. 全過程でconsole/pageエラー0件（favicon 404を除く）。負の予算（-946万円等）でも
+   `慰留する`ボタンが正しくdisabled表示されることを実データで確認。
+
+15画面中14画面を実撮確認、残り1画面（transferRequest）はコードレビューで確認。
