@@ -1157,7 +1157,55 @@ CLAUDE.md §5が防ごうとしている構造の腐りなので、実態に合�
   までの一瞬だけ旧配色が見えてちらつく状態になっていた。**
 - `#loading { color: #9aa3b5 }` → `#8C8A82`（旧`C.sub`→`T.color.sub`）
 
-## Phase 3-D-5: 配色トークンの見直し（アクセントカラー導入・設計確定・実装待ち）
+### 実装
+
+`src/screens/meta.jsx`を全面書き換え（旧`C`/`FONT_D`/`FONT_M`/`Btn`/`Eyebrow`を廃し
+`T`/`kit.jsx`へ一本化）。
+
+- **モード選択（案C）**：ゲーム名2行「ロードレース」「シミュレーション」（`display`28px・
+  `accent`）＋タグライン「チームを率い、世界の頂点へ」（`caption`・`sub`）。本編2つは
+  `Section`（`title`＝モード名の小見出し、内部に`title`(20px)の具体語「チーム運営」
+  「選手キャリア」＋説明`caption`＋`PrimaryBtn`（シーズン）／`QuietBtn color={action}`
+  （マイライフ））。付属2枠（生涯評価スコア／使えるCP）はローカルの`<button>`2つを
+  `flex`で横並びにし、`loadMeta().totalEarnedCP===0 && loadMlLegends().length===0`で
+  丸ごと非表示。
+- **生涯評価（Item化＋案A）**：スコアのみ`display`(28px・`accent`)、他は`Section`＋`Item`。
+  「通算勝利数：42勝／通算表彰台：89回」の1行2値連結を`Item`2行へ分離。解禁一覧は
+  `lockedRows = rows.filter(r => !r.unlocked)`を`ShopRow`（`label`=r.label・`detail`=
+  r.category・`locked`=`あと${cp}pt`）で列挙、`Section`の`right`に
+  `${unlockedCount} / ${rows.length} 解禁済み`。全解禁時は「すべて解禁済みです。」1行。
+  ダイナスティは`Section`の`right`に「世界○年目」を移設（🌍絵文字を廃止）。
+- **CPショップ（ShopRow化）**：D-4-bの5画面と同型で`CP_SHOP`19件を`ShopRow`へ
+  （`badge`=category・`detail`=desc・`locked`="解禁済み"／`buyLabel`=`${cost}pt`・
+  `buyDisabled`=残高不足）。リセットボタンは`QuietBtn color={T.color.bad}`（既存の
+  `releaseRider`等と同じ「破壊的操作はQuietBtn+bad」パターンを踏襲）。2段確認の内側
+  `askConfirm`に`confirmLabel="消去する"`を追加（未指定だった）。
+- 絵文字18個（🏢🚴🏆🛒🌍🌳🧬🔓✓）を全廃、戻るボタンの「←」のみ残す。角丸14枚・枠線
+  12本・グラデーション2箇所も`Section`の面・行の罫線に統合され消滅。
+
+`src/index.html`：`<title>`を「ロードレース・シミュレーション」へ、`body`の起動前背景を
+`#14171d`→`#0E0E10`、`#loading`の文字色を`#9aa3b5`→`#8C8A82`へ修正（D-4-aで本体側は
+`T.color.bg`へ移行済みだったが、マウント前の一瞬だけ旧配色が見えていたちらつきを解消）。
+
+### 検証
+
+`npm run build`成功後、Playwrightで3状態を実撮（`/tmp`のスクラッチに保存・目視確認）：
+
+1. **空状態**（`localStorage`未設定）：モード選択の付属2枠が正しく非表示。本編2つのみ表示。
+2. **全項目0状態**（`totalEarnedCP:0`・殿堂1名・全stats0）：スコア15（殿堂1名分の
+   基礎点のみ）を隠さず表示。解禁一覧は28行中0行解禁で全件が未解禁として列挙される
+   （スクロール閉じ込めが無いことを確認）。CPショップは残高0円で19件全ての購入ボタンが
+   disabled、価格表示は残る。
+3. **遊び込み状態**（生涯CP128pt・使用済み70pt・殿堂3名）：スコア732・残高58pt・
+   解禁19/28が正しく算出・表示。解禁一覧は未解禁9行のみ表示され差分表記（あと2pt〜
+   あと272pt）を確認。
+
+5画面（モード選択・生涯評価・系譜ツリー・因子図鑑・CPショップ）×3状態＝15回の遷移で
+console/pageエラー0件（faviconの404のみ、無関係）。ブラウザ`document.title`が
+「ロードレース・シミュレーション」に、起動前`body`背景が`rgb(14,14,16)`(`#0E0E10`)に
+変わったことも確認。
+
+## Phase 3-D-5: 配色トークンの見直し（アクセントカラー導入・設計確定・実装完了）
 
 **設計案**：https://claude.ai/code/artifact/44316e43-969e-4f28-bb2b-6bc0b0156c8b
 
