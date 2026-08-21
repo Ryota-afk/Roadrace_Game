@@ -30,9 +30,11 @@ const mapColor = (c) => COLOR_MAP[c] ?? T.color.sub;
 //   menu    = 既定・枠線：月は進まない（画面を開くだけ・トグルするだけ）
 //   danger  = 警告・枠線：取り返しがつかない操作（引退・データ消去など）
 // role未指定なら従来通りcolor/outlineをそのまま使う（既存の呼び出しは無改修で動く）。
+// 第13弾Phase3-D-5: 黄(accent)はデータ強調専用、押せるものはaction（バイオレット）に
+// 役割を分けた（CLAUDE.md §9）。primary/monthはどちらも「押す」役割の強調なのでaction。
 const BTN_ROLE = {
-  primary: { color: T.color.accent, outline: false },
-  month: { color: T.color.accent, outline: true },
+  primary: { color: T.color.action, outline: false },
+  month: { color: T.color.action, outline: true },
   menu: { color: T.color.sub, outline: true },
   danger: { color: T.color.bad, outline: true },
 };

@@ -3,6 +3,7 @@
 // 純粋な提示コンポーネント——categoriesとコールバックだけを受け取る。
 // 第13弾Phase3-D-4-a: 新トークンTへ移行。角丸・影・枠線を撤去し面の濃淡のみで区切る。
 // 開閉ボタンの「✕/☰」だけは開閉状態を表す記号として機能しているため残す。
+// 第13弾Phase3-D-5: 開閉ボタンは「押すもの」なのでaction（バイオレット）へ（CLAUDE.md §9）。
 import React from "react";
 import { T, FONT_DOT } from "../../data/theme.js";
 
@@ -15,7 +16,7 @@ export function MenuShell({ categories, menuState, openMenu, closeMenu, selectCa
       <button onClick={open ? closeMenu : openMenu} aria-label={open ? "メニューを閉じる" : "メニューを開く"}
         style={{
           position: "fixed", right: 18, bottom: 18, zIndex: 1100, width: 52, height: 52,
-          background: T.color.accent, color: T.color.bg, border: "none", cursor: "pointer",
+          background: T.color.action, color: T.color.bg, border: "none", cursor: "pointer",
           fontSize: 20, fontFamily: FONT_DOT,
         }}>
         {open ? "✕" : "☰"}

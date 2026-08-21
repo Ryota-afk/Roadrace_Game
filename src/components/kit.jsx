@@ -6,9 +6,11 @@
 import React from "react";
 import { FONT_DOT, T } from "../data/theme.js";
 
+// 第13弾Phase3-D-5: 見出し自体をaccent（黄）にする（CLAUDE.md §9「中間」の量）。
+// 黄はデータ強調用のまま——見出しは「今どの情報を読んでいるか」を示すデータ的な役割。
 export const Section = ({ title, right, children, padded }) => (
   <>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>
       <span>{title}</span>{right != null && <span style={{ color: T.color.accent }}>{right}</span>}
     </div>
     <div style={{ background: T.color.surface, padding: padded ? T.space.md : `0 ${T.space.md}px`, marginBottom: T.space.md }}>{children}</div>
@@ -29,9 +31,11 @@ export const Item = ({ label, value, valueColor, detail, detailColor, first }) =
   </div>
 );
 
+// 第13弾Phase3-D-5: 黄(accent)はデータ強調専用、押せるものはaction（バイオレット）に
+// 役割を分ける（CLAUDE.md §9）。PrimaryBtnは1画面に1つを想定する主ボタンなのでaction。
 export const PrimaryBtn = ({ children, onClick, disabled }) => (
   <button onClick={onClick} disabled={disabled} style={{
-    width: "100%", background: disabled ? T.color.surfaceUp : T.color.accent, color: disabled ? T.color.sub : T.color.bg,
+    width: "100%", background: disabled ? T.color.surfaceUp : T.color.action, color: disabled ? T.color.sub : T.color.bg,
     border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: disabled ? "default" : "pointer", marginBottom: T.space.sm,
   }}>{children}</button>
 );
@@ -54,7 +58,7 @@ export const SelectRow = ({ label, detail, selected, onClick, first }) => (
     border: 0, borderTop: first ? "none" : `1px solid ${T.color.rule}`, cursor: "pointer",
     padding: `${T.space.sm}px ${T.space.md}px`, fontFamily: FONT_DOT,
   }}>
-    <div style={{ fontSize: T.size.body, color: selected ? T.color.accent : T.color.text }}>{label}</div>
+    <div style={{ fontSize: T.size.body, color: selected ? T.color.action : T.color.text }}>{label}</div>
     {detail && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6 }}>{detail}</div>}
   </button>
 );
@@ -73,9 +77,9 @@ export const Screen = ({ children }) => (
 export const ShopBtn = ({ children, onClick, disabled, outline, minWidth }) => (
   <button onClick={onClick} disabled={disabled} style={{
     flex: "none", minWidth, textAlign: minWidth ? "center" : undefined,
-    background: disabled ? T.color.surfaceUp : outline ? "transparent" : T.color.accent,
-    color: disabled ? T.color.sub : outline ? T.color.accent : T.color.bg,
-    border: outline ? `1px solid ${disabled ? T.color.sub : T.color.accent}` : "none",
+    background: disabled ? T.color.surfaceUp : outline ? "transparent" : T.color.action,
+    color: disabled ? T.color.sub : outline ? T.color.action : T.color.bg,
+    border: outline ? `1px solid ${disabled ? T.color.sub : T.color.action}` : "none",
     fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: disabled ? "default" : "pointer", whiteSpace: "nowrap",
   }}>{children}</button>
 );

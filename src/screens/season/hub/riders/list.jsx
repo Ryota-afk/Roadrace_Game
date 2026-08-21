@@ -26,7 +26,7 @@ export function renderRidersListSection(ctx) {
         <div style={{ display: "flex", gap: T.space.sm, flexWrap: "wrap", marginBottom: T.space.sm }}>
           <QuietBtn onClick={() => openRename("選手名を変更", r.name, v => setG(s => ({ ...s, roster: s.roster.map(x => x.id === r.id ? { ...x, name: v } : x) })))}>名前を変更</QuietBtn>
           {!isCaptain && <QuietBtn onClick={() => setCaptain(r.id)}>主将に任命</QuietBtn>}
-          <QuietBtn color={r.favorite ? T.color.accent : T.color.sub} onClick={() => toggleFavorite(r.id)}>{r.favorite ? "お気に入り解除" : "お気に入り登録"}</QuietBtn>
+          <QuietBtn color={r.favorite ? T.color.action : T.color.sub} onClick={() => toggleFavorite(r.id)}>{r.favorite ? "お気に入り解除" : "お気に入り登録"}</QuietBtn>
           {g.month === 0 && <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id), "解雇する")}>解雇</QuietBtn>}
         </div>
         {riderNickname(r) && <div style={{ fontSize: T.size.caption, color: T.color.sub, fontStyle: "italic", marginBottom: T.space.sm }}>「{riderNickname(r)}」</div>}
@@ -75,7 +75,7 @@ export function renderRidersListSection(ctx) {
           <RiderCard key={r.id} r={r} first={i === 0}
             ovr={overall(r)}
             badge={isCaptain ? "主将" : r.isLegendRecruit ? "伝説の招待選手" : null}
-            sub={ph.tag}
+            sub={ph.tag} subColor={T.color.accent}
             cond={r.cond}
             fatigue={r.fatigue}
             expanded={expandedRiderId === r.id}
@@ -93,8 +93,8 @@ export function renderRidersListSection(ctx) {
             </div>
             {((g.inv.supp > 0 && r.fatigue > 30) || (g.inv.tune > 0 && r.cond < 5)) && (
               <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.sm }}>
-                {g.inv.supp > 0 && r.fatigue > 30 && <QuietBtn color={T.color.accent} onClick={() => useSupp(r.id)}>サプリ（疲労-40）</QuietBtn>}
-                {g.inv.tune > 0 && r.cond < 5 && <QuietBtn color={T.color.accent} onClick={() => useTune(r.id)}>調律（調子+2）</QuietBtn>}
+                {g.inv.supp > 0 && r.fatigue > 30 && <QuietBtn color={T.color.action} onClick={() => useSupp(r.id)}>サプリ（疲労-40）</QuietBtn>}
+                {g.inv.tune > 0 && r.cond < 5 && <QuietBtn color={T.color.action} onClick={() => useTune(r.id)}>調律（調子+2）</QuietBtn>}
               </div>
             )}
             {r.injury > 0 && <div style={{ fontSize: T.size.caption, color: T.color.bad, marginTop: T.space.sm }}>故障 残{r.injury}ヶ月</div>}

@@ -13,7 +13,7 @@ import { COND_ARROW, COND_COLOR, TYPES } from "../data/abilities.js";
 import { FONT_DOT, T } from "../data/theme.js";
 
 export function RiderCard({
-  r, ovr, ovrLabel = "OVR", badge, sub, cond, fatigue,
+  r, ovr, ovrLabel = "OVR", badge, sub, subColor, cond, fatigue,
   children, footer, expanded, onToggleExpand,
   expandLabel = "くわしく見る", collapseLabel = "閉じる", expandedContent,
   first,
@@ -32,7 +32,7 @@ export function RiderCard({
         )}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, marginTop: 3, gap: T.space.sm }}>
-        <span>{t.label}{sub ? `・${sub}` : ""}</span>
+        <span>{t.label}{sub ? <>・<span style={{ color: subColor || T.color.sub }}>{sub}</span></> : ""}</span>
         {cond != null && (
           <span style={{ flex: "none" }}>調子 <span style={{ color: COND_COLOR[cond - 1], fontVariantNumeric: "tabular-nums" }}>{COND_ARROW[cond - 1]}</span></span>
         )}

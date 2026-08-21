@@ -20,7 +20,7 @@ export function renderMiscSettingsSection(ctx) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: `${T.space.sm}px 0` }}>
           <span style={{ fontSize: T.size.head, color: T.color.text }}>{g.teamName || "あなたのチーム"}</span>
           <button onClick={() => openRename("チーム名を変更", g.teamName || "", v => setG(s => ({ ...s, teamName: v })), 16)}
-            style={{ background: "none", border: "none", color: T.color.accent, fontSize: T.size.caption, cursor: "pointer", fontFamily: "inherit" }}>変更</button>
+            style={{ background: "none", border: "none", color: T.color.action, fontSize: T.size.caption, cursor: "pointer", fontFamily: "inherit" }}>変更</button>
         </div>
       </Section>
       <QuietBtn color={T.color.sub} onClick={() => askConfirm("最初からやり直しますか？セーブデータも消えます。", () => { clearSaveGame(); setG(initGame()); }, "新しく始める")}>ゲームをリセット</QuietBtn>
