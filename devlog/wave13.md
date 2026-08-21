@@ -775,3 +775,116 @@ destructiveな呼び出し6箇所（`hub.jsx`5箇所・`create.jsx`1箇所・`ca
 ①ショップのパーツ行が「未装着 0」で右揃え・整列 ②`AbilityFileList`の金特（逃げ屋）が
 能力名自体アクセント色・右ラベルは「金に進化する」のみ ③選手成績・全チーム名鑑が
 今季/通算/表彰台/最高の固定幅列で揃い、自分の行と最高順位1位がアクセント色、を目視確認。
+
+## Phase 3-D-4-a: シーズンの額縁（ヘッダ・メニュー・敷地ストリップ）の作り直し（設計確定・実装待ち）
+
+**設計案**：https://claude.ai/code/artifact/6a0b617b-af43-43d4-96b4-c10934d83c75
+（実データ・実フォント埋め込みで候補3案を提示。CLAUDE.md §8の手順1〜3を実施し合意済み）
+
+### 実測（着手時）
+
+シーズンを実際に開始して撮影したところ、`SeasonHeader`（`chrome.jsx:14-40`）は**21画面すべてに
+出続ける常設クロームでありながら18項目を詰め込んでいた**。実データ（クラス B1／1年目 4月／
+予算300万／スポンサー「カワセミ電工」・月18万・ノルマ103pt・違約金30万・指定レース1回）で確認：
+
+- **実バグ：幅420pxで右カラムが狭すぎ、値の途中で改行していた**。「`/ 出場権113pt`」が
+  「/ 出場権」＋「113pt」に、「`順位 10/10位`」が「10/10」＋「位」に割れ、数字と単位が
+  別の行に離れていた。
+- R1違反：項目6〜10・12〜14が1本の文字列に連結（`月+18万／ノルマ103pt／未達-30万／指定レース0済`）。
+- R4違反：10.5px・11px・12pxが混在。3段あるのに全て「小さいグレー」で階層になっていない。
+  加えて`theme.js`が実測で「9〜11pxは漢字が潰れて読めない」と記録しているサイズを使っていた。
+- R5違反：黄・緑・金・白・灰が1つのヘッダに同居。
+- 絵文字2個（🏆順位・🔁ダイナスティ）。
+
+### 判断：18項目のうち常時表示に値するのは7項目
+
+判断基準は「この画面でも次の画面でも、判断のために参照し続ける値か」。
+
+- **残す（7項目）**：クラス／年月／チーム名／予算／ポイント／昇格必要pt／順位
+- **移す（10項目）**：スポンサー4項目（月給・ノルマ・未達・指定レース）＋支出内訳3項目
+  （選手年俸・人数・スタッフ月給・OBコーチ）＋ダイナスティ周回。
+  **「移す」は「消す」ではない**——移設先は`race_status`（レース→シーズン状況・目標）。
+  既に「中期目標」「タイトル争い」「今月のチーム状態」を持つ"今の状況"画面であり、
+  受け皿セクションを同じラウンドで新設する。
+- **注釈「（昇格ボーダー緩和圏）」は撤去してよいと確認済み**：このルールは
+  `scheduleBoard.jsx:49,71`（年間プログラム）で本文として説明済みで、`yearend.jsx:26`でも
+  年度末に表示される。ヘッダから消しても情報は失われない。
+
+### 確定した仕様（ユーザー選択：案C 計器盤3列）
+
+候補3案（A最小68px／B進捗ゲージ80px／C計器盤3列92px）を実データ・実フォントで提示し、
+**案C**が選ばれた。D-4-0で確定した`StatRow`の固定幅列の思想をヘッダにも適用し、順位も残す形。
+
+**`SeasonHeader`の構造**（3行）：
+1. クラス（左・caption・sub）／年月（右・caption・sub）
+2. チーム名（head 16px・text・`whiteSpace:nowrap`＋`textOverflow:ellipsis`で1行固定。
+   長い名前でもヘッダの高さが変わらない）
+3. 3列（`flex:1`ずつ・`minWidth:0`）。各列＝ラベル（caption・sub）＋値（head・
+   `fontVariantNumeric:"tabular-nums"`）＋単位（caption・sub）
+   - 資金（左揃え）：`g.budget` ＋「万円」。色は`T.color.accent`、**負のとき`T.color.bad`**
+   - 昇格まで（右揃え）：`g.points` ＋「/{seasonNeed(g.classIdx)}pt」。色は`T.color.text`、
+     **`g.points >= need`のとき`T.color.accent`**
+   - 順位（右揃え）：`seasonRank(g).rank` ＋「/{total}」。色は常に`T.color.text`
+
+**共通ルール**：絵文字0個／色は`T.color.accent`1色のみ（緑は使わない。例外は上記の`bad`）／
+級数はcaption(12)とhead(16)の2段だけ（10.5・11pxは廃止）／数字は全てtabular-nums。
+
+**空・特殊状態**：
+- `g.teamName`が空 → 「あなたのチーム」（現行と同じ）
+- `g.budget < 0` → 数値を`T.color.bad`。「（借金）」の文字は付けない（マイナス記号＋赤で
+  足りており、買い物不可という帰結は`race_status`の警告文が既に説明している）
+- `g.points >= need` → 値を`T.color.accent`
+- `seasonRank(g).rank === 0`（算出不能） → 「—」を表示し単位は空
+- `g.dynastyLevel > 0` → **ヘッダには出さない**。`race_status`に「N周目」として表示
+
+### 同じラウンドで直す残り3箇所
+
+**`MenuShell`（`components/menu/MenuShell.jsx`）**：全画面から開く常設UI。
+- 大ジャンル6個の絵文字🏠🚴🏗🛒📜⚙️を撤去（`data/seasonMenu.js`の`icon`フィールドごと削除）。
+  ラベルだけで判別できる。
+- 丸ボタン（56px・`borderRadius:"50%"`・`boxShadow`）→角丸0・影なしの矩形へ。
+  「✕/☰」は開閉の記号として機能しているため残す。
+- `C.panel`/`C.line`/`FONT_B`→`T`/`FONT_DOT`。小ジャンルの角丸8px・1px枠線を撤去し
+  面の濃淡と罫線に置換。
+- フォントサイズ13/13.5/14.5/16pxの4段→`body`(14)と`caption`(12)の2段へ。
+
+**BaseView下部の施設ストリップ（`components/base/BaseView.jsx:294-300`）**：
+- **10pxで表示されている**（`theme.js`が「9〜11pxは漢字が潰れる」と実測記録しているサイズ）→`caption`(12)へ。
+- 絵文字6個（🏠💪🔧🏥🔍🌳）を撤去。
+- `FONT_M`（欧文等幅）→`FONT_DOT`。
+- 初期状態ではLv0が6個並ぶだけの行になるため、**Lv1以上の施設だけを出す**。
+  空状態：全部Lv0なら行ごと非表示。
+
+**`makeWrap`/`makeMetaWrap`（`chrome.jsx:91-124`）**：
+- 背景`C.bg`(#14171d・青紫寄り)→`T.color.bg`(#0E0E10)。マイライフ側は移行済みで、
+  モードを行き来すると背景色が変わってしまう状態だった。
+- `fontFamily: FONT_B`→`FONT_DOT`。
+- **padding・maxWidthは変更しない**（`mlUi.jsx`の`Screen`のマージン相殺値がこの値に依存）。
+
+### `race_status`に新設する受け皿（ヘッダから外す10項目の移設先）
+
+既存の「中期目標」カードの直後・「タイトル争い」の前に置く。`mlUi.jsx`の`Section`＋`Item`で
+書く（D-3で`Screen`がseason側でもそのまま動くことを確認済み。**mlUi.jsxのseason共有の第一歩**）。
+
+- **「スポンサー契約」**（`g.sponsor`があるときのみ。無ければセクションごと非表示）
+  - スポンサー名：`g.sponsor.name`
+  - 月々の収入：`g.sponsor.monthly`
+  - 年間ノルマ：`g.sponsor.norma`
+  - 未達の違約金：`g.sponsor.penalty`
+  - 指定レース：`g.sponsor.mandates`（総数）・`g.sponsor.mandatesMet`（出場済）・
+    `g.sponsor.mandatesMissed`（見送り。0なら出さない）
+- **「今月の支出」**（常に表示）
+  - 選手年俸：`teamPayroll(g.roster, g.salaryDiscountMul || 1)`＋`g.roster.length`名
+  - スタッフ月給：`staffSalaryTotal(g.staff)`（0なら行を出さない）
+  - OBコーチ：`OB_COACH_SALARY`（`g.obCoach`が無ければ行を出さない）
+  - 合計：上記の合計（**スタッフかOBがあるときだけ出す**。他が0なら合計＝選手年俸で冗長なため）
+- **「ダイナスティ」**（`g.dynastyLevel > 0`のときのみ）：「N周目」
+
+### スコープ
+
+当初のD-4-a案に含めていた`meta.jsx`3画面（モード選択・生涯評価・クリアポイント交換所、
+絵文字18個）は**D-4-a2として次ラウンドへ分離**（ユーザー選択：「額縁に絞る」）。
+額縁は21画面すべての土台なので先に確定させる。
+
+実装対象5ファイル：`components/chrome.jsx`／`components/menu/MenuShell.jsx`／
+`data/seasonMenu.js`／`components/base/BaseView.jsx`／`screens/season/hub/race/status.jsx`。
