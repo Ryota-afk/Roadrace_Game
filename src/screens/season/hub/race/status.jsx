@@ -3,9 +3,47 @@
 // （byte-for-byte照合済み）。
 import React from "react";
 import { Eyebrow } from "../../../../components/ui.jsx";
+import { Section, Item } from "../../../../components/mlUi.jsx";
 import { MONTHS } from "../../../../data/course.js";
-import { C, FONT_D, FONT_M } from "../../../../data/theme.js";
-import { SCOUT_POLICIES, objectiveStatusText, rivalNews, seasonTitleRace } from "../../../../logic/support.js";
+import { C, FONT_D, FONT_M, T } from "../../../../data/theme.js";
+import { OB_COACH_SALARY } from "../../../../data/economy.js";
+import { SCOUT_POLICIES, objectiveStatusText, rivalNews, seasonTitleRace, staffSalaryTotal } from "../../../../logic/support.js";
+import { teamPayroll } from "../../../../domain/season/salary.js";
+
+// 第13弾Phase3-D-4-a: SeasonHeaderから移設したスポンサー詳細・支出内訳・ダイナスティ周回の受け皿。
+// ヘッダは常時参照する7項目だけに絞ったため、月1回程度しか参照しないこれらの値はここへ集約した
+// （消したのではなく移設。詳細はdevlog/wave13.md）。
+function SponsorAndSpendingSections({ g }) {
+  const staffTotal = staffSalaryTotal(g.staff);
+  const payroll = teamPayroll(g.roster, g.salaryDiscountMul || 1);
+  const extra = staffTotal + (g.obCoach ? OB_COACH_SALARY : 0);
+  const s = g.sponsor;
+  return (
+    <>
+      {s && (
+        <Section title="スポンサー契約">
+          <Item first label="スポンサー" value={s.name} />
+          <Item label="月収" value={`+${s.monthly}万`} valueColor={T.color.accent} />
+          <Item label="ノルマ" value={`${s.norma}pt`} />
+          <Item label="未達時" value={`-${s.penalty}万`} valueColor={T.color.bad} />
+          <Item label="指定レース" value={`${s.mandatesMet}/${s.mandates}済`}
+            detail={s.mandatesMissed > 0 ? `見送り${s.mandatesMissed}件` : null} />
+        </Section>
+      )}
+      <Section title="今月の支出">
+        <Item first label="選手年俸" value={`-${payroll}万/月`} detail={`${g.roster.length}名`} />
+        {staffTotal > 0 && <Item label="スタッフ" value={`-${staffTotal}万/月`} />}
+        {g.obCoach && <Item label="OBコーチ" value={`-${OB_COACH_SALARY}万/月`} />}
+        {extra > 0 && <Item label="合計" value={`-${payroll + extra}万/月`} valueColor={T.color.bad} />}
+      </Section>
+      {g.dynastyLevel > 0 && (
+        <Section title="ダイナスティ">
+          <Item first label="周回" value={`${g.dynastyLevel}周目`} />
+        </Section>
+      )}
+    </>
+  );
+}
 
 export function renderRaceStatusSection(ctx) {
   const { g, healthy, setG } = ctx;
@@ -42,6 +80,7 @@ export function renderRaceStatusSection(ctx) {
               </div>
             );
           })()}
+          <SponsorAndSpendingSections g={g} />
           {g.month === 11 && (
             <div style={{ background: "#2b2436", border: `1px solid ${C.purple}`, borderRadius: 10, padding: "10px 12px" }}>
               <div style={{ fontSize: 13, color: C.purple, fontWeight: 700 }}>3月 — チャンピオンシップ月間／来季スカウト方針の決定</div>

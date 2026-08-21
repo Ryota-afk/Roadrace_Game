@@ -10,37 +10,39 @@
 // - market先頭の「チーム名」編集セクション→misc_settingsへ（市場取引とは無関係な設定操作のため）
 // - race（旧home.jsx）末尾の「年間プログラム/順位表/トロフィールーム」リンク→
 //   records_standingsへ統合（いずれも記録閲覧画面への導線であり、記録ジャンルの方が自然なため）
+//
+// 第13弾Phase3-D-4-a: 大ジャンルのicon（絵文字）フィールドを撤去。ラベルだけで判別できる。
 export const SEASON_MENU_CATEGORIES = [
   // sectionsを持たない大ジャンルは「小ジャンルへドリルダウンせず即座に選択される」リーフ項目
   // （MenuShellが分岐）。ホームに戻るはワンタップで戻れることが重要なため先頭・リーフ化した。
-  { key: "base", icon: "🏠", label: "ホームに戻る" },
-  { key: "riders", icon: "🚴", label: "選手", sections: [
+  { key: "base", label: "ホームに戻る" },
+  { key: "riders", label: "選手", sections: [
     { key: "riders_list", label: "選手一覧・練習指定" },
     { key: "riders_team", label: "チーム状況（絆・スタッフ）" },
     { key: "riders_youth", label: "ユース・血統配合" },
   ] },
-  { key: "facility", icon: "🏗", label: "施設・機材", sections: [
+  { key: "facility", label: "施設・機材", sections: [
     { key: "facility_equip", label: "施設状況・機材強化" },
     { key: "facility_staff", label: "スタッフ雇用" },
     { key: "facility_ob", label: "OBコーチ" },
     { key: "facility_room", label: "内装・改装" },
   ] },
-  { key: "market", icon: "🛒", label: "市場", sections: [
+  { key: "market", label: "市場", sections: [
     { key: "market_scout", label: "新人スカウト・FA移籍" },
     { key: "market_transfer", label: "引き抜き・トレード" },
     { key: "market_shop", label: "パーツ・消耗品" },
   ] },
-  { key: "race", icon: "🏁", label: "レース", sections: [
+  { key: "race", label: "レース", sections: [
     { key: "race_calendar", label: "レースカレンダー" },
     { key: "race_status", label: "シーズン状況・目標" },
   ] },
-  { key: "records", icon: "📜", label: "記録", sections: [
+  { key: "records", label: "記録", sections: [
     { key: "records_career", label: "通算成績・実績・年度別記録" },
     { key: "records_hall", label: "殿堂入り選手名鑑" },
     { key: "records_archive", label: "通算タイトル・コースレコード・特能図鑑" },
     { key: "records_standings", label: "年間プログラム・順位表・トロフィールーム" },
   ] },
-  { key: "misc", icon: "⚙️", label: "その他", sections: [
+  { key: "misc", label: "その他", sections: [
     { key: "help", label: "ヘルプ" },
     { key: "misc_settings", label: "チーム名・その他設定" },
     { key: "save", label: "セーブ" },

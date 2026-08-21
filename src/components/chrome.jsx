@@ -1,39 +1,44 @@
 // アプリ全体の共通クローム（Header/Nav/改名モーダル/確認モーダル/wrap・mlWrap）。
 // Step7第11弾でmain.jsxから分離。season/mylife両モードが共有する「額縁」だけをここに置く。
 import React from "react";
-import { C, FONT_D, FONT_B, FONT_DOT, FONT_M, T } from "../data/theme.js";
+import { FONT_B, FONT_DOT, T } from "../data/theme.js";
 import { CLASSES, seasonNeed } from "../data/progression.js";
 import { MONTHS } from "../data/course.js";
-import { OB_COACH_SALARY } from "../data/economy.js";
 import { Btn, Eyebrow } from "./ui.jsx";
 import { BottomTabs } from "./BottomTabs.jsx";
-import { seasonRank, staffSalaryTotal, mlLivingCost } from "../logic/support.js";
-import { teamPayroll } from "../domain/season/salary.js";
+import { seasonRank, mlLivingCost } from "../logic/support.js";
 import { findUnsupportedChars } from "../domain/shared/textInput.js";
 
-export function SeasonHeader({ g, cls }) {
+// 第13弾Phase3-D-4-a: 資金／昇格まで／順位の3値を同じ形で並べる列。
+// 常時参照する値だけをヘッダに残すため（詳細はdevlog/wave13.md）、値は最大2段（caption/head）のみ。
+function HeaderStat({ label, value, unit, valueColor, align }) {
   return (
-    <div style={{ padding: "10px 0", borderBottom: `1px solid ${C.line}`, marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <Eyebrow>{cls.label} — {g.year}年目 {MONTHS[g.month]}{g.dynastyLevel > 0 ? ` ／ 🔁 ダイナスティ${g.dynastyLevel}周目` : ""}</Eyebrow>
-          <div style={{ fontFamily: FONT_D, fontSize: 18, fontWeight: 700, color: C.text }}>{g.teamName || "あなたのチーム"}</div>
-          {g.sponsor && <div style={{ fontSize: 10.5, color: C.sub }}>スポンサー {g.sponsor.name}（月+{g.sponsor.monthly}万／ノルマ{g.sponsor.norma}pt／未達-{g.sponsor.penalty}万／指定レース{g.sponsor.mandatesMet}済{g.sponsor.mandatesMissed > 0 ? `・見送り${g.sponsor.mandatesMissed}` : ""}）</div>}
-          <div style={{ fontSize: 10.5, color: C.sub }}>
-            選手年俸 -{teamPayroll(g.roster, g.salaryDiscountMul || 1)}万/月（{g.roster.length}名）
-            {staffSalaryTotal(g.staff) > 0 && <>／スタッフ月給 -{staffSalaryTotal(g.staff)}万/月</>}
-            {g.obCoach && <>／OBコーチ -{OB_COACH_SALARY}万/月</>}
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: FONT_M, fontSize: 18, color: g.budget < 0 ? C.red : C.yellow }}>{g.budget}<span style={{ fontSize: 10 }}>万円{g.budget < 0 ? "（借金）" : ""}</span></div>
-          <div style={{ fontFamily: FONT_M, fontSize: 12, color: C.green }}>{g.points}pt <span style={{ color: C.sub }}>/ 出場権{seasonNeed(g.classIdx)}pt</span></div>
-          {(() => { const sr = seasonRank(g); return (
-            <div style={{ fontFamily: FONT_M, fontSize: 11, color: sr.rank <= 3 ? "#e8a13c" : C.sub }}>
-              🏆 順位 {sr.rank}/{sr.total}位{sr.rank <= 3 ? "（昇格ボーダー緩和圏）" : ""}
-            </div>
-          ); })()}
-        </div>
+    <div style={{ flex: 1, minWidth: 0, textAlign: align }}>
+      <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{label}</div>
+      <div style={{ fontSize: T.size.head, color: valueColor || T.color.text, fontVariantNumeric: "tabular-nums" }}>
+        {value}<span style={{ fontSize: T.size.caption, color: T.color.sub }}>{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+// 第13弾Phase3-D-4-a: 18項目を詰め込んでいた旧ヘッダを、常時参照する7項目だけに絞った
+// （実測で幅420pxでは値の途中改行まで起きていた。詳細・移設先はdevlog/wave13.md）。
+// スポンサー詳細・支出内訳・ダイナスティ周回はrace_status（レース→シーズン状況）へ移設。
+export function SeasonHeader({ g, cls }) {
+  const need = seasonNeed(g.classIdx);
+  const sr = seasonRank(g);
+  return (
+    <div style={{ padding: `${T.space.sm}px 0 ${T.space.md}px`, borderBottom: `1px solid ${T.color.rule}`, marginBottom: T.space.md, fontFamily: FONT_DOT }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub }}>
+        <span>{cls.label}</span>
+        <span>{g.year}年目 {MONTHS[g.month]}</span>
+      </div>
+      <div style={{ fontSize: T.size.head, color: T.color.text, marginTop: T.space.xs, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.teamName || "あなたのチーム"}</div>
+      <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.sm }}>
+        <HeaderStat label="資金" value={g.budget} unit="万円" align="left" valueColor={g.budget < 0 ? T.color.bad : T.color.accent} />
+        <HeaderStat label="昇格まで" value={g.points} unit={`/${need}pt`} align="right" valueColor={g.points >= need ? T.color.accent : T.color.text} />
+        <HeaderStat label="順位" value={sr.rank || "—"} unit={sr.rank ? `/${sr.total}` : ""} align="right" />
       </div>
     </div>
   );
@@ -91,7 +96,7 @@ export function ConfirmDialog({ confirmDialog, setConfirmDialog }) {
 export function makeWrap({ g, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
   const cls = CLASSES[g.classIdx];
   return (children, opts = {}) => (
-    <div style={{ minHeight: "100svh", background: C.bg, fontFamily: FONT_B, ...(opts.fill ? { display: "flex", flexDirection: "column" } : null) }}>
+    <div style={{ minHeight: "100svh", background: T.color.bg, fontFamily: FONT_DOT, ...(opts.fill ? { display: "flex", flexDirection: "column" } : null) }}>
       <div style={{
         maxWidth: 560, margin: "0 auto", width: "100%", boxSizing: "border-box",
         padding: opts.fill ? "6px 14px 10px" : "6px 14px 40px",
@@ -113,7 +118,7 @@ export function makeWrap({ g, renameState, setRenameState, confirmDialog, setCon
 // SeasonHeaderを持たない専用のwrapを新設し、renderMetaScreens側だけに配線する。
 export function makeMetaWrap({ renameState, setRenameState, confirmDialog, setConfirmDialog }) {
   return (children) => (
-    <div style={{ minHeight: "100svh", background: C.bg, fontFamily: FONT_B }}>
+    <div style={{ minHeight: "100svh", background: T.color.bg, fontFamily: FONT_DOT }}>
       <div style={{ maxWidth: 560, margin: "0 auto", width: "100%", boxSizing: "border-box", padding: "6px 14px 40px" }}>
         {children}
       </div>

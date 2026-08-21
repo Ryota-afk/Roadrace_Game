@@ -776,7 +776,7 @@ destructiveな呼び出し6箇所（`hub.jsx`5箇所・`create.jsx`1箇所・`ca
 能力名自体アクセント色・右ラベルは「金に進化する」のみ ③選手成績・全チーム名鑑が
 今季/通算/表彰台/最高の固定幅列で揃い、自分の行と最高順位1位がアクセント色、を目視確認。
 
-## Phase 3-D-4-a: シーズンの額縁（ヘッダ・メニュー・敷地ストリップ）の作り直し（設計確定・実装待ち）
+## Phase 3-D-4-a: シーズンの額縁（ヘッダ・メニュー・敷地ストリップ）の作り直し（完了）
 
 **設計案**：https://claude.ai/code/artifact/6a0b617b-af43-43d4-96b4-c10934d83c75
 （実データ・実フォント埋め込みで候補3案を提示。CLAUDE.md §8の手順1〜3を実施し合意済み）
@@ -888,3 +888,35 @@ destructiveな呼び出し6箇所（`hub.jsx`5箇所・`create.jsx`1箇所・`ca
 
 実装対象5ファイル：`components/chrome.jsx`／`components/menu/MenuShell.jsx`／
 `data/seasonMenu.js`／`components/base/BaseView.jsx`／`screens/season/hub/race/status.jsx`。
+
+### 実装
+
+設計どおり5ファイルを実装。`SeasonHeader`に`HeaderStat`ローカル部品（label=caption・
+value=head+tabular-nums・unit=caption）を新設し3行構成へ。旧`teamPayroll`/`staffSalaryTotal`/
+`OB_COACH_SALARY`のヘッダ内呼び出しは撤去し、`race/status.jsx`の`SponsorAndSpendingSections`
+（新設）へ移設——「スポンサー契約」「今月の支出」「ダイナスティ」の3セクションを
+`mlUi.jsx`の`Section`/`Item`で構成した（**season側での`mlUi.jsx`共有の第一歩**。D-3で
+`Screen`がseason外枠のpaddingと相殺値が一致することを確認済みだったのが活きた）。
+`MenuShell`/`seasonMenu.js`は`icon`フィールドを削除し新トークン化、`BaseView.jsx`下部
+ストリップはLv1以上の施設だけを表示する条件分岐を追加。`chrome.jsx`の未使用化した
+`C`/`FONT_D`/`FONT_M`インポートも削除。
+
+### 検証
+
+ビルド成功（各ファイル変更後に都度確認）。Playwrightでシーズン実プレイ（オンボーディング
+→敷地画面→メニュー開閉→選手/施設/市場/レース/記録の各セクション）を一通り確認：
+コンソールエラー0件・NaN/undefined 0件・「昇格ボーダー緩和圏」の残存文字列0件。
+
+高DPIでヘッダ単体を再撮影し、**実測で見つかっていた「値の途中で改行するバグ」が解消**
+していることを確認（`資金 300万円`／`昇格まで 0/113pt`／`順位 10/10`の3列が折り返さず
+1行に収まる）。当初の通常解像度スクリーンショットでは数字が二重露光のように見えたが、
+高DPI再撮影で圧縮アーティファクトと判明——実バグではなかった。
+
+撤去対象の絵文字（🏆🔁🏠🚴🏗🛒📜⚙️💪🔧🏥🔍🌳）はヘッダ・メニュー・下部ストリップの
+テキストからは0件。ボディに残っていた🏠💪🔧🔍は`Room.jsx`/`Station.jsx`が敷地の建物・
+持ち場に描く**シーン内のラベル**（アイソメ図の上に描く記号で、UIテキストの階層とは別物）
+と、D-4-bスコープの`staff.jsx`由来——今回の対象（額縁）ではないため意図した残存。
+
+`riders`/`facility`/`market`/`records`の各セクション本体（hub配下17画面）は旧`C`トークン
+のまま残っており、ヘッダだけが新トークンで浮いて見える状態だが、これはD-4-bで解消する
+想定どおりの中間状態。

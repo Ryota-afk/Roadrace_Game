@@ -14,7 +14,7 @@
 // メニュー全体（大ジャンル一覧）が開く（onRoomTap経由。当たり判定は持ち場を優先し、
 // 外れたら部屋全体のfloorへフォールバックする）。
 import React, { useEffect, useRef, useState } from "react";
-import { C, FONT_M } from "../../data/theme.js";
+import { C, T, FONT_DOT } from "../../data/theme.js";
 import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
@@ -291,13 +291,22 @@ export function BaseView({ g, paused, onRoomTap }) {
             style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.line}`, background: "rgba(20,23,29,0.72)", color: C.text, fontSize: 13, lineHeight: 1, cursor: "pointer" }}>⌂</button>
         </div>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", fontSize: 10, color: C.sub, marginTop: 4, fontFamily: FONT_M, flexShrink: 0 }}>
-        <span>{BASE_VIEW_CLUBHOUSE.icon} {BASE_VIEW_CLUBHOUSE.label} Lv{levels.clubhouse}</span>
-        {BASE_VIEW_STATIONS.map(s => (
-          <span key={s.key}>{s.icon} {s.label} Lv{levels[s.levelKey]}</span>
-        ))}
-        <span>🌳 敷地整備 Lv{groundsLv}</span>
-      </div>
+      {/* 第13弾Phase3-D-4-a: 10pxは実測で漢字が潰れて読めないサイズだったためcaption(12px)へ、
+          絵文字を撤去。初期状態でLv0が6個並ぶだけの行になるのを避け、Lv1以上の施設だけを出す
+          （全部Lv0ならこの行自体を出さない。詳細はdevlog/wave13.md）。 */}
+      {(() => {
+        const rows = [
+          { key: "clubhouse", label: BASE_VIEW_CLUBHOUSE.label, lv: levels.clubhouse },
+          ...BASE_VIEW_STATIONS.map(s => ({ key: s.key, label: s.label, lv: levels[s.levelKey] })),
+          { key: "grounds", label: "敷地整備", lv: groundsLv },
+        ].filter(r => r.lv >= 1);
+        if (rows.length === 0) return null;
+        return (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", fontSize: T.size.caption, color: T.color.sub, marginTop: 4, fontFamily: FONT_DOT, flexShrink: 0 }}>
+            {rows.map(r => <span key={r.key}>{r.label} Lv{r.lv}</span>)}
+          </div>
+        );
+      })()}
     </div>
   );
 }
