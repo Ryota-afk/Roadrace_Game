@@ -262,33 +262,47 @@ export function BaseView({ g, paused, onRoomTap }) {
               </g>
               <Track proj={PROJ} loop={BASE_VIEW_LOOP} rack={BASE_VIEW_PROPS.bikeRack} />
               {drawOrder.map((item, i) => {
-                if (item.kind === "clubhouse") return (
-                  <g key="clubhouse">
-                    <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"}
-                      rooms={BASE_VIEW_ROOMS} partitions={BASE_VIEW_PARTITIONS} partitionHeight={BASE_VIEW_PARTITION_HEIGHT} grades={roomGrades} />
-                    {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} grade={roomGrades[s.room]} />)}
-                    {/* 第20弾: 条件解禁の奥3部屋。未解禁は納戸（st_empty）を描き、解禁済みは
-                        その部屋の什器（BASE_VIEW_FIXTURESのroom=diner/locker/trophy）を描く。 */}
-                    {BASE_VIEW_LOCKED_ROOMS.filter(s => !unlocks[s.room])
-                      .map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} grade={0} />)}
-                    {fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => {
+                if (item.kind === "clubhouse") {
+                  // 第20弾: 屋内の持ち場・納戸・什器・人物は1本のリストにまとめ、接地点の
+                  // screen y（奥→手前）で並べ替えて描く。旧実装の固定グループ順
+                  // （持ち場→什器→人物）は「奥の椅子が手前の机の上に描かれる」「人物が常に
+                  // 最前面で机に重なる」の原因だった（2026-08ユーザー指摘・実例スカウト室）。
+                  // 床・壁（Room）だけは常に最初＝すべての下。
+                  const py = (w, l) => isoProject(w, l, 0, PROJ).y;
+                  const trainingSt = BASE_VIEW_STATIONS.find(s => s.key === "training");
+                  const indoorItems = [
+                    ...BASE_VIEW_STATIONS.map(s => ({ y: py(s.w, s.l),
+                      node: <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} grade={roomGrades[s.room]} /> })),
+                    // 条件解禁の奥3部屋。未解禁は納戸（st_empty）を描き、解禁済みは什器を描く。
+                    ...BASE_VIEW_LOCKED_ROOMS.filter(s => !unlocks[s.room]).map(s => ({ y: py(s.w, s.l),
+                      node: <Station key={s.key} s={s} proj={PROJ} selected={false} grade={0} /> })),
+                    ...fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => {
                       if (f.room === "diner" || f.room === "locker" || f.room === "trophy") return unlocks[f.room];
                       return (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity);
-                    }))}
-                    {/* 屋内の人物（選手＋常駐スタッフ）は必ず床・壁・什器より後に描く。
-                        Wave H-3：トレーニング室（pose==="roller"）だけは自転車ごとローラー台に
-                        乗せるため、新規ドット絵を描かずにPixelBikeを流用する（設計①）。 */}
-                    {indoorPeople.map(pn => (
-                      pn.r && pn.act.pose === "roller"
+                    })).map(it => ({ y: it.sortY, node: it.node })),
+                    // 人物。座る選手は椅子と同座標のため+0.1で必ず椅子の上に。ローラーの選手は
+                    // 乗車位置が台の中心（アンカーより奥）のため、台スプライトのアンカー基準で
+                    // 並べ、自転車が台の上に乗って見えるようにする。
+                    // （Wave H-3：roller姿勢は自転車ごとPixelBikeで描く設計①の踏襲）
+                    ...indoorPeople.map(pn => ({
+                      y: pn.r && pn.act.pose === "roller" ? py(trainingSt.w, trainingSt.l) + 0.2 : pn.y + 0.1,
+                      node: pn.r && pn.act.pose === "roller"
                         ? <PixelBike key={`ir${pn.r.id}`} x={pn.x} y={pn.y} color={pn.color}
                             posture={pn.dancing ? "dancing" : "normal"} dir={pn.dir} flip={pn.flip}
                             t={elapsed} phase={pn.phase || 0} />
                         : <PixelPerson key={pn.r ? `ir${pn.r.id}` : `st${pn.key}`} x={pn.x} y={pn.y}
                             pose={pn.r ? pn.act.pose : "stand"} t={elapsed}
-                            color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />
-                    ))}
-                  </g>
-                );
+                            color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />,
+                    })),
+                  ].sort((a, b) => a.y - b.y);
+                  return (
+                    <g key="clubhouse">
+                      <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"}
+                        rooms={BASE_VIEW_ROOMS} partitions={BASE_VIEW_PARTITIONS} partitionHeight={BASE_VIEW_PARTITION_HEIGHT} grades={roomGrades} />
+                      {indoorItems.map((it, k) => <React.Fragment key={`ii${k}`}>{it.node}</React.Fragment>)}
+                    </g>
+                  );
+                }
                 if (item.kind === "prop") return <React.Fragment key={`p${i}`}>{item.node}</React.Fragment>;
                 // 自転車に乗っていない選手（ラック〜玄関の屋外を歩く）は人型で描く
                 if (item.act.pose !== "ride") {
