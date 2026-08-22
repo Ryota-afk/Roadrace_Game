@@ -10,7 +10,7 @@
 export const OBJ_SPRITES = {
   st_roller: {
     anchorCol: 32, anchorRow: 32,
-    legend: {"a":"#595657","b":"#8d9294","c":"#9ea6aa","d":"#e0eaed","e":"#c9d4d9","f":"#babbbc","g":"#bdc4c6","h":"#6b7687","i":"#b6b9ba","j":"#b3aea6","k":"#a6917b","l":"#5c85b4","m":"#4d84c2"},
+    legend: {"a":"#575355","b":"#8c9295","c":"#9ca7ac","d":"#e1eef2","e":"#c8d7dd","f":"#bcbebf","g":"#bec7ca","h":"#637187","i":"#b8bcbd","j":"#b6afa4","k":"#a88c6f","l":"#4379b7","m":"#2b73c5"},
     rows: [
       ".............................ab................................",
       "...........................cbddec..............................",
@@ -49,7 +49,7 @@ export const OBJ_SPRITES = {
   },
   st_workbench: {
     anchorCol: 29, anchorRow: 44,
-    legend: {"a":"#6f5044","b":"#663f35","c":"#905c47","d":"#935f48","e":"#707a7f","f":"#47494c","g":"#697175","h":"#939591","i":"#60696c","j":"#7d8282","k":"#695b55","l":"#856c60","m":"#c0c0c0"},
+    legend: {"a":"#6e4637","b":"#653326","c":"#914d31","d":"#945032","e":"#6b787f","f":"#434649","g":"#656f74","h":"#939691","i":"#5c676b","j":"#7c8282","k":"#68564e","l":"#856555","m":"#c3c3c3"},
     rows: [
       "................................................aa........",
       "..............................................baccca......",
@@ -100,7 +100,7 @@ export const OBJ_SPRITES = {
   },
   st_medical: {
     anchorCol: 31, anchorRow: 58,
-    legend: {"a":"#676e6d","b":"#757676","c":"#7b7e7f","d":"#4e5252","e":"#8d8d8b","f":"#b4b8b9","g":"#c8cdcf","h":"#9a9c9c","i":"#e8e9ea","j":"#7e898c","k":"#f2f2f2","l":"#f4f4f4","m":"#f3f3f3"},
+    legend: {"a":"#646d6c","b":"#747676","c":"#7a7e7f","d":"#4b5050","e":"#8e8e8b","f":"#b5bbbc","g":"#cad0d3","h":"#9b9d9d","i":"#edeeef","j":"#7a898d","k":"#f8f8f8","l":"#fafafa","m":"#f9f9f9"},
     rows: [
       "............aba...............................................",
       ".........ca..........efghhgf..................................",
@@ -165,7 +165,7 @@ export const OBJ_SPRITES = {
   },
   st_desk: {
     anchorCol: 29, anchorRow: 59,
-    legend: {"a":"#748181","b":"#a19b91","c":"#b8bdb3","d":"#898277","e":"#efeeed","f":"#4c4c49","g":"#596162","h":"#3c4142","i":"#6e6860","j":"#7d967d","k":"#8f694b","l":"#ba8051","m":"#5e4d43"},
+    legend: {"a":"#708181","b":"#a39b8e","c":"#b9c0b3","d":"#898072","e":"#f5f3f2","f":"#494946","g":"#555f61","h":"#373e3f","i":"#6d655b","j":"#769776","k":"#905e37","l":"#bd7032","m":"#5c473a"},
     rows: [
       ".....................................ab...................",
       ".....................................accb.................",
@@ -231,7 +231,7 @@ export const OBJ_SPRITES = {
   },
   st_empty: {
     anchorCol: 25, anchorRow: 47,
-    legend: {"a":"#a6967d","b":"#93846c","c":"#a88057","d":"#d8be98","e":"#c3aa89","f":"#837460","g":"#bd9366","h":"#b68d63","i":"#a37a53","j":"#a17750","k":"#756451","l":"#554939","m":"#7b817e"},
+    legend: {"a":"#a89372","b":"#948061","c":"#aa753f","d":"#dcba88","e":"#c6a57a","f":"#837056","g":"#c0894d","h":"#b9834b","i":"#a56f3c","j":"#a36c38","k":"#745e46","l":"#53442f","m":"#79817d"},
     rows: [
       ".........................ab.......................",
       ".......................cdddef.....................",
@@ -285,7 +285,7 @@ export const OBJ_SPRITES = {
   },
   dumbbells: {
     anchorCol: 22, anchorRow: 41,
-    legend: {"a":"#707478","b":"#55575c","c":"#808181","d":"#4e4f51","e":"#66686a","f":"#5d5c5c","g":"#474849","h":"#8b8f91","i":"#434343","j":"#a4a7a8","k":"#3c3c3b","l":"#bebfc0","m":"#b9baba"},
+    legend: {"a":"#6d7278","b":"#51545a","c":"#808181","d":"#4b4c4f","e":"#646669","f":"#5b5a5a","g":"#444546","h":"#8a8f92","i":"#404040","j":"#a5a9aa","k":"#393937","l":"#c1c2c3","m":"#bcbdbd"},
     rows: [
       "..........................aa................",
       ".........................bcade..............",
@@ -333,7 +333,7 @@ export const OBJ_SPRITES = {
   },
   waterTable: {
     anchorCol: 23, anchorRow: 46,
-    legend: {"a":"#88949b","b":"#8aacbb","c":"#9ac9d4","d":"#584e44","e":"#6d7672","f":"#acb0b5","g":"#c29066","h":"#8a7566","i":"#825843","j":"#9e7252","k":"#cdced1","l":"#c59974","m":"#aa7d5b"},
+    legend: {"a":"#83939c","b":"#7daabe","c":"#8bcad8","d":"#56493d","e":"#6a7670","f":"#acb1b8","g":"#c5834c","h":"#8b6f5c","i":"#824b30","j":"#a0663c","k":"#d0d1d5","l":"#c88e5d","m":"#ac7144"},
     rows: [
       ".........aaabba...............................",
       "........cccccccc..............................",
@@ -386,7 +386,7 @@ export const OBJ_SPRITES = {
   },
   rollerUnit: {
     anchorCol: 19, anchorRow: 48,
-    legend: {"a":"#787d7f","b":"#a5aaae","c":"#93979a","d":"#bfc5c8","e":"#636363","f":"#e0e8eb","g":"#c9d1d4","h":"#868483","i":"#b2b4b5","j":"#b4b8ba","k":"#bab8b8","l":"#bababa","m":"#b9b9b8"},
+    legend: {"a":"#767c7f","b":"#a4abb0","c":"#92979b","d":"#c0c8cc","e":"#626262","f":"#e2ecf0","g":"#cad4d8","h":"#868482","i":"#b4b6b8","j":"#b5babd","k":"#bdbaba","l":"#bdbdbd","m":"#bcbcbb"},
     rows: [
       ".........aa..........................",
       ".......bcbddce.......................",
@@ -441,7 +441,7 @@ export const OBJ_SPRITES = {
   },
   fan: {
     anchorCol: 12, anchorRow: 42,
-    legend: {"a":"#757067","b":"#8d887d","c":"#827a6f","d":"#7e7468","e":"#6b645a","f":"#938f86","g":"#9f9c92","h":"#a7a194","i":"#9b9386","j":"#837f75","k":"#8a8175","l":"#b7b0a2","m":"#ccc4b2"},
+    legend: {"a":"#746e62","b":"#8e8779","c":"#827869","d":"#7e7161","e":"#6a6154","f":"#948f83","g":"#a19d90","h":"#a9a190","i":"#9c9281","j":"#837e71","k":"#8b7f6f","l":"#bab19e","m":"#d0c5ad"},
     rows: [
       "..........abbcdcb.......",
       "........efghbg..ibj.....",
@@ -490,7 +490,7 @@ export const OBJ_SPRITES = {
   },
   monitor: {
     anchorCol: 15, anchorRow: 39,
-    legend: {"a":"#5c6064","b":"#696b6c","c":"#4d4d4d","d":"#3a4148","e":"#555555","f":"#3e4955","g":"#3c4c5e","h":"#3f4d5f","i":"#495665","j":"#3d4d5f","k":"#566a78","l":"#6e7f8a","m":"#617380"},
+    legend: {"a":"#585d63","b":"#676a6b","c":"#4a4a4a","d":"#343c45","e":"#535353","f":"#364453","g":"#31455c","h":"#34465d","i":"#405064","j":"#32465d","k":"#4c6578","l":"#667c8b","m":"#586f80"},
     rows: [
       "...........................aba",
       "..........................abbc",
@@ -536,7 +536,7 @@ export const OBJ_SPRITES = {
   },
   wheelsLeaning: {
     anchorCol: 20, anchorRow: 34,
-    legend: {"a":"#404140","b":"#4b4b4b","c":"#515151","d":"#585858","e":"#5b5b5b","f":"#666666","g":"#606060","h":"#555555","i":"#b9b9b9","j":"#7b7b7b","k":"#abaaaa","l":"#999998","m":"#6d6d6d"},
+    legend: {"a":"#3d3e3d","b":"#484848","c":"#4f4f4f","d":"#565656","e":"#595959","f":"#656565","g":"#5e5e5e","h":"#535353","i":"#bcbcbc","j":"#7b7b7b","k":"#adacac","l":"#9a9a99","m":"#6c6c6c"},
     rows: [
       "........................abbcdc..........",
       ".......................aabedbcdc........",
@@ -577,7 +577,7 @@ export const OBJ_SPRITES = {
   },
   toolbox: {
     anchorCol: 22, anchorRow: 31,
-    legend: {"a":"#a68a68","b":"#8f7d69","c":"#aa9b88","d":"#8e6e54","e":"#a3815b","f":"#746356","g":"#774e4a","h":"#9d7153","i":"#aa4841","j":"#bf483f","k":"#7a6e61","l":"#873430","m":"#ac3a33"},
+    legend: {"a":"#a88356","b":"#90785e","c":"#ac987f","d":"#8f6543","e":"#a57846","f":"#735d4d","g":"#77413c","h":"#9e653d","i":"#ac2b22","j":"#c22519","k":"#7a6a59","l":"#871b16","m":"#ae180f"},
     rows: [
       "..............................ab............",
       "...........................bacdaab..........",
@@ -615,7 +615,7 @@ export const OBJ_SPRITES = {
   },
   partsShelf: {
     anchorCol: 23, anchorRow: 54,
-    legend: {"a":"#909fa9","b":"#848586","c":"#abb3b5","d":"#757f87","e":"#839199","f":"#4e4e51","g":"#6d7478","h":"#626c77","i":"#5b636e","j":"#776559","k":"#a58161","l":"#847366","m":"#b99679"},
+    legend: {"a":"#8a9eab","b":"#848586","c":"#aab5b8","d":"#707d87","e":"#7d909a","f":"#4b4b4f","g":"#697278","h":"#5b6877","i":"#555f6d","j":"#775f50","k":"#a7784d","l":"#846e5d","m":"#bc8e67"},
     rows: [
       ".............ab...............................",
       "...........accccd.............................",
@@ -676,7 +676,7 @@ export const OBJ_SPRITES = {
   },
   workbench2: {
     anchorCol: 22, anchorRow: 56,
-    legend: {"a":"#91999b","b":"#787e81","c":"#99a2a7","d":"#b7b9ba","e":"#6d7173","f":"#5d544f","g":"#9e7352","h":"#796759","i":"#8c7664","j":"#c69065","k":"#c79166","l":"#c89266","m":"#9b8e83"},
+    legend: {"a":"#8f9a9c","b":"#757d81","c":"#97a2a9","d":"#b9bcbd","e":"#6b7072","f":"#5b5049","g":"#a0673c","h":"#79614f","i":"#8d7058","j":"#ca8249","k":"#cb834a","l":"#cc844a","m":"#9c8b7d"},
     rows: [
       ".............ab.............................",
       ".............cdda...........................",
@@ -739,7 +739,7 @@ export const OBJ_SPRITES = {
   },
   wheelBuildStand: {
     anchorCol: 17, anchorRow: 52,
-    legend: {"a":"#555656","b":"#4d4e4e","c":"#606162","d":"#676a6b","e":"#444444","f":"#6c7071","g":"#76797b","h":"#a7adaf","i":"#71777a","j":"#bbc1c2","k":"#949a9c","l":"#7b8083","m":"#83898c"},
+    legend: {"a":"#535454","b":"#4a4c4c","c":"#5e5f61","d":"#65696a","e":"#414141","f":"#6a6f70","g":"#74787b","h":"#a7afb1","i":"#6e767a","j":"#bcc4c5","k":"#939b9d","l":"#797f83","m":"#81898d"},
     rows: [
       "...................aaaaaa.........",
       ".................bcdaeebbab.......",
@@ -798,7 +798,7 @@ export const OBJ_SPRITES = {
   },
   cabinet: {
     anchorCol: 13, anchorRow: 46,
-    legend: {"a":"#9a9fa2","b":"#d7dcde","c":"#dfe5e8","d":"#a4a9ad","e":"#676a6b","f":"#bac0c4","g":"#bec4c8","h":"#b3b9bd","i":"#afb5b9","j":"#b1b7ba","k":"#b1b7bb","l":"#b0b7ba","m":"#b1b8bc"},
+    legend: {"a":"#99a0a4","b":"#d9e0e3","c":"#e1e9ed","d":"#a3aaaf","e":"#65696a","f":"#bac2c7","g":"#bec6cc","h":"#b3bbc0","i":"#afb7bc","j":"#b1b9bd","k":"#b1b9be","l":"#b0b9bd","m":"#b0babf"},
     rows: [
       "............aa............",
       "..........abccba..........",
@@ -851,7 +851,7 @@ export const OBJ_SPRITES = {
   },
   medCart: {
     anchorCol: 15, anchorRow: 40,
-    legend: {"a":"#94999d","b":"#98a0a6","c":"#8e9195","d":"#7a7f83","e":"#cad2d8","f":"#b1b5b8","g":"#898e93","h":"#a5aaaf","i":"#a1a3a4","j":"#b5babd","k":"#858789","l":"#8c8e93","m":"#636567"},
+    legend: {"a":"#93999e","b":"#96a0a8","c":"#8d9196","d":"#777e83","e":"#cad4dc","f":"#b2b7bb","g":"#878d94","h":"#a4abb1","i":"#a2a5a6","j":"#b6bcc0","k":"#848789","l":"#8b8d94","m":"#616366"},
     rows: [
       "............abc...............",
       "...........deef...............",
@@ -898,7 +898,7 @@ export const OBJ_SPRITES = {
   },
   bed2: {
     anchorCol: 23, anchorRow: 31,
-    legend: {"a":"#75787c","b":"#86898d","c":"#aaadb1","d":"#95999d","e":"#dadce3","f":"#dde1e6","g":"#dddfe5","h":"#b9bcbe","i":"#c3c8cd","j":"#b4b5b7","k":"#7f8286","l":"#626568","m":"#b8b8b8"},
+    legend: {"a":"#73777c","b":"#85888e","c":"#aaaeb3","d":"#94999e","e":"#dcdfe8","f":"#dfe4eb","g":"#dfe2ea","h":"#bbbec1","i":"#c4cad1","j":"#b6b7ba","k":"#7d8186","l":"#5f6367","m":"#bbbbbb"},
     rows: [
       "...............................abcd...........",
       ".............................dcefffghd........",
@@ -936,7 +936,7 @@ export const OBJ_SPRITES = {
   },
   chair: {
     anchorCol: 11, anchorRow: 38,
-    legend: {"a":"#40454c","b":"#4a535f","c":"#51719f","d":"#5b79a6","e":"#597bac","f":"#556887","g":"#4e6f9e","h":"#46648f","i":"#587bab","j":"#323436","k":"#687fa1","l":"#b2b2b1","m":"#bdbdbb"},
+    legend: {"a":"#3a4149","b":"#434e5d","c":"#3a64a1","d":"#456da8","e":"#416eae","f":"#465f87","g":"#3762a0","h":"#305890","i":"#406ead","j":"#2d3032","k":"#5876a3","l":"#b5b5b3","m":"#c0c0bd"},
     rows: [
       ".............aab......",
       "............cdecba....",
@@ -981,7 +981,7 @@ export const OBJ_SPRITES = {
   },
   whiteboard: {
     anchorCol: 18, anchorRow: 50,
-    legend: {"a":"#868b8d","b":"#7a7f82","c":"#94999b","d":"#cfcbca","e":"#b9b5b4","f":"#babab8","g":"#abadae","h":"#f2f2f2","i":"#eae9e8","j":"#f4f4f4","k":"#f6f6f6","l":"#bcbcba","m":"#626567"},
+    legend: {"a":"#858b8e","b":"#787e82","c":"#939a9c","d":"#d3cecc","e":"#bcb7b5","f":"#bdbdba","g":"#acafb0","h":"#f8f8f8","i":"#efeeed","j":"#fafafa","k":"#fcfcfc","l":"#bfbfbc","m":"#5f6366"},
     rows: [
       ".............................ab.....",
       "...........................cdeb.....",
@@ -1038,7 +1038,7 @@ export const OBJ_SPRITES = {
   },
   folders: {
     anchorCol: 11, anchorRow: 24,
-    legend: {"a":"#9ca0a0","b":"#b7b9b8","c":"#b2b2ad","d":"#c8cbce","e":"#858d92","f":"#616b74","g":"#6d8096","h":"#adaea5","i":"#555657","j":"#acb0aa","k":"#b0b0a0","l":"#b0b0a1","m":"#b1afa0"},
+    legend: {"a":"#9ca2a2","b":"#b9bcbb","c":"#b5b5ae","d":"#caced2","e":"#828c93","f":"#5b6873","g":"#617a97","h":"#afb0a4","i":"#525455","j":"#adb2ab","k":"#b2b29d","l":"#b2b29f","m":"#b3b19d"},
     rows: [
       ".......abbaa..........",
       "...cbabdbbdefg........",
@@ -1069,7 +1069,7 @@ export const OBJ_SPRITES = {
   },
   archiveShelf: {
     anchorCol: 15, anchorRow: 65,
-    legend: {"a":"#b6a68f","b":"#a08a6d","c":"#d5c1a3","d":"#ebca9b","e":"#e8d4b5","f":"#7e7c77","g":"#b99972","h":"#ceaf85","i":"#c6a276","j":"#8e8981","k":"#ad8c68","l":"#6d6866","m":"#9b7b59"},
+    legend: {"a":"#b9a485","b":"#a2855f","c":"#d9bf97","d":"#f0c486","e":"#edd3a9","f":"#7e7b75","g":"#bc925e","h":"#d2a971","i":"#ca9a60","j":"#8f887e","k":"#af8454","l":"#6c6663","m":"#9c7246"},
     rows: [
       "..........ab..................",
       ".........bccbaa...............",
@@ -1141,7 +1141,7 @@ export const OBJ_SPRITES = {
   },
   shoeRack: {
     anchorCol: 15, anchorRow: 33,
-    legend: {"a":"#7c766f","b":"#baa283","c":"#564c44","d":"#968c7e","e":"#e7c798","f":"#debd8c","g":"#edce9d","h":"#c9b69b","i":"#cfac7c","j":"#ad8e68","k":"#cda97a","l":"#9b7858","m":"#ba986e"},
+    legend: {"a":"#7c746b","b":"#bd9d74","c":"#54473d","d":"#978a78","e":"#ecc283","f":"#e3b776","g":"#f2c988","h":"#cdb490","i":"#d3a565","j":"#af8654","k":"#d1a163","l":"#9c6e45","m":"#bd9059"},
     rows: [
       "...................aaab.......",
       "..................acaddeb.....",
@@ -1181,7 +1181,7 @@ export const OBJ_SPRITES = {
   },
   bench: {
     anchorCol: 20, anchorRow: 37,
-    legend: {"a":"#322d2e","b":"#7e604f","c":"#71452d","d":"#b47541","e":"#e09e59","f":"#ce945a","g":"#c1814a","h":"#cc8243","i":"#e3af75","j":"#d08948","k":"#e4a560","l":"#98613b","m":"#a86938"},
+    legend: {"a":"#2e2829","b":"#7e5741","c":"#703718","d":"#b7641f","e":"#e58d32","f":"#d28538","g":"#c47027","h":"#d06e1a","i":"#e8a356","j":"#d47620","k":"#e9953a","l":"#99511f","m":"#aa5717"},
     rows: [
       "............aa..........................",
       "..........bcaa..........................",
@@ -1225,7 +1225,7 @@ export const OBJ_SPRITES = {
   },
   lamp: {
     anchorCol: 13, anchorRow: 59,
-    legend: {"a":"#343337","b":"#3c3b3e","c":"#636569","d":"#4d4d50","e":"#2c2c2f","f":"#444549","g":"#28272a","h":"#59595c","i":"#212123","j":"#404145","k":"#47484b","l":"#737579","m":"#c7d4d9"},
+    legend: {"a":"#302f33","b":"#38373b","c":"#606368","d":"#4a4a4e","e":"#27272b","f":"#404146","g":"#232226","h":"#56565a","i":"#1c1c1e","j":"#3c3d42","k":"#434548","l":"#717379","m":"#c6d7dd"},
     rows: [
       "....................ab....",
       "....................cda...",
@@ -1291,7 +1291,7 @@ export const OBJ_SPRITES = {
   },
   bikeRack: {
     anchorCol: 20, anchorRow: 28,
-    legend: {"a":"#5f676d","b":"#9ea5aa","c":"#abb3b8","d":"#656d73","e":"#7a8288","f":"#6d767c","g":"#91989d","h":"#889197","i":"#828a92","j":"#51595e","k":"#c1c6c9","l":"#747e86","m":"#d2d4d3"},
+    legend: {"a":"#5a646c","b":"#9ca6ac","c":"#aab4bb","d":"#606b72","e":"#768188","f":"#68747c","g":"#8f989e","h":"#859098","i":"#7e8893","j":"#4c565c","k":"#c2c9cd","l":"#6f7c86","m":"#d6d8d7"},
     rows: [
       "......aba...............................",
       "......cdded.............................",
@@ -1326,7 +1326,7 @@ export const OBJ_SPRITES = {
   },
   teamCar: {
     anchorCol: 48, anchorRow: 81,
-    legend: {"a":"#1e2834","b":"#3b3f47","c":"#526f83","d":"#4d5861","e":"#3a566c","f":"#243c59","g":"#22579b","h":"#387ab5","i":"#7c8388","j":"#c5cfd4","k":"#eaf4f6","l":"#96b1c1","m":"#3c9ce8"},
+    legend: {"a":"#162230","b":"#353a44","c":"#436983","d":"#46545f","e":"#2b4f6b","f":"#143257","g":"#00449c","h":"#136ab8","i":"#798288","j":"#c4d2d8","k":"#ecf9fc","l":"#8bafc4","m":"#0988ed"},
     rows: [
       "......................................................aba.......................................",
       ".....................................................bcdda......................................",
@@ -1414,7 +1414,7 @@ export const OBJ_SPRITES = {
   },
   tree: {
     anchorCol: 23, anchorRow: 54,
-    legend: {"a":"#4b5130","b":"#48833b","c":"#3c7239","d":"#4e8b3a","e":"#6faa3f","f":"#8bc148","g":"#81b945","h":"#52903a","i":"#66a23f","j":"#326d38","k":"#6aa93e","l":"#4a8838","m":"#417d39"},
+    legend: {"a":"#474f25","b":"#368325","c":"#2c7128","d":"#3c8c22","e":"#5eac1f","f":"#7dc424","g":"#72bc23","h":"#409120","i":"#55a422","j":"#206c28","k":"#58ab1e","l":"#388820","m":"#2f7d25","w":"#6b4a2e","x":"#8a6440"},
     rows: [
       ".....................atta.....................",
       ".................tauuvVVVutat.................",
@@ -1453,29 +1453,29 @@ export const OBJ_SPRITES = {
       "ttuttuuuuvvvvvvvvvvvvvvvvvvvvuuvuvvuvvuuuttttt",
       "ttutttuuuuuuuvvvvvvvvvvvvvvvutttttttuuuuuttttt",
       ".tttuuuuuuuuuuuuuuvvvvvvvvvvutttttttuuuuttttt.",
-      ".jccdddddlmmbblllhiikkkiiilhllbmccjmllmmcjcca.",
-      "..jjjjbldlmjjmddddddhkhdhhlllllldddddlbbhcjj..",
-      "..ajjjcbmddhdddddddllllddddddlldlmmdbmlbmjjc..",
-      "...ajjjjjddmhddddddddllddddddmmbbjjjjjjjjjj...",
-      "....bjjjcjjjmlbjmbdddlllldbddmjjjjjjjjjjj.....",
-      ".......jcjjjjjjjjmddmbddlbjjjjjjjjjjjjj.......",
-      ".......cjjjjjjjjjjccjjcmcjjjjjjjjjcjjj........",
-      "...........jjjjjjjjjjjjjjjjjjjjjjjj...........",
-      ".............jajjjjjajjjjajjjjajj.............",
-      "..................aaaaaaaaa...................",
-      "...................aaaaaaaa...................",
-      "..................aaaaaaaaa...................",
-      "..................aaaaaaaaaa..................",
-      "..................aiaaaaaaaa..................",
-      ".................aiaaaaaaaaaa.................",
-      ".................aaaaaaaaaaaa.................",
-      "....................aaaaaa....................",
-      "......................aaa.....................",
+      ".tttuuuuuuttttuuuuvvvvvvvvuuuuttttttuutttttta.",
+      "..tttttuuuttttuuuuuuuvuuuuuuuuuuuuuuuuttuttt..",
+      "..attttttuuuuuuuuuuuuuuuuuuuuuuuuttuttuttttt..",
+      "...atttttuutuuuuuuuuuuuuuuuuutttttttttttttt...",
+      "....tttttttttuttttuuuuuuuutuutttttttttttt.....",
+      ".......tttttttttttuuttuuutttttttttttttt.......",
+      ".......ttttttttttttttttttttttttttttttt........",
+      "...........tttttttttttttttttttttttt...........",
+      ".............twtttttwttttwttttwtt.............",
+      "..................wwwwwwwww...................",
+      "...................wwwwwwww...................",
+      "..................wwwwwwwww...................",
+      "..................wwwwwwwwww..................",
+      "..................wxwwwwwwww..................",
+      ".................wxwwwwwwwwww.................",
+      ".................wwwwwwwwwwww.................",
+      "....................wwwwww....................",
+      "......................www.....................",
     ],
   },
   treeSnow: {
     anchorCol: 23, anchorRow: 54,
-    legend: {"a":"#4b5130","b":"#48833b","c":"#3c7239","d":"#4e8b3a","e":"#6faa3f","f":"#8bc148","g":"#81b945","h":"#52903a","i":"#66a23f","j":"#326d38","k":"#6aa93e","l":"#4a8838","m":"#417d39"},
+    legend: {"a":"#474f25","b":"#368325","c":"#2c7128","d":"#3c8c22","e":"#5eac1f","f":"#7dc424","g":"#72bc23","h":"#409120","i":"#55a422","j":"#206c28","k":"#58ab1e","l":"#388820","m":"#2f7d25","w":"#6b4a2e","x":"#8a6440"},
     rows: [
       ".....................aSSa.....................",
       ".................SaSSSSSSSSaS.................",
@@ -1514,24 +1514,24 @@ export const OBJ_SPRITES = {
       "Stuttuuuuvvvvvvvvvvvvvvvvvvvvuuvuvvuvvuuuttttt",
       "ttutttuuuuuuuvvvvvvvvvvvvvvvutttttttuuuuuttttt",
       ".tttuuuuuuuuuuuuuuvvvvvvvvvvutttttttuuuuttttt.",
-      ".jccdddddlmmbblllhiikkkiiilhllbmccjmllmmcjcca.",
-      "..jjjjbldlmjjmddddddhkhdhhlllllldddddlbbhcjj..",
-      "..ajjjcbmddhdddddddllllddddddlldlmmdbmlbmjjc..",
-      "...ajjjjjddmhddddddddllddddddmmbbjjjjjjjjjj...",
-      "....bjjjcjjjmlbjmbdddlllldbddmjjjjjjjjjjj.....",
-      ".......jcjjjjjjjjmddmbddlbjjjjjjjjjjjjj.......",
-      ".......cjjjjjjjjjjccjjcmcjjjjjjjjjcjjj........",
-      "...........jjjjjjjjjjjjjjjjjjjjjjjj...........",
-      ".............jajjjjjajjjjajjjjajj.............",
-      "..................aaaaaaaaa...................",
-      "...................aaaaaaaa...................",
-      "..................aaaaaaaaa...................",
-      "..................aaaaaaaaaa..................",
-      "..................aiaaaaaaaa..................",
-      ".................aiaaaaaaaaaa.................",
-      ".................aaaaaaaaaaaa.................",
-      "....................aaaaaa....................",
-      "......................aaa.....................",
+      ".tttuuuuuuttttuuuuvvvvvvvvuuuuttttttuutttttta.",
+      "..tttttuuuttttuuuuuuuvuuuuuuuuuuuuuuuuttuttt..",
+      "..attttttuuuuuuuuuuuuuuuuuuuuuuuuttuttuttttt..",
+      "...atttttuutuuuuuuuuuuuuuuuuutttttttttttttt...",
+      "....tttttttttuttttuuuuuuuutuutttttttttttt.....",
+      ".......tttttttttttuuttuuutttttttttttttt.......",
+      ".......ttttttttttttttttttttttttttttttt........",
+      "...........tttttttttttttttttttttttt...........",
+      ".............twtttttwttttwttttwtt.............",
+      "..................wwwwwwwww...................",
+      "...................wwwwwwww...................",
+      "..................wwwwwwwww...................",
+      "..................wwwwwwwwww..................",
+      "..................wxwwwwwwww..................",
+      ".................wxwwwwwwwwww.................",
+      ".................wwwwwwwwwwww.................",
+      "....................wwwwww....................",
+      "......................www.....................",
     ],
   },
 };
