@@ -254,3 +254,25 @@ export function mlCreateRival(rng, playerName, playerTeamName, bannedNames, bann
   const abilities = rollAbilities(rng);
   return { id: ridState.value++, name, type, team: team.name, age: 20 + Math.floor(rng() * 8), personality, abilities };
 }
+
+// 第16弾A: ライバルの加齢・引退・後継。世界のロースター（ageWorldRosters）と同じ引退ルール
+// （38歳で強制、33歳以上は0.18+(age-33)*0.06の確率）を適用する。引退すれば、その好敵手との
+// 記録（rivalRecord）を持ち帰りつつ、若い後継のライバルを新たに立てる（対戦成績はリセット＝
+// 因縁は一から）。旧セーブ（ageを保存していない）は26歳（生成時の年齢帯20〜27の中央値）として
+// 扱う。戻り値: { rival, record, retiredInfo }（retiredInfoは引退が起きた年だけ非null）。
+export function ageRival(rival, record, rng, year, playerName, playerTeamName, bannedNames, bannedTeams) {
+  if (!rival) return { rival, record, retiredInfo: null };
+  const age = (rival.age != null ? rival.age : 26) + 1;
+  const retireChance = age >= 38 ? 1 : (age >= 33 ? 0.18 + (age - 33) * 0.06 : 0);
+  if (retireChance > 0 && rng() < retireChance) {
+    const retiredInfo = {
+      name: rival.name, team: rival.team, type: rival.type, age, year,
+      record: { ...(record || { meetings: 0, wins: 0, losses: 0 }) },
+      heat: (record && record.heat) || 0,
+    };
+    const successor = mlCreateRival(rng, playerName, playerTeamName, bannedNames, bannedTeams);
+    successor.age = 20 + Math.floor(rng() * 4); // 後継は20〜23歳の新星
+    return { rival: successor, record: { meetings: 0, wins: 0, losses: 0 }, retiredInfo };
+  }
+  return { rival: { ...rival, age }, record, retiredInfo: null };
+}

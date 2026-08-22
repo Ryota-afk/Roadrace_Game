@@ -120,6 +120,9 @@ export function initMyLife() {
     rival: null, rivalRecord: null,
     // v26: 複数ライバル制。2人目の好敵手（初対戦を終えるまでUIには出さない）
     rival2: null, rivalRecord2: null,
+    // 第16弾A: 引退したライバルの記録（{name,team,type,age,year,record,heat}の配列）。
+    // 現在の好敵手は引き継がれない（rival/rival2が後継）ため、回想用に別枠で保持する。
+    retiredRivals: [],
     // v37: 永続キャラ（ライバル/仲間）の成績台帳
     riderStats: {},
     // v37: 永続ワールドロースター（各AIチーム固定の選手団）
@@ -148,7 +151,7 @@ const ML_SAVE_VERSION = "v12ml";
 const ML_SAVE_FIELDS = [
   "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
-  "rival", "rivalRecord", "rival2", "rivalRecord2", "flags", "rewardedAchievements",
+  "rival", "rivalRecord", "rival2", "rivalRecord2", "retiredRivals", "flags", "rewardedAchievements",
   // v30: 世界ランキング＆キャリア・アンビション
   "worldPoints", "worldRank", "worldRankBest", "worldNews", "ambitionIdx", "ambitionDone", "ambitionPath",
   "careerWins", "careerPodiums", "careerBigWins", "careerTitles", "careerClassics",
@@ -221,6 +224,9 @@ export function loadMyLifeGame() {
       merged.worldRank = null;
     }
     if (!Array.isArray(merged.worldNews)) merged.worldNews = [];
+    // 第16弾A: 旧セーブ（retiredRivals未保存）はここで初期化。rival/rival2にageが
+    // 無い旧セーブはageRival()側が26歳として扱うため、ここでの補完は不要。
+    if (!Array.isArray(merged.retiredRivals)) merged.retiredRivals = [];
     return merged;
   } catch (e) { return null; }
 }

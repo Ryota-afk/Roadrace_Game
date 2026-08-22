@@ -10,6 +10,19 @@ import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, 
 import { aiPowerFor, mlAiCapFor } from "../domain/shared/scouting.js";
 import { loadMlLegends } from "../breeding/breeding.js";
 
+// 第16弾A: ライバルの強さは年齢の山なりで変化する（世界のロースターと同じ「全盛期が最も強い」
+// 発想）。従来は生成時の年齢によらず常にpower+6の固定強度だったため、世界の300名が世代交代する
+// 中でライバルだけが不老不死だった。全盛期(24〜31歳)の値は既存の+6のまま据え置き、それ以外の
+// 年齢帯だけ変化させる（バランスの中心は動かさない）。
+// sim層はdomain/season/rival.jsを参照しない（依存の一方向を保つため）ため、ここに直接置く。
+function rivalPowerBonus(rival) {
+  const age = rival.age != null ? rival.age : 26;
+  if (age <= 23) return 3;       // 若手：まだ粗い
+  if (age <= 31) return 6;       // 全盛期：既存と同じ
+  if (age <= 34) return 4;       // 陰り
+  return 1;                      // 最晩年：それでも並のAIよりは強い
+}
+
 export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
@@ -136,7 +149,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       };
     });
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
-      const rivalStats = newRider(power + 6, idYearSeed(rival.id, year), { type: rival.type, banned: nameBanned, cap: aiCap });
+      const rivalStats = newRider(power + rivalPowerBonus(rival), idYearSeed(rival.id, year), { type: rival.type, banned: nameBanned, cap: aiCap });
       rivalStats.abilities = rival.abilities; rivalStats.goldAbilities = rival.goldAbilities;
       rivalStats.form = aiFormRoll(rng);
       const re = effAbilities(rivalStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
@@ -148,7 +161,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
     // v26: 複数ライバル制。2人目のライバル（好敵手）は別チームの出走枠を差し替える
     if (rival2 && raceMeta.rival2Present && d.name === rival2.team && d.name !== myTeamName) {
-      const rival2Stats = newRider(power + 6, idYearSeed(rival2.id, year), { type: rival2.type, banned: nameBanned, cap: aiCap });
+      const rival2Stats = newRider(power + rivalPowerBonus(rival2), idYearSeed(rival2.id, year), { type: rival2.type, banned: nameBanned, cap: aiCap });
       rival2Stats.abilities = rival2.abilities; rival2Stats.goldAbilities = rival2.goldAbilities;
       rival2Stats.form = aiFormRoll(rng);
       const r2e = effAbilities(rival2Stats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);

@@ -8,7 +8,7 @@ import { ML_CARS, ML_HOUSES } from "../../data/gear.js";
 import { mulberry, overall, hasAbility } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
-  GRADE_MUL, ML_AB_COACH_KEY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, computeWorldRank,
+  GRADE_MUL, ML_AB_COACH_KEY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, ageRival, computeWorldRank,
   decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCap, mlLivingCost, mlTeamTier,
   mlUpdateRiderStats, mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
@@ -271,6 +271,24 @@ export function mlAdvanceMonth(s, mode) {
     if (freshFaces.length && s.teammates && s.teammates.length) {
       log.push(`【${s.year}年目 3月】新加入の${freshFaces.map(tm => tm.name).join("・")}がチームに合流した`);
     }
+    // 第16弾A: ライバル（好敵手）も世界の選手と同じルールで加齢・引退する。引退時は
+    // 若い後継のライバルが台頭する（対戦成績はリセット＝因縁は一から）。2人のライバルの
+    // rng streamは互いに独立させ、後継の名前は「もう一方の現在のライバル」と重複しないようにする。
+    const rival1Rng = mulberry(((s.year + 1) * 3266489917) >>> 0);
+    const rival1Res = ageRival(s.rival, s.rivalRecord, rival1Rng, s.year + 1, player.name, s.team,
+      s.rival2 ? [s.rival2.name] : [], s.rival2 ? [s.rival2.team] : []);
+    const rival2Rng = mulberry(((s.year + 1) * 4106556331) >>> 0);
+    const rival2Res = ageRival(s.rival2, s.rivalRecord2, rival2Rng, s.year + 1, player.name, s.team,
+      [rival1Res.rival?.name].filter(Boolean), [rival1Res.rival?.team].filter(Boolean));
+    const nextRetiredRivals = [...(s.retiredRivals || [])];
+    if (rival1Res.retiredInfo) {
+      nextRetiredRivals.push(rival1Res.retiredInfo);
+      log.push(`【${s.year}年目 3月】🏁 好敵手・${rival1Res.retiredInfo.name}（${rival1Res.retiredInfo.age}歳）が現役を退いた。通算${rival1Res.retiredInfo.record.meetings}回対戦し${rival1Res.retiredInfo.record.wins}勝${rival1Res.retiredInfo.record.losses}敗の記憶を残して。${rival1Res.rival.team}の${rival1Res.rival.name}（${rival1Res.rival.age}歳）が、次代の好敵手として名乗りを上げた`);
+    }
+    if (rival2Res.retiredInfo) {
+      nextRetiredRivals.push(rival2Res.retiredInfo);
+      log.push(`【${s.year}年目 3月】🏁 好敵手・${rival2Res.retiredInfo.name}（${rival2Res.retiredInfo.age}歳）が現役を退いた。通算${rival2Res.retiredInfo.record.meetings}回対戦し${rival2Res.retiredInfo.record.wins}勝${rival2Res.retiredInfo.record.losses}敗の記憶を残して`);
+    }
     // v36(弟子深化): 弟子がこの年度替わりでOVRの節目(70/80/90)を越えたら祝いのニュースを記録
     if (s.protege) {
       const news = protegeMilestoneNews(s.protege, s.year, s.year + 1);
@@ -356,6 +374,8 @@ export function mlAdvanceMonth(s, mode) {
         directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
         contractOffers: [stayOffer, ...offerTeams], biddingWar,
         salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates,
+        rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
+        retiredRivals: nextRetiredRivals,
         screen: "mylife_contract", log,
       });
     }
@@ -364,6 +384,8 @@ export function mlAdvanceMonth(s, mode) {
       races: [mlGenRace(s.year + 1, 0, classIdx)],
       directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
       salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates,
+      rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
+      retiredRivals: nextRetiredRivals,
       screen: "mylife_main", log,
     });
   }

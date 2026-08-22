@@ -74,7 +74,7 @@ export { EFFECT_APPLIERS, seasonPersonalityEvent, applyEventEffects } from "../d
 
 export {
   isHallOfFameWorthy, mlTeamTier, rivalHeatTier, rivalMeetingHeat, rivalDrama, rivalScene, rivalDialogue,
-  abilityDeltaSummary, seasonRivalDex, mlCreateRival,
+  abilityDeltaSummary, seasonRivalDex, mlCreateRival, ageRival,
 } from "../domain/season/rival.js";
 
 export {
