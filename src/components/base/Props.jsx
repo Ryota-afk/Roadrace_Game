@@ -35,36 +35,20 @@ function treeNode(w, l, proj, palette, key) {
   return treeSpriteNode({ x: base.x, y: base.y, palette, key });
 }
 
+// 第19弾: ベンチ・外灯・駐輪ラックも参考画像から抽出したドット絵へ差し替え。
 function benchNode(w, l, proj, key) {
-  return <g key={key}>{shadowDiamond(w, l, 0.30, 0.16, proj)}{isoBox(w, l, 0.28, 0.12, 5, proj, "#7c5c39", "#a07a4d", "#b98d59")}</g>;
+  const p = isoProject(w, l, 0, proj);
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.bench, key, cacheKey: "obj-bench" });
 }
 
 function lampNode(w, l, proj, key) {
   const p = isoProject(w, l, 0, proj);
-  return (
-    <g key={key}>
-      {shadowDiamond(w, l, 0.14, 0.10, proj)}
-      <polygon points={`${(p.x - 1.4).toFixed(1)},${p.y.toFixed(1)} ${(p.x + 1.4).toFixed(1)},${p.y.toFixed(1)} ${(p.x + 0.9).toFixed(1)},${(p.y - 24).toFixed(1)} ${(p.x - 0.9).toFixed(1)},${(p.y - 24).toFixed(1)}`} fill="#6a707a" />
-      <ellipse cx={p.x} cy={(p.y - 26).toFixed(1)} rx="3.6" ry="2.8" fill="#ffe9a8" stroke="#8a8f99" strokeWidth="0.8" />
-    </g>
-  );
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.lamp, key, cacheKey: "obj-lamp", shadowRx: 3.5, shadowRy: 1.7 });
 }
 
 function bikeRackNode(w, l, proj, key) {
   const p = isoProject(w, l, 0, proj);
-  return (
-    <g key={key}>
-      {shadowDiamond(w, l, 0.34, 0.18, proj)}
-      {[-0.22, 0, 0.22].map((d, i) => {
-        const a = isoProject(w + d, l - 0.14, 0, proj), b = isoProject(w + d, l + 0.14, 0, proj);
-        return <g key={i}>
-          <line x1={a.x.toFixed(1)} y1={a.y.toFixed(1)} x2={a.x.toFixed(1)} y2={(a.y - 9).toFixed(1)} stroke="#8a929c" strokeWidth="1.6" />
-          <line x1={b.x.toFixed(1)} y1={b.y.toFixed(1)} x2={b.x.toFixed(1)} y2={(b.y - 9).toFixed(1)} stroke="#8a929c" strokeWidth="1.6" />
-          <line x1={a.x.toFixed(1)} y1={(a.y - 9).toFixed(1)} x2={b.x.toFixed(1)} y2={(b.y - 9).toFixed(1)} stroke="#8a929c" strokeWidth="1.6" />
-        </g>;
-      })}
-    </g>
-  );
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.bikeRack, key, cacheKey: "obj-bikeRack" });
 }
 
 // チームカー（第19弾: ドット絵化）。ルーフキャリアのスペアホイール2本＝ロードレースの

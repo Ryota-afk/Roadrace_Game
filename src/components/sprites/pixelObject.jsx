@@ -10,16 +10,19 @@ import { OBJ_SPRITES, OBJ_LEGEND } from "./pixelObjectData.js";
 
 export const OBJ_PX = 0.5;
 
-// data: OBJ_SPRITESのエントリ。x,y: 接地点のスクリーン座標。
-// shadowRx/Ry: 足元の影楕円（従来の各Nodeが自前で敷いていた影の置き換え。省略で影なし）。
-export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowRx = 0, shadowRy = 0 }) {
+// data: OBJ_SPRITESのエントリ。x,y: 接地点のスクリーン座標。legend省略時はdata.legend。
+// shadowRx/Ry: 足元の影楕円。省略時はスプライト幅から自動（旧ノードが自前で敷いていた影の置き換え）。
+// shadowRx: 0 を渡すと影なし。
+export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowRx, shadowRy }) {
   const s = spriteImageUrl(data.rows, legend || data.legend || OBJ_LEGEND, cacheKey);
   const w = +(s.w * OBJ_PX).toFixed(2), h = +(s.h * OBJ_PX).toFixed(2);
+  const rx = shadowRx == null ? +(w * 0.42).toFixed(1) : shadowRx;
+  const ry = shadowRy == null ? +(rx * 0.48).toFixed(1) : shadowRy;
   const ox = +(-data.anchorCol * OBJ_PX).toFixed(2);
   const oy = +(-(data.anchorRow + 1) * OBJ_PX).toFixed(2);
   return (
     <g key={key} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-      {shadowRx > 0 && <ellipse cx="0" cy="0" rx={shadowRx} ry={shadowRy} fill="#000" opacity="0.14" />}
+      {rx > 0 && <ellipse cx="0" cy="0" rx={rx} ry={ry} fill="#000" opacity="0.14" />}
       <image href={s.url} x={ox} y={oy} width={w} height={h} style={{ imageRendering: "pixelated" }} />
     </g>
   );
@@ -27,9 +30,9 @@ export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowRx = 
 
 // 木：葉の色は季節パレット（palette.treeDark/treeMid/treeLeaf）から動的に組む。
 // 冬（palette.snow）は冠雪差分のrows（treeSnow）を使い、雪の文字Sをpalette.snowで塗る。
+// 幹・根元は抽出データの静的色のまま（季節で変わらない）。
 export function treeSpriteNode({ x, y, palette, key }) {
   const data = palette.snow ? OBJ_SPRITES.treeSnow : OBJ_SPRITES.tree;
-  // 抽出データの静的色（幹など）に季節の葉色を重ねる
   const legend = {
     ...data.legend,
     t: palette.treeDark, u: palette.treeMid, v: palette.treeLeaf,
@@ -39,6 +42,6 @@ export function treeSpriteNode({ x, y, palette, key }) {
   return pixelObjectNode({
     x, y, data, legend, key,
     cacheKey: `objtree-${palette.treeLeaf}-${palette.snow ? "s" : "n"}`,
-    shadowRx: 13.5, shadowRy: 6.8,
+    shadowRx: 11, shadowRy: 5.3,
   });
 }
