@@ -10,7 +10,7 @@ import { Item, PrimaryBtn, QuietBtn, Section } from "../../../../components/kit.
 import { MONTHS } from "../../../../data/course.js";
 import { T } from "../../../../data/theme.js";
 import { OB_COACH_SALARY } from "../../../../data/economy.js";
-import { SCOUT_POLICIES, objectiveStatusText, rivalNews, seasonTitleRace, staffSalaryTotal } from "../../../../logic/support.js";
+import { SCOUT_POLICIES, objectiveStatusText, seasonTitleRace, seasonWorldNews, staffSalaryTotal } from "../../../../logic/support.js";
 import { teamPayroll } from "../../../../domain/season/salary.js";
 
 // 第13弾Phase3-D-4-a: SeasonHeaderから移設したスポンサー詳細・支出内訳・ダイナスティ周回の受け皿。
@@ -54,7 +54,7 @@ export function renderRaceStatusSection(ctx) {
   const om = objectiveStatusText(g.sponsor && g.sponsor.objective);
   const obj = g.sponsor && g.sponsor.objective;
   const tr = seasonTitleRace(g);
-  const news = rivalNews(g.year, g.month);
+  const news = seasonWorldNews(g.rivalRosters, g.year, g.month);
   const inj = g.roster.filter(r => r.injury > 0);
   const avgFat = Math.round(g.roster.reduce((s, r) => s + (r.fatigue || 0), 0) / Math.max(1, g.roster.length));
   const tired = g.roster.filter(r => r.injury === 0 && (r.fatigue || 0) >= 80).length;

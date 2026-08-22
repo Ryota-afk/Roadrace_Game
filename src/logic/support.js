@@ -14,7 +14,7 @@ import { MANAGER_DIRECTIVES, SEASON_OBJECTIVES } from "../data/directives.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS } from "../data/gear.js";
 import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_COLOR, DIFFICULTIES, DISCIPLINES, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL } from "../data/progression.js";
 import { riderFlavorText } from "../view/flavor.js";
-import { mlNewspaper, mlBuildWorldNews, rivalNews } from "../view/news.js";
+import { mlNewspaper, mlBuildWorldNews, seasonWorldNews } from "../view/news.js";
 import { computePickupChance } from "../domain/season/transfer.js";
 import { genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText } from "../domain/season/sponsor.js";
 import { computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut } from "../domain/season/standings.js";
@@ -31,7 +31,7 @@ export {
   ML_AB_COACH_KEY, ML_CARS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS,
   ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, CHEMISTRY_TIERS, CLASS_TIER_COLOR, DISCIPLINES, DISCIPLINE_KEYS,
   FAVORS_TO_DISCIPLINE, GROWTHPOW_ORDER, GROWTH_ORDER, GROWTH_POW_LADDER, ML_AMBITION_PATH_KEYS, SUB_STAT_LABEL,
-  riderFlavorText, mlNewspaper, mlBuildWorldNews, rivalNews,
+  riderFlavorText, mlNewspaper, mlBuildWorldNews, seasonWorldNews,
   computePickupChance,
   genSeasonObjective, raceObjectiveEvent, advanceObjective, expireObjective, objectiveStatusText,
   computeStandings, seasonRank, seasonTitleRace, standingsRankReward, champPromoteCut,

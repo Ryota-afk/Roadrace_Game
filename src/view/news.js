@@ -1,24 +1,39 @@
 // ニュース・号外の文字列生成（純関数）。Phase 4-1後の support.js から分離（Step 4: view層）。
 import { mulberry } from "../core/core.js";
 import { MONTHS } from "../data/course.js";
-import { RIVAL_TEAMS } from "../state/state.js";
+import { RIVAL_TEAMS, MYLIFE_TEAMS, growthPeakAge } from "../state/state.js";
 
-export const RIVAL_NEWS_TEMPLATES = [
-  t => `${t}が有望な若手を獲得し、戦力を着々と上積みしているという。`,
-  t => `${t}が今季ここまで好調をキープ。勢いに乗っている。`,
-  t => `${t}はエースの不振に苦しみ、やや停滞気味との情報だ。`,
-  t => `${t}のエースに、他チームからの引き抜きの噂が浮上している。`,
-  t => `${t}が最新機材を導入し、平坦での速さに磨きをかけたらしい。`,
-  t => `${t}で世代交代が進み、チームの雰囲気が変わりつつあるようだ。`,
-  t => `${t}が強化合宿を敢行。次戦に向けて仕上げてきそうだ。`,
-  t => `${t}が監督体制を刷新し、戦術に変化が見られるという。`,
-];
-
-export function rivalNews(year, month) {
+// 第16弾C: rivalNews()（張りぼてのランダムテンプレ8種）を実データ版へ置換。
+// g.rivalRosters（全25チーム・シーズンと同じ世代交代ルールで加齢する永続ロースター）から、
+// 最も「語れる事実」を優先度順に1つだけ文章化する。テンプレ文は該当なし時の汎用1種のみ残す。
+export function seasonWorldNews(rosters, year, month) {
   const rng = mulberry((year || 1) * 137 + (month || 0) * 31 + 911);
-  const team = RIVAL_TEAMS[Math.floor(rng() * RIVAL_TEAMS.length)];
-  const tmpl = RIVAL_NEWS_TEMPLATES[Math.floor(rng() * RIVAL_NEWS_TEMPLATES.length)];
-  return { team: team.name, color: team.color, text: tmpl(team.name) };
+  const teamNames = Object.keys(rosters || {});
+  if (!teamNames.length) {
+    // 旧セーブ等でrivalRostersが空の場合のフォールバック（既存のRIVAL_TEAMSから汎用文のみ）
+    const team = RIVAL_TEAMS[Math.floor(rng() * RIVAL_TEAMS.length)];
+    return { team: team.name, color: team.color, text: `${team.name}は今季も安定した陣容で戦っている。` };
+  }
+  const teamName = teamNames[Math.floor(rng() * teamNames.length)];
+  const roster = rosters[teamName] || [];
+  const ace = roster[0]; // ロースターは先頭=baseline最大（エース）でソート済み
+  const teamInfo = MYLIFE_TEAMS.find(t => t.name === teamName);
+  const color = teamInfo ? teamInfo.color : "#9aa3b5";
+  let text;
+  if (ace && (ace.age || 0) >= 35) {
+    text = `${teamName}のエース${ace.name}（${ace.age}歳）に引退の噂が流れ始めた。`;
+  } else if (ace && (ace.age || 0) > growthPeakAge(ace.growthPow)) {
+    text = `${teamName}の${ace.name}に衰えの影。若手への切り替えが囁かれる。`;
+  } else if (roster.some(r => r.joinYear === year)) {
+    const rookie = roster.find(r => r.joinYear === year);
+    text = `${teamName}の新人${rookie.name}（${rookie.age}歳）が練習で好タイムを連発しているという。`;
+  } else if (roster.some(r => (r.growthPow === "S" || r.growthPow === "A") && (r.age || 0) <= 24)) {
+    const prospect = roster.find(r => (r.growthPow === "S" || r.growthPow === "A") && (r.age || 0) <= 24);
+    text = `${teamName}の${prospect.name}（${prospect.age}歳）は大器と評判だ。`;
+  } else {
+    text = `${teamName}は今季も安定した陣容で戦っている。`;
+  }
+  return { team: teamName, color, text };
 }
 
 // v51(第11弾Phase2・2-D): mlWorldStarsForYear（24人の別世界を毎回1年目から再計算する

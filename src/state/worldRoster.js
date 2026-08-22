@@ -46,8 +46,9 @@ export function genWorldRosters(rng, count = 6, teams = MYLIFE_TEAMS) {
   return rosters;
 }
 
-// 成長曲線のピーク年齢（成長力が高いほど遅咲き＝長く伸びる）
-function growthPeakAge(growthPow) {
+// 成長曲線のピーク年齢（成長力が高いほど遅咲き＝長く伸びる）。
+// 第16弾C: シーズンの「他チーム動向」（seasonWorldNews）がエースの衰え判定に使うためexport。
+export function growthPeakAge(growthPow) {
   return growthPow === "S" ? 29 : growthPow === "A" ? 28 : growthPow === "B" ? 27 : 26;
 }
 function growthStep(growthPow) {

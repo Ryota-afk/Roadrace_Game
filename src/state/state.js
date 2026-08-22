@@ -7,7 +7,7 @@
 // stateレイヤーへ逆依存しないよう data/progression.js へ移設。
 // 呼び出し側（29ファイル）のimport文を書き換えずに済むよう、ここで全シンボルを再exportする。
 export { totalTitleCount, computePrestige, unlockedTemplates } from "./prestige.js";
-export { genWorldRosters, ageWorldRosters, topUpWorldRosters, WORLD_KEY, loadWorldMeta, advanceWorldYear, sharedWorldRosters } from "./worldRoster.js";
+export { genWorldRosters, ageWorldRosters, topUpWorldRosters, WORLD_KEY, loadWorldMeta, advanceWorldYear, sharedWorldRosters, growthPeakAge } from "./worldRoster.js";
 export { genMonthRaces, initGame, SAVE_KEY, serializeState, saveGame, resyncRid, loadGame, saveGameInfo } from "./seasonState.js";
 export {
   ML_AMBITION_PATHS, mlAmbitionMetricValue, mlFirstUnmetRung, mlAmbitionCleared, initMyLife,
