@@ -215,7 +215,11 @@ export function BaseView({ g, paused, onRoomTap }) {
   // Wave F-1: 施設ショップの「敷地整備」(g.equip.grounds、Lv0〜5)で段階的に解禁される
   // 屋外装飾。旧セーブに未存在のことがあるためstaff.scout等と同じ`|| 0`ガードを踏襲する。
   const groundsLv = g.equip.grounds || 0;
-  const unlockedDecor = BASE_VIEW_GROUNDS_DECOR.filter(d => groundsLv >= d.minLevel);
+  // 第19弾G: 池は敷地整備Lvで見た目が育つ（Lv1〜2小さな池 → Lv3〜4タイル2×2 →
+  // Lv5タイル3×3）。位置・解禁Lvはdata側のまま、描くスプライトのkindだけ差し替える。
+  const pondKind = groundsLv >= 5 ? "pond3" : groundsLv >= 3 ? "pond2" : "pond";
+  const unlockedDecor = BASE_VIEW_GROUNDS_DECOR.filter(d => groundsLv >= d.minLevel)
+    .map(d => (d.kind === "pond" ? { ...d, kind: pondKind } : d));
   const propRows = propItems(PROJ, { ...BASE_VIEW_PROPS, groundsDecor: unlockedDecor }, palette).map(item => ({ kind: "prop", ...item }));
   const drawOrder = [clubhouseRow, ...propRows, ...outdoorRiders].sort((a, b) => a.sortY - b.sortY);
   const landQuad = LAND_QUAD_WORLD.map(p => isoProject(p.w, p.l, 0, PROJ));
