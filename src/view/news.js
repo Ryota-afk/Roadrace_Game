@@ -27,19 +27,74 @@ export function rivalNews(year, month) {
 // 無い）ため、その年に実際に起きたイベント（ageWorldRosters()が返すretired/debuted＝
 // state.js側で既に計算済み）を年度末にそのまま文章化する形にした。呼び出し側（月次コントローラ）
 // で年度末に1回だけ生成し、ml.worldNewsとして保存する（career.jsx側での再計算・シード復元は不要）。
-export function mlBuildWorldNews(riderStatsById, leaderEntry, retired, debuted, year) {
+//
+// v53(第16弾B-1): 年3行止まりだった出口を、優先度順に最大7行へ拡充。全項目は実データ
+// （riderStats／worldRosters の加齢前後比較／ライバルの引退情報）から機械的に組み立てる。
+// 引数はオブジェクトへ変更（第16弾で入力が5→9個に増えたため）。
+//   riderStatsById: mlUpdateRiderStats()の戻り値
+//   leaderEntry: riderStatsByIdの中でwp最大の1件（自分は含まれない。呼び出し側で算出済み）
+//   retired/debuted: ageWorldRosters()の戻り値
+//   year: これから始まる年（year>=2で発火。年度替わりの「翌年」を渡す既存仕様を踏襲）
+//   prevWorldRosters/nextWorldRosters: 加齢前後のworldRosters（エース交代の検出に使う）
+//   prevLeaderId: 前年のworldLeaderId（呼び出し側がnextStateに保存・翌年に渡す新設フィールド）
+//   rivalRetirements: [{ retiredInfo, newRival }, ...]（Task Aのage Rival()の結果。0〜2件）
+export function mlBuildWorldNews({ riderStatsById, leaderEntry, retired, debuted, year, prevWorldRosters, nextWorldRosters, prevLeaderId, rivalRetirements }) {
   if (!year || year < 2) return [];
   const news = [];
-  if (leaderEntry) news.push(`👑 ${leaderEntry.name}（${leaderEntry.team || "無所属"}）が世界ランキング首位（通算${leaderEntry.wins || 0}勝）`);
+
+  // 1・2: 王者交代／首位維持
+  if (leaderEntry) {
+    if (prevLeaderId != null && leaderEntry.id !== prevLeaderId) {
+      const prevName = (riderStatsById[prevLeaderId] || {}).name;
+      news.push(`👑 世界の勢力図が動いた。${leaderEntry.name}が${prevName ? `${prevName}を` : ""}王座から引きずり下ろした`);
+    } else {
+      news.push(`👑 ${leaderEntry.name}（${leaderEntry.team || "無所属"}）が世界ランキング首位（通算${leaderEntry.wins || 0}勝）`);
+    }
+  }
+
+  // 3: ライバルの引退・後継
+  (rivalRetirements || []).forEach(r => {
+    news.push(`🏁 好敵手・${r.retiredInfo.name}（${r.retiredInfo.age}歳）が現役を退いた。${r.newRival ? `${r.newRival.name}（${r.newRival.age}歳）が次代の好敵手として名乗りを上げた` : ""}`);
+  });
+
+  // 4: 世界の大物引退
   const notableRetired = [...(retired || [])].sort((a, b) => ((riderStatsById[b.id] || {}).wins || 0) - ((riderStatsById[a.id] || {}).wins || 0))[0];
   if (notableRetired) {
     const st = riderStatsById[notableRetired.id];
     news.push(`🏁 ${notableRetired.name}が現役を退いた${st ? `（通算${st.wins}勝）` : ""}`);
   }
+
+  // 5: エース交代（チームの先頭選手＝baseline最大が加齢前後で入れ替わったチームを1件だけ）
+  if (prevWorldRosters && nextWorldRosters) {
+    for (const teamName of Object.keys(nextWorldRosters)) {
+      const prevAce = (prevWorldRosters[teamName] || [])[0];
+      const nextAce = (nextWorldRosters[teamName] || [])[0];
+      if (prevAce && nextAce && prevAce.id !== nextAce.id) {
+        news.push(`🔄 ${teamName}のエースが交代。${nextAce.name}（${nextAce.age}歳）が${prevAce.name}からその座を奪った`);
+        break;
+      }
+    }
+  }
+
+  // 6: 節目の通算勝利数（50→25→10の順で優先。今年またいだ選手だけを対象にする）
+  const lastYear = year - 1;
+  milestoneLoop:
+  for (const M of [50, 25, 10]) {
+    for (const st of Object.values(riderStatsById || {})) {
+      const yearWins = (st.byYear && st.byYear[lastYear]) ? st.byYear[lastYear].wins : 0;
+      if ((st.wins || 0) >= M && (st.wins || 0) - yearWins < M) {
+        news.push(`🏆 ${st.name}が通算${M}勝の金字塔`);
+        break milestoneLoop;
+      }
+    }
+  }
+
+  // 7: 新星デビュー
   const topDebut = (debuted || []).find(d => d.bloodOf);
   if (topDebut) news.push(`🌟 新星 ${topDebut.name}（${topDebut.age}歳）が台頭。${topDebut.bloodOf}の血を継ぐ逸材だ`);
   else if (debuted && debuted[0]) news.push(`🌟 新星 ${debuted[0].name}（${debuted[0].age}歳）が台頭`);
-  return news;
+
+  return news.slice(0, 7);
 }
 
 export function mlNewspaper({ player, race, rank, careerWins, worldRank, year, month }) {

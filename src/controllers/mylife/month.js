@@ -315,10 +315,23 @@ export function mlAdvanceMonth(s, mode) {
       // （mlWorldStarsForYearの「毎回1年目から再計算」に代わり、実際に起きたイベント
       // ＝ageWorldRosters()のretired/debutedをそのまま文章化する）。
       const leaderEntry = Object.values(decayedRiderStats).sort((a, b) => (b.wp || 0) - (a.wp || 0))[0] || null;
-      const worldNews = mlBuildWorldNews(decayedRiderStats, leaderEntry, aged.retired, aged.debuted, s.year + 1);
+      // 第16弾B-1: 王者交代・エース交代・ライバル引退後継・節目の勝利数を加えて最大7行へ拡充
+      const rivalRetirements = [
+        rival1Res.retiredInfo ? { retiredInfo: rival1Res.retiredInfo, newRival: rival1Res.rival } : null,
+        rival2Res.retiredInfo ? { retiredInfo: rival2Res.retiredInfo, newRival: rival2Res.rival } : null,
+      ].filter(Boolean);
+      const worldNews = mlBuildWorldNews({
+        riderStatsById: decayedRiderStats, leaderEntry, retired: aged.retired, debuted: aged.debuted, year: s.year + 1,
+        prevWorldRosters: s.worldRosters, nextWorldRosters: aged.worldRosters,
+        prevLeaderId: s.worldLeaderId, rivalRetirements,
+      });
       // v32（キャリアグラフ）：この年の到達値を年次記録に積む（OVR・世界ランク・通算成績の推移）
       const histEntry = { year: s.year, ovr: overall(player), worldRank: s.worldRank, worldBest: s.worldRankBest, wins: s.careerWins || 0, podiums: s.careerPodiums || 0 };
-      nextState = { ...nextState, worldPoints: decayedWP, worldRank, riderStats: decayedRiderStats, worldNews, careerHistory: [...(s.careerHistory || []), histEntry] };
+      nextState = {
+        ...nextState, worldPoints: decayedWP, worldRank, riderStats: decayedRiderStats, worldNews,
+        worldLeaderId: leaderEntry ? leaderEntry.id : null,
+        careerHistory: [...(s.careerHistory || []), histEntry],
+      };
       const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState };
       if (retireChoice) {
         return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval,

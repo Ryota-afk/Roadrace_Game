@@ -135,6 +135,7 @@ export function initMyLife() {
     // v30: 世界ランキング＆キャリア・アンビション
     worldPoints: 0, worldRank: null, worldRankBest: null,
     worldNews: [], // v51(第11弾Phase2・2-D): 年度末に生成する世界ニュース（実データベース）
+    worldLeaderId: null, // 第16弾B-1: 前年の世界ランキング首位id（王者交代の検出に使う）
     ambitionIdx: 0, ambitionDone: [], ambitionPath: "victory", // v31.5: 生き方（路線）
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
     // v32: 固定チームメイト・条件付き作戦・キャリアグラフ用の年次記録
@@ -153,7 +154,7 @@ const ML_SAVE_FIELDS = [
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
   "rival", "rivalRecord", "rival2", "rivalRecord2", "retiredRivals", "flags", "rewardedAchievements",
   // v30: 世界ランキング＆キャリア・アンビション
-  "worldPoints", "worldRank", "worldRankBest", "worldNews", "ambitionIdx", "ambitionDone", "ambitionPath",
+  "worldPoints", "worldRank", "worldRankBest", "worldNews", "worldLeaderId", "ambitionIdx", "ambitionDone", "ambitionPath",
   "careerWins", "careerPodiums", "careerBigWins", "careerTitles", "careerClassics",
   "teammates", "tactic", "careerHistory",
   "protege", // v35(逆メンター): 弟子（プロテジェ）
