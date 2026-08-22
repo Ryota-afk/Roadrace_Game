@@ -190,6 +190,8 @@ export function genSubStats(type, rng, opts = {}) {
   // 安定感：独走・平坦系（淡々と走る）がやや高め、スプリンター（爆発力型）がやや低め。
   const breakthroughBase = { CLM: 58, TT: 56, RUL: 52, PUN: 50, SPR: 44 }[type] ?? 50;
   const stabilityBase = { TT: 58, RUL: 56, PUN: 50, CLM: 48, SPR: 44 }[type] ?? 50;
+  // 第18弾: スピリット（僚友と走る力）。ルーラー（献身の脚質）がやや高め、独走屋がやや低め。
+  const spiritBase = { RUL: 56, PUN: 52, CLM: 50, SPR: 48, TT: 44 }[type] ?? 50;
   return {
     accel: cl(accelBase + j() + boost),
     build: cl(buildBase + j()), // 体格は才能とは無関係なので逸材補正なし
@@ -199,6 +201,9 @@ export function genSubStats(type, rng, opts = {}) {
     // v43(マイライフ難易度調整Phase 2): 新ステータス「運」。脚質と運の間に論理的な関連が
     // 無いため、breakthrough/stabilityと違い脚質差はつけずbase50±ジッターのみ。
     luck: cl(50 + j()),
+    // 第18弾: 新ステータス「スピリット」。breakthrough/stabilityと同じく生まれつき固定・
+    // 才能とは無関係（逸材補正なし）。献身の脚質（ルーラー）がやや高め、独走屋がやや低め。
+    spirit: cl(spiritBase + j()),
   };
 }
 
