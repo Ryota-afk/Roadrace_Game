@@ -410,12 +410,22 @@ export function mlAdvanceMonth(s, mode) {
   // クラス（mode==="race"の場合のs.classIdx）だけはmlRaceFinish側で実結果を既に積んでいる
   // ので、二重計上を避けてスキップする。
   let riderStats = s.riderStats;
+  // 第16弾B-2: 自分が出ていない月も、他クラスで実際に決着したレースの優勝者を1行だけ
+  // ホームに出す（world ticker）。既に台帳へ積むために毎月計算しているworldLite[0]を
+  // そのまま流用するので追加コストはゼロ。自分のクラスに近い方を優先する。
+  let worldTicker = null;
+  let worldTickerDist = Infinity;
   if (s.worldRosters && Object.keys(s.worldRosters).length) {
     for (let cls = 0; cls < 3; cls++) {
       if (mode === "race" && cls === s.classIdx) continue;
       const raceForClass = mlGenRace(s.year, s.month, cls);
       const worldLite = mlWorldRaceLite(s, s.year * 1000 + s.month * 17 + 3 + cls, cls, raceForClass);
       riderStats = mlUpdateRiderStats(riderStats, worldLite, new Set(), s.year, raceForClass.grade, CLASSES[cls].prizeMul);
+      const dist = Math.abs(cls - s.classIdx);
+      if (worldLite[0] && dist < worldTickerDist) {
+        worldTicker = `${worldLite[0].name}（${worldLite[0].teamName}）が${raceForClass.name}を制した`;
+        worldTickerDist = dist;
+      }
     }
   }
   // v38(改善:育成の手応え): 「今月の成長」レポート。伸びた能力（丸め後で+1以上、または生の伸びが
@@ -440,7 +450,7 @@ export function mlAdvanceMonth(s, mode) {
   const base = {
     ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)],
     directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
-    money, managerEval, riderStats, growthReport,
+    money, managerEval, riderStats, growthReport, worldTicker,
     screen: "mylife_main", log,
   };
   // v36(弟子深化): 弟子がいる間は、毎月ごく稀に指導イベントが発生する。関わり方で

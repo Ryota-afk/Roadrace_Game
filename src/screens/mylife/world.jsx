@@ -114,6 +114,11 @@ export function renderMyLifeWorldScreen(ctx) {
         <Section title="ロードレース・タイムズ" padded>
           <div style={{ fontSize: T.size.head, lineHeight: 1.3 }}>{media.headline}</div>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm, lineHeight: 1.7 }}>{media.body}</div>
+          {ml.worldTicker && (
+            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm, paddingTop: T.space.sm, borderTop: `1px solid ${T.color.rule}` }}>
+              {ml.worldTicker}
+            </div>
+          )}
         </Section>
       )}
 
