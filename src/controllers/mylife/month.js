@@ -296,8 +296,9 @@ export function mlAdvanceMonth(s, mode) {
     if (freshFaces.length && s.teammates && s.teammates.length) {
       log.push(`【${s.year}年目 3月】新加入の${freshFaces.map(tm => tm.name).join("・")}がチームに合流した`);
     }
-    // 第18弾B: 現メンバー（次年度のチームメイト＋弟子）以外の絆を刈り取る（引退・入れ替わりで自然に消える）
-    const nextBonds = pruneBonds(s.bonds, [...nextTeammates.map(tm => tm.id), ...(s.protege ? [s.protege.id] : [])]);
+    // 第18弾B: 現メンバー（次年度のチームメイト）以外の絆を刈り取る（引退・入れ替わりで自然に消える）。
+    // 弟子はprotege.bond（既存の指導で育つ絆）に一本化しており、ml.bondsには入らないため対象外。
+    const nextBonds = pruneBonds(s.bonds, nextTeammates.map(tm => tm.id));
     // 第16弾A: ライバル（好敵手）も世界の選手と同じルールで加齢・引退する。引退時は
     // 若い後継のライバルが台頭する（対戦成績はリセット＝因縁は一から）。2人のライバルの
     // rng streamは互いに独立させ、後継の名前は「もう一方の現在のライバル」と重複しないようにする。

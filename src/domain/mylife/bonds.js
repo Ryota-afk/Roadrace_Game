@@ -1,7 +1,11 @@
 // 第18弾: 僚友（チームメイト・弟子）との絆（bonds）に関する純関数。
-// 絆はプレイヤーと一緒に出走した僚友ごとに育ち、レースのチームケミストリー（chemMul）と
-// 年次成長ボーナスに使われる（配線はそれぞれsim/state.jsのbuildMyLifeSim・
+// 絆はプレイヤーと一緒に出走したチームメイトごとに育ち、レースのチームケミストリー
+// （chemMul）と年次成長ボーナスに使われる（配線はそれぞれsim/buildMyLifeSim.js・
 // controllers/mylife/month.jsの年度末処理側）。
+// 弟子（プロテジェ）は既存の「指導で育つ絆」(protege.bond, 0〜100・指導イベントで成長し
+// protegeStateの伸び計算に使用)が既にあるため、ここでは新しい数値を作らず一本化する
+// （ユーザー合意：2026-08）。ml.bonds[id]でチームメイトを引くのと同じ場面で、弟子だけは
+// bondValueForを介してprotege.bondを直接読む。
 
 export function bondTier(v) {
   if (v >= 90) return "無二の親友";
@@ -21,13 +25,21 @@ export function bondCapFor(spirit) {
   return Math.min(100, Math.round(55 + (spirit ?? 50) * 0.5));
 }
 
-// sim.ranked（レース参加者）のうち、現在の僚友（teammates＋弟子）と一致するidの配列
+// id指定の絆の値を返す。弟子はprotege.bond（既存の指導で育つ絆）をそのまま使い、
+// それ以外（チームメイト）はml.bondsから引く。
+export function bondValueFor(bonds, protege, id) {
+  if (protege && protege.id === id) return Math.min(100, protege.bond || 0);
+  return (bonds || {})[id] || 0;
+}
+
+// sim.ranked（レース参加者）のうち、現在のチームメイトと一致するidの配列。
+// 弟子は含めない（弟子の絆は指導イベントでのみ育つ・既存の育成はそのまま）。
 export function mlCoRacedIds(sim, s) {
-  const rosterIds = new Set([...(s.teammates || []).map(t => t.id), ...(s.protege ? [s.protege.id] : [])]);
+  const rosterIds = new Set((s.teammates || []).map(t => t.id));
   return sim.ranked.filter(e => rosterIds.has(e.id)).map(e => e.id);
 }
 
-// レース確定時に絆を更新する。共闘した僚友がいなければ無変更で返す。
+// レース確定時に絆を更新する。共闘したチームメイトがいなければ無変更で返す。
 export function mlBondsAfterRace(bonds, s, sim, { podium, assist }) {
   const coRacedIds = mlCoRacedIds(sim, s);
   if (!coRacedIds.length) return bonds;
@@ -44,7 +56,7 @@ export function mlBondsAfterRace(bonds, s, sim, { podium, assist }) {
   return next;
 }
 
-// 年度末：現メンバー（次年度のteammates＋弟子）に居ない僚友の絆を刈り取る
+// 年度末：現メンバー（次年度のteammates）に居ないチームメイトの絆を刈り取る
 export function pruneBonds(bonds, currentIds) {
   const idSet = new Set(currentIds);
   const next = {};
@@ -54,9 +66,9 @@ export function pruneBonds(bonds, currentIds) {
   return next;
 }
 
-// 実際に出走した僚友（＋弟子）の絆の平均。誰もいなければ0（＝結束ボーナスなし）
-export function avgBondFor(bonds, ids) {
+// 実際に出走した僚友（チームメイト＋弟子）の絆の平均。誰もいなければ0（＝結束ボーナスなし）
+export function avgBondFor(bonds, ids, protege) {
   if (!ids || !ids.length) return 0;
-  const sum = ids.reduce((a, id) => a + ((bonds || {})[id] || 0), 0);
+  const sum = ids.reduce((a, id) => a + bondValueFor(bonds, protege, id), 0);
   return sum / ids.length;
 }

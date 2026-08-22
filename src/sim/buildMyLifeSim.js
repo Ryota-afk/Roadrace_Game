@@ -138,8 +138,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
-    // 第18弾: 実際に出走する僚友（＋弟子）の絆の平均から結束を算出（自チームのみ・絆0なら1=無効果）
-    const chemMul = isMyTeam ? 1 - (avgBondFor(bonds, coRacedIds) / 100) * 0.08 : 1;
+    // 第18弾: 実際に出走する僚友（チームメイト＋弟子）の絆の平均から結束を算出
+    // （自チームのみ・絆0なら1=無効果。弟子はprotege.bond＝既存の指導で育つ絆を一本化して使う）
+    const chemMul = isMyTeam ? 1 - (avgBondFor(bonds, coRacedIds, protege) / 100) * 0.08 : 1;
     const teamEntrants = members.map((r, i) => {
       // v29: マイライフのAI相手もeffAbilitiesを通し、体格・調子・大舞台・加速力・メンタルを反映
       // v48(第10弾続き): 土台の能力値はid+年で固定した分、当日の調子（form）は毎レース振り直す。
