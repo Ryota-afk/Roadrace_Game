@@ -11,7 +11,8 @@ import {
   BASE_VIEW_PROPS, BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_PLAZA, BASE_VIEW_GROUND,
 } from "../src/data/baseViewBuildings.js";
 import { routeToStation, workSpotFor } from "../src/domain/season/riderActivity.js";
-import { loopPointAt, loopNearestT } from "../src/domain/season/baseViewLayout.js";
+import { loopPointAt, loopNearestT, loopDistanceTo } from "../src/domain/season/baseViewLayout.js";
+import { OBJ_SPRITES } from "../src/components/sprites/pixelObjectData.js";
 
 const errs = [];
 const CH = BASE_VIEW_CLUBHOUSE;
@@ -142,9 +143,34 @@ for (let i = 0; i < 200; i++) {
   }
 }
 
+// ---- 6. 屋外の大型スプライト（池3段階・小川）がコース帯に乗り上げないこと ----
+// アンカー（接地点=下端中央）とスプライトのbbox幅から接地菱形を正方形近似で推定し
+// （bbox幅px = (w辺+l辺)×26。anchor = 菱形中心から(+s/2,-s/2)、s=(w辺+l辺)/2）、
+// 輪郭サンプルの中心線最短距離が 帯半幅+0.1 を下回ったら違反。2026-08にpond3が
+// 実際にコースへ0.2ユニット乗り上げていた（点座標だけ見て実寸を見ていなかった穴）。
+const bigSprites = [
+  ...["pond", "pond2", "pond3"].map(k => [k, BASE_VIEW_GROUNDS_DECOR.find(d => d.key === "pond")]),
+  ["canal", BASE_VIEW_PROPS.canal],
+];
+for (const [key, anchor] of bigSprites) {
+  const spr = OBJ_SPRITES[key];
+  if (!spr || !anchor) continue;
+  const ext = (spr.rows[0].length * 0.5) / 26;   // w辺+l辺（world単位）
+  const cw = anchor.w - ext / 4, cl = anchor.l + ext / 4;
+  let worst = Infinity;
+  for (let i = 0; i < 48; i++) {
+    const t = (i / 48) * Math.PI * 2;
+    const d = loopDistanceTo(BASE_VIEW_LOOP, cw + Math.cos(t) * ext / 4, cl + Math.sin(t) * ext / 4);
+    if (d < worst) worst = d;
+  }
+  if (worst < BASE_VIEW_LOOP.trackHalfWidth + 0.1) {
+    errs.push(`大型スプライト${key}がコース帯に接近/重なり: 中心線まで${worst.toFixed(2)} (< ${(BASE_VIEW_LOOP.trackHalfWidth + 0.1).toFixed(2)})`);
+  }
+}
+
 if (errs.length) {
   for (const e of errs) console.log("NG:", e);
   console.log(`検証NG ${errs.length}件`);
   process.exit(1);
 }
-console.log("導線・レイアウト検証OK（部屋の敷き詰め／収容／壁交差ゼロ／クリアランス／コース範囲）");
+console.log("導線・レイアウト検証OK（部屋の敷き詰め／収容／壁交差ゼロ／クリアランス／コース範囲／大型スプライト×コース）");
