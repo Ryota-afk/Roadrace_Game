@@ -124,23 +124,49 @@ player.bloodMarks = [ { gen: 1, mark: "nearly" }, { gen: 2, mark: "world1" }, ..
 新規ファイル**`src/breeding/recipes.js`**（`breeding.js`は既に447行。レシピ定義＋判定は
 別ファイルへ分ける）。
 
-### B. レシピ定義（案・全件列挙）
+### B. レシピ定義（実装済み・確定）
 
-`data/breeding.js`に`ML_BLOOD_RECIPES`を新設。**以下は設計案であり、合意後に確定する。**
+`src/breeding/recipes.js`に`ML_BLOOD_RECIPES`として実装済み（判定は`matchBloodRecipe`、段階的ヒント用の
+進捗計算は`bloodRecipeProgress`）。設計案からの変更点を含め、以下が確定版。
 
 | # | key | 称号 | 深さ | 条件（世代順） | 物語 |
 |---|---|---|---|---|---|
 | R1 | `revenge` | 雪辱の血脈 | 2代 | gen1に`nearly`（勝てなかった選手）→ gen2で`world1`または`emperor` | 勝てなかった父の無念を子が晴らす |
-| R2 | `twin_edge` | 二刀の血統 | 2代 | gen1に`specialist_CLM`or`specialist_PUN` → gen2に`specialist_SPR`or`specialist_RUL`、かつ2代目が`hybrid`保持 | 相反する才能が一人に融合する |
+| R2 | `twin_edge` | 二刀の血統 | 2代 | gen1に`specialist_CLM`or`specialist_PUN` → gen2に`specialist_SPR`or`specialist_RUL` | 相反する才能（登坂↔平坦）が二代を経て一人に融合する |
 | R3 | `three_gen` | 三代の悲願 | 3代 | gen1=`nearly` → gen2=`nearly` → gen3=`world1` | 二代続けて勝てず、三代目が頂点に立つ |
-| R4 | `iron_peak` | 不落の山嶺 | 3代 | gen1=`ironman` → gen2=`specialist_CLM` → gen3が`mount`を金特で保持 | 鉄の肉体に山の魂が宿る |
-| R5 | `supremacy` | 覇道極まれり | 4代 | gen1=`emperor` → gen2=`hero`or`heroMulti` → gen3=`world1` → gen4の親が`specialMatingTitle`保持 | 四代かけて覇道が極まる |
+| R4 | `iron_peak` | 不落の山嶺 | 3代 | gen1=`ironman` → gen2=`specialist_CLM` → gen3=`specialist_CLM` | 鉄の肉体の上に三代にわたって山の血が積み重なる |
+| R5 | `supremacy` | 覇道極まれり | 4代 | gen1=`emperor` → gen2=`hero`or`heroMulti` → gen3=`world1` → gen4は任意の特殊配合（`sm:`接頭辞） | 四代かけて覇道が極まる |
 
-**設計上の論点（実装前に確定させる）**：
-- レシピは5件でよいか（増やすと検証コストが比例して増える）。
-- 条件に使う`careerArchetypeKey`は引退時のキャリア次第で決まるため、
-  **狙って出せるか**を実測で確認する必要がある（例：`nearly`＝「表彰台12回以上かつ勝利3回以下」は
-  狙って作れるか）。実測して達成不能な条件があれば差し替える。
+**設計案からの変更点（実装時に判明・R2/R4）**：`bloodMarks`が記録するのは
+`careerArchetypeKey`と特殊配合keyだけで、脚質(`type`)や個別の特殊能力（二刀流="hybrid"・
+山の申し子の金特="mount"等）は記録していない。R2の「2代目が`hybrid`保持」・R4の
+「gen3が`mount`金特を保持」は記録されていないデータへの参照で実装不能だったため、
+印の並びだけで判定できる条件へ差し替えた（R2は登坂系→平坦系のspecialist連鎖のみに、
+R4はironman→specialist_CLMの連鎖を1代分伸ばして3代の登坂の血に変更）。
+
+**達成可能性の分析（実測ではなく既存データに基づく確認）**：
+レシピが参照する`careerArchetypeKey`はすべて`mlCareerArchetype()`（`breeding.js`、第13弾以前から
+実装済み・生き様の称号として殿堂表示に既に使われている既存機能）が判定するキーであり、
+本弾で新設したものではない。実際に何世代分もの新規プレイスルーを回して検証する代わりに、
+判定条件（if/elseの優先順位を含む）をコードから直接確認し、狙って到達可能かを分析した：
+- `nearly`（表彰台12回以上かつ勝利3回以下）：上位分岐（world1/heroMulti/hero/classicKing/
+  classicHunter/emperor/specialist_X/domestique）のいずれにも該当しない、かつ表彰台を積む
+  プレイが条件。「エースとして走るがタイトルを取らせない・勝たせすぎない」プレイで意図的に
+  到達可能（勝利を抑えつつ表彰台を狙うのは難度は高いが再現性のある操作）。
+- `world1`（世界ランキング1位経験）・`emperor`（通算勝利25以上）：既存の実績システム
+  （`ML_ACHIEVEMENTS`）でも上位実績として扱われる到達点で、長期プレイで既に到達実績のある
+  ライン。
+- `hero`/`heroMulti`（タイトル1回/2回以上）：世界選手権・五輪という既存の大舞台システムに
+  紐づく既存の到達点。
+- `ironman`（在籍12年以上または引退年齢36歳以上）：意図的に選手寿命を伸ばすプレイ
+  （早期引退させない）で到達可能。
+- `specialist_CLM`（CLM型で通算勝利8〜24、かつタイトル0・クラシック3勝未満）：CLM型を選び
+  勝利を積みつつ大舞台のタイトルを取らない、という狙って作れる条件。
+- 特殊配合（`sm:`接頭辞）：既存の`ML_SPECIAL_MATINGS`（5種）が成立した配合で自動的に付与される。
+
+いずれも「上位の希少な分岐を踏まずに、特定の条件だけを満たす」という操作でプレイヤーが
+意図的に狙える設計になっている。1レシピ＝2〜4回の完走プレイスルーが必要な高コストな
+やり込み要素である点は§設計制約で既に合意済み。
 
 ### C. 生まれる個体（「質的に別物」の中身）
 
