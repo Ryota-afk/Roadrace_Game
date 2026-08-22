@@ -9,7 +9,7 @@ import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.j
 import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
-import { PARTS, PART_SLOTS } from "../../sim/race.js";
+import { PARTS, PART_SLOTS, partEffectParts } from "../../data/parts.js";
 
 // mlEventResultText等は複数行の生成テキスト（\n区切り）を含むため、Proseではなく
 // whiteSpace:pre-wrapを明示したこの専用ブロックで改行を保持する。
@@ -55,7 +55,7 @@ export function renderMyLifeEventScreens(ctx) {
                   return (
                     <ShopRow key={pid} first={i === 0}
                       label={p.label} countLabel="未装着" count={Math.max(0, availPartsMl(pid))}
-                      detail={`${SLOT_LABEL[p.slot]}・${Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}`}
+                      detail={`${SLOT_LABEL[p.slot]}・${partEffectParts(p, 1, AB_LABEL).join(" / ")}`}
                       locked={lockedByClass ? `${CLASSES[p.tier - 1].id}で解禁` : null}
                       buyLabel={lockedByClass ? null : `${p.price}万`} buyDisabled={ml.money < p.price} onBuy={() => mlBuyPart(pid)} />
                   );
@@ -86,7 +86,7 @@ export function renderMyLifeEventScreens(ctx) {
                   return (
                     <ShopRow key={slot} first={i === 0}
                       label={p.label} countLabel="Lv" count={`${lv}/${maxLv}`}
-                      detail={Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${Math.round(v * (1 + ML_PART_LV_MUL * lv) * 10) / 10}`).join(" / ")}
+                      detail={partEffectParts(p, 1 + ML_PART_LV_MUL * lv, AB_LABEL).join(" / ")}
                       locked={maxed ? "最大強化" : null}
                       buyLabel={maxed ? null : `${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
                   );

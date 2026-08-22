@@ -6,10 +6,10 @@ import React from "react";
 import { Section, ShopRow } from "../../../../components/kit.jsx";
 import { AB_LABEL } from "../../../../data/abilities.js";
 import { ITEMS } from "../../../../data/items.js";
+import { PARTS, partEffectParts } from "../../../../data/parts.js";
 import { CLASSES } from "../../../../data/progression.js";
 import { T } from "../../../../data/theme.js";
 import { SLOT_LABEL } from "../../../../logic/support.js";
-import { PARTS } from "../../../../sim/race.js";
 
 export function renderMarketShopSection(ctx) {
   const { askConfirm, availParts, buyItem, buyPart, g, useCamp } = ctx;
@@ -22,7 +22,7 @@ export function renderMarketShopSection(ctx) {
             <div key={pid} style={{ opacity: lockedByClass ? 0.5 : 1 }}>
               <ShopRow first={i === 0}
                 label={p.label} badge={p.tier > 1 ? CLASSES[p.tier - 1].id : null}
-                detail={`[${SLOT_LABEL[p.slot]}] ${Object.entries(p.ab).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}`}
+                detail={`[${SLOT_LABEL[p.slot]}] ${partEffectParts(p, 1, AB_LABEL).join(" / ")}`}
                 countLabel="未装着" count={Math.max(0, availParts(pid))}
                 locked={lockedByClass ? `${CLASSES[p.tier - 1].id}で解禁` : null}
                 buyLabel={lockedByClass ? null : `${p.price}万`}

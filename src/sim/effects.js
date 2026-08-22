@@ -35,14 +35,22 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   const formMul = 1 + ((r.form ?? 50) - 50) / 300;
   const e = {};
   AB_KEYS.forEach(k => { e[k] = r[k]; });
+  // 第17弾：石畳タイヤの石畳ボーナスはmonumentMulと同じ乗算枠に合流させる（乗算なので初期値1）
+  let paveMulExtra = 1;
   if (r.parts) {
     PART_SLOTS.forEach(slot => {
       const pid = r.parts[slot];
       if (!pid || !PARTS[pid]) return;
+      const p = PARTS[pid];
       // v51(第12弾12-B): マイライフ限定のパーツ強化Lv（Season選手はr.partLvが存在せず常に0＝無影響）
       const lv = (r.partLv && r.partLv[slot]) || 0;
       const mul = 1 + ML_PART_LV_MUL * lv;
-      Object.entries(PARTS[pid].ab).forEach(([k, v]) => { e[k] += v * mul; });
+      Object.entries(p.ab).forEach(([k, v]) => { e[k] += v * mul; });
+      // 第17弾：天候・地形の条件付き効果（強化Lvはかけない＝マイナスが深くなるのを防ぐ）
+      if (weather !== "rain" && p.dry) Object.entries(p.dry).forEach(([k, v]) => { e[k] += v; });
+      if (weather === "heat" && p.heat && p.heat.stamina) e.stamina += p.heat.stamina;
+      if (monument === "pave" && p.pave) paveMulExtra *= p.pave.mul;
+      if (monument !== "pave" && p.offPave) Object.entries(p.offPave).forEach(([k, v]) => { e[k] += v; });
     });
   }
   // v28: 大舞台適性。big=★3で+6%、nervous(悪特性)=★3で-5%
@@ -52,8 +60,17 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   // v37(第2弾): 大舞台の申し子＝★3/★4で+7%（世界選手権・五輪でも発揮）。既存bigは★3のみ+6%。
   const bigheartMul = (grade >= 3 && hasAbility(r, "bigheart")) ? (hasGoldAbility(r, "bigheart") ? 1.10 : 1.07) : 1;
   const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig * bigheartMul;
-  const wMul = rainMul(r, weather);
-  const mMul = monumentMul(r, monument); // v34(C-2): 古典適性（石畳巧者）
+  // 第17弾：雨天用タイヤ／シーズンの雨仕様セットアップは雨ペナルティを緩和する
+  // （最大でも0.99止まり＝雨のマイナスを完全には消さない）
+  let wMul = rainMul(r, weather);
+  if (weather === "rain") {
+    let shift = 0;
+    const tirePid = r.parts && r.parts.tire;
+    if (tirePid && PARTS[tirePid] && PARTS[tirePid].rain) shift += PARTS[tirePid].rain.mulShift;
+    if (itemBoost && itemBoost.setup === "rain") shift += 0.04;
+    if (shift > 0) wMul = Math.min(0.99, wMul + shift);
+  }
+  const mMul = monumentMul(r, monument) * paveMulExtra; // v34(C-2): 古典適性（石畳巧者）＋第17弾の石畳タイヤ
   // 第15弾: 血脈レシピ「宿願成就」は大舞台（★3以上）でさらに能力+5%
   const destinyMul = (grade >= 3 && hasAbility(r, "destiny")) ? 1.05 : 1;
   AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul * mMul * destinyMul; });
@@ -79,6 +96,10 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   e.solo *= 1 + (build - 50) / 450;
   e.flat *= (1 + equip.frame * 0.06) * (itemBoost.suit ? 1.15 : 1);
   e.climb *= (1 + equip.wheels * 0.06) * (itemBoost.wheel ? 1.15 : 1);
+  // 第17弾：シーズンのレース前「機材セットアップ」選択（無料・ChipRow）。標準/雨/冷却は
+  // ここでは能力に影響しない（雨仕様の効果は上のwMul、冷却仕様はレース後の疲労軽減のみ）
+  if (itemBoost && itemBoost.setup === "light") { e.climb *= 1.05; e.flat *= 0.97; }
+  else if (itemBoost && itemBoost.setup === "aero") { e.flat *= 1.05; e.climb *= 0.97; }
   // v29バグ修正: 万一いずれかの能力値が欠損（旧セーブ等でundefined）していると
   // NaNがシミュレーション全体（finishTime等）に伝播し、最終的にレース描画がクラッシュして
   // 画面が真っ暗になる恐れがあった。非有限値は安全な既定値(50)に丸めて必ず有限にする

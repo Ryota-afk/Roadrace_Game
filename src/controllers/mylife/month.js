@@ -5,6 +5,7 @@ import { ABILITIES, AB_KEYS, AB_LABEL, POW } from "../../data/abilities.js";
 import { CLASSES } from "../../data/progression.js";
 import { MONTHS, SEG_AB } from "../../data/course.js";
 import { ML_CARS, ML_HOUSES } from "../../data/gear.js";
+import { PARTS } from "../../data/parts.js";
 import { mulberry, overall, hasAbility } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
@@ -56,7 +57,11 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     const glassMul = glassBody ? 1.35 : 1;
     // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす
     const raceWeather = ctx && ctx.raceWeather;
-    const heatMul = raceWeather === "heat" ? 1.15 : 1;
+    // 第17弾: 冷感ボトルセット（栄養スロット）は猛暑の疲労加算をキャンセルする
+    const nuPid = player.parts && player.parts.nutrition;
+    const nuPart = nuPid && PARTS[nuPid];
+    const heatCancelled = raceWeather === "heat" && nuPart && nuPart.heat && nuPart.heat.fatigueCancel;
+    const heatMul = (raceWeather === "heat" && !heatCancelled) ? 1.15 : 1;
     // v28: 役割を縮小して現役続行を選んだベテランは、レース負荷が軽くなり疲労蓄積が減る
     const roleCut = flags.reducedRole ? 0.85 : 1;
     player.fatigue = Math.min(100, player.fatigue + 40 * carCut * chefCut * ironCut * glassMul * heatMul * roleCut);
@@ -77,7 +82,12 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     // v29: メンタルは「大舞台の経験」で育つ。格上のレースほど大きく伸びる
     growSub(player, "mental", 0.35 * raceGradeMul * Math.max(0.25, ph.gain));
     // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
-    if (raceWeather === "rain" && Math.random() < (hasAbility(player, "rain_sp") ? 0.02 : 0.06)) {
+    // 第17弾: 雨天用タイヤ（タイヤスロット）は落車率を半減させる
+    const tiPid = player.parts && player.parts.tire;
+    const tiPart = tiPid && PARTS[tiPid];
+    const rainCrashHalf = tiPart && tiPart.rain && tiPart.rain.crashHalf;
+    const rainCrashChance = (hasAbility(player, "rain_sp") ? 0.02 : 0.06) * (rainCrashHalf ? 0.5 : 1);
+    if (raceWeather === "rain" && Math.random() < rainCrashChance) {
       player.fatigue = Math.min(100, player.fatigue + 15);
       AB_KEYS.forEach(k => { player[k] = Math.max(20, player[k] - 2); });
       player.__weatherCrash = true;
