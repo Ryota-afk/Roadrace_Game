@@ -12,8 +12,8 @@ export const OBJ_PX = 0.5;
 
 // data: OBJ_SPRITESのエントリ。x,y: 接地点のスクリーン座標。
 // shadowRx/Ry: 足元の影楕円（従来の各Nodeが自前で敷いていた影の置き換え。省略で影なし）。
-export function pixelObjectNode({ x, y, data, legend = OBJ_LEGEND, cacheKey, key, shadowRx = 0, shadowRy = 0 }) {
-  const s = spriteImageUrl(data.rows, legend, cacheKey);
+export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowRx = 0, shadowRy = 0 }) {
+  const s = spriteImageUrl(data.rows, legend || data.legend || OBJ_LEGEND, cacheKey);
   const w = +(s.w * OBJ_PX).toFixed(2), h = +(s.h * OBJ_PX).toFixed(2);
   const ox = +(-data.anchorCol * OBJ_PX).toFixed(2);
   const oy = +(-(data.anchorRow + 1) * OBJ_PX).toFixed(2);
@@ -29,10 +29,11 @@ export function pixelObjectNode({ x, y, data, legend = OBJ_LEGEND, cacheKey, key
 // 冬（palette.snow）は冠雪差分のrows（treeSnow）を使い、雪の文字Sをpalette.snowで塗る。
 export function treeSpriteNode({ x, y, palette, key }) {
   const data = palette.snow ? OBJ_SPRITES.treeSnow : OBJ_SPRITES.tree;
+  // 抽出データの静的色（幹など）に季節の葉色を重ねる
   const legend = {
-    K: "#1a1d22", w: "#5c4426", x: "#7d5c33",
+    ...data.legend,
     t: palette.treeDark, u: palette.treeMid, v: palette.treeLeaf,
-    V: shade(palette.treeLeaf, 1.18), T: shade(palette.treeDark, 0.72),
+    V: shade(palette.treeLeaf, 1.18),
     S: palette.snow || "#ffffff",
   };
   return pixelObjectNode({

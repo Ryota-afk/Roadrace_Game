@@ -151,21 +151,13 @@ function wheelsLeaningNode(w, l, proj, key) {
   );
 }
 
-// メカニック室：工具箱（本体+取っ手のアーチ+顔を出したレンチとドライバー）。
+// メカニック室：工具箱＋部品クレート（第19弾: 参考画像から抽出したドット絵）。
 function toolboxNode(w, l, proj, key) {
-  const hw = 0.26, hl = 0.2, h = 5;
-  const f = isoBoxFaces(w, l, hw, hl, h, proj);
-  const top = f.top.N;
-  return (
-    <g key={key}>
-      {shadow(w, l, hw, hl, proj)}
-      {isoBox(w, l, hw, hl, h, proj, "#8a2e28", "#c9463c", "#dc5a4e")}
-      <path d={`M ${(top.x - 3).toFixed(1)} ${(top.y - 0.5).toFixed(1)} Q ${top.x.toFixed(1)} ${(top.y - 5.5).toFixed(1)} ${(top.x + 3).toFixed(1)} ${(top.y - 0.5).toFixed(1)}`} fill="none" stroke="#5a2b26" strokeWidth="1.1" />
-      <line x1={(top.x - 2).toFixed(1)} y1={(top.y - 1).toFixed(1)} x2={(top.x - 3.2).toFixed(1)} y2={(top.y - 6.4).toFixed(1)} stroke="#c9ced4" strokeWidth="1.3" strokeLinecap="round" />
-      <circle cx={(top.x - 3.2).toFixed(1)} cy={(top.y - 6.4).toFixed(1)} r="1.1" fill="none" stroke="#c9ced4" strokeWidth="0.8" />
-      <line x1={(top.x + 1.6).toFixed(1)} y1={(top.y - 1).toFixed(1)} x2={(top.x + 2.6).toFixed(1)} y2={(top.y - 5.6).toFixed(1)} stroke="#e0a032" strokeWidth="1.2" strokeLinecap="round" />
-    </g>
-  );
+  const p = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  return pixelObjectNode({
+    x: p.x, y: p.y, data: OBJ_SPRITES.toolbox, key,
+    cacheKey: "obj-toolbox", shadowRx: 11, shadowRy: 5,
+  });
 }
 
 // メカニック室（Wave E-3新規）：パーツ棚（2段の棚板＋色違いの部品ケース3つ）。
