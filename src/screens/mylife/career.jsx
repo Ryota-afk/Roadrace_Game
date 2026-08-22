@@ -10,6 +10,7 @@ import { MONTHS } from "../../data/course.js";
 import { CLASSES } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlSetAutobiography, mlCareerTimeline, mlWorldBoard, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
+import { avgBondFor, bondTier } from "../../domain/mylife/bonds.js";
 import { initMyLife, mlCareerArchetype, computeAchievements, ML_ACHIEVEMENTS } from "../../state/state.js";
 import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section } from "../../components/kit.jsx";
 
@@ -227,6 +228,9 @@ export function renderMyLifeCareerScreens(ctx) {
   // ---- チーム名鑑 ----
   if (ml.screen === "mylife_teamroster" && ml.player) {
     const mates = ml.teammates || [];
+    // 第18弾: 結束＝チームメイトの絆の平均（弟子は指導で育つ別枠のため、この平均には含めない）
+    const cohesionTier = bondTier(avgBondFor(ml.bonds, mates.map(tm => tm.id)));
+    const pr = ml.protege ? protegeState(ml.protege, ml.year) : null;
     return mlWrap(
       <Screen>
         <div style={{ marginBottom: T.space.lg }}>
@@ -244,11 +248,12 @@ export function renderMyLifeCareerScreens(ctx) {
             </div>
           </div>
         </Section>
-        <Section title={`チームメイト ${mates.length}名`}>
+        <Section title={`チームメイト ${mates.length}名`} right={mates.length > 0 ? `結束：${cohesionTier}` : null}>
           {mates.length === 0 && <Item first label="—" value="" detail="チームメイトの記録がありません。" />}
           {mates.map((tm, i) => {
             const per = PERSONALITIES[tm.personality];
             const abilLabels = (tm.abilities || []).map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・");
+            const bond = bondTier((ml.bonds || {})[tm.id] || 0);
             return (
               <div key={i} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
@@ -257,11 +262,24 @@ export function renderMyLifeCareerScreens(ctx) {
                 </div>
                 {per && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>性格 {per.label}（{per.desc}）</div>}
                 {abilLabels && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{abilLabels}</div>}
+                <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2 }}>絆　{bond}</div>
                 {(tm.winsForMe || 0) > 0 && <div style={{ fontSize: T.size.caption, color: T.color.good, marginTop: 2 }}>あなたのアシストとして {tm.winsForMe} 勝を支えた</div>}
               </div>
             );
           })}
         </Section>
+        {ml.protege && pr && (
+          <Section title="弟子">
+            <div style={{ padding: `${T.space.sm}px 0` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                <span>{ml.protege.name}</span>
+                <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{TYPES[ml.protege.type]?.label}</span>
+              </div>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{pr.age}歳・総合力{pr.ovr}</div>
+              <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2 }}>絆　{bondTier(ml.protege.bond || 0)}</div>
+            </div>
+          </Section>
+        )}
         <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>世界の画面に戻る</QuietBtn>
       </Screen>
     );
