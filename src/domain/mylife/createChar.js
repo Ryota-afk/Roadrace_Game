@@ -7,7 +7,7 @@ import { AB_KEYS, AB_LABEL, ABILITIES } from "../../data/abilities.js";
 import { ML_BACKGROUNDS } from "../../data/events.js";
 import { SUB_STAT_KEYS, mulberry, newRider, overall, pickRiderName } from "../../core/core.js";
 import { legendAncestorSet, legendBloodId, mlBloodlineBonus, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
-import { deriveBloodMarks } from "../../breeding/recipes.js";
+import { deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
 import { GROWTHPOW_ORDER } from "../../data/progression.js";
 import { MYLIFE_TEAMS, mlTeammatesFromRoster, sharedWorldRosters, cpShopMylifePerks } from "../../state/state.js";
 import { bumpGrowthPow, mlCpPerks, mlCreateRival, mlGenDirective } from "../../logic/support.js";
@@ -148,6 +148,17 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     // 第15弾（血脈レシピ）：両親の血の印を合流させる。旧セーブ（bloodMarks未保存）は
     // deriveBloodMarksが既存フィールドからその場で導出するので、殿堂を跨いでも判定が壊れない。
     player.bloodMarks = [...deriveBloodMarks(master), ...deriveBloodMarks(partner)].slice(0, 24);
+    // 第15弾（血脈レシピ）：順序を含む隠しレシピが成立していれば、伝説特能・成長曲線の緩和
+    // （domain/shared/growth.jsのgrowthPhaseが特能を見て衰えを抑制）・専用称号を付与する。
+    // mlBreedBonus（シーズンの血統ユースからも呼ばれる共通関数）には一切触れず、
+    // mlCreateChar（マイライフの新規キャラ作成のみ）に閉じて判定・付与する（devlog/wave15.md §E）。
+    const recipe = matchBloodRecipe(player.bloodMarks);
+    if (recipe) {
+      player.bloodRecipe = { key: recipe.key, title: recipe.title, note: recipe.note, color: recipe.color, abilityId: recipe.abilityId };
+      if (recipe.abilityId && ABILITIES[recipe.abilityId] && !(player.abilities || []).includes(recipe.abilityId)) {
+        player.abilities = [...(player.abilities || []), recipe.abilityId];
+      }
+    }
     player.joinOvr = overall(player);
   }
   // v31.2: 系統名（血統の系統）。師匠／親の系統を継ぎ、いなければ自分が始祖となって新系統を興す
@@ -224,6 +235,11 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
       if (bloodlineNote.factor) initLog.push(`【1年目 4月】🧬 系統因子「${ABILITIES[bloodlineNote.factor]?.label || bloodlineNote.factor}」${bloodlineNote.gold ? "を金の状態で" : "を"}発現している`);
     }
     if (player.specialMating) initLog.push(`【1年目 4月】🌟 特殊配合『${player.specialMating.title}』発動！${player.specialMating.note}`);
+    if (player.bloodRecipe) {
+      initLog.push(`【1年目 4月】👑 血脈レシピ『${player.bloodRecipe.title}』成立！${player.bloodRecipe.note}`);
+      const legendId = player.bloodRecipe.abilityId;
+      if (legendId && player.abilities.includes(legendId)) initLog.push(`【1年目 4月】👑 伝説の特殊能力「${ABILITIES[legendId].label}」を血に宿して誕生した`);
+    }
   } else {
     initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
   }

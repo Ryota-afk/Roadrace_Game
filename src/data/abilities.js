@@ -103,6 +103,14 @@ export const ABILITIES = {
   sireline:    { label: "系統の申し子", desc: "全区間で能力+3", category: "配合限定", breedOnly: true },
   hybrid:      { label: "二刀流", desc: "登坂・スプリント+2、さらに丘陵・山岳・スプリント区間で能力+5", category: "配合限定", breedOnly: true },
   dynasty:     { label: "覇道の血脈", desc: "全能力+2・スタミナ+3", category: "配合限定", breedOnly: true },
+  // 第15弾: 血脈レシピ（複数世代にわたる隠し配合）を達成したときだけ手に入る最上位の特能。
+  // 配合限定(breedOnly)のさらに上位で、通常の配合(mlBreedBonus)では絶対に付与されない
+  // （付与はdomain/mylife/createChar.jsのレシピ判定処理でのみ行う）
+  revenant:  { label: "雪辱の継承", desc: "全能力+4。最終直線の追い込みがさらに鋭くなる", category: "血脈レシピ", breedOnly: true },
+  twinsoul:  { label: "万能の極致", desc: "全能力+3。あらゆる地形で能力+4（二刀流の上位互換）", category: "血脈レシピ", breedOnly: true },
+  destiny:   { label: "宿願成就", desc: "全能力+5。大舞台（★3以上）でさらに能力+5%", category: "血脈レシピ", breedOnly: true },
+  unfallen:  { label: "不落の血", desc: "全能力+4。登坂・山岳区間でさらに+6、エネルギー消耗-10%", category: "血脈レシピ", breedOnly: true },
+  sovereign: { label: "絶対王者の血", desc: "全能力+6。あらゆる地形で能力+5、エネルギー消耗-8%", category: "血脈レシピ", breedOnly: true },
 };
 
 export const PERSONALITIES = {

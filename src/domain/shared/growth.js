@@ -1,6 +1,7 @@
 // 能力成長の純計算（逓減カーブ・突破力・種目別適性）。第13弾Phase0でlogic/support.jsから分離。
 import { PERSONALITIES, GROWTH, TYPES } from "../../data/abilities.js";
 import { DISCIPLINES, DISCIPLINE_KEYS } from "../../data/progression.js";
+import { hasAbility } from "../../core/core.js";
 
 export const persMul = (r, k) => (PERSONALITIES[r.personality]?.mul[k]) || 1;
 
@@ -68,7 +69,15 @@ export function growthPhase(r) {
   const mul = def.gainMul ?? 1.0;
   if (r.age < ps) return { gain: 1.0 * mul, dec: 0, tag: "成長期" };
   if (r.age <= pe) return { gain: 0.5 * mul, dec: 0, tag: "全盛期" };
-  return { gain: 0.1 * mul, dec: Math.min(1.2, 0.25 * (r.age - pe)), tag: "衰え期" };
+  // 第15弾: 血脈レシピ達成の伝説特能は、レシピの深さ（希少さ）に応じて衰えが緩やかになる。
+  // 2代レシピ(revenant/twinsoul)＝3割抑制、3代レシピ(destiny/unfallen)＝5割抑制、
+  // 4代レシピ(sovereign)＝衰えなし。devlog/wave15.mdの初期案（destiny=0.5・sovereign=0）を、
+  // 5種すべてに深さ基準で一貫して拡張した（詳細はdevlog/wave15.md §C）
+  const decayMul = hasAbility(r, "sovereign") ? 0
+    : (hasAbility(r, "destiny") || hasAbility(r, "unfallen")) ? 0.5
+    : (hasAbility(r, "revenant") || hasAbility(r, "twinsoul")) ? 0.7
+    : 1;
+  return { gain: 0.1 * mul, dec: Math.min(1.2, 0.25 * (r.age - pe)) * decayMul, tag: "衰え期" };
 }
 
 // v43(マイライフ難易度調整Phase 1・成長力マスク化): revealPow=falseの間はpowScoreを除外する

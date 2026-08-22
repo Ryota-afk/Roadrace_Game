@@ -46,29 +46,31 @@ const climbSpecialist = ["specialist_CLM", "specialist_PUN"];
 const flatSpecialist = ["specialist_SPR", "specialist_RUL"];
 const anySpecialMating = (mark) => typeof mark === "string" && mark.startsWith("sm:");
 
+// abilityId: 成立時にdomain/mylife/createChar.jsが付与する伝説特能（data/abilities.js参照）。
+// color: 称号表示用のアクセント色（Task D・段階的ヒントUIで使用）。
 export const ML_BLOOD_RECIPES = [
   {
-    key: "revenge", title: "雪辱の血脈", depth: 2,
+    key: "revenge", title: "雪辱の血脈", depth: 2, abilityId: "revenant", color: "#ff6b6b",
     pattern: ["nearly", world1OrEmperor],
     note: "勝てなかった選手の無念を、その血を継いだ子が頂点で晴らす",
   },
   {
-    key: "twin_edge", title: "二刀の血統", depth: 2,
+    key: "twin_edge", title: "二刀の血統", depth: 2, abilityId: "twinsoul", color: "#4fd1c5",
     pattern: [climbSpecialist, flatSpecialist],
     note: "登坂と平坦、相反する才能が二代を経て一人に融合する",
   },
   {
-    key: "three_gen", title: "三代の悲願", depth: 3,
+    key: "three_gen", title: "三代の悲願", depth: 3, abilityId: "destiny", color: "#f6ad55",
     pattern: ["nearly", "nearly", "world1"],
     note: "二代続けて手が届かなかった頂点に、三代目がついに立つ",
   },
   {
-    key: "iron_peak", title: "不落の山嶺", depth: 3,
+    key: "iron_peak", title: "不落の山嶺", depth: 3, abilityId: "unfallen", color: "#a0aec0",
     pattern: ["ironman", "specialist_CLM", "specialist_CLM"],
     note: "鉄の肉体の上に、三代にわたって山の血が積み重なる",
   },
   {
-    key: "supremacy", title: "覇道極まれり", depth: 4,
+    key: "supremacy", title: "覇道極まれり", depth: 4, abilityId: "sovereign", color: "#ffd700",
     pattern: ["emperor", heroAny, "world1", anySpecialMating],
     note: "帝王・英雄・世界の頂点、そして特別な血の交わりを経て覇道が極まる",
   },

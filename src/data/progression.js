@@ -73,7 +73,7 @@ export const CHEMISTRY_TIERS = [
   { min: 0,  label: "新体制", mul: 1 },
 ];
 
-export const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長", "配合限定"];
+export const ABILITY_CATEGORY_ORDER = ["地形適性", "展開・役割", "メンタル", "フィジカル", "成長", "配合限定", "血脈レシピ"];
 
 export const ML_AMBITION_PATH_KEYS = ["victory", "bigstage", "devotion", "world", "ironman", "stardom"];
 

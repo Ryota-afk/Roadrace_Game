@@ -78,7 +78,9 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig * bigheartMul;
   const wMul = rainMul(r, weather);
   const mMul = monumentMul(r, monument); // v34(C-2): 古典適性（石畳巧者）
-  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul * mMul; });
+  // 第15弾: 血脈レシピ「宿願成就」は大舞台（★3以上）でさらに能力+5%
+  const destinyMul = (grade >= 3 && hasAbility(r, "destiny")) ? 1.05 : 1;
+  AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul * mMul * destinyMul; });
   // v28: オールラウンダーは全能力を控えめに底上げ（脚質を選ばない万能型）
   if (hasAbility(r, "allrounder_sp")) AB_KEYS.forEach(k => { e[k] += hasGoldAbility(r, "allrounder_sp") ? 4 : 2; });
   // v31.2: 配合限定特能。系統の申し子＝全能力+3、覇道の血脈＝全能力+2かつスタミナ+3
@@ -88,6 +90,12 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   // 決着（finishAbilityは素のclimb/sprint参照）や平坦に届かず、+3全能力の系統の申子に見劣りしていた。
   // 二本柱である登坂とスプリントの素地を底上げ（+2/+2）し、フィニッシュにも効く二刀流に。
   if (hasAbility(r, "hybrid")) { e.climb += 2; e.sprint += 2; }
+  // 第15弾: 血脈レシピ達成の伝説特能（配合限定のさらに上位）。全能力への一律上乗せ分
+  if (hasAbility(r, "revenant")) AB_KEYS.forEach(k => { e[k] += 4; });
+  if (hasAbility(r, "twinsoul")) AB_KEYS.forEach(k => { e[k] += 3; });
+  if (hasAbility(r, "destiny")) AB_KEYS.forEach(k => { e[k] += 5; });
+  if (hasAbility(r, "unfallen")) AB_KEYS.forEach(k => { e[k] += 4; });
+  if (hasAbility(r, "sovereign")) AB_KEYS.forEach(k => { e[k] += 6; });
   // v29: 体格（パワーウェイト）。軽いほど登坂有利・重いほど平坦/独走有利
   const build = r.build ?? 50;
   e.climb *= 1 + (50 - build) / 300;
@@ -196,6 +204,11 @@ export function segmentAbility(segType, e, steepness) {
   if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += hasGoldAbility(e, "closer") ? 8 : 4;
   // v31.2: 配合限定「二刀流」。丘陵・山岳・スプリントの各区間で+5（登坂型とスプリント型の血を併せ持つ証）
   if (hasAbility(e, "hybrid") && ["hill", "climb", "mtn", "sprint"].includes(segType)) ab += 5;
+  // 第15弾: 血脈レシピ達成の伝説特能。万能の極致(twinsoul)＝全地形+4（二刀流の対象地形を拡張した上位互換）、
+  // 不落の血(unfallen)＝登坂・山岳特化+6、絶対王者の血(sovereign)＝全地形+5
+  if (hasAbility(e, "twinsoul")) ab += 4;
+  if (hasAbility(e, "unfallen") && ["climb", "mtn"].includes(segType)) ab += 6;
+  if (hasAbility(e, "sovereign")) ab += 5;
   // v37(第2弾): 岳人＝丘/登/山で+4、重量級（悪特性）＝登/山で-4
   if (hasAbility(e, "allclimber") && ["hill", "climb", "mtn"].includes(segType)) ab += hasGoldAbility(e, "allclimber") ? 8 : 4;
   if (hasAbility(e, "heavy") && ["climb", "mtn"].includes(segType)) ab -= 4;
@@ -337,7 +350,9 @@ function energyDrain(en, mode, segType, steepness) {
   // v35: 献身のアシストに徹する選手は、賢く脚を使って（無駄に踏み過ぎず）自滅を避ける。
   // 長丁場のクリテ等で牽引しすぎて千切れ、自分もエースも大敗する事故を防ぐ。
   const assistMul = en.isAssisting ? 0.78 : 1;
-  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul * terrainEcoMul * brk * assistMul;
+  // 第15弾: 血脈レシピ達成の伝説特能。不落の血(unfallen)＝消耗-10%、絶対王者の血(sovereign)＝消耗-8%
+  const legendEco = hasAbility(en, "unfallen") ? 0.90 : hasAbility(en, "sovereign") ? 0.92 : 1;
+  return TICK_SEC * (1 - en.stamina / 150) * DRAIN_K * effortCost(mode, segType, steepness) * roleTerrainMismatchMul(en.role, segType) * engineMul * terrainEcoMul * brk * assistMul * legendEco;
 }
 
 export function canPull(en, segType) {
@@ -708,6 +723,8 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             const finishKick = (hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0)
               // v37: 剛脚の差し脚＝最終直線の追い込みがさらに鋭い（finisherと重複可）／勝負弱い＝鈍る（悪特性）
               + (hasAbility(en, "kicker") ? (hasGoldAbility(en, "kicker") ? 0.05 : 0.03) : 0)
+              // 第15弾: 血脈レシピ「雪辱の継承」＝最終直線の追い込みがさらに鋭くなる
+              + (hasAbility(en, "revenant") ? 0.04 : 0)
               - (hasAbility(en, "choke") ? 0.03 : 0)
               // v38: リードアウト役が同集団で射出してくれているエースは、風除け＋加速で伸びる（スリングショット）
               + (slingshotAceIds.has(en.id) ? 0.045 : 0)
