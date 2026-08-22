@@ -185,7 +185,7 @@ export const BASE_VIEW_PROPS = {
   bikeRack: { w: 5.2, l: -4.2 },
   // 第19弾: 旧位置(5.8, 4.8)はクラブハウスの壁の真裏で、カメラからほぼ完全に隠れていた
   // （ドット絵化の試作時に発覚した既存の配置問題）。正面広場の駐輪ラック脇へ移動。
-  teamCar: { w: 6.4, l: -4.9 },
+  teamCar: { w: 6.8, l: -4.35 },
 };
 
 // Wave F-1: 敷地の見た目だけを変える購入枠（data/items.jsのEQUIPS.grounds、g.equip.grounds

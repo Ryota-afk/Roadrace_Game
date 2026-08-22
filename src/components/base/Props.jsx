@@ -36,9 +36,11 @@ function bikeRackNode(w, l, proj, key) {
 // チームカーの記号として追加。
 function teamCarNode(w, l, proj, key) {
   const base = isoProject(w, l, 0, proj);
+  // 影は車体の長軸（+l方向＝画面右上がり・約-27°）に沿って寝かせ、車体幅に収める。
+  // 水平のまま大きくすると右下へはみ出して水たまりに見える（2026-08ユーザー指摘）。
   return pixelObjectNode({
     x: base.x, y: base.y, data: OBJ_SPRITES.teamCar, key,
-    cacheKey: "obj-teamCar", shadowRx: 29.5, shadowRy: 14.5,
+    cacheKey: "obj-teamCar", shadowRx: 21, shadowRy: 8, shadowDx: -1, shadowDy: -4, shadowRot: -27,
   });
 }
 

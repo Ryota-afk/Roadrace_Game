@@ -13,16 +13,19 @@ export const OBJ_PX = 0.5;
 // data: OBJ_SPRITESのエントリ。x,y: 接地点のスクリーン座標。legend省略時はdata.legend。
 // shadowRx/Ry: 足元の影楕円。省略時はスプライト幅から自動（旧ノードが自前で敷いていた影の置き換え）。
 // shadowRx: 0 を渡すと影なし。
-export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowRx, shadowRy }) {
+// shadowDx/Dy/Rot: 影の中心オフセットと回転（度）。細長い物（チームカー等）はアイソメの
+// 対角に沿って寝かせないと、水平の楕円が車体からはみ出して水たまりに見える。
+export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowRx, shadowRy, shadowDx = 0, shadowDy = 0, shadowRot = 0 }) {
   const s = spriteImageUrl(data.rows, legend || data.legend || OBJ_LEGEND, cacheKey);
   const w = +(s.w * OBJ_PX).toFixed(2), h = +(s.h * OBJ_PX).toFixed(2);
   const rx = shadowRx == null ? +(w * 0.42).toFixed(1) : shadowRx;
   const ry = shadowRy == null ? +(rx * 0.48).toFixed(1) : shadowRy;
   const ox = +(-data.anchorCol * OBJ_PX).toFixed(2);
   const oy = +(-(data.anchorRow + 1) * OBJ_PX).toFixed(2);
+  const shTf = `translate(${shadowDx},${shadowDy})` + (shadowRot ? ` rotate(${shadowRot})` : "");
   return (
     <g key={key} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-      {rx > 0 && <ellipse cx="0" cy="0" rx={rx} ry={ry} fill="#000" opacity="0.14" />}
+      {rx > 0 && <ellipse cx="0" cy="0" rx={rx} ry={ry} fill="#000" opacity="0.14" transform={shTf} />}
       <image href={s.url} x={ox} y={oy} width={w} height={h} style={{ imageRendering: "pixelated" }} />
     </g>
   );
