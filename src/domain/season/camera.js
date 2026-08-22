@@ -39,7 +39,7 @@ export function sceneContentBounds({ proj, land, plaza, loop, buildings, props }
   }
   const propLists = [props?.backTrees, props?.trees, props?.benches, props?.lamps, props?.groundsDecor];
   for (const list of propLists) for (const o of list || []) add(o.w, o.l, 34);
-  for (const o of [props?.bikeRack, props?.teamCar, props?.canal]) if (o) add(o.w, o.l, 20);
+  for (const o of [props?.bikeRack, props?.teamCar]) if (o) add(o.w, o.l, 20);
 
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
   const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;

@@ -46,13 +46,6 @@ function teamCarNode(w, l, proj, key) {
   });
 }
 
-// 第20弾: 水路（Gシートのタイルを合成した焼き込みスプライト）。敷地左奥の縁を流れる。
-// 接地面いっぱいの造形＝影なし。
-function canalNode(w, l, proj, key) {
-  const p = isoProject(w, l, 0, proj);
-  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.canal, key, cacheKey: "obj-canal", noShadow: true });
-}
-
 // Wave F-1: 敷地整備（g.equip.grounds、施設ショップの新規購入枠）で段階的に解禁される
 // 屋外装飾。第19弾でreference/F.pngから抽出したドット絵へ全面差し替え（手続きSVG全廃）。
 // 池・生け垣・ジム・アーチ・噴水はいずれも接地面いっぱいの造形なので足元の影楕円は敷かない
@@ -71,7 +64,6 @@ export function propItems(proj, props, palette) {
   (props.lamps || []).forEach((l, i) => push(l.w, l.l, () => lampNode(l.w, l.l, proj, `lamp${i}`)));
   if (props.bikeRack) push(props.bikeRack.w, props.bikeRack.l, () => bikeRackNode(props.bikeRack.w, props.bikeRack.l, proj, "rack"));
   if (props.teamCar) push(props.teamCar.w, props.teamCar.l, () => teamCarNode(props.teamCar.w, props.teamCar.l, proj, "car"));
-  if (props.canal && OBJ_SPRITES.canal) push(props.canal.w, props.canal.l, () => canalNode(props.canal.w, props.canal.l, proj, "canal"));
   (props.groundsDecor || []).forEach((d) => {
     if (OBJ_SPRITES[d.kind]) push(d.w, d.l, () => decorNode(d.kind, d.w, d.l, proj, d.key));
   });

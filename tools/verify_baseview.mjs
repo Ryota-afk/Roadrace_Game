@@ -8,10 +8,10 @@
 import {
   BASE_VIEW_CLUBHOUSE, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_STATIONS,
   BASE_VIEW_FIXTURES, BASE_VIEW_STAFF, BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_LOOP,
-  BASE_VIEW_PROPS, BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_PLAZA, BASE_VIEW_GROUND,
+  BASE_VIEW_PROPS, BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_STREAM,
 } from "../src/data/baseViewBuildings.js";
 import { routeToStation, workSpotFor } from "../src/domain/season/riderActivity.js";
-import { loopPointAt, loopNearestT, loopDistanceTo } from "../src/domain/season/baseViewLayout.js";
+import { loopPointAt, loopNearestT, loopDistanceTo, streamCenterlinePts } from "../src/domain/season/baseViewLayout.js";
 import { OBJ_SPRITES } from "../src/components/sprites/pixelObjectData.js";
 
 const errs = [];
@@ -114,7 +114,6 @@ const outdoorObs = [
   ...BASE_VIEW_PROPS.benches.map(t => ({ ...t, key: "bench" })),
   ...BASE_VIEW_PROPS.lamps.map(t => ({ ...t, key: "lamp" })),
   { ...BASE_VIEW_PROPS.teamCar, key: "teamCar" },
-  { ...BASE_VIEW_PROPS.canal, key: "canal" },
   ...BASE_VIEW_GROUNDS_DECOR.filter(d => d.kind !== "arch").map(d => ({ ...d, key: d.key })),
   // archは意図的にゲートとして動線上に置く（くぐる演出）ため除外
 ];
@@ -148,10 +147,8 @@ for (let i = 0; i < 200; i++) {
 // （bbox幅px = (w辺+l辺)×26。anchor = 菱形中心から(+s/2,-s/2)、s=(w辺+l辺)/2）、
 // 輪郭サンプルの中心線最短距離が 帯半幅+0.1 を下回ったら違反。2026-08にpond3が
 // 実際にコースへ0.2ユニット乗り上げていた（点座標だけ見て実寸を見ていなかった穴）。
-const bigSprites = [
-  ...["pond", "pond2", "pond3"].map(k => [k, BASE_VIEW_GROUNDS_DECOR.find(d => d.key === "pond")]),
-  ["canal", BASE_VIEW_PROPS.canal],
-];
+const bigSprites = ["pond", "pond2", "pond3"]
+  .map(k => [k, BASE_VIEW_GROUNDS_DECOR.find(d => d.key === "pond")]);
 for (const [key, anchor] of bigSprites) {
   const spr = OBJ_SPRITES[key];
   if (!spr || !anchor) continue;
@@ -165,6 +162,21 @@ for (const [key, anchor] of bigSprites) {
   }
   if (worst < BASE_VIEW_LOOP.trackHalfWidth + 0.1) {
     errs.push(`大型スプライト${key}がコース帯に接近/重なり: 中心線まで${worst.toFixed(2)} (< ${(BASE_VIEW_LOOP.trackHalfWidth + 0.1).toFixed(2)})`);
+  }
+}
+
+// ---- 7. 小川がコース帯・前庭に乗り上げないこと ----
+// 小川の帯は土手込みで画面約11px＝中心線から約0.25ユニット。帯半幅+0.3のクリアランスを要求。
+for (const p of streamCenterlinePts(BASE_VIEW_STREAM, 60)) {
+  const onLand = p.w >= BASE_VIEW_GROUND.wMin && p.w <= BASE_VIEW_GROUND.wMax
+    && p.l >= BASE_VIEW_GROUND.lMin && p.l <= BASE_VIEW_GROUND.lMax;
+  if (!onLand) continue; // 両端は意図的に敷地の外（海）へ抜ける
+  const d = loopDistanceTo(BASE_VIEW_LOOP, p.w, p.l);
+  if (d < BASE_VIEW_LOOP.trackHalfWidth + 0.3) {
+    errs.push(`小川がコース帯に接近: (${p.w.toFixed(2)},${p.l.toFixed(2)}) 中心線まで${d.toFixed(2)}`);
+  }
+  if (p.w > BASE_VIEW_PLAZA.wMin - 0.3) {
+    errs.push(`小川が前庭舗装に接近: (${p.w.toFixed(2)},${p.l.toFixed(2)})`);
   }
 }
 

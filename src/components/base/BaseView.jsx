@@ -17,7 +17,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { T, FONT_DOT } from "../../data/theme.js";
 import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
-  BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
+  BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS, BASE_VIEW_STREAM,
   BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_PARTITION_HEIGHT,
   BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_FIXTURES, BASE_VIEW_STAFF,
 } from "../../data/baseViewBuildings.js";
@@ -38,6 +38,7 @@ import { Room } from "./Room.jsx";
 import { Station } from "./Station.jsx";
 import { Track } from "./Track.jsx";
 import { Ground } from "./Ground.jsx";
+import { Stream } from "./Stream.jsx";
 import { propItems } from "./Props.jsx";
 import { fixtureItems } from "./Fixtures.jsx";
 import { PixelPerson } from "../sprites/pixelPerson.jsx";
@@ -248,6 +249,17 @@ export function BaseView({ g, paused, onRoomTap }) {
             <g transform={camera.transform}>
               <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill={palette.grass} stroke={palette.plazaEdge} strokeWidth="1.5" opacity="0.9" />
               <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
+              {/* 小川は敷地（陸地）ポリゴンでクリップ：両端は敷地の外まで引いてあるため、
+                  岸線でぴったり切れて「海へ合流して続いている」ように見える（丸い線端が
+                  海の上に浮くのを防ぐ） */}
+              <defs>
+                <clipPath id="bv-land-clip">
+                  <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} />
+                </clipPath>
+              </defs>
+              <g clipPath="url(#bv-land-clip)">
+                <Stream proj={PROJ} stream={BASE_VIEW_STREAM} palette={palette} />
+              </g>
               <Track proj={PROJ} loop={BASE_VIEW_LOOP} rack={BASE_VIEW_PROPS.bikeRack} />
               {drawOrder.map((item, i) => {
                 if (item.kind === "clubhouse") return (

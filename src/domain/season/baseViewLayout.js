@@ -334,6 +334,27 @@ export function roomUnlocks(g) {
   };
 }
 
+// ---- 小川（第20弾） ----
+// stream: { points: [{w,l},...] }（開いた折れ線）。Catmull-Romで滑らかにしたn点の
+// 中心線サンプルを返す。描画（components/base/Stream.jsx）と機械検証
+// （tools/verify_baseview.mjsのコース帯との距離チェック）の両方から同じ関数を使う。
+export function streamCenterlinePts(stream, n) {
+  const pts = stream.points;
+  const P = (i) => pts[Math.max(0, Math.min(pts.length - 1, i))];
+  const segs = pts.length - 1;
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const t = (k / (n - 1)) * segs;
+    const i = Math.min(segs - 1, Math.floor(t));
+    const u = t - i;
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    const cr = (a, b, c, d) => 0.5 * ((2 * b) + (-a + c) * u
+      + (2 * a - 5 * b + 4 * c - d) * u * u + (-a + 3 * b - 3 * c + d) * u * u * u);
+    out.push({ w: cr(p0.w, p1.w, p2.w, p3.w), l: cr(p0.l, p1.l, p2.l, p3.l) });
+  }
+  return out;
+}
+
 // 旧・角丸オーバル周回路（roundedLoopPoint/nearestLoopT/riderLoopPoint/riderFacesLeft/
 // trackCenterline/groundZone/trackRibbon）は第20弾の多角形周回路（上記buildPolyLoop系）へ
 // 一般化して置き換え、参照ゼロになったため削除した（git履歴から復元可能）。
