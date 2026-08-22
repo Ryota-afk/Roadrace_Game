@@ -115,17 +115,74 @@ export function polylineAt(pts, u) {
   return { ...pts[pts.length - 1] };
 }
 
-// 行き先の決定（ユーザー選択①A：ゲーム状態に連動）。
-// 疲労が高い選手ほどメディカル室へ行きやすい＝拠点を一目見て「誰か医務室にいる＝疲れてるな」
-// と分かる＝装飾ではなく情報になる。gは読み取りのみ（状態を変更しない）。
-export function destinationFor(riderId, fatigue, cycleIndex, roomKeys) {
-  const medical = roomKeys.includes("medical") ? "medical" : roomKeys[0];
-  const tired = Math.max(0, Math.min(1, ((fatigue || 0) - 35) / 50)); // 疲労35→0, 85→1
-  if (riderHash01(riderId * 31 + cycleIndex, 71) < 0.12 + tired * 0.6) return medical;
-  const rest = roomKeys.filter(k => k !== medical);
-  if (rest.length === 0) return medical;
-  const i = Math.floor(riderHash01(riderId * 17 + cycleIndex, 29) * rest.length);
-  return rest[Math.min(rest.length - 1, Math.max(0, i))];
+// 第21弾: 屋外の行き先（ベンチ・ジム・散歩）を組み込んだ「行き先」の重み表。
+// 疲労が高い選手ほどメディカル室、若手はトレーニング室やジム、パワー系の脚質
+// （SPR/RUL/PUN）はジムを好む、といった既存の「装飾ではなく情報」という思想の拡張。
+// gymは敷地整備Lv3で解禁されるまでカテゴリ自体が候補に入らない（ctx.hasGymで制御）。
+// 全て既存フィールド（fatigue/type/age）だけを参照し、選択はriderHash01で決定論的。
+const OUTDOOR_CATEGORY_WEIGHT = {
+  medical: (r) => 1.0 + Math.max(0, Math.min(1, ((r.fatigue || 0) - 35) / 50)) * 5.0,
+  training: (r) => (r.age <= 22 ? 1.6 : 1.0),
+  mechanic: () => 1.0,
+  scout: () => 1.0,
+  bench: (r) => {
+    const f = r.fatigue || 0;
+    let w = 1.5;
+    if (f >= 30 && f <= 60) w *= 1.6;
+    else if (f >= 85) w *= 0.4;
+    return w;
+  },
+  gym: (r) => {
+    let w = 1.2;
+    if (r.type === "SPR" || r.type === "RUL" || r.type === "PUN") w *= 1.8;
+    if (r.age <= 22) w *= 1.3;
+    return w;
+  },
+  stroll: () => 1.0,
+};
+const BENCH_KEYS = ["bench-plaza0", "bench-plaza1", "bench-home0", "bench-home1"];
+
+// 行き先の決定（ユーザー選択：屋外の行き先も含めゲーム状態に連動させる）。gは読み取りのみ
+// （状態を変更しない）。riderIndex（ロースター内の並び順）はベンチ・ジムの席割り当てに使う
+// （他の選手を見ない純関数のまま、同じ席に複数人が重ならないようにする）。
+export function destinationFor(rider, riderIndex, cycleIndex, ctx) {
+  const categories = ["medical", "training", "mechanic", "scout", "bench"];
+  if (ctx.hasGym) categories.push("gym");
+  categories.push("stroll");
+  const weights = categories.map(c => OUTDOOR_CATEGORY_WEIGHT[c](rider));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let x = riderHash01(rider.id * 31 + cycleIndex, 71) * total;
+  let category = categories[categories.length - 1];
+  for (let i = 0; i < categories.length; i++) {
+    if (x < weights[i]) { category = categories[i]; break; }
+    x -= weights[i];
+  }
+  if (category === "bench") return BENCH_KEYS[(riderIndex + cycleIndex) % BENCH_KEYS.length];
+  if (category === "gym") return `gym${(riderIndex + cycleIndex) % 3}`;
+  return category; // room key（training/mechanic/medical/scout）またはstroll
+}
+
+// 第21弾: BASE_VIEW_OUTDOOR_SPOTS（ベンチ・ジム・散歩）から、ラックを起点とする
+// [rack, ...waypoints, spot]の折れ線とポーズを組み立てる。ジムは3スロット分を
+// gym0/gym1/gym2として展開する。groundsLv未満のkindを持つ行き先（現状ジムのみ）は
+// 除外する＝ACTIVITY_CTXがゲーム状態（敷地整備Lv）に依存する理由（第20弾までは
+// モジュール読み込み時の静的構築だったが、この行き先解禁のため状態依存へ変更した）。
+export function buildOutdoorRoutes(rack, outdoorSpots, groundsLv) {
+  const routes = {}, poses = {};
+  for (const s of outdoorSpots || []) {
+    if (s.minLevel != null && (groundsLv || 0) < s.minLevel) continue;
+    if (s.kind === "gym") {
+      s.slots.forEach((slot, i) => {
+        const key = `${s.key}${i}`;
+        routes[key] = [{ ...rack }, ...s.waypoints, slot];
+        poses[key] = s.pose;
+      });
+    } else {
+      routes[s.key] = [{ ...rack }, ...s.waypoints, s.spot];
+      poses[s.key] = s.pose;
+    }
+  }
+  return { routes, poses };
 }
 
 const lerpPt = (a, b, u) => ({ w: a.w + (b.w - a.w) * u, l: a.l + (b.l - a.l) * u });
@@ -138,7 +195,8 @@ function lerpLoopT(ta, tb, u) {
 }
 
 // 時刻tSecにおける選手の位置・モード・ポーズ。ctxは静的データ（data/baseViewBuildings.js由来）。
-export function riderActivityAt(rider, tSec, ctx) {
+// riderIndex（ロースター内の並び順・省略時0）はベンチ・ジムの席割り当てに使う（destinationFor参照）。
+export function riderActivityAt(rider, tSec, ctx, riderIndex = 0) {
   const { loop, rack, speed, roomKeys } = ctx;
   const phase = riderHash01(rider.id, 53);
   const tt = tSec + phase * ACTIVITY_CYCLE;
@@ -168,7 +226,7 @@ export function riderActivityAt(rider, tSec, ctx) {
   const loopT = (t) => ((nT + (t - tCycleStart) * speed) % 1 + 1) % 1;
   const onLoop = (t) => loopPointAt(loop, loopT(t));
 
-  const roomKey = destinationFor(rider.id, rider.fatigue, cycleIndex, roomKeys);
+  const roomKey = destinationFor(rider, riderIndex, cycleIndex, ctx);
   const route = ctx.routes[roomKey] || ctx.routes[roomKeys[0]];
   const spot = route[route.length - 1];
   const spotPose = ctx.poses[roomKey] || "stand";
@@ -214,9 +272,9 @@ export function activityWobble(rider, act, tSec) {
 // 上回って実際の見た目の動きが逆転することがあり、「NEへ進もうとしているのにNW向きに
 // 見える（逆もまた然り）」という間欠的なバグになっていた（実機でユーザーが発見）。
 // 向き判定にも同じゆらぎを加えて実際の描画位置と一致させることで解消する。
-export function activityFacesLeft(rider, tSec, ctx, proj) {
-  const a = riderActivityAt(rider, tSec, ctx);
-  const b = riderActivityAt(rider, tSec + 0.12, ctx);
+export function activityFacesLeft(rider, tSec, ctx, proj, riderIndex = 0) {
+  const a = riderActivityAt(rider, tSec, ctx, riderIndex);
+  const b = riderActivityAt(rider, tSec + 0.12, ctx, riderIndex);
   const wa = activityWobble(rider, a, tSec), wb = activityWobble(rider, b, tSec + 0.12);
   const pa = isoProject(a.w, a.l + wa, 0, proj), pb = isoProject(b.w, b.l + wb, 0, proj);
   if (Math.abs(pb.x - pa.x) < 0.01) return false; // 静止中は向きを変えない
@@ -228,9 +286,9 @@ export function activityFacesLeft(rider, tSec, ctx, proj) {
 // 「SE系（下向き）」か「NE系（上向き）」かが決まる。左右はactivityFacesLeftのflipが担当し、
 // 本関数はその直交する軸（上下）を担当する。静止中・純水平移動中はSEをデフォルトにする。
 // activityFacesLeftと同じ理由でriderWanderの横ゆらぎを加えてから判定する。
-export function activityDir(rider, tSec, ctx, proj) {
-  const a = riderActivityAt(rider, tSec, ctx);
-  const b = riderActivityAt(rider, tSec + 0.12, ctx);
+export function activityDir(rider, tSec, ctx, proj, riderIndex = 0) {
+  const a = riderActivityAt(rider, tSec, ctx, riderIndex);
+  const b = riderActivityAt(rider, tSec + 0.12, ctx, riderIndex);
   const wa = activityWobble(rider, a, tSec), wb = activityWobble(rider, b, tSec + 0.12);
   const pa = isoProject(a.w, a.l + wa, 0, proj), pb = isoProject(b.w, b.l + wb, 0, proj);
   if (Math.abs(pb.y - pa.y) < 0.01) return "SE";

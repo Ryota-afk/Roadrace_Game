@@ -294,3 +294,35 @@ export const BASE_VIEW_GROUNDS_DECOR = [
   { key: "arch", minLevel: 4, kind: "arch", w: 2.6, l: -5.4 },
   { key: "fountain", minLevel: 5, kind: "fountain", w: 12.2, l: -5.4 },
 ];
+
+// 第21弾: 選手が屋外でも過ごす行き先（ベンチ・ジム・散歩）。devlog/wave21.mdの設計に基づく。
+// ラックからの経路は[rack, ...waypoints, spot]で組み立てる
+// （domain/season/riderActivity.jsのbuildOutdoorRoutes()）。waypointsは木・ランプ・
+// ベンチ・コース帯とのクリアランスをtools/verify_baseview.mjsで機械検証してある。
+// 前庭ベンチ2脚（bench-plaza0/1）は玄関前広場の敷地奥・ランプ(3.9,0.2)を避けて中継点
+// (5.1,0.2)経由で入り、bench1はさらに(5.2,2.8)でbench0の脇を回り込む。
+// ホームストレート観戦ベンチ2脚（bench-home0/1）・ジム・散歩は敷地南辺の徒歩帯
+// l=-5.8（敷地奥の桜並木backTrees l:-7.0〜-7.6から0.8以上・コース中心線から0.7の
+// クリアランス。lamp(0.5,-6.6)からも0.8）を共用し、そこから各行き先へ折れる。
+// 前庭ベンチ・ホームストレートベンチ・散歩はコース非横断、ジムだけがインフィールドに
+// ありl=-5.8→l=-4.0の縦移動でコースを1回だけ横断する（検証器がこの横断回数を機械チェック）。
+export const BASE_VIEW_OUTDOOR_SPOTS = [
+  { key: "bench-plaza0", kind: "bench", spot: { w: 4.3, l: 2.4 }, pose: "sit", flip: false,
+    waypoints: [{ w: 5.1, l: 0.2 }] },
+  { key: "bench-plaza1", kind: "bench", spot: { w: 4.2, l: 3.6 }, pose: "sit", flip: false,
+    waypoints: [{ w: 5.1, l: 0.2 }, { w: 5.2, l: 2.8 }] },
+  { key: "bench-home0", kind: "bench", spot: { w: -1.6, l: -6.6 }, pose: "sit", flip: true,
+    waypoints: [{ w: 2.8, l: -5.8 }, { w: -1.6, l: -5.8 }] },
+  { key: "bench-home1", kind: "bench", spot: { w: -4.8, l: -6.6 }, pose: "sit", flip: true,
+    waypoints: [{ w: 2.8, l: -5.8 }, { w: -4.8, l: -5.8 }] },
+  // ジムは敷地整備Lv3で解禁（BASE_VIEW_GROUNDS_DECORのgymと同じ条件）。3人分の立ち位置
+  // スロットを用意し、選手の並び順で衝突なく割り当てる（domain層のriderIndex参照）。
+  { key: "gym", kind: "gym", pose: "stand", minLevel: 3,
+    waypoints: [{ w: 2.8, l: -5.8 }, { w: -4.3, l: -5.8 }, { w: -4.3, l: -4.0 }],
+    slots: [{ w: -3.6, l: -2.2 }, { w: -5.0, l: -2.2 }, { w: -4.3, l: -3.6 }] },
+  // 散歩：敷地南辺→西側の外周コリドー（コースと敷地西縁の間）を歩いて折り返す。
+  // ジム同様コース南辺の徒歩帯を通るが、コースの外側（w<-6.9）を進むため横断はゼロ。
+  { key: "stroll", kind: "stroll", pose: "walk",
+    waypoints: [{ w: 2.8, l: -5.8 }, { w: -6.9, l: -5.8 }, { w: -8.5, l: -5.0 }],
+    spot: { w: -8.5, l: -0.5 } },
+];

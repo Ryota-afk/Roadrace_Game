@@ -19,7 +19,7 @@ import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS, BASE_VIEW_STREAM,
   BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_PARTITION_HEIGHT,
-  BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_FIXTURES, BASE_VIEW_STAFF,
+  BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_FIXTURES, BASE_VIEW_STAFF, BASE_VIEW_OUTDOOR_SPOTS,
 } from "../../data/baseViewBuildings.js";
 import {
   isoProject, buildingLevels, roomGrade, roomUnlocks, seasonOf,
@@ -27,6 +27,7 @@ import {
 } from "../../domain/season/baseViewLayout.js";
 import {
   riderActivityAt, activityFacesLeft, activityDir, activityWobble, isIndoors, routeToStation, workSpotFor,
+  buildOutdoorRoutes,
 } from "../../domain/season/riderActivity.js";
 import { pickChatters } from "../../domain/season/riderChatter.js";
 import { sceneContentBounds } from "../../domain/season/camera.js";
@@ -119,10 +120,11 @@ const CLUBHOUSE_QUAD = roomFloorQuad(BASE_VIEW_CLUBHOUSE, BASE_VIEW_PROJ);
 // Wave F-2 redo: 空き部屋はSTATION_QUADSに含めない＝タップ判定は従来通り床全体(clubhouse)
 // へフォールバックする（機能が無い部屋なので専用の遷移先を持たない）。
 
-// Wave F-3a: 選手の行動（周回⇔屋内の往復）を解くための静的な文脈。レイアウトは不変なので
-// モジュール読み込み時に一度だけ組み立てる。歩行ルートは壁データ(BASE_VIEW_PARTITIONS)の
-// 「壁が無い区間」＝扉から機械的に導出されるため、壁を通り抜ける経路が発生しない。
-const ACTIVITY_CTX = (() => {
+// Wave F-3a〜第21弾: 選手の行動（周回⇔屋内外の往復）を解くための文脈。屋内の部屋（training/
+// mechanic/medical/scout）は不変なので毎回同じだが、屋外の行き先（第21弾: ベンチ・ジム・散歩）
+// はジムが敷地整備Lv3で解禁されるため、groundsLvに応じてctxを組み直す必要がある
+// （BaseView側でuseMemoしてg.equip.groundsが変わった時だけ再構築する）。
+function buildActivityCtx(groundsLv) {
   const base = {
     loop: BASE_VIEW_LOOP,
     rack: BASE_VIEW_PROPS.bikeRack,
@@ -140,11 +142,17 @@ const ACTIVITY_CTX = (() => {
     routes[k] = routeToStation(base, k);
     poses[k] = workSpotFor(k, BASE_VIEW_STATIONS.find(s => s.room === k), BASE_VIEW_FIXTURES).pose;
   }
-  return { ...base, roomKeys, routes, poses };
-})();
-// 第20弾: 部屋ごとの椅子の向き（flip）。座る選手の向きを椅子に揃えるための静的表。
-const CHAIR_FLIP = Object.fromEntries(
-  BASE_VIEW_FIXTURES.filter(f => f.kind === "chair").map(f => [f.room, !!f.flip]));
+  const outdoor = buildOutdoorRoutes(base.rack, BASE_VIEW_OUTDOOR_SPOTS, groundsLv);
+  Object.assign(routes, outdoor.routes);
+  Object.assign(poses, outdoor.poses);
+  const hasGym = BASE_VIEW_OUTDOOR_SPOTS.some(s => s.kind === "gym" && (groundsLv || 0) >= s.minLevel);
+  return { ...base, roomKeys, routes, poses, hasGym };
+}
+// 第20〜21弾: 座る選手の向き（flip）を、部屋の椅子／ベンチの向きに揃えるための静的表。
+const SIT_FLIP = Object.fromEntries([
+  ...BASE_VIEW_FIXTURES.filter(f => f.kind === "chair").map(f => [f.room, !!f.flip]),
+  ...BASE_VIEW_OUTDOOR_SPOTS.filter(s => s.kind === "bench").map(s => [s.key, !!s.flip]),
+]);
 
 export function BaseView({ g, paused, onRoomTap }) {
   const elapsed = useElapsedSeconds(!!paused);
@@ -167,12 +175,18 @@ export function BaseView({ g, paused, onRoomTap }) {
   const unlocks = roomUnlocks(g);
   const palette = BASE_VIEW_SEASON_PALETTE[seasonOf(g.month)];
   const snow = !!palette.snow;
+  // Wave F-1: 施設ショップの「敷地整備」(g.equip.grounds、Lv0〜5)。旧セーブに未存在の
+  // ことがあるためstaff.scout等と同じ`|| 0`ガードを踏襲する。第21弾: ジムの解禁判定にも
+  // 使うため、この値が変わった時だけ行動文脈(activityCtx)を組み直す。
+  const groundsLv = g.equip.grounds || 0;
+  const activityCtx = React.useMemo(() => buildActivityCtx(groundsLv), [groundsLv]);
 
   const roster = (g.roster || []).slice(0, 12);
   // Wave F-3a: 選手ごとの「今なにをしているか」を時刻の純関数として解く
-  // （周回／コース⇔ラックの移動／徒歩での往復／持ち場での作業）。
-  const riderRows = roster.map(r => {
-    const act = riderActivityAt(r, elapsed, ACTIVITY_CTX);
+  // （周回／コース⇔ラックの移動／徒歩での往復／持ち場での作業）。riderIndex（並び順）は
+  // 第21弾でベンチ・ジムの席割り当てに使う（destinationFor参照）。
+  const riderRows = roster.map((r, riderIndex) => {
+    const act = riderActivityAt(r, elapsed, activityCtx, riderIndex);
     // 周回中だけ左右のゆらぎを加える（歩行中は経路上をまっすぐ進ませる）。
     // activityFacesLeft/activityDirの向き判定も同じactivityWobbleを使っており、
     // 実際の描画位置と向き判定がズレないようにしてある（Wave G-1改で発覚したバグの修正）。
@@ -180,15 +194,15 @@ export function BaseView({ g, paused, onRoomTap }) {
     const p = isoProject(act.w, act.l + wob, 0, PROJ);
     // 第20弾: 静止ポーズの向きは移動方向からは決まらないため、什器に合わせて固定する。
     //  - roller: st_rollerの台の長軸は+l（画面右上がり）＝NE向き・非反転
-    //  - sit: 椅子(chair)スプライトの向き（素=SW/左向き、flip=SE/右向き）に人も揃える
+    //  - sit: 椅子・ベンチの向き（素=SW/左向き、flip=SE/右向き）に人も揃える
     const still = act.pose === "roller" || act.pose === "sit";
-    const chairFlip = act.pose === "sit" && CHAIR_FLIP[act.roomKey];
+    const chairFlip = act.pose === "sit" && SIT_FLIP[act.roomKey];
     return {
       kind: "rider", r, act, x: p.x, y: p.y, sortY: p.y,
       indoors: isIndoors(act.w, act.l, BASE_VIEW_CLUBHOUSE),
       flip: still ? (act.pose === "sit" ? !chairFlip : false)
-        : activityFacesLeft(r, elapsed, ACTIVITY_CTX, PROJ),
-      dir: act.pose === "roller" ? "NE" : activityDir(r, elapsed, ACTIVITY_CTX, PROJ),
+        : activityFacesLeft(r, elapsed, activityCtx, PROJ, riderIndex),
+      dir: act.pose === "roller" ? "NE" : activityDir(r, elapsed, activityCtx, PROJ, riderIndex),
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
       color: (TYPES[r.type] && TYPES[r.type].color) || T.color.accent,
       phase: riderHash01(r.id, 91) * 4, // 歩調・ペダリングが全員で揃わないようずらす
@@ -224,9 +238,6 @@ export function BaseView({ g, paused, onRoomTap }) {
   // 部屋＋全持ち場を1つのdrawOrderエントリにまとめ、内部では必ず「床→什器」の順で描くことで
   // 解消する（他の要素＝小物・選手との奥行き比較には部屋のsortYをそのまま使う）。
   const clubhouseRow = { kind: "clubhouse", sortY: Math.max(...CLUBHOUSE_QUAD.map(p => p.y)) };
-  // Wave F-1: 施設ショップの「敷地整備」(g.equip.grounds、Lv0〜5)で段階的に解禁される
-  // 屋外装飾。旧セーブに未存在のことがあるためstaff.scout等と同じ`|| 0`ガードを踏襲する。
-  const groundsLv = g.equip.grounds || 0;
   // 第19弾G: 池は敷地整備Lvで見た目が育つ（Lv1〜2小さな池(F-34) → Lv3〜4中型豪華池(H-48)
   // → Lv5巨大豪華池(I-49)）。位置・解禁Lvはdata側のまま、描くスプライトのkindだけ差し替える。
   const pondKind = groundsLv >= 5 ? "pond3" : groundsLv >= 3 ? "pond2" : "pond";
@@ -248,16 +259,21 @@ export function BaseView({ g, paused, onRoomTap }) {
           {camera.ready && (
             <g transform={camera.transform}>
               <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill={palette.grass} stroke={palette.plazaEdge} strokeWidth="1.5" opacity="0.9" />
-              <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
-              {/* 小川は敷地（陸地）ポリゴンでクリップ：両端は敷地の外まで引いてあるため、
+              {/* 第21弾: 芝の装飾（Ground）と小川は敷地（陸地）ポリゴンでクリップする。
+                  Groundの濃淡パッチ（中心から半幅1.1の菱形）は散布点が縁ぎりぎりだと
+                  必ず菱形の一部が敷地の外へはみ出し、海の上に緑の四角が浮いて見えていた
+                  （2026-08ユーザー指摘。実測：14枚中7枚がはみ出し・うち3枚は中心が海上）。
+                  座標を個別調整するのではなく陸地の形で機械的に切ることで、散布数や
+                  ジッター幅を変えても再発しない。小川も両端が敷地の外まで引いてあるため、
                   岸線でぴったり切れて「海へ合流して続いている」ように見える（丸い線端が
-                  海の上に浮くのを防ぐ） */}
+                  海の上に浮くのを防ぐ）。 */}
               <defs>
                 <clipPath id="bv-land-clip">
                   <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} />
                 </clipPath>
               </defs>
               <g clipPath="url(#bv-land-clip)">
+                <Ground proj={PROJ} ground={BASE_VIEW_GROUND} plaza={BASE_VIEW_PLAZA} loop={BASE_VIEW_LOOP} palette={palette} bounds={SCENE_BOUNDS} />
                 <Stream proj={PROJ} stream={BASE_VIEW_STREAM} palette={palette} />
               </g>
               <Track proj={PROJ} loop={BASE_VIEW_LOOP} rack={BASE_VIEW_PROPS.bikeRack} />

@@ -113,4 +113,20 @@ export const BASE_VIEW_CHATTER = [
   { when: "scout", persona: "maverick", state: null, text: "他人は関係ない" },
   { when: "scout", persona: "showman", state: null, text: "俺が一番だろ" },
   { when: "scout", persona: "tactician", state: null, text: "相手の弱点を探る" },
+
+  // ── 屋外（ベンチ・ジム）第21弾 ──────────────────────
+  { when: "bench", persona: null, state: null, text: "ちょっと休憩" },
+  { when: "bench", persona: null, state: null, text: "いい天気だな" },
+  { when: "bench", persona: null, state: null, text: "水分補給しとくか" },
+  { when: "bench", persona: null, state: "tired", text: "少し座らせてくれ" },
+  { when: "bench", persona: null, state: "injured", text: "無理はしない" },
+  { when: "bench", persona: null, state: "hot", text: "調子いいから休むのも大事" },
+  { when: "bench", persona: null, state: "cold", text: "ぼーっとするか" },
+  { when: "gym", persona: null, state: null, text: "体幹を鍛えるか" },
+  { when: "gym", persona: null, state: null, text: "地力をつけないと" },
+  { when: "gym", persona: null, state: null, text: "もう少しやろう" },
+  { when: "gym", persona: null, state: "tired", text: "軽めに済ませる" },
+  { when: "gym", persona: null, state: "injured", text: "無理のない範囲で" },
+  { when: "gym", persona: null, state: "hot", text: "追い込めるな今日は" },
+  { when: "gym", persona: null, state: "cold", text: "気合を入れ直す" },
 ];

@@ -9,9 +9,10 @@ import {
   BASE_VIEW_CLUBHOUSE, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_STATIONS,
   BASE_VIEW_FIXTURES, BASE_VIEW_STAFF, BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_LOOP,
   BASE_VIEW_PROPS, BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_STREAM,
+  BASE_VIEW_OUTDOOR_SPOTS,
 } from "../src/data/baseViewBuildings.js";
-import { routeToStation, workSpotFor } from "../src/domain/season/riderActivity.js";
-import { loopPointAt, loopNearestT, loopDistanceTo, streamCenterlinePts } from "../src/domain/season/baseViewLayout.js";
+import { routeToStation, workSpotFor, buildOutdoorRoutes } from "../src/domain/season/riderActivity.js";
+import { loopPointAt, loopNearestT, loopDistanceTo, streamCenterlinePts, loopContains } from "../src/domain/season/baseViewLayout.js";
 import { OBJ_SPRITES } from "../src/components/sprites/pixelObjectData.js";
 
 const errs = [];
@@ -177,6 +178,66 @@ for (const p of streamCenterlinePts(BASE_VIEW_STREAM, 60)) {
   }
   if (p.w > BASE_VIEW_PLAZA.wMin - 0.3) {
     errs.push(`小川が前庭舗装に接近: (${p.w.toFixed(2)},${p.l.toFixed(2)})`);
+  }
+}
+
+// ---- 8. 第21弾: 屋外の行き先（ベンチ・ジム・散歩）のルート検証 ----
+// Lv5（ジム込み・全行き先が存在する状態）でルートを組み立てて検証する。
+function crossingCount(route, samplesPerSeg = 40) {
+  let count = 0, prevInside = null;
+  for (let i = 0; i + 1 < route.length; i++) {
+    for (let k = 0; k <= samplesPerSeg; k++) {
+      const t = k / samplesPerSeg;
+      const w = route[i].w + (route[i + 1].w - route[i].w) * t;
+      const l = route[i].l + (route[i + 1].l - route[i].l) * t;
+      const inside = loopContains(BASE_VIEW_LOOP, w, l);
+      if (prevInside !== null && inside !== prevInside) count++;
+      prevInside = inside;
+    }
+  }
+  return count;
+}
+const outdoorRoutes = buildOutdoorRoutes(rack, BASE_VIEW_OUTDOOR_SPOTS, 5).routes;
+for (const [destKey, route] of Object.entries(outdoorRoutes)) {
+  const endSpot = route[route.length - 1];
+  const spotDef = BASE_VIEW_OUTDOOR_SPOTS.find(s => destKey === s.key || destKey.startsWith(s.key));
+  // 敷地内に収まっていること
+  for (const p of route) {
+    if (p.w < BASE_VIEW_GROUND.wMin || p.w > BASE_VIEW_GROUND.wMax
+      || p.l < BASE_VIEW_GROUND.lMin || p.l > BASE_VIEW_GROUND.lMax) {
+      errs.push(`屋外ルート${destKey}: 中継点(${p.w},${p.l})が敷地の外`);
+    }
+  }
+  // 小物とのクリアランス（rack・自分自身の行き先は除外）
+  for (let i = 0; i + 1 < route.length; i++) {
+    for (const o of outdoorObs) {
+      const d = distToSeg(o, route[i], route[i + 1]);
+      // ジムの立ち位置スロットは、目的地であるgym装飾そのものの脇に立つのが意図した絵
+      // なので、gym decorだけは自分の行き先(gym0〜2)に限り除外する。
+      const isOwn = Math.hypot(o.w - endSpot.w, o.l - endSpot.l) < 1e-6
+        || Math.hypot(o.w - rack.w, o.l - rack.l) < 1e-6
+        || (spotDef && spotDef.kind === "gym" && o.key === "gym");
+      if (d < CLEAR_OUT && !isOwn) {
+        errs.push(`屋外ルート${destKey}: 区間${i}が ${o.key || o.kind}(${o.w},${o.l}) と近接 d=${d.toFixed(2)}`);
+      }
+    }
+  }
+  // コース帯の横断回数（ベンチ・散歩=0、ジム=1）
+  const crosses = crossingCount(route);
+  const expected = spotDef && spotDef.kind === "gym" ? 1 : 0;
+  if (crosses !== expected) {
+    errs.push(`屋外ルート${destKey}: コース横断回数${crosses} (期待値${expected})`);
+  }
+}
+// ベンチの着席位置・ジムの立ち位置スロットが互いに0.5以上離れていること
+const outdoorSeats = [
+  ...BASE_VIEW_OUTDOOR_SPOTS.filter(s => s.kind === "bench").map(s => ({ key: s.key, ...s.spot })),
+  ...BASE_VIEW_OUTDOOR_SPOTS.filter(s => s.kind === "gym").flatMap(s => s.slots.map((slot, i) => ({ key: `${s.key}${i}`, ...slot }))),
+];
+for (let i = 0; i < outdoorSeats.length; i++) {
+  for (let j = i + 1; j < outdoorSeats.length; j++) {
+    const d = Math.hypot(outdoorSeats[i].w - outdoorSeats[j].w, outdoorSeats[i].l - outdoorSeats[j].l);
+    if (d < 0.5) errs.push(`屋外の席が近すぎる: ${outdoorSeats[i].key} - ${outdoorSeats[j].key} d=${d.toFixed(2)}`);
   }
 }
 
