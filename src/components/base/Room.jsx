@@ -92,6 +92,12 @@ export function Room({ b, proj, snow, selected, rooms, partitions, partitionHeig
           })
         : <polygon points={poly([corners.N, corners.E, corners.S, corners.W])} fill={b.floor} stroke="#00000022" strokeWidth="0.6" />}
 
+      {/* 第20弾: 開放2辺（手前）の床の縁に低い段差を描き、床と前庭舗装（同系色）の境界を
+          はっきりさせる。これが無いと車や噴水が「屋内にある」ように見える（ユーザー指摘の
+          「地面の下にあるかのよう」と同種の錯視の予防）。 */}
+      <polygon points={poly([corners[left], corners[front], { x: corners[front].x, y: corners[front].y - 4 }, { x: corners[left].x, y: corners[left].y - 4 }])} fill="#00000030" />
+      <polygon points={poly([corners[front], corners[right], { x: corners[right].x, y: corners[right].y - 4 }, { x: corners[front].x, y: corners[front].y - 4 }])} fill="#00000030" />
+
       {/* 入口（扉）：開放辺(left-front)の中央に敷物＋短い枠柱を置き、出入口の目印にする */}
       <polygon points={poly([matA, matB, { x: matB.x, y: matB.y - 3 }, { x: matA.x, y: matA.y - 3 }])} fill="#8a6a45" opacity="0.85" />
       <line x1={doorJamb1.x.toFixed(1)} y1={doorJamb1.y.toFixed(1)} x2={doorJamb1Top.x.toFixed(1)} y2={doorJamb1Top.y.toFixed(1)} stroke="#5a4632" strokeWidth="1.6" />
@@ -115,12 +121,6 @@ export function Room({ b, proj, snow, selected, rooms, partitions, partitionHeig
         const shade = vertical ? b.wallDark : b.wallLight;
         return <polygon key={`part${i}`} points={poly([wp.botA, wp.botB, wp.topB, wp.topA])} fill={shade} opacity="0.85" stroke="#00000030" strokeWidth="0.5" />;
       })}
-
-      {/* 見出し：奥の角の上に部屋アイコン＋ラベルの小さな札 */}
-      <g transform={`translate(${topBack.x.toFixed(1)},${(topBack.y - 12).toFixed(1)})`}>
-        <rect x="-8" y="-9" width="16" height="14" rx="3" fill={b.accent} opacity="0.92" />
-        <text x="0" y="1.5" textAnchor="middle" fontSize="9" style={{ pointerEvents: "none" }}>{b.icon}</text>
-      </g>
 
       {/* タップ領域を視覚的に示す枠線（選択中のみ） */}
       {selected && <polygon points={poly([corners.N, corners.E, corners.S, corners.W])} fill="none" stroke="#ffffff" strokeWidth="1.4" opacity="0.5" />}

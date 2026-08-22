@@ -1,8 +1,10 @@
 // クラブハウス内の持ち場（什器）1つぶんの描画。Wave E-2 redoで新設。
-// 第19弾：手続きSVG（tableBox/wheelIcon等の組み合わせ）を全廃し、ユーザー提供の参考画像から
-// 抽出したドット絵（sprites/pixelObjectData.jsのst_*）へ全面差し替えた。
-// バッジ（部屋アイコン・内装グレードG3の金枠）と選択リングの仕組みは従来のまま。
+// 第19弾：手続きSVGを全廃しドット絵（sprites/pixelObjectData.jsのst_*）へ差し替え。
+// 第20弾：絵文字バッジを全廃（CLAUDE.md §8「アイコンは逃げ」・ユーザー合意の案b）。
+// 部屋の機能は什器そのもので分からせ、**部屋名は選択時のみ**小さな札で表示する。
+// 内装グレードG3の金枠はバッジ廃止に伴い選択リングの色替えに引き継いだ。
 import React from "react";
+import { FONT_DOT } from "../../data/theme.js";
 import { isoBoxFaces } from "../../domain/season/baseViewLayout.js";
 import { pixelObjectNode } from "../sprites/pixelObject.jsx";
 import { OBJ_SPRITES } from "../sprites/pixelObjectData.js";
@@ -12,27 +14,31 @@ const STATION_SPRITE = {
   workbench: "st_workbench", // 作業台（ペグボード＋工具＋引き出し）
   medical: "st_medical",     // 診察ベッド（ベッド＋点滴＋モニター＋ワゴン）
   desk: "st_desk",           // スカウトデスク（デスク＋モニター＋チェア）
-  empty: "st_empty",         // 空き部屋の機器（段ボール＋掃除機＋古いPC）
+  empty: "st_empty",         // 納戸（段ボール＋掃除機＋古いPC。未解禁の奥3部屋にも使う）
 };
 
-// grade(0〜3)はWave H-2の内装グレード。G3のみバッジに金枠を追加する
-// （domain/season/baseViewLayout.jsのroomGrade参照。判断⑤a+c＝効果は無いが実績連動）。
+// grade(0〜3)はWave H-2の内装グレード。G3は選択リングを金色にする。
 export function Station({ s, proj, selected, grade = 0 }) {
   const spriteKey = STATION_SPRITE[s.kind] || "st_desk";
   const label = isoBoxFaces(s.w, s.l, 0, 0, 0, proj).corners.N;
-  const goldBadge = grade >= 3;
+  const ringColor = grade >= 3 ? "#f5d98a" : "#ffffff";
   return (
     <g opacity={selected ? 1 : 0.98}>
       {pixelObjectNode({
         x: label.x, y: label.y, data: OBJ_SPRITES[spriteKey],
         key: "furniture", cacheKey: `obj-${spriteKey}`,
       })}
-      <g transform={`translate(${label.x.toFixed(1)},${(label.y - 24).toFixed(1)})`}>
-        {goldBadge && <rect x="-9.5" y="-10.5" width="19" height="17" rx="4" fill="none" stroke="#f5d98a" strokeWidth="1.4" />}
-        <rect x="-8" y="-9" width="16" height="14" rx="3" fill={s.accent} opacity="0.92" />
-        <text x="0" y="1.5" textAnchor="middle" fontSize="9" style={{ pointerEvents: "none" }}>{s.icon}</text>
-      </g>
-      {selected && <circle cx={label.x} cy={label.y - 4} r="16" fill="none" stroke="#ffffff" strokeWidth="1.2" opacity="0.5" />}
+      {selected && (
+        <g>
+          <circle cx={label.x} cy={label.y - 4} r="16" fill="none" stroke={ringColor} strokeWidth="1.2" opacity="0.6" />
+          <g transform={`translate(${label.x.toFixed(1)},${(label.y - 26).toFixed(1)})`}>
+            <rect x={-(s.label.length * 5.5 + 6)} y="-9" width={s.label.length * 11 + 12} height="15" rx="2"
+              fill="#16181d" opacity="0.85" />
+            <text x="0" y="2.5" textAnchor="middle" fontSize="10" fill="#f2efe6"
+              fontFamily={FONT_DOT} style={{ pointerEvents: "none" }}>{s.label}</text>
+          </g>
+        </g>
+      )}
     </g>
   );
 }

@@ -19,10 +19,10 @@ import {
   BASE_VIEW_PROJ, BASE_VIEW_CLUBHOUSE, BASE_VIEW_STATIONS, BASE_VIEW_LOOP,
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS,
   BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_PARTITION_HEIGHT,
-  BASE_VIEW_EMPTY_ROOMS, BASE_VIEW_FIXTURES, BASE_VIEW_STAFF,
+  BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_FIXTURES, BASE_VIEW_STAFF,
 } from "../../data/baseViewBuildings.js";
 import {
-  isoProject, buildingLevels, roomGrade, seasonOf,
+  isoProject, buildingLevels, roomGrade, roomUnlocks, seasonOf,
   pointInQuad, roomFloorQuad, stationQuad,
 } from "../../domain/season/baseViewLayout.js";
 import {
@@ -159,6 +159,8 @@ export function BaseView({ g, paused, onRoomTap }) {
   // 全キー分をここでまとめて解決し、Room.jsx（床の目地/ラグ/照明）とStation.jsx
   // （持ち場バッジの金枠）の両方へ配る。
   const roomGrades = Object.fromEntries(BASE_VIEW_ROOMS.map(r => [r.key, roomGrade(g, r.key)]));
+  // 第20弾: 条件解禁の奥3部屋（食堂=スタッフ2人／ロッカー=所属8人／トロフィー=初タイトル）
+  const unlocks = roomUnlocks(g);
   const palette = BASE_VIEW_SEASON_PALETTE[seasonOf(g.month)];
   const snow = !!palette.snow;
 
@@ -244,8 +246,14 @@ export function BaseView({ g, paused, onRoomTap }) {
                     <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"}
                       rooms={BASE_VIEW_ROOMS} partitions={BASE_VIEW_PARTITIONS} partitionHeight={BASE_VIEW_PARTITION_HEIGHT} grades={roomGrades} />
                     {BASE_VIEW_STATIONS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} grade={roomGrades[s.room]} />)}
-                    {BASE_VIEW_EMPTY_ROOMS.map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} grade={roomGrades[s.room]} />)}
-                    {fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity)))}
+                    {/* 第20弾: 条件解禁の奥3部屋。未解禁は納戸（st_empty）を描き、解禁済みは
+                        その部屋の什器（BASE_VIEW_FIXTURESのroom=diner/locker/trophy）を描く。 */}
+                    {BASE_VIEW_LOCKED_ROOMS.filter(s => !unlocks[s.room])
+                      .map(s => <Station key={s.key} s={s} proj={PROJ} selected={false} grade={0} />)}
+                    {fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => {
+                      if (f.room === "diner" || f.room === "locker" || f.room === "trophy") return unlocks[f.room];
+                      return (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity);
+                    }))}
                     {/* 屋内の人物（選手＋常駐スタッフ）は必ず床・壁・什器より後に描く。
                         Wave H-3：トレーニング室（pose==="roller"）だけは自転車ごとローラー台に
                         乗せるため、新規ドット絵を描かずにPixelBikeを流用する（設計①）。 */}
