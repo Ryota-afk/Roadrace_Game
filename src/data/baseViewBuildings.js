@@ -152,7 +152,9 @@ export const BASE_VIEW_LOOP = { pathW: 3.6, pathL: 2.6, cornerR: 1.1, trackHalfW
 // クラブハウスの入口前の舗装アプローチ（world座標のw/l範囲）。クラブハウスfootprint
 // （w:4.5〜13.5〜手前に張り出す形）とコースの間の「敷地の通り道」を1枚の大きな
 // ポリゴンとして描く。
-export const BASE_VIEW_PLAZA = { wMin: 3.6, wMax: 14.5, lMin: -4.8, lMax: 5.8 };
+// 第19弾補修: lMinを-4.8→-6.4へ拡張（チームカーの駐車場所。車が芝との境界をまたいで
+// 沈んで見える問題への対応。ユーザー提案「舗装自体を広げてみては」）。
+export const BASE_VIEW_PLAZA = { wMin: 3.6, wMax: 14.5, lMin: -6.4, lMax: 5.8 };
 
 // 芝の装飾（草むら等）を散らす範囲。市松塗りは廃止したので、ここは「点在させる装飾の範囲」。
 // Wave F-1でこの矩形を「所有敷地（陸地）」の外形としても兼用する（下記BASE_VIEW_PROPS
@@ -177,7 +179,7 @@ export const BASE_VIEW_PROPS = {
   ],
   trees: [
     { w: -6.5, l: 2.5 }, { w: -7.0, l: -2.5 }, { w: -1.0, l: 6.0 },
-    { w: -1.5, l: -6.5 }, { w: 4.0, l: -6.0 }, { w: 4.5, l: 5.5 },
+    { w: -1.5, l: -6.5 }, { w: 2.8, l: -7.0 }, { w: 4.5, l: 5.5 },
     { w: -3.5, l: 6.5 }, { w: -4.0, l: -6.0 },
   ],
   benches: [{ w: 4.2, l: -3.2 }, { w: 4.2, l: 3.6 }],
@@ -185,7 +187,7 @@ export const BASE_VIEW_PROPS = {
   bikeRack: { w: 5.2, l: -4.2 },
   // 第19弾: 旧位置(5.8, 4.8)はクラブハウスの壁の真裏で、カメラからほぼ完全に隠れていた
   // （ドット絵化の試作時に発覚した既存の配置問題）。正面広場の駐輪ラック脇へ移動。
-  teamCar: { w: 6.8, l: -4.35 },
+  teamCar: { w: 7.0, l: -5.3 },
 };
 
 // Wave F-1: 敷地の見た目だけを変える購入枠（data/items.jsのEQUIPS.grounds、g.equip.grounds

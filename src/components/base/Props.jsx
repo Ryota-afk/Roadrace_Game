@@ -16,6 +16,7 @@ function treeNode(w, l, proj, palette, key) {
   return treeSpriteNode({ x: base.x, y: base.y, palette, key });
 }
 
+
 // 第19弾: ベンチ・外灯・駐輪ラックも参考画像から抽出したドット絵へ差し替え。
 function benchNode(w, l, proj, key) {
   const p = isoProject(w, l, 0, proj);
@@ -24,7 +25,7 @@ function benchNode(w, l, proj, key) {
 
 function lampNode(w, l, proj, key) {
   const p = isoProject(w, l, 0, proj);
-  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.lamp, key, cacheKey: "obj-lamp", shadowRx: 3.5, shadowRy: 1.7 });
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.lamp, key, cacheKey: "obj-lamp", shadowW: 0.13, shadowL: 0.13 });
 }
 
 function bikeRackNode(w, l, proj, key) {
@@ -36,21 +37,20 @@ function bikeRackNode(w, l, proj, key) {
 // チームカーの記号として追加。
 function teamCarNode(w, l, proj, key) {
   const base = isoProject(w, l, 0, proj);
-  // 影は車体の長軸（+l方向＝画面右上がり・約-27°）に沿って寝かせ、車体幅に収める。
-  // 水平のまま大きくすると右下へはみ出して水たまりに見える（2026-08ユーザー指摘）。
+  // 車は+l方向（画面右上がり）に長い。footprintを実車比（幅0.45×長さ0.95ユニット）で指定。
   return pixelObjectNode({
     x: base.x, y: base.y, data: OBJ_SPRITES.teamCar, key,
-    cacheKey: "obj-teamCar", shadowRx: 21, shadowRy: 8, shadowDx: -1, shadowDy: -4, shadowRot: -27,
+    cacheKey: "obj-teamCar", shadowW: 0.45, shadowL: 0.95,
   });
 }
 
 // Wave F-1: 敷地整備（g.equip.grounds、施設ショップの新規購入枠）で段階的に解禁される
 // 屋外装飾。第19弾でreference/F.pngから抽出したドット絵へ全面差し替え（手続きSVG全廃）。
 // 池・生け垣・ジム・アーチ・噴水はいずれも接地面いっぱいの造形なので足元の影楕円は敷かない
-// （shadowRx: 0。敷くと水面・土台の下に黒い縁が覗いて汚れて見える）。
+// （noShadow。敷くと水面・土台の下に黒い縁が覗いて汚れて見える）。
 function decorNode(kind, w, l, proj, key) {
   const p = isoProject(w, l, 0, proj);
-  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES[kind], key, cacheKey: `obj-${kind}`, shadowRx: 0 });
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES[kind], key, cacheKey: `obj-${kind}`, noShadow: true });
 }
 
 export function propItems(proj, props, palette) {
