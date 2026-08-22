@@ -102,6 +102,9 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   e.type = r.type; e.abilities = r.abilities; e.goldAbilities = r.goldAbilities;
   // v29: 副ステータスをエントラントにも持たせ、tick計算・最終区間で参照する
   e.accel = r.accel ?? 50; e.mental = mental; e.build = build;
+  // v52(第14弾C): 安定感（stability）をsimへ接続。TTのペース配分ゆらぎ（ttPacing）の
+  // 振れ幅を選手ごとに調整するために使う（simulateTicks参照）。
+  e.stability = r.stability ?? 50;
   return e;
 }
 
@@ -244,6 +247,19 @@ const MAX_TICKS = 2500;
 // 自滅（＝アシスト大敗や早め逃げの燃え尽きの一因）を抑え、現実のローテーション（先頭交代→後方回復）を再現。
 const PULL_MIN_ENERGY = 24;
 const PULL_RESUME_ENERGY = 44;
+// v52(第14弾C): TT（個人・区間とも）は単独走のため集団のゆらぎが無く、距離が長いため
+// 毎tickの±3%（tickSpeedFactor参照）も平均化されて実質決定論になる。レース単位で1回だけ
+// 引く「ペース配分」ゆらぎを別に持たせ、能力が近い選手同士の結果が毎回同じにならないようにする。
+// 較正実測（マイライフ個人TT・PRO・年8・世界ロースター相当・能力別各150レース）：
+// spread=0.02→崖は消えたが93:87%/100:100%と強すぎ。0.04→93:59%までは入るが100:97%が残る。
+// 0.06で目標曲線（80:0-5%/88:10-25%/93:40-60%/100:75-90%）と単調性の両方を満たした
+// （devlog/wave14.md参照）。
+const TT_PACING_SPREAD = 0.06;
+// 安定感（stability）が高いほど振れ幅が小さく、低いほど大きい（0.6〜1.3倍）。
+// stability未設定（AI・シーズン選手・旧セーブ）は50=1.0倍で既定の振れ幅のまま。
+function steadyMul(en) {
+  return Math.max(0.6, Math.min(1.3, 1 - ((en.stability ?? 50) - 50) / 200));
+}
 
 function effortCost(mode, segType, steepness) {
   if (mode === "pull") return 1.0;
@@ -272,6 +288,8 @@ export function tickSpeedFactor(en, segType, mode, steepness) {
   f *= energyPenaltyMul(en.energy);
   // v8: 微小なゆらぎ（±3%）。純粋な決定論だと同一条件のレースが毎回ほぼ同じ結果になってしまうため
   f *= 1 + (Math.random() - 0.5) * 0.06;
+  // v52(第14弾C): TT区間はレース単位で1回だけ引いたペース配分ゆらぎを乗せる（上記コメント参照）
+  if (segType === "tt" && en.ttPacing != null) f *= en.ttPacing;
   return Math.max(0.15, f);
 }
 
@@ -396,6 +414,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // 脚を溜める（牽引しない＋消耗軽減）、finaleSend（数値）は最終区間の追い込みの上乗せ、
       // holdOn>0の間は歯を食いしばって集団に食らいつく（keepThreshが下がる＝千切れにくい）。
       en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0;
+      // v52(第14弾C): TTペース配分ゆらぎ。レース開始時（fromTick===0）に1回だけ引き、
+      // レース中は変えない（tickSpeedFactorのtt区間で毎tick乗算される）
+      en.ttPacing = 1 + (Math.random() - 0.5) * 2 * TT_PACING_SPREAD * steadyMul(en);
     });
     // v38: リードアウト指名。各チームでエース（＝射出される選手）に対し、平坦/スプリント寄りの
     // 非エース1名を「リードアウト役」に割り当てる。最終区間で同集団にいれば前を牽いてエースを
@@ -663,7 +684,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             // v38: リードアウト役は最終区間で前を牽いて集団の頭に上がり（surge）、エースを射出する。
             // 脚が残る間だけ（energy>30）前に出て、使い切ったら isLeadingOut が外れて通常処理へ→
             // 自然に後方へ流れる（＝見た目のリードアウト→ピールオフ）。
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.02;
+            const luck = (Math.random() - 0.5) * 0.02;
             dist = groupDist * (1.05 + luck);
             en.leadoutSurging = true;
           } else if (isFinalSeg && en.isAssisting && !en.isAce) {
@@ -671,7 +692,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             // ＝先頭で競らず、集団の後方へ自然に下がる。これにより「アシストなのに自分がぶっちぎって
             // 先頭ゴール→リザルトでは2位」という観戦とリザルトの食い違いを、シミュレーション自体で
             // 解消する（着順を後から書き換えない＝アニメと結果が必ず一致）。
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.02;
+            const luck = (Math.random() - 0.5) * 0.02;
             dist = groupDist * (0.90 + luck);
           } else if (isFinalSeg) {
             // v28: 最終区間（カメラが切り替わる勝負どころ）は、そこまで生き残った選手同士の
@@ -695,12 +716,12 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             // v29: 加速力=飛び出しの鋭さ、メンタル=勝負どころの粘りも最終区間の着差に効く
             const accelKick = ((en.accel ?? 50) - 50) / 900;
             const mentalKick = ((en.mental ?? 50) - 50) / 1500;
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.035;
+            const luck = (Math.random() - 0.5) * 0.035;
             dist = groupDist * Math.max(0.85, Math.min(1.19, 1 + terrainEdge * edgeMul + sprintEdge + finishKick + accelKick + mentalKick + luck));
           } else if (segType === "sprint") {
             // 周回途中などの非最終スプリント区間は従来の弱めの着差
             const abilityEdge = ownCapable / groupDist - 1;
-            const luck = (riderHash01(en.id, tick + 4409) - 0.5) * 0.05;
+            const luck = (Math.random() - 0.5) * 0.05;
             dist = groupDist * Math.max(0.94, Math.min(1.06, 1 + abilityEdge * 0.6 + luck));
           } else {
             dist = groupDist;

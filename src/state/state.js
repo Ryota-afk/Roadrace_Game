@@ -984,7 +984,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
     teamEntrants.forEach(en => riders.push(en));
   });
-  const sim = { entrants: riders, riders, course, groupMode: "full", raceMeta, breakSurvived: false };
+  const sim = { entrants: riders, riders, course, groupMode: raceMeta.tmpl?.soloTT ? "solo" : "full", raceMeta, breakSurvived: false };
   // v37: チームTTはペロトンではなくチーム単位の合算タイム。マイライフでも「個人の順位」ではなく
   // 「チームの順位」で結果を出す（従来は teamTT 未対応で個人simへ落ちて個人リザルトになっていた）。
   if (raceMeta.tmpl && raceMeta.tmpl.teamTT) {
@@ -999,7 +999,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // v39(A案): レース中の判断カードでfromTickから再計算するため、作戦（directive）をsimに保持する
   sim.directive = { chaseMode: tac.chaseMode, aceEarly: tac.aceEarly };
   sim.difficulty = difficultyId; // v39.18: 難易度で判断カードの一手の効きを変える
-  simulateTicks(course, riders, 0, sim.directive, false);
+  simulateTicks(course, riders, 0, sim.directive, !!(raceMeta.tmpl && raceMeta.tmpl.soloTT));
   rankSim(sim);
   // v36修正: レース後にfinishTimeを書き換えると、観戦アニメ（posHist）と着順（finishTime）が
   // 食い違い「先頭でゴールしたのにリザルト2位」等の同期ズレが起きていた。着順の書き換えは全廃し、

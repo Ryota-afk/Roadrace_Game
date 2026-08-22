@@ -142,6 +142,12 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
   `aiPowerFor()`が基準文脈での査定値を計算し（`buildSim`/`buildMyLifeSim`の重複power式を集約）、
   スカウトLv（シーズン）／対戦経験`riderStats[id].races`（マイライフ）で**4段階に開示**する
   （未分析→総合力帯→適性グレード→数値。UIは`ScoutBadge`）。
+- **TTペース配分ゆらぎ（§45・`sim/race.js`）**：TT（個人・区間とも）は単独走で距離が長く、
+  毎tickの±3%（`tickSpeedFactor`）が平均化されて実質決定論になるため、`simulateTicks`の
+  `fromTick===0`枝で`en.ttPacing`をレース単位1回だけ抽選する（`TT_PACING_SPREAD=0.06`、
+  実測較正済み）。`steadyMul(en)`で`stability`（安定感）が振れ幅を調整（高いほど小さい）。
+  `stability`は`effAbilities()`の戻り値に`e.stability = r.stability ?? 50;`で乗せてあり、
+  season/mylife問わず既存の`...e`スプレッドだけで配線される。
 
 ### マイライフ状態
 - `initMyLife()` / `mlCreateChar(type, background, master, partner, cpMeta)` / `mlGenRace(year, month, classIdx)`
@@ -562,6 +568,25 @@ CLAUDE.md §9へ恒久ルール化） →
 
 ---
 
+## 45. 第14弾（simの精度の負債返済＋RaceView.jsx分割）— 完了
+
+**状態**：完了（2026-08）。36番（決着ジッターの規則性）・37番（マイライフ個人TTの集団走行化）・
+新設のTTペース配分ゆらぎ（C）・`RaceView.jsx`分割（D）の4点。**全文は`devlog/wave14.md`**
+（設計合意・実測値・較正の試行錯誤・検証結果すべてそちらに記録済み）。
+
+**要点**：36番はluck項を`riderHash01`（規則的な鋸波に退化していた）から`Math.random()`へ
+（カイ二乗2.660で有意差解消）。37番は`groupMode`/`noGroup`を`soloTT`フラグで分岐し単独走に
+修正したが、単独では能力差5で勝率が0%↔100%に飛ぶ崖ができるため、TT専用の「ペース配分」
+ゆらぎ（レース単位1回・`TT_PACING_SPREAD=0.06`）を新設して埋めた（`stability`をsimへ新規配線、
+生きた技術的事実は**§3「TTペース配分ゆらぎ」へ転記済み**）。Dは1,554行の`RaceView.jsx`を
+5ファイルへ分割（判断カード→`domain/shared/raceDecisions.js`、simデータ読み取り→
+`domain/shared/raceViewModel.js`、定数群→`components/race/raceViewConstants.js`、
+最終スプリント演出→`components/race/FinalSprintCinematic.jsx`、本体943行）。副産物として
+Wave13の`Btn`撤去漏れ（`RaceErrorBoundary`が未importの`Btn`を参照）と未使用コード
+（`riderWander`・`CAP_COLORS`の空reexport・`cycMod`・`SPRINT_SLOWDOWN`）を同時に解消。
+
+---
+
 ## 次のアクション（ユーザーメモ・未着手のみ）
 
 以下はユーザーから明示的に指示された、今後着手すべき項目のメモ。優先度・着手順は未確定。
@@ -588,25 +613,12 @@ CLAUDE.md §9へ恒久ルール化） →
    `hooks/useIsoCamera.js`の`zoomBy: (mul) => applyZoom((k || 1) * mul, ...)`は
    ボタン1タップで倍率を一段階いきなり適用しており補間が無い。着手する場合は設計を提示してから。
 
-36. **【要バランス検証】simの決着ジッターにも規則性が残っている**（2026-08・§36の調査で発見）。
-   `sim/race.js`最終区間の`riderHash01(en.id, tick+4409)`はtickごとにsaltが+1され
-   **毎tick +0.40503の規則的な鋸波**になっており乱数として機能していない。§36-Cでは
-   「着順が変わる」ため意図的に据え置いた（ユーザー合意）。直す場合は着順分布の前後比較を
-   実測してから。
-
-37. **マイライフの個人TTが集団走行としてシミュレートされている**（2026-08・§36の調査で発見）。
-   `buildMyLifeSim`は個人TT（出走1名）でも`groupMode`が`"full"`のまま10名でドラフティング
-   している（シーズン側は`groupModeFor(squadN)`で正しく`"solo"`になる）。観戦は廃止済みで
-   見た目には出ないが、**結果（着順・タイム）は集団走行前提のまま**。直すと着順が変わるため
-   バランス確認込みで別途扱う。
-
 **実装順序（上から着手する）**
 
 - 完了済みの弾：第5〜6弾（§36・§37）／第7〜9弾（§38・§39・§40）／第10弾（§41）／
-  第11弾 Phase 1-3（§42）／第12弾（§43）。各弾の要点はその§、全文は`devlog/waveNN.md`。
-- **第13弾（今ここ・§44・`devlog/wave13.md`）：デザインの作り直し＋`support.js`分割**
-- **以降：** 36番＋37番（sim精度の負債返済・検証コストを共有できるので統合推奨）、
-  7番（特殊配合）、4番（拠点のドット絵化）、11番（スプライト描き直し・凍結中）。
+  第11弾 Phase 1-3（§42）／第12弾（§43）／第13弾（§44）／第14弾（§45）。
+  各弾の要点はその§、全文は`devlog/waveNN.md`。
+- **以降：** 7番（特殊配合）、4番（拠点のドット絵化）、11番（スプライト描き直し・凍結中）。
 
 **ドット絵化の拡張**
 4. **拠点(BaseView)のオブジェクト類（什器・プロップ・建物など）もドット絵化する**（未着手）。
