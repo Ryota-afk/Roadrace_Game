@@ -152,21 +152,26 @@ export const BASE_VIEW_FIXTURES = [
   { key: "scout-folders", room: "scout", kind: "folders", w: 11.4, l: 2.4, minLevel: 1 },
   { key: "scout-whiteboard", room: "scout", kind: "whiteboard", w: 13.5, l: 2.4, minLevel: 2 },
   { key: "scout-shelf", room: "scout", kind: "archiveShelf", w: 13.6, l: -0.3, minLevel: 3 },
-  // 玄関ホール：靴箱（旧・廊下配置(9.5,-2.8)は縦廊下の動線の真上で選手が貫通していた）
+  // 玄関ホール：靴箱（旧・廊下配置(9.5,-2.8)は縦廊下の動線の真上で選手が貫通していた）＋
+  // Kシートの受付カウンター・自立コルクボード・雑誌ラック（待合の趣）
   { key: "hall-shoerack", room: "hall", kind: "shoeRack", w: 8.5, l: -4.1, minLevel: 0 },
-  // --- 条件解禁の奥3部屋（Jシート到着までは既存スプライトの仮置き。解禁前は
-  //     BaseView側でこのグループごと非表示にし、st_emptyの納戸を描く） ---
-  // 食堂（テーブル=給水台の流用＋椅子2脚）
-  { key: "diner-table", room: "diner", kind: "waterTable", w: 6.2, l: 4.4, minLevel: 0 },
-  { key: "diner-chair1", room: "diner", kind: "chair", w: 7.3, l: 4.0, minLevel: 0 },
-  { key: "diner-chair2", room: "diner", kind: "chair", w: 5.5, l: 5.0, minLevel: 0 },
-  // ロッカールーム（靴箱2＋薬品棚の流用）
-  { key: "locker-rack1", room: "locker", kind: "shoeRack", w: 8.8, l: 4.2, minLevel: 0 },
-  { key: "locker-rack2", room: "locker", kind: "shoeRack", w: 10.2, l: 4.8, minLevel: 0 },
-  { key: "locker-cabinet", room: "locker", kind: "cabinet", w: 10.3, l: 3.9, minLevel: 0 },
-  // トロフィールーム（資料棚の流用＋ファイル）
-  { key: "trophy-shelf", room: "trophy", kind: "archiveShelf", w: 12.1, l: 4.3, minLevel: 0 },
-  { key: "trophy-folders", room: "trophy", kind: "folders", w: 13.3, l: 4.9, minLevel: 0 },
+  { key: "hall-reception", room: "hall", kind: "receptionCounter", w: 10.6, l: -1.8, minLevel: 0 },
+  { key: "hall-corkboard", room: "hall", kind: "corkboardStand", w: 8.5, l: -1.6, minLevel: 0 },
+  { key: "hall-magazines", room: "hall", kind: "magazineRack", w: 10.6, l: -4.0, minLevel: 0 },
+  // スカウト室の置き時計（Kシート）
+  { key: "scout-clock", room: "scout", kind: "deskClock", w: 12.9, l: 2.45, minLevel: 0 },
+  // --- 条件解禁の奥3部屋（J/Kシートの専用什器。解禁前はBaseView側で
+  //     このグループごと非表示にし、st_emptyの納戸を描く） ---
+  // 食堂：テーブルセット＋配膳カウンター＋メニュー掲示のコルクボード（立てかけ）
+  { key: "diner-table", room: "diner", kind: "cafeteriaTable", w: 6.0, l: 4.3, minLevel: 0 },
+  { key: "diner-counter", room: "diner", kind: "cateringCounter", w: 7.2, l: 4.95, minLevel: 0 },
+  { key: "diner-menu", room: "diner", kind: "corkboardLean", w: 5.5, l: 5.0, minLevel: 0 },
+  // ロッカールーム：ロッカー列＋コート掛け
+  { key: "locker-row", room: "locker", kind: "lockerRow", w: 9.6, l: 4.95, minLevel: 0 },
+  { key: "locker-coats", room: "locker", kind: "coatRack", w: 8.7, l: 4.0, minLevel: 0 },
+  // トロフィールーム：トロフィーケース＋観葉植物
+  { key: "trophy-case", room: "trophy", kind: "trophyCase", w: 12.4, l: 4.95, minLevel: 0 },
+  { key: "trophy-plant", room: "trophy", kind: "pottedPlant", w: 13.5, l: 4.3, minLevel: 0 },
 ];
 
 // Wave F-3c：常駐スタッフ（動かない人）。対応するスタッフを雇っていれば
