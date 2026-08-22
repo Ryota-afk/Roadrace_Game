@@ -40,7 +40,7 @@ function teamCarNode(w, l, proj, key) {
   // 車は+l方向（画面右上がり）に長い。footprintを実車比（幅0.45×長さ0.95ユニット）で指定。
   return pixelObjectNode({
     x: base.x, y: base.y, data: OBJ_SPRITES.teamCar, key,
-    cacheKey: "obj-teamCar", shadowW: 0.45, shadowL: 0.95,
+    cacheKey: "obj-teamCar", shadowW: 0.45, shadowL: 0.95, shadowDx: -5, shadowDy: 2.5,
   });
 }
 
