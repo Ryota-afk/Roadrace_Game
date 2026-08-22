@@ -183,7 +183,9 @@ export const BASE_VIEW_PROPS = {
   benches: [{ w: 4.2, l: -3.2 }, { w: 4.2, l: 3.6 }],
   lamps: [{ w: 3.9, l: 0.2 }, { w: -2.5, l: 3.0 }, { w: -2.5, l: -2.8 }],
   bikeRack: { w: 5.2, l: -4.2 },
-  teamCar: { w: 5.8, l: 4.8 },
+  // 第19弾: 旧位置(5.8, 4.8)はクラブハウスの壁の真裏で、カメラからほぼ完全に隠れていた
+  // （ドット絵化の試作時に発覚した既存の配置問題）。正面広場の駐輪ラック脇へ移動。
+  teamCar: { w: 6.4, l: -4.9 },
 };
 
 // Wave F-1: 敷地の見た目だけを変える購入枠（data/items.jsのEQUIPS.grounds、g.equip.grounds

@@ -6,6 +6,8 @@
 // isoBoxFaces()で描き、木も輪郭と陰影を持つ構造（幹＋3層の樹冠）へ作り直した。
 import React from "react";
 import { isoProject, isoBoxFaces } from "../../domain/season/baseViewLayout.js";
+import { pixelObjectNode, treeSpriteNode } from "../sprites/pixelObject.jsx";
+import { OBJ_SPRITES } from "../sprites/pixelObjectData.js";
 
 const poly = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 
@@ -26,21 +28,11 @@ function shadowDiamond(w, l, hw, hl, proj) {
   return <polygon points={poly([c.N, c.E, c.S, c.W])} fill="#000" opacity="0.16" />;
 }
 
+// 第19弾: ドット絵化（sprites/pixelObjectData.jsの静的rows）。季節パレット・冠雪差分は
+// treeSpriteNode側でlegendを動的に組む。影もスプライト側ヘルパーが敷く。
 function treeNode(w, l, proj, palette, key) {
   const base = isoProject(w, l, 0, proj);
-  const x = base.x, y = base.y;
-  return (
-    <g key={key}>
-      {shadowDiamond(w, l, 0.30, 0.22, proj)}
-      {/* 幹（下が太い台形） */}
-      <polygon points={`${(x - 2.6).toFixed(1)},${y.toFixed(1)} ${(x + 2.6).toFixed(1)},${y.toFixed(1)} ${(x + 1.6).toFixed(1)},${(y - 11).toFixed(1)} ${(x - 1.6).toFixed(1)},${(y - 11).toFixed(1)}`} fill="#6b4f34" />
-      {/* 樹冠：暗→中→明の3層で球の陰影を作り、輪郭線でシルエットを締める */}
-      <ellipse cx={x} cy={y - 19} rx="11.5" ry="10" fill={palette.treeDark} stroke="#00000038" strokeWidth="0.8" />
-      <ellipse cx={(x - 1.8).toFixed(1)} cy={(y - 21).toFixed(1)} rx="9" ry="7.8" fill={palette.treeMid} />
-      <ellipse cx={(x - 3.6).toFixed(1)} cy={(y - 23.5).toFixed(1)} rx="5.2" ry="4.4" fill={palette.treeLeaf} />
-      {palette.snow && <ellipse cx={(x - 2.6).toFixed(1)} cy={(y - 25.5).toFixed(1)} rx="6.4" ry="3" fill={palette.snow} opacity="0.92" />}
-    </g>
-  );
+  return treeSpriteNode({ x: base.x, y: base.y, palette, key });
 }
 
 function benchNode(w, l, proj, key) {
@@ -75,17 +67,14 @@ function bikeRackNode(w, l, proj, key) {
   );
 }
 
-// チームカー：車体（l方向に長い箱）の上にキャビンを重ねる。キャビンは「地面から生えた
-// より高く細い箱」として描き、車体に隠れる下半分は見えない＝結果的に屋根に見える。
-// （transformで持ち上げるとアイソメの足元がズレるため、高さで表現する）
+// チームカー（第19弾: ドット絵化）。ルーフキャリアのスペアホイール2本＝ロードレースの
+// チームカーの記号として追加。
 function teamCarNode(w, l, proj, key) {
-  return (
-    <g key={key}>
-      {shadowDiamond(w, l, 0.42, 0.72, proj)}
-      {isoBox(w, l, 0.34, 0.62, 9, proj, "#2c55a8", "#3f74d4", "#5289e4")}
-      {isoBox(w, l - 0.06, 0.25, 0.30, 16, proj, "#24406f", "#33598f", "#8fb4e2")}
-    </g>
-  );
+  const base = isoProject(w, l, 0, proj);
+  return pixelObjectNode({
+    x: base.x, y: base.y, data: OBJ_SPRITES.teamCar, key,
+    cacheKey: "obj-teamCar", shadowRx: 29.5, shadowRy: 14.5,
+  });
 }
 
 // Wave F-1: 敷地整備（g.equip.grounds、施設ショップの新規購入枠）で段階的に解禁される

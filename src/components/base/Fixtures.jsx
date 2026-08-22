@@ -11,6 +11,8 @@
 // data/baseViewBuildings.jsのBASE_VIEW_FIXTURESの`minLevel`で段階的に解禁する。
 import React from "react";
 import { isoBoxFaces } from "../../domain/season/baseViewLayout.js";
+import { pixelObjectNode } from "../sprites/pixelObject.jsx";
+import { OBJ_SPRITES } from "../sprites/pixelObjectData.js";
 
 const poly = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 
@@ -91,17 +93,13 @@ function waterTableNode(w, l, proj, key) {
 
 // トレーニング室（Wave E-3新規）：増設ローラー（低い台＋ローラー2本。フレームは無く
 // 「予備の台」であることを示す最小限の構成）。
+// 第19弾: ドット絵化（sprites/pixelObjectData.jsの静的rows・影はヘルパーが敷く）
 function rollerUnitNode(w, l, proj, key) {
-  const hw = 0.24, hl = 0.16, h = 5;
-  const top = isoBoxFaces(w, l, hw, hl, h, proj).top.N;
-  return (
-    <g key={key}>
-      {shadow(w, l, hw, hl, proj)}
-      {isoBox(w, l, hw, hl, h, proj, "#5a6068", "#7a828c", "#9aa0a6")}
-      <ellipse cx={(top.x - 2.4).toFixed(1)} cy={(top.y - 0.4).toFixed(1)} rx="1.5" ry="2.6" fill="#3a3f46" />
-      <ellipse cx={(top.x + 1.6).toFixed(1)} cy={(top.y - 0.6).toFixed(1)} rx="1.5" ry="2.6" fill="#3a3f46" />
-    </g>
-  );
+  const p = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  return pixelObjectNode({
+    x: p.x, y: p.y, data: OBJ_SPRITES.rollerUnit, key,
+    cacheKey: "obj-rollerUnit", shadowRx: 10.5, shadowRy: 5.2,
+  });
 }
 
 // トレーニング室（Wave E-3新規）：大型サーキュレーター（支柱＋丸いガード付きの羽根＋台座）。
@@ -171,21 +169,13 @@ function toolboxNode(w, l, proj, key) {
 }
 
 // メカニック室（Wave E-3新規）：パーツ棚（2段の棚板＋色違いの部品ケース3つ）。
+// 第19弾: ドット絵化（開いた正面＝棚板2枚＋色付き小箱＋最下段のホイール）
 function partsShelfNode(w, l, proj, key) {
-  const hw = 0.28, hl = 0.16, h = 10;
-  const f = isoBoxFaces(w, l, hw, hl, h, proj);
-  const shelfY1 = f.botFront.y - h * 0.35, shelfY2 = f.botFront.y - h * 0.7;
-  return (
-    <g key={key}>
-      {shadow(w, l, hw, hl, proj)}
-      {isoBox(w, l, hw, hl, h, proj, "#6b5636", "#8a6f48", "#a3814f")}
-      <line x1={(f.botFront.x - 4).toFixed(1)} y1={shelfY1.toFixed(1)} x2={(f.botFront.x + 4).toFixed(1)} y2={shelfY1.toFixed(1)} stroke="#00000030" strokeWidth="0.5" />
-      <line x1={(f.botFront.x - 4).toFixed(1)} y1={shelfY2.toFixed(1)} x2={(f.botFront.x + 4).toFixed(1)} y2={shelfY2.toFixed(1)} stroke="#00000030" strokeWidth="0.5" />
-      <rect x={(f.botFront.x - 2.6).toFixed(1)} y={(shelfY1 - 2.1).toFixed(1)} width="2" height="2" fill="#c9463c" />
-      <rect x={(f.botFront.x + 0.4).toFixed(1)} y={(shelfY1 - 2.1).toFixed(1)} width="2" height="2" fill="#4f8fe8" />
-      <rect x={(f.botFront.x - 0.8).toFixed(1)} y={(shelfY2 - 2.1).toFixed(1)} width="2" height="2" fill="#e0a032" />
-    </g>
-  );
+  const p = isoBoxFaces(w, l, 0, 0, 0, proj).corners.N;
+  return pixelObjectNode({
+    x: p.x, y: p.y, data: OBJ_SPRITES.partsShelf, key,
+    cacheKey: "obj-partsShelf", shadowRx: 11.5, shadowRy: 5.7,
+  });
 }
 
 // メカニック室（Wave E-3新規）：2台目の作業スタンド（本体は主什器のWorkbenchFurnitureより
