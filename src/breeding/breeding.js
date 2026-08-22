@@ -237,6 +237,12 @@ export function mlLegendSnapshot(s) {
   const bloodId = "b:" + (r.name || "無名") + "#" + retiredAt;
   const ancestors = Array.isArray(r.ancestorBloodIds) ? r.ancestorBloodIds.slice(0, 12) : [];
   const arch = mlCareerArchetype(s); // v31.4: 生き様（称号）
+  // 第15弾（血脈レシピ）：この代で確定した血の印（キャリアの生き様＋成立していれば特殊配合）を
+  // 両親から受け継いだ印に追記する。次代の配合ではこの選手をmaster/partnerに選ぶだけで、
+  // 何世代も遡らずレシピ判定ができる。
+  const ownBloodMarks = [{ gen: r.generation || 0, mark: arch.key }];
+  if (r.specialMating) ownBloodMarks.push({ gen: r.generation || 0, mark: "sm:" + r.specialMating.key });
+  const bloodMarks = [...(r.bloodMarks || []), ...ownBloodMarks].slice(0, 24);
   return {
     // v49(第11弾続き): この選手個体を一意に識別するid。mlRecordLegend()の二重記録防止に使う
     // （リロード等で同じ引退が2回呼ばれても、同一idの選手を殿堂に重複登録しないためのキー）。
@@ -256,7 +262,7 @@ export function mlLegendSnapshot(s) {
     growthPow: r.growthPow, specialAbilities: [...(r.abilities || [])], focus: r.focus, overall: overall(r),
     retiredAt,
     // v31: 配合（血統）
-    bloodId, ancestors, parents: r.parentBloodIds || null,
+    bloodId, ancestors, parents: r.parentBloodIds || null, bloodMarks,
     plusValue: r.plusValue || 0, generation: r.generation || 0,
     // v31.2: 系統名（旧セーブは名前から生成）
     lineageName: r.lineageName || `${r.name || "無名"}系`,

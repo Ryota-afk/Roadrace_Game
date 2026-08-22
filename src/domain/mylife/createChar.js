@@ -7,6 +7,7 @@ import { AB_KEYS, AB_LABEL, ABILITIES } from "../../data/abilities.js";
 import { ML_BACKGROUNDS } from "../../data/events.js";
 import { SUB_STAT_KEYS, mulberry, newRider, overall, pickRiderName } from "../../core/core.js";
 import { legendAncestorSet, legendBloodId, mlBloodlineBonus, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
+import { deriveBloodMarks } from "../../breeding/recipes.js";
 import { GROWTHPOW_ORDER } from "../../data/progression.js";
 import { MYLIFE_TEAMS, mlTeammatesFromRoster, sharedWorldRosters, cpShopMylifePerks } from "../../state/state.js";
 import { bumpGrowthPow, mlCpPerks, mlCreateRival, mlGenDirective } from "../../logic/support.js";
@@ -144,6 +145,9 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     legendAncestorSet(master).forEach(a => anc.add(a));
     legendAncestorSet(partner).forEach(a => anc.add(a));
     player.ancestorBloodIds = [...anc].slice(0, 12);
+    // 第15弾（血脈レシピ）：両親の血の印を合流させる。旧セーブ（bloodMarks未保存）は
+    // deriveBloodMarksが既存フィールドからその場で導出するので、殿堂を跨いでも判定が壊れない。
+    player.bloodMarks = [...deriveBloodMarks(master), ...deriveBloodMarks(partner)].slice(0, 24);
     player.joinOvr = overall(player);
   }
   // v31.2: 系統名（血統の系統）。師匠／親の系統を継ぎ、いなければ自分が始祖となって新系統を興す
