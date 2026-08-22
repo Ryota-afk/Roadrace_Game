@@ -8,6 +8,7 @@ import { OB_COACH_SALARY } from "../../data/economy.js";
 import { ABILITIES, AB_KEYS, POW } from "../../data/abilities.js";
 import { DIFFICULTIES } from "../../data/progression.js";
 import { mulberry, overall, hasAbility, strHash } from "../../core/core.js";
+import { PARTS } from "../../data/parts.js";
 import {
   MYLIFE_TEAMS, ageWorldRosters, genFaPool, genMonthRaces, genPoachTargets, raceEntryPlan,
   genScouts, genSponsors, genTradeOffers, makePoachOffer, teamsForClass,
@@ -87,7 +88,11 @@ export function monthlyUpdate(state, raceInfo) {
       // v28: 出走した選手はベンチ月数（起用されない不満の蓄積）をリセットする
       n.benchMonths = 0;
       // v25: 天候の悪化。猛暑は出走後の疲労蓄積を増やす（悪天候巧者による軽減はなし＝純粋な体力勝負）
-      const heatMul = raceInfo.weather === "heat" ? 1.15 : 1;
+      // 第17弾C: 冷感ボトルセット（個人装備）または冷却仕様（チームセットアップ）でキャンセルされる
+      const nuPid = n.parts && n.parts.nutrition;
+      const nuPart = nuPid && PARTS[nuPid];
+      const heatCancelled = raceInfo.setup === "cool" || (nuPart && nuPart.heat && nuPart.heat.fatigueCancel);
+      const heatMul = (raceInfo.weather === "heat" && !heatCancelled) ? 1.15 : 1;
       n.fatigue = Math.min(100, n.fatigue + (hasAbility(n, "iron") ? 32 : 45) * stageFatigueMul * heatMul);
       n.streak += 1;
       const ph = growthPhase(n);
@@ -112,7 +117,15 @@ export function monthlyUpdate(state, raceInfo) {
           n.streak = 0;
           notices.push(`${n.name} が疲労の蓄積で故障（${n.injury}ヶ月離脱）`);
         }
-      } else if (raceInfo.weather === "rain" && Math.random() < (hasAbility(n, "rain_sp") ? 0.02 : 0.06) * Math.max(0.1, 1 - doctorLv * 0.22)) {
+      } else if ((() => {
+        if (raceInfo.weather !== "rain") return false;
+        // 第17弾C: 雨天用タイヤ（個人装備）または雨仕様（チームセットアップ）で落車率半減
+        const tiPid = n.parts && n.parts.tire;
+        const tiPart = tiPid && PARTS[tiPid];
+        const rainCrashHalf = raceInfo.setup === "rain" || (tiPart && tiPart.rain && tiPart.rain.crashHalf);
+        const chance = (hasAbility(n, "rain_sp") ? 0.02 : 0.06) * Math.max(0.1, 1 - doctorLv * 0.22) * (rainCrashHalf ? 0.5 : 1);
+        return Math.random() < chance;
+      })()) {
         // v25: 雨天レースは悪天候巧者を持たない選手に一定確率で落車リスクを上乗せする
         n.injury = Math.max(1, 1 + (Math.random() < 0.3 ? 1 : 0) + injExtra - injCut);
         n.streak = 0;

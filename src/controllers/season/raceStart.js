@@ -14,7 +14,8 @@ export function prepareRaceInputs(race, roster, sel, homeRegion) {
     ? squadRaw.map(r => ({ ...r, flat: r.flat + HOME_ABILITY_BONUS, climb: r.climb + HOME_ABILITY_BONUS, sprint: r.sprint + HOME_ABILITY_BONUS, stamina: r.stamina + HOME_ABILITY_BONUS, solo: r.solo + HOME_ABILITY_BONUS }))
     : squadRaw;
   const aceId = sel.starters.length === 1 ? sel.starters[0] : sel.ace;
-  const itemBoost = { wheel: sel.useWheel, suit: sel.useSuit };
+  // 第17弾C: 機材セットアップ（無料・ChipRow）。自チーム全員に一律で効く
+  const itemBoost = { wheel: sel.useWheel, suit: sel.useSuit, setup: sel.setup || "std" };
   // v12: 無線指示は廃止し、出走前に選んだ作戦をそのままシミュレーションへ渡す
   const directive = { chaseMode: sel.chaseMode || "normal", aceEarly: !!sel.aceEarly };
   return { squad, aceId, itemBoost, directive };

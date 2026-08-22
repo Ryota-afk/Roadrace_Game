@@ -124,7 +124,7 @@ export function initGame() {
     entryPlan: raceEntryPlan(initRaces, teamsForClass(0), 0, rivalRosters, 1, 0),
     // v50(第11弾Phase1・1-C): 実際のレース結果から積み上げるチーム別ポイント（張りぼてのハッシュ式を置換）
     rivalPoints: {},
-    sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false },
+    sel: { raceId: null, starters: [], ace: null, roles: {}, squadN: null, useWheel: false, useSuit: false, chaseMode: "normal", aceEarly: false, setup: "std" },
     result: null, prizeInfo: null,
     champBest: null, gc: null, pendingEvent: null, eventResult: null,
     yearendInfo: null, log: [], cleared: false,

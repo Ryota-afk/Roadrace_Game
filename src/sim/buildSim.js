@@ -10,6 +10,17 @@ import { teamsForClass } from "../state/state.js";
 import { aiPowerFor } from "../domain/shared/scouting.js";
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "./race.js";
 
+// 第17弾C: AIチームの機材セットアップ選択（決定論・§41「全チーム対称」原則の踏襲）。
+// 天候対応チップが使える天候ならそれを優先し、それ以外は得意分野で選ぶ。
+export function aiSetupFor(raceMeta) {
+  if (raceMeta.weather === "rain") return "rain";
+  if (raceMeta.weather === "heat") return "cool";
+  const favors = raceMeta.tmpl && raceMeta.tmpl.favors;
+  if (favors === "CLM") return "light";
+  if (favors === "SPR") return "aero";
+  return "std";
+}
+
 export function groupModeFor(squadN) {
   if (squadN === 1) return "solo";
   if (squadN === 2) return "pelotonOnly";
@@ -57,6 +68,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
   } else {
     const rng = mulberry(Date.now() % 999983);
     const power = aiPowerFor(52, classIdx, raceMeta.grade, diffAiMul, (raceMeta.championship ? 6 : 0) + dynastyBonus);
+    const aiSetup = aiSetupFor(raceMeta); // 第17弾C: 全AIチーム共通（天候・地形が同じレースのため対称）
     // v12: 相手チームの出走人数は自チームの選択人数に連動させず、レース規定の範囲内で
     // チームごとに独立して決める（毎回同じ人数になる不自然さを解消）
     const { squadMin, squadMax } = raceMeta.tmpl;
@@ -111,7 +123,7 @@ export function buildSim(raceMeta, squad, aceId, roles, equip, itemBoost, classI
         // 加速力・メンタルなどの副次補正が相手選手にも効くようにする（天候補正もこの中で処理）
         // v48(第10弾続き): 土台の能力値はid+年で固定（安定）、当日の調子（form）は毎レース振り直す。
         r.form = aiFormRoll(rng);
-        const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
+        const e = effAbilities(r, { frame: 0, wheels: 0, facility: 0 }, { setup: aiSetup }, raceMeta.grade, raceMeta.weather, raceMeta.monument);
         return {
           id: r.id, name: r.name, type: r.type, abilities: r.abilities, goldAbilities: r.goldAbilities, age: r.age, ...e,
           team: d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,

@@ -194,7 +194,9 @@ export function useSeasonGame() {
     // ロスター）だけを再利用する
     const { roster2, squad } = prepareNextStageSquad(g, gc);
     // v13: 各日ともステージ1で選んだ作戦（gc.directive）をそのまま引き継ぐ
-    const { sim } = buildSim(gc.race, squad, gc.pendingAceId, gc.pendingRoles, g.equip, { wheel: false, suit: false }, g.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, g.difficulty, undefined, g.dynastyLevel, g.teamName, g.rivalRosters, g.year);
+    // 第17弾C: 機材セットアップ（無料）はグランツールの初日に選んだものを全ステージへ引き継ぐ
+    // （wheel/suitは1回限りの消耗品のため引き継がない・従来通り）
+    const { sim } = buildSim(gc.race, squad, gc.pendingAceId, gc.pendingRoles, g.equip, { wheel: false, suit: false, setup: g.sel.setup || "std" }, g.classIdx, gc.aiTeams, `day${nextStage}`, gc.directive, g.difficulty, undefined, g.dynastyLevel, g.teamName, g.rivalRosters, g.year);
     setG(s => ({
       ...s, roster: roster2, result: sim,
       gc: { ...s.gc, stage: nextStage, aceId: gc.pendingAceId, roles: gc.pendingRoles, pendingStage: null, pendingAceId: null, pendingRoles: null },

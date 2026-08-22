@@ -149,6 +149,28 @@ export function renderSeasonRaceScreens(ctx) {
             {g.inv.suit > 0 && <QuietBtn color={sel.useSuit ? T.color.action : T.color.sub} onClick={() => setG(s => ({ ...s, sel: { ...s.sel, useSuit: !s.sel.useSuit } }))}>エアロスーツ（平坦+15%）{sel.useSuit ? "・使用する" : ""}</QuietBtn>}
           </Section>
         )}
+        {ready && (() => {
+          // 第17弾C: 機材セットアップ（無料・出走メンバー全員に一律）。天候対応チップは該当天候の時だけ表示
+          const setupOptions = [
+            { value: "std", label: "標準" },
+            { value: "light", label: "軽量仕様" },
+            { value: "aero", label: "エアロ仕様" },
+          ];
+          if (race.weather === "rain") setupOptions.push({ value: "rain", label: "雨仕様" });
+          if (race.weather === "heat") setupOptions.push({ value: "cool", label: "冷却仕様" });
+          return (
+            <Section title="機材セットアップ" right="出走メンバー全員に適用">
+              <ChipRow value={sel.setup || "std"} onChange={k => setG(s => ({ ...s, sel: { ...s.sel, setup: k } }))} options={setupOptions} />
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>
+                {sel.setup === "light" ? "登坂に強いが平坦がやや落ちる"
+                  : sel.setup === "aero" ? "平坦に強いが登坂がやや落ちる"
+                  : sel.setup === "rain" ? "雨のペナルティを緩和し落車率も下げるが、地形の得意分野は伸びない"
+                  : sel.setup === "cool" ? "猛暑による疲労蓄積を抑える"
+                  : "地形・天候に左右されない万能仕様"}
+              </div>
+            </Section>
+          );
+        })()}
         <div style={{ display: "grid", gap: T.space.sm }}>
           {g.pendingAiTeams && <QuietBtn onClick={() => setG(s => ({ ...s, screen: "startlist" }))}>出走表（他チームの布陣）を見る</QuietBtn>}
           <PrimaryBtn disabled={!ready} onClick={() => startRace(true)}>観戦しながらスタート</PrimaryBtn>
@@ -206,7 +228,7 @@ export function renderSeasonRaceScreens(ctx) {
             </div>
           ))}
         </Section>
-        <PrimaryBtn onClick={() => { const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))]; advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId }); }}>翌月へ進む</PrimaryBtn>
+        <PrimaryBtn onClick={() => { const expKeys = [...new Set(g.result.course.segs.map(s => SEG_AB[s.type]))]; advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId, setup: g.sel.setup }); }}>翌月へ進む</PrimaryBtn>
       </div>
     );
   }
@@ -260,7 +282,7 @@ export function renderSeasonRaceScreens(ctx) {
             </div>
           ))}
         </Section>
-        <PrimaryBtn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount })}>翌月へ進む</PrimaryBtn>
+        <PrimaryBtn onClick={() => advanceMonth({ starters: g.sel.starters, expKeys, grade: race.grade, weather: race.weather, raceId: g.sel.raceId, grandTour: !!race.grandTour, stageCount: race.stageCount, setup: g.sel.setup })}>翌月へ進む</PrimaryBtn>
       </div>
     );
   }
@@ -437,7 +459,7 @@ export function renderSeasonRaceScreens(ctx) {
             );
           })}
         </Section>
-        <PrimaryBtn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, grade: g.gc.race.grade, weather: g.gc.race.weather, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount })}>翌月へ進む</PrimaryBtn>
+        <PrimaryBtn onClick={() => advanceMonth({ starters: g.gc.starters, expKeys, grade: g.gc.race.grade, weather: g.gc.race.weather, raceId: g.gc.race.id, grandTour: !!g.gc.race.grandTour, stageCount: g.gc.race.stageCount, setup: g.sel.setup })}>翌月へ進む</PrimaryBtn>
       </div>
     );
   }
