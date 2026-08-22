@@ -140,6 +140,8 @@ export function initMyLife() {
     careerWins: 0, careerPodiums: 0, careerBigWins: 0, careerTitles: 0,
     // v32: 固定チームメイト・条件付き作戦・キャリアグラフ用の年次記録
     teammates: [], tactic: "balanced", careerHistory: [],
+    // 第18弾: 僚友（チームメイト・弟子）ごとの絆 { [riderId]: number }
+    bonds: {},
     difficulty: "easy", mlDiffChoice: "easy", // v38(#6): 難易度
     // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」。デビュー時にcpShopMylifePerks()から
     // 一度だけ適用される（既定は無購入＝0）。
@@ -168,6 +170,7 @@ const ML_SAVE_FIELDS = [
   "awardedCP",
   // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」
   "partLvMaxBonus",
+  "bonds", // 第18弾: 僚友ごとの絆
 ];
 
 export function saveMyLife(ml) {
@@ -214,6 +217,8 @@ export function loadMyLifeGame() {
     }
     if (!merged.tactic) merged.tactic = "balanced";
     if (!Array.isArray(merged.careerHistory)) merged.careerHistory = [];
+    // 第18弾: 絆未保存の旧セーブは空から始める
+    if (!merged.bonds || typeof merged.bonds !== "object") merged.bonds = {};
     // v51(第11弾Phase2): 世界ランキング実体化に伴う旧セーブ移行。riderStatsに.wp（世界ポイント）が
     // 無い＝Phase2より前のセーブと判定し、ユーザー判断どおり「自分を含め全員0から再スタート」
     // させる（旧worldPointsを残すと、他の全員が0スタートの中で自分だけ持ち点が残り継続セーブが

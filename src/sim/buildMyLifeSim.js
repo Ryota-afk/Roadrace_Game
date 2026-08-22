@@ -9,6 +9,7 @@ import { SUB_STAT_KEYS, aiFormRoll, idYearSeed, mulberry, newRider } from "../co
 import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, rankSim, simulateTicks } from "./race.js";
 import { aiPowerFor, mlAiCapFor } from "../domain/shared/scouting.js";
 import { loadMlLegends } from "../breeding/breeding.js";
+import { avgBondFor } from "../domain/mylife/bonds.js";
 
 // 第16弾A: ライバルの強さは年齢の山なりで変化する（世界のロースターと同じ「全盛期が最も強い」
 // 発想）。従来は生成時の年齢によらず常にpower+6の固定強度だったため、世界の300名が世代交代する
@@ -23,7 +24,7 @@ function rivalPowerBonus(rival) {
   return 1;                      // 最晩年：それでも並のAIよりは強い
 }
 
-export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege) {
+export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege, bonds) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
   const diffAiMul = diffDef.aiMul;
   // v38(#6): マイライフのAI能力上限を難易度で引き上げる。従来は easy/normal/hard がどれも94上限で
@@ -76,6 +77,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     const aiSquadNRaw = squadMin === squadMax ? squadMin : aiMinFloor + Math.floor(rng() * (squadMax - aiMinFloor + 1));
     const members = [];
     let aiSquadN = aiSquadNRaw;
+    // 第18弾: 実際に出走する僚友（＋弟子）の絆から結束（chemMul）を算出する。省略時・自チーム以外は
+    // 従来通り無効果（chemMul=1）。
+    let coRacedIds = [];
     // v32（固定チームメイト）：自分のチームは、保存済みの固定メンバーを現在の地力で登場させる
     if (isMyTeam && teammates && teammates.length) {
       // v38(#3): 弟子（プロテジェ）を自チームの1枠として実際にレースへ出す。従来は数値が育つだけで
@@ -87,6 +91,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const memberTarget = Math.max(0, aiSquadN - 1);
       const protegeSlot = (protege && protege.id != null && memberTarget >= 1) ? 1 : 0;
       const tmSlots = Math.max(0, memberTarget - protegeSlot);
+      coRacedIds = [...teammates.slice(0, tmSlots).map(tm => tm.id), ...(protegeSlot ? [protege.id] : [])];
       // v48(第10弾続き): 固定メンバーの土台をworldRostersと同じid+年シードへ揃える。
       // 従来はここだけ毎レース非決定論的なrngで再ロールしており、「毎回同じ顔ぶれなのに
       // 能力だけ毎回変わる」という食い違いになっていた（詳細はDEVLOG §41／devlog/wave10.md）。
@@ -133,6 +138,8 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
+    // 第18弾: 実際に出走する僚友（＋弟子）の絆の平均から結束を算出（自チームのみ・絆0なら1=無効果）
+    const chemMul = isMyTeam ? 1 - (avgBondFor(bonds, coRacedIds) / 100) * 0.08 : 1;
     const teamEntrants = members.map((r, i) => {
       // v29: マイライフのAI相手もeffAbilitiesを通し、体格・調子・大舞台・加速力・メンタルを反映
       // v48(第10弾続き): 土台の能力値はid+年で固定した分、当日の調子（form）は毎レース振り直す。
@@ -145,6 +152,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         // チーム集計が自分＋チームメイトで正しくまとまり、集団simのエース同一チーム判定（牽引ペース
         // 合わせ）も効く。表示名 teamName は自チーム名のまま。
         team: isMyTeam ? "PLAYER" : d.name, teamName: d.name, color: d.color, isAce: i === 0, role: aiRoles[r.id], aiStyle,
+        chemMul: isMyTeam ? chemMul : 1,
         isProtege: !!r.isProtege,
       };
     });
@@ -221,6 +229,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         isAce: playerIsAce, role: playerRole, isPlayerChar: true,
         // v35: アシストに徹する選手は脚を賢く使い自滅しない（energyDrainで消耗軽減）
         isAssisting: !!(tac.playerAssist && !playerIsAce),
+        chemMul, // 第18弾: 僚友との絆から算出した結束
       });
     }
     teamEntrants.forEach(en => riders.push(en));

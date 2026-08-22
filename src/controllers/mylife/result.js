@@ -14,6 +14,7 @@ import {
   mlCurrentAmbition, mlNewspaper, mlUpdateRiderStats, peekCourseRecord, raceForecast, rivalDialogue,
   rivalDrama, rivalMeetingHeat, rivalScene, worldPointsForFinish,
 } from "../../logic/support.js";
+import { mlBondsAfterRace } from "../../domain/mylife/bonds.js";
 
 export function mlRaceFinish(s) {
   const sim = s.result;
@@ -136,6 +137,8 @@ export function mlRaceFinish(s) {
   const riderStats = mlUpdateRiderStats(s.riderStats, sim.ranked, new Set([...(s.teammates || []).map(t => t.id), ...(s.protege ? [s.protege.id] : [])]), s.year, race.grade, classMul);
   const wpGain = worldPointsForFinish(me.rank, race.grade, classMul);
   const worldPoints = (s.worldPoints || 0) + wpGain;
+  // 第18弾: 共闘した僚友（チームメイト・弟子）との絆を更新
+  const bonds = mlBondsAfterRace(s.bonds, s, sim, { podium: me.rank <= 3, assist: assistChosen });
   const worldRank = computeWorldRank(riderStats, worldPoints);
   const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
   const careerWins = (s.careerWins || 0) + (me.rank === 1 ? 1 : 0);
@@ -193,6 +196,7 @@ export function mlRaceFinish(s) {
     ambitionIdx, ambitionDone,
     // v37: 永続キャラ（ライバル／チームメイト）の成績台帳を更新（上でworldRank算出のため既に計算済み）
     riderStats,
+    bonds, // 第18弾: 僚友との絆
     resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared, assistOutcome, milestoneWin,
       // v34(UI): レース後サマリーの整理。フィニッシュタイム・トップとの差・下馬評の答え合わせ。
       finishTime: me.finishTime, gapSec: me.rank === 1 ? 0 : (me.finishTime - winner.finishTime),

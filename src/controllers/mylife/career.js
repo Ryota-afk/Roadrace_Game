@@ -61,7 +61,9 @@ export function mlChooseTeam(s, offer) {
   const newTeammates = offer.team !== s.team
     ? mlTeammatesFromRoster(s.worldRosters, offer.team)
     : s.teammates;
-  return { ...s, team: offer.team, classIdx, races, directive, salary, money, teammates: newTeammates, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
+  // 第18弾: 移籍すると僚友が入れ替わるため、絆も新チームで0から
+  const newBonds = offer.team !== s.team ? {} : s.bonds;
+  return { ...s, team: offer.team, classIdx, races, directive, salary, money, teammates: newTeammates, bonds: newBonds, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
 }
 
 // v28: 引退勧告への応答。pendingAdviceに次年度以降の続行state（オフシーズン画面）が

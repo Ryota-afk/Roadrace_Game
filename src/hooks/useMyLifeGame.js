@@ -163,7 +163,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     const baseDirectiveKey = ml.directive ? ml.directive.key : null;
     const { race, directiveKey } = resolveNationalRole(ml.races[0], ml.managerEval, baseDirectiveKey);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, ml.worldRosters, protegeForRace);
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, ml.worldRosters, protegeForRace, ml.bonds);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
     setMl(s => s.screen !== "mylife_main" ? s : ({
       ...s, races: race !== ml.races[0] ? [race, ...s.races.slice(1)] : s.races,
@@ -174,7 +174,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     if (ml.screen !== "mylife_main") return;
     const meta = buildLastRaceMeta(ml.player, ml.year, ml.classIdx);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
-    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", ml.worldRosters, protegeForRace);
+    const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", ml.worldRosters, protegeForRace, ml.bonds);
     setMl(s => s.screen !== "mylife_main" ? s : ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
   }
   // v41(§Step7第3弾): マイライフのレース結果確定は controllers/mylife/result.js の純関数に集約。

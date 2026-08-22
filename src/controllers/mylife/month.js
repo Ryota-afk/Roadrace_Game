@@ -15,6 +15,7 @@ import {
 } from "../../logic/support.js";
 import { mlGenRace } from "../../domain/mylife/race.js";
 import { loadMlLegends } from "../../breeding/breeding.js";
+import { pruneBonds } from "../../domain/mylife/bonds.js";
 
 // v14.2: 月次アクションを「レース／練習」の2択から拡張。練習・休養・イベントで
 // 選手への効果を出し分ける（順位・ポイント・賞金は既にmlRaceFinish側で反映済みのため
@@ -259,6 +260,20 @@ export function mlAdvanceMonth(s, mode) {
     // これで「同じ顔ぶれが永遠に同じ強さ」ではなく、若手台頭とベテラン引退の流れが生まれる。
     const agerng = mulberry(((s.year + 1) * 2246822519) >>> 0);
     const aged = ageWorldRosters(s.worldRosters, agerng, s.year + 1, MYLIFE_TEAMS, loadMlLegends());
+    // 第18弾D: 絆の高い僚友は練習の質が上がり、実際の成長（baseline）が良くなる。
+    // ageWorldRosters自体は無改修（シーズンに影響しない）で、その戻り値の自チームのみに
+    // 後処理として適用する（第16弾のageRivalと同じ手筋）。クランプ14はageWorldRosters内部の
+    // 上限と同値（自チームだけ上限を超えないため）。ログは出さない（§7の抑制。効果は
+    // 名鑑の成長と結束の数字で見える）。
+    if (aged.worldRosters[s.team]) {
+      aged.worldRosters[s.team] = aged.worldRosters[s.team]
+        .map(r => {
+          const bond = (s.bonds || {})[r.id] || 0;
+          const boost = bond >= 85 ? 2 : bond >= 60 ? 1 : 0;
+          return boost ? { ...r, baseline: Math.min(14, (r.baseline || 0) + boost) } : r;
+        })
+        .sort((a, b) => (b.baseline || 0) - (a.baseline || 0));
+    }
     // v41(§Step7第3弾): advanceWorldYear()（非冪等なlocalStorage書き込み）はここで呼ばず、
     // s.yearの変化を検知したApp()側のuseEffectに一本化した（詳細はDEVLOG §9参照）。
     // 自チームの引退は下のチームメイト専用ログで個別に出すため、ここでは他チーム分だけに絞る
@@ -281,6 +296,8 @@ export function mlAdvanceMonth(s, mode) {
     if (freshFaces.length && s.teammates && s.teammates.length) {
       log.push(`【${s.year}年目 3月】新加入の${freshFaces.map(tm => tm.name).join("・")}がチームに合流した`);
     }
+    // 第18弾B: 現メンバー（次年度のチームメイト＋弟子）以外の絆を刈り取る（引退・入れ替わりで自然に消える）
+    const nextBonds = pruneBonds(s.bonds, [...nextTeammates.map(tm => tm.id), ...(s.protege ? [s.protege.id] : [])]);
     // 第16弾A: ライバル（好敵手）も世界の選手と同じルールで加齢・引退する。引退時は
     // 若い後継のライバルが台頭する（対戦成績はリセット＝因縁は一から）。2人のライバルの
     // rng streamは互いに独立させ、後継の名前は「もう一方の現在のライバル」と重複しないようにする。
@@ -396,7 +413,7 @@ export function mlAdvanceMonth(s, mode) {
         races: [mlGenRace(s.year + 1, 0, classIdx)],
         directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
         contractOffers: [stayOffer, ...offerTeams], biddingWar,
-        salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates,
+        salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
         rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
         retiredRivals: nextRetiredRivals,
         screen: "mylife_contract", log,
@@ -406,7 +423,7 @@ export function mlAdvanceMonth(s, mode) {
       ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
       races: [mlGenRace(s.year + 1, 0, classIdx)],
       directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-      salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates,
+      salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
       rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
       retiredRivals: nextRetiredRivals,
       screen: "mylife_main", log,
