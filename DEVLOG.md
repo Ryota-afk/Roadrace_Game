@@ -199,8 +199,21 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
 - ランキング：`computeWorldRank(riderStats, myWp)`（実順位）・`mlWorldBoard(ml)`（表示用の並び）・
   `worldPointsForFinish(rank, grade, classMul)`・`mlUpdateRiderStats(...)`・`decayRiderStatsWp(...)`
   （いずれも`domain/mylife/worldRank.js`）。
-- ニュース：`mlBuildWorldNews(riderStatsById, leaderEntry, retired, debuted, year)`（`view/news.js`）。
-  実際に起きた出来事（首位交代・引退・デビュー）から組む。旧`mlWorldNews(seed, year, ...)`は無い。
+- ニュース：`mlBuildWorldNews({riderStatsById, leaderEntry, retired, debuted, year, prevWorldRosters,
+  nextWorldRosters, prevLeaderId, rivalRetirements})`（`view/news.js`・第16弾B-1で5引数→1
+  オプションオブジェクトへ変更、優先度順に最大7行）。実際に起きた出来事（王者交代・ライバル引退・
+  大物引退・エース交代・節目の勝利数・新星デビュー）から組む。旧`mlWorldNews(seed, year, ...)`は無い。
+- **ライバルのライフサイクル（第16弾A）**：`domain/season/rival.js`の`ageRival(rival, record, rng,
+  year, playerName, playerTeamName, bannedNames, bannedTeams)`が、世界ロースターと同じ引退式
+  （38歳強制・33歳以上は`0.18+(age-33)*0.06`）でライバルを加齢・引退・後継者生成する
+  （引退時は20〜23歳の新ライバルへ、`rivalRecord`は`{0,0,0}`にリセット）。年度末に
+  `controllers/mylife/month.js`が呼ぶ。強さの年齢フェーズ`rivalPowerBonus(rival)`
+  （23歳以下+3／24〜31歳+6／32〜34歳+4／35歳以上+1）は**`sim/buildMyLifeSim.js`内の私的関数**
+  として複製されている（`domain/season/rival.js`は`state/state.js`をimportしsim層より上位のため、
+  sim層から参照すると依存の一方向が崩れる）。
+- **シーズンの他チーム動向（第16弾C）**：`seasonWorldNews(rosters, year, month)`（`view/news.js`）が
+  `g.rivalRosters`の実データ（エース年齢・成長ピーク超過・新人加入・若手大器）から優先度順に
+  1文を生成する。旧`rivalNews`（張りぼてテンプレ8種）は完全削除済み。
 - **殿堂の血が流入**：`legendPool = loadMlLegends()`を渡すと上位スターが殿堂選手の姓・脚質を継ぐ`bloodOf`付きになる。
 - **殿堂の頭数と対戦相手への出現は無関係**（次のアクション調査済み）：`legendPool`は無制限に蓄積するが、1レースあたりの殿堂選手代打は`nLeg=0/1/2`（55%×35%分布）で固定上限。
 - **永続ロースター（§33）**：`WORLD_ROSTER_SIZE = 12`（`data/teams.js`）。マイライフ世界人口は
@@ -294,6 +307,8 @@ npx http-server -p 8844 -s -c-1 .   # ← run_in_background で起動。curlで2
 - 爆発力＆配合評価／危険度／系統確立＋因子／特殊配合／生きた世界（永続ペロトン＋殿堂の血流入）／モニュメント／アシスト作戦
 - 血脈レシピ（第15弾）：世代をまたぐ順序付き隠しレシピ5件。成立で伝説特能＋成長曲線緩和＋
   専用称号。配合画面に段階的ヒント（最有力1件のみ強調・§46）
+- ライバルの加齢・引退・後継登場、月次world ticker（他クラス優勝者の一言）、年度末世界ニュース
+  7優先度への拡充（第16弾・§47）
 - イベント：能力/新ステ変動・賭け（ダイジョーブ博士系）・覚醒・悪イベントの5分類、46件以上（継続拡充中、§18）
 - イベント・岐路・オフシーズン・弟子指導での能力変化は必ず差分表示（`abilityDeltaSummary`/`protegeEffectSummary`、§21）
 - 「今月の行動」の推奨表示（疲労・レース有無・大舞台から1つ判定、§24）
@@ -330,10 +345,10 @@ v33系〜現行まで、すべてPlaywright（＋純ロジックはNode単体）
 
 ## 5. 今後の候補（ゲーム内容・未着手のみ）
 
-第1候補（シーズンの駆け引き①②③）は全て完了済み（§4参照）。以下、着手順は未確定：
+第1候補（シーズンの駆け引き①②③）は全て完了済み（§4参照）。「生きた世界の深掘り」（ライバルの
+成長/全盛期/引退・世界ランキング変動のニュース化・世代交代の物語化）も第16弾（§47）で完了済み。
+以下、着手順は未確定：
 
-- **生きた世界の深掘り**：`src/world/world.js`はv33.10で停滞。ライバルの成長/全盛期/引退・
-  世界ランキング変動のニュース化・世代交代の物語化を深める余地あり。
 - **アイテム・設備の刷新**：`src/data/items.js`は少数のまま。機材選択にトレードオフ（軽量
   ホイール＝登り有利/平坦不利、雨用・石畳用など）を入れる案（未整理）。
 - 特殊配合の深化（順序を含む隠しレシピ）は第15弾（§46）で完了。リーグ全体の生きてる感は
@@ -612,6 +627,24 @@ Wave13の`Btn`撤去漏れ（`RaceErrorBoundary`が未importの`Btn`を参照）
 ことを実測で確認済み。あわせて1,096行に肥大化していた`state.js`をCLAUDE.md §5に沿って
 6ファイルへ分割（互換シムとして残置、外部29importerは無改修）。
 
+## 47. 第16弾（生きた世界の深掘り＋`sim/race.js`分割）— 完了
+
+**状態**：完了（2026-08）。§5の未着手候補「生きた世界の深掘り」に着手し完結。**全文は
+`devlog/wave16.md`**（実測・設計合意・実装結果・検証ログすべてそちらに記録済み）。
+
+**要点**：ライバルに世界ロースターと同じ加齢・引退・後継登場のライフサイクルを実装
+（`ageRival()`・引退時は20〜23歳の新ライバルが名乗りを上げ因縁は一から）。年度末世界ニュース
+（`mlBuildWorldNews`）を3行→優先度順最大7行へ拡充（王者交代・ライバル引退・エース交代・
+節目の勝利数を追加）。月次にも軽い世界の動き（`worldTicker`・他クラス優勝者1行、既存の月次
+決着ループを流用し追加コストなし）を新設。シーズンの「他チーム動向」は張りぼてテンプレ8種
+（`rivalNews`）を廃止し、`rivalRosters`の実データ（エース年齢・成長ピーク超過・新人・若手大器）
+から生成する`seasonWorldNews()`へ置換。あわせて1,089行に肥大化していた`sim/race.js`を
+CLAUDE.md §5に沿って5ファイル（`data/parts.js`・`sim/effects.js`・`sim/course.js`・`sim/ticks.js`・
+`sim/finish.js`）へ分割（互換シムとして残置、外部19importerは無改修）。旧セーブ互換
+（`rival.age`欠落／`retiredRivals`・`worldLeaderId`未保存／`rivalRosters`空）の3系統をNode単体
+テストで明示的に確認済み。**現行の仕様は§3「生きた世界」の該当項目が正**
+（ライバルのライフサイクル／シーズンの他チーム動向）。
+
 ---
 
 ## 次のアクション（ユーザーメモ・未着手のみ）
@@ -643,8 +676,8 @@ Wave13の`Btn`撤去漏れ（`RaceErrorBoundary`が未importの`Btn`を参照）
 **実装順序（上から着手する）**
 
 - 完了済みの弾：第5〜6弾（§36・§37）／第7〜9弾（§38・§39・§40）／第10弾（§41）／
-  第11弾 Phase 1-3（§42）／第12弾（§43）／第13弾（§44）／第14弾（§45）／第15弾（§46）。
-  各弾の要点はその§、全文は`devlog/waveNN.md`。
+  第11弾 Phase 1-3（§42）／第12弾（§43）／第13弾（§44）／第14弾（§45）／第15弾（§46）／
+  第16弾（§47）。各弾の要点はその§、全文は`devlog/waveNN.md`。
 - **以降：** 4番（拠点のドット絵化）、11番（スプライト描き直し・凍結中）。
 
 **ドット絵化の拡張**

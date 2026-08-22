@@ -1,8 +1,9 @@
 # 第16弾：生きた世界の深掘り＋`sim/race.js`分割
 
-**状態：設計合意済み・実装待ち**。§5の未着手候補「生きた世界の深掘り」（ライバルの成長/全盛期/引退・
-世界ランキング変動のニュース化・世代交代の物語化）に着手する。あわせてCLAUDE.md §5に沿って
-`sim/race.js`（1,089行・現在最大）を分割する（第15弾の`state.js`と同じ互換シム方式）。
+**状態：完了（2026-08）**。§5の未着手候補「生きた世界の深掘り」（ライバルの成長/全盛期/引退・
+世界ランキング変動のニュース化・世代交代の物語化）に着手し完結。あわせてCLAUDE.md §5に沿って
+`sim/race.js`（1,089行・当時最大）を分割した（第15弾の`state.js`と同じ互換シム方式）。
+実装結果・検証ログは末尾の「実装結果」節を参照。
 
 ## 着手時の実測
 
@@ -109,6 +110,11 @@ rival2も同式。**全盛期の+6は現行値そのまま**＝既存バラン�
   caption（12px・`T.color.sub`）1行。自分の物語（メディア欄）と世界の動き（ticker）が
   同じ場所に並ぶ。※実装時に実画面を見て、ごちゃつくようなら位置を1回だけ調整して
   スクリーンショットで確認する（CLAUDE.md §7）。
+  **【実装時訂正】** `mlMediaHeadline`は`hub.jsx`ではimportされているだけで未使用（呼び出しなし）
+  だった。実際の（唯一の）呼び出し箇所は`screens/mylife/world.jsx`の「世界」タブ内、
+  `{media && (<Section title="ロードレース・タイムズ">...)}`ブロック。設計時のgrep調査が
+  不十分だったための誤り。実装は`world.jsx`側のこのSectionの直下に配置した（詳細は
+  「実装結果」節）。
 
 ### C. シーズンの「他チームの噂」実データ化
 
@@ -171,3 +177,55 @@ rival2も同式。**全盛期の+6は現行値そのまま**＝既存バラン�
 - Dは第15弾と同じ「抽出体のdiff照合＋export表面の自動比較」を必須とする。
 - 旧セーブ互換：`rival.age`欠落（→26初期化）・`retiredRivals`/`worldLeaderId`/`worldTicker`
   未保存（→null/[]で開始）・`rivalRosters`空（→C汎用文フォールバック）の3系統を明示的にテスト。
+
+## 実装結果
+
+設計どおりD→A→B-1→B-2→C→最終検証の順で実装。すべてNode単体テスト＋ビルド＋Playwrightで
+検証済み、コンソールエラー0件。
+
+**D（`sim/race.js`分割）**：`data/parts.js`・`sim/effects.js`・`sim/course.js`・`sim/ticks.js`
+（753行）・`sim/finish.js`の5ファイルへ分割、`race.js`は39シンボル全再exportの互換シムへ
+（設計表からの変更点：`finishAbility`は`effects.js`ではなく唯一の呼び出し元`resolveFinishClusters`
+と同じ`finish.js`に置いた＝クロスファイルimportを1本減らす軽微な最適化）。
+抽出は`sed`範囲コピー→`diff`でオリジナルとバイト照合→39/39シンボルの自動比較で export面が
+完全一致することを確認。**ビルドは通ったが`sim/ticks.js`に`terrainSpeedMul`のimportが1行
+漏れており、Node側でクロスファイル実行するテストでのみ`ReferenceError`として顕在化した**
+（静的ビルドだけでは検出できない典型例。CLAUDE.md的にも「ビルド成功だけを信用しない」を
+再確認した回）。import追加で解消、以後全テスト成功。
+
+**A（ライバルのライフサイクル）**：`domain/season/rival.js`に`ageRival(rival, record, rng, year,
+playerName, playerTeamName, bannedNames, bannedTeams)`を新設。`ageWorldRosters()`と同じ引退式
+（38歳強制・33歳以上は`0.18+(age-33)*0.06`）を踏襲し、引退時は`retiredInfo`（記録つき）を返しつつ
+`mlCreateRival`で20〜23歳の後継者を生成、`rivalRecord`は`{0,0,0}`にリセット。
+`rivalPowerBonus(rival)`は設計どおりの4段階だが、**`domain/season/rival.js`は`state/state.js`を
+importしておりsim層より上位に位置するため**、sim層（`buildMyLifeSim.js`）からそこへ逆依存する
+わけにいかず、`rivalPowerBonus`はsim層内に私的関数として複製した（層の一方向依存を優先した
+設計時未検討の分岐）。Node実測（20,000試行）で年齢別引退率が理論値と±0.5%以内に一致することを
+確認。
+
+**B-1（年度末世界ニュース）**：`mlBuildWorldNews`を5引数→1オプションオブジェクトへ変更
+（入力が5→9個に増えたため）。設計表どおり優先度7段を実装、唯一の呼び出し元
+`controllers/mylife/month.js`を更新。`worldLeaderId`（前年首位id）を新設の永続フィールドとして
+`mylifeState.js`へ追加。Node単体テストで7発火条件すべて確認。
+
+**B-2（月次world ticker）**：既存の月次`mlWorldRaceLite`ループ（元々台帳用に毎月実行済み・
+追加コストなし）から`worldTicker`（他クラス優勝者1行、非永続の一時フィールド＝`growthReport`と
+同じ扱い）を生成。**表示位置は設計時の誤りを実装時に訂正し`world.jsx`の「ロードレース・タイムズ」
+Section直下**（詳細は上記【実装時訂正】）。Playwrightで表示・0エラーを確認。
+
+**C（シーズンの噂の実データ化）**：`rivalNews`と`RIVAL_NEWS_TEMPLATES`（8種）を完全削除し
+`seasonWorldNews(rosters, year, month)`へ置換（呼び出し元は`status.jsx`1箇所のみのため
+互換シムなしで削除＝CLAUDE.md「確実に不要なら消す」方針）。設計どおり5優先度。
+`growthPeakAge`を`state/worldRoster.js`でexport化。Node単体テスト7件（5優先度＋空ロースター
+フォールバック＋優先度順序）・Playwright表示確認とも成功。
+
+**最終検証**：`npm run build`成功。両モードPlaywright実プレイ（シーズン：新規チーム作成→
+「他チーム動向」実データ文言確認／マイライフ：新規デビュー→世界タブ表示確認）でコンソール
+エラー0件。旧セーブ互換3系統（`rival.age`欠落→27歳として扱われ引退しない／`retiredRivals`
+`worldLeaderId`未保存→`[]`/`null`へ補完・`worldTicker`は非永続なので存在しなくて正常／
+`rivalRosters`空→汎用文フォールバック）をNode単体テスト7アサーションで確認。
+
+**旧セーブ互換の実装箇所**：`state/mylifeState.js`の`ML_SAVE_FIELDS`に`retiredRivals`・
+`worldLeaderId`を追加、`loadMyLifeGame()`で`retiredRivals`未保存時に`[]`へ補完
+（`worldLeaderId`は`{...base, ...parsed.state}`の展開順だけで自然に`null`へ補完されるため
+追加コード不要）。`worldTicker`はそもそも非永続（`ML_SAVE_FIELDS`に含めない）ため互換処理も不要。
