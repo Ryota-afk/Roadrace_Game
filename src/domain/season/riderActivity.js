@@ -65,9 +65,11 @@ export function workSpotFor(roomKey, station, clutter) {
   if (chair) return { w: chair.w, l: chair.l, pose: "sit" };
   // Wave H-3: 「ぼっ立ち」修正の第1弾。トレーニング室の主要什器はローラー台そのものなので、
   // 実際のロード選手と同じく自転車ごとローラーに乗せる（新規ドット絵不要でPixelBikeを流用）。
-  // 什器の座標そのものを使う（「手前」オフセットは徒歩の人物が什器の前に立つための調整で、
-  // 自転車が什器に重なるのはむしろ正しい絵になるため付けない）。
-  if (roomKey === "training") return { w: station.w, l: station.l, pose: "roller" };
+  // 第20弾: st_rollerスプライトは「ローラー台(左)＋机(右)＋青マット(手前)」のセットで、
+  // アンカー(bbox下端中央)は台の中心からずれている。台の中心（アンカーからscreen(-4,-9)px
+  // ＝world(-0.42,+0.27)）へオフセットし、自転車が台の真上に乗るようにする
+  // （2026-08ユーザー指摘「ローラーの向き」：台の脇のマット上に台とは別の向きで立っていた）。
+  if (roomKey === "training") return { w: station.w - 0.42, l: station.l + 0.27, pose: "roller" };
   return { w: station.w, l: station.l - 0.6, pose: "stand" };
 }
 

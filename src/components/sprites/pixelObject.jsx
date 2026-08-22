@@ -19,7 +19,10 @@ export const OBJ_PX = 0.5;
 // (+w→(26,13), +l→(26,-13)) ごと楕円に適用し、中心はanchorからfootprint中央
 // （dx=26*(hl-hw), dy=-13*(hw+hl)）へ自動で戻す。省略時はスプライト幅から正方形
 // footprintを推定。noShadow: trueで影なし（接地面いっぱいの造形＝池・装飾用）。
-export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowW, shadowL, shadowDx = 0, shadowDy = 0, noShadow }) {
+// flip: 左右鏡像（アンカーを軸にscale(-1,1)）。アイソメでは向き（SW⇔SE等）の反転になる。
+// 椅子など「据え付ける向き」が部屋ごとに違う什器のために第20弾で追加。影も一緒に鏡像に
+// なるが、地面楕円の鏡像はやはり地面楕円なので破綻しない。
+export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowW, shadowL, shadowDx = 0, shadowDy = 0, noShadow, flip }) {
   const s = spriteImageUrl(data.rows, legend || data.legend || OBJ_LEGEND, cacheKey);
   const w = +(s.w * OBJ_PX).toFixed(2), h = +(s.h * OBJ_PX).toFixed(2);
   const auto = +(w / 104 * 1.2).toFixed(3);
@@ -31,7 +34,7 @@ export function pixelObjectNode({ x, y, data, legend, cacheKey, key, shadowW, sh
   const ox = +(-data.anchorCol * OBJ_PX).toFixed(2);
   const oy = +(-(data.anchorRow + 1) * OBJ_PX).toFixed(2);
   return (
-    <g key={key} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
+    <g key={key} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})${flip ? " scale(-1,1)" : ""}`}>
       {!noShadow && hw > 0 && <ellipse cx="0" cy="0" rx="1" ry="1" fill="#000" opacity="0.13" transform={shTf} />}
       <image href={s.url} x={ox} y={oy} width={w} height={h} style={{ imageRendering: "pixelated" }} />
     </g>

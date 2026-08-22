@@ -143,12 +143,15 @@ export const BASE_VIEW_FIXTURES = [
   { key: "mechanic-stand2", room: "mechanic", kind: "workbench2", w: 7.6, l: -0.35, minLevel: 4 },
   { key: "mechanic-wheelbuild", room: "mechanic", kind: "wheelBuildStand", w: 5.5, l: 2.2, minLevel: 5 },
   // メディカル室(w11〜14, l-4.5〜-0.9)：椅子は常設／Lv1 薬品棚／Lv2 処置ワゴン／Lv3 2台目のベッド
-  { key: "medical-chair", room: "medical", kind: "chair", w: 11.6, l: -3.9, minLevel: 0 },
+  // 椅子スプライトは素のままだと座面が左下(SW)向き。flipで右下(SE)＝ベッド・ドクターの方を向かせる。
+  { key: "medical-chair", room: "medical", kind: "chair", w: 11.6, l: -3.9, minLevel: 0, flip: true },
   { key: "medical-cabinet", room: "medical", kind: "cabinet", w: 13.6, l: -1.5, minLevel: 1 },
   { key: "medical-cart", room: "medical", kind: "medCart", w: 11.5, l: -1.3, minLevel: 2 },
   { key: "medical-bed2", room: "medical", kind: "bed2", w: 13.6, l: -3.9, minLevel: 3 },
   // スカウト室(w11〜14, l-0.9〜2.7)：椅子は常設／Lv1 選手ファイル／Lv2 ホワイトボード／Lv3 資料棚
-  { key: "scout-chair", room: "scout", kind: "chair", w: 13.0, l: 0.6, minLevel: 0 },
+  // 椅子は机(st_desk)の奥側に置き、素の向き(SW=左下)のまま机に向かって座る形にする
+  // （旧位置(13.0,0.6)は机に背を向けて部屋の隅を向いていた＝2026-08ユーザー指摘「椅子の向き」）。
+  { key: "scout-chair", room: "scout", kind: "chair", w: 12.5, l: 2.35, minLevel: 0 },
   { key: "scout-folders", room: "scout", kind: "folders", w: 11.4, l: 2.4, minLevel: 1 },
   { key: "scout-whiteboard", room: "scout", kind: "whiteboard", w: 13.5, l: 2.4, minLevel: 2 },
   { key: "scout-shelf", room: "scout", kind: "archiveShelf", w: 13.6, l: -0.3, minLevel: 3 },
@@ -158,8 +161,8 @@ export const BASE_VIEW_FIXTURES = [
   { key: "hall-reception", room: "hall", kind: "receptionCounter", w: 10.6, l: -1.8, minLevel: 0 },
   { key: "hall-corkboard", room: "hall", kind: "corkboardStand", w: 8.5, l: -1.6, minLevel: 0 },
   { key: "hall-magazines", room: "hall", kind: "magazineRack", w: 10.6, l: -4.0, minLevel: 0 },
-  // スカウト室の置き時計（Kシート）
-  { key: "scout-clock", room: "scout", kind: "deskClock", w: 12.9, l: 2.45, minLevel: 0 },
+  // 置き時計（Kシート）は玄関ホールの受付脇へ（スカウト室は椅子の移動で手狭になった）
+  { key: "hall-clock", room: "hall", kind: "deskClock", w: 10.3, l: -1.3, minLevel: 0 },
   // --- 条件解禁の奥3部屋（J/Kシートの専用什器。解禁前はBaseView側で
   //     このグループごと非表示にし、st_emptyの納戸を描く） ---
   // 食堂：テーブルセット＋配膳カウンター＋メニュー掲示のコルクボード（立てかけ）
@@ -184,8 +187,10 @@ export const BASE_VIEW_STAFF = [
     w: 5.5, l: -3.0, color: "#2f8f5c", cap: "#e9e2d4", flip: false },
   { key: "doctor", staffKey: "doctor", room: "medical", label: "ドクター",
     w: 13.1, l: -2.3, color: "#eef4f6", cap: "#c7d3d8", flip: true },
+  // 第20弾: 椅子を机の奥へ移した際、旧位置(11.7,1.5)が「扉→椅子」の徒歩ルート上に
+  // なったため机の手前側へ（tools/verify_baseview.mjsが検出）。
   { key: "scout", staffKey: "scout", room: "scout", label: "スカウト",
-    w: 11.7, l: 1.5, color: "#c98bf0", cap: "#5c4a68", flip: false },
+    w: 12.9, l: 0.9, color: "#c98bf0", cap: "#5c4a68", flip: false },
   { key: "manager", staffKey: "manager", room: "hall", label: "マネージャー",
     w: 10.4, l: -3.3, color: "#3a4250", cap: "#c9a23c", flip: true },
 ];

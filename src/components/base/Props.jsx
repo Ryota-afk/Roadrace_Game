@@ -38,9 +38,11 @@ function bikeRackNode(w, l, proj, key) {
 function teamCarNode(w, l, proj, key) {
   const base = isoProject(w, l, 0, proj);
   // 車は+l方向（画面右上がり）に長い。footprintを実車比（幅0.45×長さ0.95ユニット）で指定。
+  // 影は光源=右上の想定で車体の左下へ落とす（2026-08ユーザー指摘。旧値(-5,2.5)は楕円が
+  // 車体の右脇にはみ出して見えていた。オフライン合成(scratchpad w19/car_shadow_*.png)で調整）。
   return pixelObjectNode({
     x: base.x, y: base.y, data: OBJ_SPRITES.teamCar, key,
-    cacheKey: "obj-teamCar", shadowW: 0.45, shadowL: 0.95, shadowDx: -5, shadowDy: 2.5,
+    cacheKey: "obj-teamCar", shadowW: 0.5, shadowL: 0.92, shadowDx: -16, shadowDy: 9.5,
   });
 }
 

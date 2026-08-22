@@ -141,6 +141,9 @@ const ACTIVITY_CTX = (() => {
   }
   return { ...base, roomKeys, routes, poses };
 })();
+// 第20弾: 部屋ごとの椅子の向き（flip）。座る選手の向きを椅子に揃えるための静的表。
+const CHAIR_FLIP = Object.fromEntries(
+  BASE_VIEW_FIXTURES.filter(f => f.kind === "chair").map(f => [f.room, !!f.flip]));
 
 export function BaseView({ g, paused, onRoomTap }) {
   const elapsed = useElapsedSeconds(!!paused);
@@ -174,11 +177,17 @@ export function BaseView({ g, paused, onRoomTap }) {
     // 実際の描画位置と向き判定がズレないようにしてある（Wave G-1改で発覚したバグの修正）。
     const wob = activityWobble(r, act, elapsed);
     const p = isoProject(act.w, act.l + wob, 0, PROJ);
+    // 第20弾: 静止ポーズの向きは移動方向からは決まらないため、什器に合わせて固定する。
+    //  - roller: st_rollerの台の長軸は+l（画面右上がり）＝NE向き・非反転
+    //  - sit: 椅子(chair)スプライトの向き（素=SW/左向き、flip=SE/右向き）に人も揃える
+    const still = act.pose === "roller" || act.pose === "sit";
+    const chairFlip = act.pose === "sit" && CHAIR_FLIP[act.roomKey];
     return {
       kind: "rider", r, act, x: p.x, y: p.y, sortY: p.y,
       indoors: isIndoors(act.w, act.l, BASE_VIEW_CLUBHOUSE),
-      flip: activityFacesLeft(r, elapsed, ACTIVITY_CTX, PROJ),
-      dir: activityDir(r, elapsed, ACTIVITY_CTX, PROJ),
+      flip: still ? (act.pose === "sit" ? !chairFlip : false)
+        : activityFacesLeft(r, elapsed, ACTIVITY_CTX, PROJ),
+      dir: act.pose === "roller" ? "NE" : activityDir(r, elapsed, ACTIVITY_CTX, PROJ),
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
       color: (TYPES[r.type] && TYPES[r.type].color) || T.color.accent,
       phase: riderHash01(r.id, 91) * 4, // 歩調・ペダリングが全員で揃わないようずらす

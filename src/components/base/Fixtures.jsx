@@ -12,6 +12,6 @@ export function fixtureItems(proj, list) {
     const data = OBJ_SPRITES[c.kind];
     if (!data) return null;
     const p = isoBoxFaces(c.w, c.l, 0, 0, 0, proj).corners.N;
-    return pixelObjectNode({ x: p.x, y: p.y, data, key: c.key, cacheKey: `obj-${c.kind}` });
+    return pixelObjectNode({ x: p.x, y: p.y, data, key: c.key, cacheKey: `obj-${c.kind}`, flip: c.flip });
   }).filter(Boolean);
 }
