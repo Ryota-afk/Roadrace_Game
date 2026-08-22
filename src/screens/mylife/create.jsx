@@ -3,6 +3,7 @@
 // season側と共有のため中身は据え置き（Phase3-D-3担当）。
 import React from "react";
 import { loadBloodlines, loadMlLegends, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
+import { bestBloodRecipeProgress, bloodRecipeProgress, deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
 import { AbilityGrid, TraitLine } from "../../components/panels.jsx";
 import { Item, PrimaryBtn, QuietBtn, Screen, Section, SelectRow } from "../../components/kit.jsx";
 import { fmtRelTime, overall } from "../../core/core.js";
@@ -145,6 +146,48 @@ export function renderMyLifeCreateScreens(ctx) {
                           )}
                         </Section>
                       )}
+
+                      {breed && (() => {
+                        // 第15弾D: 血脈レシピの段階的ヒント（候補C・合意済み）。
+                        // mlCreateChar()が実際に使う式と完全一致させ、「デビューすれば確実にこうなる」
+                        // という確定情報として見せる。
+                        const pool = [...deriveBloodMarks(master), ...deriveBloodMarks(partner)].slice(0, 24);
+                        const recipe = matchBloodRecipe(pool);
+                        const progress = recipe ? [] : bloodRecipeProgress(pool);
+                        const best = bestBloodRecipeProgress(progress);
+                        const otherCount = best ? progress.length - 1 : 0;
+                        return (
+                          <Section title="血脈レシピ">
+                            {recipe ? (
+                              <div style={{ background: T.color.surfaceUp, borderLeft: `3px solid ${T.color.accent}`, padding: T.space.sm }}>
+                                <div style={{ fontSize: T.size.body, color: T.color.accent }}>血脈レシピ『{recipe.title}』成立！</div>
+                                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{recipe.note}</div>
+                                <div style={{ fontSize: T.size.caption, color: T.color.text, marginTop: T.space.xs }}>
+                                  👑 伝説の特殊能力「{ABILITIES[recipe.abilityId]?.label}」を宿して生まれる
+                                </div>
+                              </div>
+                            ) : best ? (
+                              <>
+                                <div style={{ background: T.color.surfaceUp, borderLeft: `3px solid ${T.color.sub}`, padding: T.space.sm }}>
+                                  <div style={{ fontSize: T.size.body, color: T.color.text }}>{best.recipe.title}</div>
+                                  <div style={{ fontSize: T.size.body, color: T.color.accent, letterSpacing: 2, marginTop: 2 }}>
+                                    {"●".repeat(best.matchedCount)}{"○".repeat(best.total - best.matchedCount)}
+                                  </div>
+                                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
+                                    {best.recipe.steps.slice(0, best.matchedCount).join(" → ")}
+                                    {best.matchedCount < best.total && `　／　次の代に「${best.recipe.steps[best.matchedCount]}」が揃うと成立`}
+                                  </div>
+                                </div>
+                                {otherCount > 0 && (
+                                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>他に{otherCount}件の隠しレシピが進行中</div>
+                                )}
+                              </>
+                            ) : (
+                              <div style={{ color: T.color.sub, fontSize: T.size.caption }}>配合を重ねると、隠されたレシピの手がかりが見えてくる</div>
+                            )}
+                          </Section>
+                        );
+                      })()}
                     </>
                   );
                 })()}

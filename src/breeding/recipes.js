@@ -47,31 +47,34 @@ const flatSpecialist = ["specialist_SPR", "specialist_RUL"];
 const anySpecialMating = (mark) => typeof mark === "string" && mark.startsWith("sm:");
 
 // abilityId: 成立時にdomain/mylife/createChar.jsが付与する伝説特能（data/abilities.js参照）。
-// color: 称号表示用のアクセント色（Task D・段階的ヒントUIで使用）。
+// color: 称号表示用のアクセント色（現状のUI規約ではT.color.accentで代用するため未使用。
+//   既存のML_SPECIAL_MATINGSのcolorフィールドと同じ位置づけ）。
+// steps: 段階的ヒントUI（screens/mylife/create.jsx）が「何代目に何の血が必要か」を
+//   一致した分だけ開示するための、世代ごとの人間可読ラベル。patternと同じ長さ・同じ順序。
 export const ML_BLOOD_RECIPES = [
   {
     key: "revenge", title: "雪辱の血脈", depth: 2, abilityId: "revenant", color: "#ff6b6b",
-    pattern: ["nearly", world1OrEmperor],
+    pattern: ["nearly", world1OrEmperor], steps: ["雪辱の血", "頂点の血"],
     note: "勝てなかった選手の無念を、その血を継いだ子が頂点で晴らす",
   },
   {
     key: "twin_edge", title: "二刀の血統", depth: 2, abilityId: "twinsoul", color: "#4fd1c5",
-    pattern: [climbSpecialist, flatSpecialist],
+    pattern: [climbSpecialist, flatSpecialist], steps: ["登坂の血", "平坦の血"],
     note: "登坂と平坦、相反する才能が二代を経て一人に融合する",
   },
   {
     key: "three_gen", title: "三代の悲願", depth: 3, abilityId: "destiny", color: "#f6ad55",
-    pattern: ["nearly", "nearly", "world1"],
+    pattern: ["nearly", "nearly", "world1"], steps: ["雪辱の血", "雪辱の血", "頂点の血"],
     note: "二代続けて手が届かなかった頂点に、三代目がついに立つ",
   },
   {
     key: "iron_peak", title: "不落の山嶺", depth: 3, abilityId: "unfallen", color: "#a0aec0",
-    pattern: ["ironman", "specialist_CLM", "specialist_CLM"],
+    pattern: ["ironman", "specialist_CLM", "specialist_CLM"], steps: ["鉄人の血", "登坂の血", "登坂の血"],
     note: "鉄の肉体の上に、三代にわたって山の血が積み重なる",
   },
   {
     key: "supremacy", title: "覇道極まれり", depth: 4, abilityId: "sovereign", color: "#ffd700",
-    pattern: ["emperor", heroAny, "world1", anySpecialMating],
+    pattern: ["emperor", heroAny, "world1", anySpecialMating], steps: ["帝王の血", "英雄の血", "頂点の血", "特別な配合の血"],
     note: "帝王・英雄・世界の頂点、そして特別な血の交わりを経て覇道が極まる",
   },
 ];
@@ -115,4 +118,17 @@ export function bloodRecipeProgress(bloodMarks, recipes = ML_BLOOD_RECIPES) {
     if (best > 0) out.push({ recipe: r, bestBase, matchedCount: best, total: r.pattern.length });
   }
   return out;
+}
+
+// 段階的ヒントUI（screens/mylife/create.jsx・候補C「最有力1件のみ強調」）用：
+// bloodRecipeProgress()の戻り値から、最も進んでいる1件を選ぶ。
+// 優先順位：達成率(matchedCount/total)が高い → matchedCountが多い → ML_BLOOD_RECIPES定義順
+//（Array.sortは安定ソートのため、同率はprogressの元の並び＝定義順がそのまま保たれる）。
+export function bestBloodRecipeProgress(progress) {
+  if (!Array.isArray(progress) || !progress.length) return null;
+  return [...progress].sort((a, b) => {
+    const ra = a.matchedCount / a.total, rb = b.matchedCount / b.total;
+    if (rb !== ra) return rb - ra;
+    return b.matchedCount - a.matchedCount;
+  })[0];
 }
