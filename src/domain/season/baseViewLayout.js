@@ -169,9 +169,11 @@ export function buildingLevels(g) {
 //   に連動して自動で上がる（0〜2の3段階＝クラス数と一致）。「昇格するほど拠点全体が
 //   格上げされる」という体験にするため。
 export function roomGrade(g, roomKey) {
-  if (roomKey === "corridor" || roomKey === "spare1" || roomKey === "spare2") {
-    return Math.max(0, Math.min(2, g.classIdx || 0));
-  }
+  // 第20弾: 購入対象は従来どおり4持ち場のみ。それ以外（玄関ホール・縦横廊下・
+  // 条件解禁の奥3部屋）はクラブハウスのクラス(classIdx)連動で自動的に上がる。
+  const purchasable = roomKey === "training" || roomKey === "mechanic"
+    || roomKey === "medical" || roomKey === "scout";
+  if (!purchasable) return Math.max(0, Math.min(2, g.classIdx || 0));
   const lv = ((g.roomLv || {})[roomKey]) || 0;
   return Math.max(0, Math.min(3, lv));
 }
@@ -186,115 +188,152 @@ export function seasonOf(month) {
   return "winter";
 }
 
-// ---- 角丸オーバル周回路 ----
-// 矩形(w:±pathW, l:±pathL)の4隅をcornerRで丸めた周回路上の位置をt∈[0,1)で返す。
-// cornerR=0なら旧来の矩形周回路と一致する（直線区間のみ・アークなし）。
-function arcPoint(cw, cl, r, startAngle, u) {
-  const a = startAngle + u * (Math.PI / 2);
-  return { w: cw + r * Math.cos(a), l: cl + r * Math.sin(a) };
-}
-export function roundedLoopPoint(t, pathW, pathL, cornerR = 0) {
-  const r = Math.max(0, Math.min(cornerR, pathW, pathL));
-  const tt = ((t % 1) + 1) % 1;
-  const sw = 2 * (pathW - r), sl = 2 * (pathL - r), arcLen = (Math.PI / 2) * r;
-  const total = 2 * sw + 2 * sl + 4 * arcLen;
-  let s = tt * total;
-  const segs = [
-    { len: sw, fn: (u) => ({ w: -(pathW - r) + u * sw, l: -pathL }) },                 // 奥辺(左→右)
-    { len: arcLen, fn: (u) => arcPoint(pathW - r, -pathL + r, r, -Math.PI / 2, u) },   // 右奥コーナー
-    { len: sl, fn: (u) => ({ w: pathW, l: -(pathL - r) + u * sl }) },                  // 右辺(奥→手前)
-    { len: arcLen, fn: (u) => arcPoint(pathW - r, pathL - r, r, 0, u) },               // 右手前コーナー
-    { len: sw, fn: (u) => ({ w: (pathW - r) - u * sw, l: pathL }) },                   // 手前辺(右→左)
-    { len: arcLen, fn: (u) => arcPoint(-(pathW - r), pathL - r, r, Math.PI / 2, u) },  // 左手前コーナー
-    { len: sl, fn: (u) => ({ w: -pathW, l: (pathL - r) - u * sl }) },                  // 左辺(手前→奥)
-    { len: arcLen, fn: (u) => arcPoint(-(pathW - r), -(pathL - r), r, Math.PI, u) },   // 左奥コーナー
-  ];
-  for (const seg of segs) {
-    if (seg.len <= 1e-9) continue;
-    if (s <= seg.len) return seg.fn(s / seg.len);
-    s -= seg.len;
+// ---- 任意多角形＋丸め角の周回路（第20弾） ----
+// loop: { points: [{w,l},...], cornerR, trackHalfWidth }。時計回り/反時計回りどちらでも良い。
+// 各角を半径cornerR（隣接辺長の45%まで自動クランプ）の円弧で丸め、全周を弧長で
+// パラメータ化する。旧・角丸オーバル（roundedLoopPoint系）の一般化で、L字などの
+// 凹み角も扱える。事前計算はWeakMapでloopオブジェクトごとに1回だけ行う。
+const POLY_LOOP_CACHE = new WeakMap();
+function buildPolyLoop(loop) {
+  const cached = POLY_LOOP_CACHE.get(loop);
+  if (cached) return cached;
+  const pts = loop.points;
+  const n = pts.length;
+  const segs = [];
+  // 各角の丸めを構成：接点T1(手前辺側)・T2(次辺側)・中心C・回転方向
+  const corners = pts.map((P, i) => {
+    const A = pts[(i - 1 + n) % n], B = pts[(i + 1) % n];
+    const e1 = { w: P.w - A.w, l: P.l - A.l }, e2 = { w: B.w - P.w, l: B.l - P.l };
+    const L1 = Math.hypot(e1.w, e1.l), L2 = Math.hypot(e2.w, e2.l);
+    const u1 = { w: e1.w / L1, l: e1.l / L1 }, u2 = { w: e2.w / L2, l: e2.l / L2 };
+    const cross = u1.w * u2.l - u1.l * u2.w;
+    const dot = u1.w * u2.w + u1.l * u2.l;
+    const turn = Math.atan2(cross, dot); // 曲がり角（符号つき）
+    const r = Math.min(loop.cornerR || 0, 0.45 * L1, 0.45 * L2);
+    const tanHalf = Math.abs(Math.tan(turn / 2));
+    const d = r * tanHalf; // 接点までの後退距離
+    const T1 = { w: P.w - u1.w * d, l: P.l - u1.l * d };
+    const T2 = { w: P.w + u2.w * d, l: P.l + u2.l * d };
+    const s = Math.sign(turn) || 1;
+    const n1 = { w: -u1.l * s, l: u1.w * s }; // 曲がる側の法線
+    const C = { w: T1.w + n1.w * r, l: T1.l + n1.l * r };
+    const a1 = Math.atan2(T1.l - C.l, T1.w - C.w);
+    return { T1, T2, C, r, a1, sweep: turn };
+  });
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    const from = corners[i].T2, to = corners[(i + 1) % n].T1;
+    const len = Math.hypot(to.w - from.w, to.l - from.l);
+    segs.push({ kind: "line", from, to, len });
+    total += len;
+    const c = corners[(i + 1) % n];
+    const arcLen = Math.abs(c.sweep) * c.r;
+    if (arcLen > 1e-9) { segs.push({ kind: "arc", c, len: arcLen }); total += arcLen; }
   }
-  const last = segs[segs.length - 1];
-  return last.fn(1);
+  const built = { segs, total, pts };
+  POLY_LOOP_CACHE.set(loop, built);
+  return built;
 }
 
-// 周回路上で指定した地点(target: {w,l})に最も近い位置(t∈[0,1))を数値探索で求める。
-// ラックは周回路の外側にあるため、周回路上の任意の地点から直線で向かうと芝生を斜めに
-// 横切ってしまう（実機で発覚したバグ）。riderActivity.jsのapproach/depart（一旦この
-// 最寄り点まで周回路沿いに進む）と、Track.jsxのスタート/フィニッシュ帯（ラック最寄り点に
-// 固定する）の両方から使う純粋なトラック形状の計算なので、riderActivity.js側ではなく
-// こちら（コース形状を扱う層）に置く。
-export function nearestLoopT(pathW, pathL, cornerR, target) {
+export function loopPointAt(loop, t) {
+  const { segs, total } = buildPolyLoop(loop);
+  let s = (((t % 1) + 1) % 1) * total;
+  for (const seg of segs) {
+    if (s <= seg.len || seg === segs[segs.length - 1]) {
+      const u = seg.len > 1e-9 ? Math.min(1, s / seg.len) : 0;
+      if (seg.kind === "line") {
+        return { w: seg.from.w + (seg.to.w - seg.from.w) * u, l: seg.from.l + (seg.to.l - seg.from.l) * u };
+      }
+      const { c } = seg;
+      const a = c.a1 + c.sweep * u;
+      return { w: c.C.w + c.r * Math.cos(a), l: c.C.l + c.r * Math.sin(a) };
+    }
+    s -= seg.len;
+  }
+  return { ...segs[0].from };
+}
+
+export function loopNearestT(loop, target) {
   let best = 0, bestD = Infinity;
-  for (let i = 0; i < 200; i++) {
-    const t = i / 200;
-    const p = roundedLoopPoint(t, pathW, pathL, cornerR);
+  for (let i = 0; i < 240; i++) {
+    const t = i / 240;
+    const p = loopPointAt(loop, t);
     const d = (p.w - target.w) ** 2 + (p.l - target.l) ** 2;
     if (d < bestD) { bestD = d; best = t; }
   }
   return best;
 }
 
-// 選手ごとに位相をずらした周回位置。riderHash01(id,41)で初期位相(0〜1)を決定論的に割り振り、
-// 経過秒数tSec×speedだけ進める。同じ選手構成なら常に同じ隊列間隔になる。
-export function riderLoopPoint(riderId, tSec, speed, pathW, pathL, cornerR = 0) {
-  const phase = riderHash01(riderId, 41);
-  return roundedLoopPoint(phase + tSec * speed, pathW, pathL, cornerR);
-}
-
-// 選手の進行方向がスクリーン上で左向きか（＝スプライトを水平反転すべきか）を返す。
-// IsoRiderは常に右向きに描かれる固定スプライトのため、周回路の左側の直線では逆走して
-// 見えていた（Wave Dの積み残し）。わずかに先の位置との screen x の差で判定する。
-export function riderFacesLeft(riderId, tSec, speed, pathW, pathL, cornerR, proj) {
-  const dt = 0.05;
-  const a = riderLoopPoint(riderId, tSec, speed, pathW, pathL, cornerR);
-  const b = riderLoopPoint(riderId, tSec + dt, speed, pathW, pathL, cornerR);
-  return isoProject(b.w, b.l, 0, proj).x < isoProject(a.w, a.l, 0, proj).x;
-}
-
-// 周回路をn分割した中心線サンプル列。
-export function trackCenterline(n, pathW, pathL, cornerR) {
+export function loopCenterlinePts(loop, n) {
   const pts = [];
-  for (let i = 0; i < n; i++) pts.push(roundedLoopPoint(i / n, pathW, pathL, cornerR));
+  for (let i = 0; i < n; i++) pts.push(loopPointAt(loop, i / n));
   return pts;
 }
 
-// 地面タイルが属するゾーンを判定する（infield=周回路の内側の芝／track=周回路と重なる帯／
-// plaza=周回路のすぐ外側の舗装／outer=それ以遠の外周）。矩形近似のため角丸コーナー付近は
-// 粗いが、実際の周回路はTrack成分が別途リボンとして上から描画するため、このゾーン判定の
-// 誤差はtrack帯の直下では見えなくなる（infield/plaza/outerの色分けだけが実際に見える）。
-export function groundZone(w, l, pathW, pathL, trackHalfWidth, plazaPad) {
-  const aw = Math.abs(w), al = Math.abs(l);
-  const inTrackBand = aw <= pathW + trackHalfWidth && al <= pathL + trackHalfWidth
-    && (aw >= pathW - trackHalfWidth || al >= pathL - trackHalfWidth);
-  if (inTrackBand) return "track";
-  if (aw < pathW - trackHalfWidth && al < pathL - trackHalfWidth) return "infield";
-  if (aw <= pathW + trackHalfWidth + plazaPad && al <= pathL + trackHalfWidth + plazaPad) return "plaza";
-  return "outer";
+// 多角形（丸め前の生の頂点）に対する内外判定。infield判定・リボンの内外判定に使う。
+export function loopContains(loop, w, l) {
+  const pts = loop.points;
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j];
+    if ((a.l > l) !== (b.l > l) && w < (b.w - a.w) * (l - a.l) / (b.l - a.l) + a.w) inside = !inside;
+  }
+  return inside;
 }
 
-// 周回路を帯（リボン）として描くための外側/内側エッジ座標列。中心線の接線から法線方向へ
-// halfWidthだけオフセットする。どちらが「外側」かは原点(周回路の中心)からの距離で機械的に
-// 判定する（周回路は常に原点中心に配置される設計のため、距離が大きい方=外側という判定が
-// 常に成立する。方向ベクトルの回転符号を手で決め打ちしない分、カメラや周回路の形が変わっても
-// 崩れない）。
-export function trackRibbon(n, pathW, pathL, cornerR, halfWidth) {
+// 丸め後の周回路中心線までの最短距離（サンプル近似）。地面ゾーン判定に使う。
+export function loopDistanceTo(loop, w, l) {
+  let best = Infinity;
+  for (let i = 0; i < 160; i++) {
+    const p = loopPointAt(loop, i / 160);
+    const d = Math.hypot(p.w - w, p.l - l);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+// 周回路リボンの外側/内側エッジ。内側の向きは多角形の符号付き面積（巻き方向）から
+// 一括で決める：CCW（面積>0）なら進行方向の左法線(-dl,dw)が常に内側。
+// 旧実装（サンプル点ごとのloopContains判定）は角の円弧付近＝丸めが生の頂点の外に
+// 膨らむ区間で判定が反転し、リボンが蝶ネクタイ状に潰れる不具合があった（第20弾で実測）。
+export function loopRibbonPts(loop, n, halfWidth) {
   const eps = 1e-4;
+  const pts = loop.points;
+  let area2 = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    area2 += a.w * b.l - b.w * a.l;
+  }
+  const innerSign = area2 > 0 ? 1 : -1; // CCWなら左法線が内側
   const outer = [], inner = [];
   for (let i = 0; i < n; i++) {
     const t = i / n;
-    const p0 = roundedLoopPoint(t - eps, pathW, pathL, cornerR);
-    const p1 = roundedLoopPoint(t + eps, pathW, pathL, cornerR);
+    const p0 = loopPointAt(loop, t - eps), p1 = loopPointAt(loop, t + eps);
     let dw = p1.w - p0.w, dl = p1.l - p0.l;
     const len = Math.hypot(dw, dl) || 1;
     dw /= len; dl /= len;
-    const nw = -dl, nl = dw; // 接線に垂直な単位法線（符号は下で距離判定して補正）
-    const center = roundedLoopPoint(t, pathW, pathL, cornerR);
-    const cand1 = { w: center.w + nw * halfWidth, l: center.l + nl * halfWidth };
-    const cand2 = { w: center.w - nw * halfWidth, l: center.l - nl * halfWidth };
-    const d1 = cand1.w * cand1.w + cand1.l * cand1.l, d2 = cand2.w * cand2.w + cand2.l * cand2.l;
-    const [outerPt, innerPt] = d1 >= d2 ? [cand1, cand2] : [cand2, cand1];
-    outer.push(outerPt); inner.push(innerPt);
+    const nw = -dl * innerSign, nl = dw * innerSign;
+    const center = loopPointAt(loop, t);
+    inner.push({ w: center.w + nw * halfWidth, l: center.l + nl * halfWidth });
+    outer.push({ w: center.w - nw * halfWidth, l: center.l - nl * halfWidth });
   }
   return { outer, inner };
 }
+
+// 第20弾: 条件解禁の部屋（食堂・ロッカールーム・トロフィールーム）。gは読み取り専用。
+// 解禁前は納戸の見た目（BaseView側でst_emptyを描く）。
+export function roomUnlocks(g) {
+  const staffCount = Object.values(g.staff || {}).filter(v => v > 0).length;
+  const rosterCount = (g.roster || []).length;
+  const hasTitle = g.cleared || g.champBest === 1
+    || (g.careerHistory || []).some(h => h && h.champBest === 1);
+  return {
+    diner: staffCount >= 2,
+    locker: rosterCount >= 8,
+    trophy: !!hasTitle,
+  };
+}
+
+// 旧・角丸オーバル周回路（roundedLoopPoint/nearestLoopT/riderLoopPoint/riderFacesLeft/
+// trackCenterline/groundZone/trackRibbon）は第20弾の多角形周回路（上記buildPolyLoop系）へ
+// 一般化して置き換え、参照ゼロになったため削除した（git履歴から復元可能）。

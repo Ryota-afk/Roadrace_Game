@@ -12,7 +12,7 @@
 // 歩行ルートは**壁データ(BASE_VIEW_PARTITIONS)の「壁が無い区間」＝扉から機械的に導出**する。
 // 間仕切りを動かせばルートも自動で追従し、壁を通り抜ける経路が原理的に発生しない。
 import { riderHash01, riderWander } from "../../sim/race.js";
-import { isoProject, roundedLoopPoint, nearestLoopT, inWorldRect } from "./baseViewLayout.js";
+import { isoProject, loopPointAt, loopNearestT, inWorldRect } from "./baseViewLayout.js";
 
 // 1サイクルの構成（秒）。周回に最も長く時間を割り当てることで、実行時のカウンタを持たずに
 // 「常に一定割合だけが屋内にいる」状態が自動的に生まれる（純関数のまま人数バランスが取れる）。
@@ -162,9 +162,9 @@ export function riderActivityAt(rider, tSec, ctx) {
   // (riderHash01(id,41))で周回上の任意の点から始まっていたが、選手ごとに
   // tCycleStartがずれている（riderHash01(id,53)由来）ため、この変更後も選手同士が
   // 団子状態になることはない。
-  const nT = nearestLoopT(loop.pathW, loop.pathL, loop.cornerR, rack);
+  const nT = loopNearestT(loop, rack);
   const loopT = (t) => ((nT + (t - tCycleStart) * speed) % 1 + 1) % 1;
-  const onLoop = (t) => roundedLoopPoint(loopT(t), loop.pathW, loop.pathL, loop.cornerR);
+  const onLoop = (t) => loopPointAt(loop, loopT(t));
 
   const roomKey = destinationFor(rider.id, rider.fatigue, cycleIndex, roomKeys);
   const route = ctx.routes[roomKey] || ctx.routes[roomKeys[0]];
@@ -176,9 +176,9 @@ export function riderActivityAt(rider, tSec, ctx) {
     // 周回路沿いにラック近くまで進んでから(前半)、短距離でラックへ入る(後半)。
     if (u < 0.5) {
       const tOnLoop = lerpLoopT(loopT(tRideEnd), nT, u / 0.5);
-      return { mode: "approach", pose: "ride", roomKey, ...roundedLoopPoint(tOnLoop, loop.pathW, loop.pathL, loop.cornerR) };
+      return { mode: "approach", pose: "ride", roomKey, ...loopPointAt(loop, tOnLoop) };
     }
-    const nearPt = roundedLoopPoint(nT, loop.pathW, loop.pathL, loop.cornerR);
+    const nearPt = loopPointAt(loop, nT);
     return { mode: "approach", pose: "ride", roomKey, ...lerpPt(nearPt, rack, (u - 0.5) / 0.5) };
   }
   if (seg.mode === "depart") {
@@ -187,7 +187,7 @@ export function riderActivityAt(rider, tSec, ctx) {
     // 後半部分は不要（それどころか、cycleをまたいだtNextRideStartをこのcycleの
     // tCycleStart基準で評価してしまい、実際にride開始時に評価される位置とズレて
     // ワープして見えるバグになっていた。実機シミュレーションで発覚・修正）。
-    const nearPt = roundedLoopPoint(nT, loop.pathW, loop.pathL, loop.cornerR);
+    const nearPt = loopPointAt(loop, nT);
     return { mode: "depart", pose: "ride", roomKey, ...lerpPt(rack, nearPt, u) };
   }
   if (seg.mode === "walkIn") return { mode: "walkIn", pose: "walk", roomKey, ...polylineAt(route, u) };

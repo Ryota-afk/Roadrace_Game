@@ -1,8 +1,8 @@
-// BaseView（敷地画面）の練習コース。Wave Dで新設 → Wave D2で路肩の白線を追加。
-// 角丸オーバルのリボン（内側に穴が空いた1本のpath）として描画し、中央破線・両端の白線・
-// スタート帯を重ねる。選手も同じroundedLoopPointで周回するため、見た目と走行位置が常に一致する。
+// BaseView（敷地画面）の練習コース。Wave Dで新設 → Wave D2で路肩の白線 → 第20弾で
+// 角丸オーバルから「丸め角付き任意多角形」（案A: L字）へ一般化。リボン・中央破線・白線・
+// スタート帯を重ねる。選手も同じloopPointAtで周回するため、見た目と走行位置が常に一致する。
 import React from "react";
-import { isoProject, trackRibbon, trackCenterline, nearestLoopT } from "../../domain/season/baseViewLayout.js";
+import { isoProject, loopRibbonPts, loopCenterlinePts, loopNearestT } from "../../domain/season/baseViewLayout.js";
 
 const chain = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" L ");
 const closed = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
@@ -10,15 +10,15 @@ const closed = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join
 // rack: 自転車ラック({w,l})。スタート/フィニッシュ帯はラックに一番近い周回路上の地点に
 // 固定する（選手がラックから出てすぐ・戻る直前に通る場所＝実際のスタート/ゴールらしい位置）。
 export function Track({ proj, loop, rack }) {
-  const { pathW, pathL, cornerR, trackHalfWidth } = loop;
-  const N = 72;
+  const { trackHalfWidth } = loop;
+  const N = 96; // 第20弾: L字は周長が伸びたためサンプルを増やす（角の丸みを保つ）
   const project = (p) => isoProject(p.w, p.l, 0, proj);
-  const { outer, inner } = trackRibbon(N, pathW, pathL, cornerR, trackHalfWidth);
+  const { outer, inner } = loopRibbonPts(loop, N, trackHalfWidth);
   const outerPx = outer.map(project), innerPx = inner.map(project);
-  const centerPx = trackCenterline(N, pathW, pathL, cornerR).map(project);
+  const centerPx = loopCenterlinePts(loop, N).map(project);
 
   // ラック最寄りのtをリボンのサンプル間隔(1/N)へ丸め、隣接する2点で帯の幅を作る。
-  const t0 = nearestLoopT(pathW, pathL, cornerR, rack);
+  const t0 = loopNearestT(loop, rack);
   const i0 = Math.round(t0 * N) % N;
   const i1 = (i0 + 1) % N;
 

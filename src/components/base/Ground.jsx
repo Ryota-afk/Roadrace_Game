@@ -6,7 +6,7 @@
 // ここでも芝はviewBox全面を覆う単色の矩形1枚にし、舗装プラザは大きなポリゴン1枚、
 // 装飾は決定論的な散布点として描く方式へ改めた（ポリゴン数も1500超→100前後へ激減）。
 import React from "react";
-import { isoProject, isoBoxFaces, inWorldRect, scatterPoints, groundZone } from "../../domain/season/baseViewLayout.js";
+import { isoProject, isoBoxFaces, inWorldRect, scatterPoints, loopDistanceTo } from "../../domain/season/baseViewLayout.js";
 
 const pt = (p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
 
@@ -14,7 +14,7 @@ const pt = (p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
 // ズームアウトしてもビューポートは必ず芝色で埋まり、黒い余白が出ない。ここはカメラ変換の
 // 内側に入る「world座標に紐づく物」＝プラザと芝の装飾だけを描く。
 export function Ground({ proj, ground, plaza, loop, palette, bounds }) {
-  const { pathW, pathL, trackHalfWidth } = loop;
+  const { trackHalfWidth } = loop;
   const P = (w, l) => isoProject(w, l, 0, proj);
 
   // 舗装プラザ：world矩形の4隅をそのまま投影した平行四辺形（＝アイソメ格子に乗る）
@@ -33,7 +33,7 @@ export function Ground({ proj, ground, plaza, loop, palette, bounds }) {
   // 芝の装飾：草むらを散らす。舗装プラザの内側と周回路の帯の上には置かない。
   const tufts = scatterPoints(ground, ground.scatterStep, 91, 0.34)
     .filter(s => !inWorldRect(s.w, s.l, plaza))
-    .filter(s => groundZone(s.w, s.l, pathW, pathL, trackHalfWidth, 0.2) !== "track")
+    .filter(s => loopDistanceTo(loop, s.w, s.l) > trackHalfWidth + 0.2)
     .filter(s => within(s.w, s.l, 12));
 
   return (
