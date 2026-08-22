@@ -95,6 +95,8 @@ export {
   mlAmbitionPath, mlCurrentAmbition, mlAmbitionProgressText, bumpGrowthPow, applyAmbitionReward,
 } from "../domain/mylife/ambition.js";
 
+export { mlGearFitHint } from "../domain/mylife/gearFit.js";
+
 export { hasSaveGame, clearSaveGame, hasMyLifeSave, clearMyLifeSave } from "../state/saveGame.js";
 
 export { groupModeFor, raceIsHome, teamChemistryTier, buildSim } from "../sim/buildSim.js";

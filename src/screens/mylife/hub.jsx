@@ -14,7 +14,8 @@ import { AB_KEYS, AB_LABEL, POW, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { Item, Prose, QuietBtn, Screen, Section } from "../../components/kit.jsx";
-import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGrowthCap, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
+import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCap, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
+import { PART_SLOTS, PARTS } from "../../data/parts.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 
 // 選手成績・全チーム名鑑で共通の行（第13弾Phase3-D-0・可読性ルールR2）：
@@ -143,6 +144,24 @@ export function renderMyLifeHubScreen(ctx) {
               </div>
             )}
           </div>
+
+          {/* 第17弾B: 機材付け替え（案3・適合表示付き）。1つも装着していなければ出さない（§7：迷ったら消す） */}
+          {PART_SLOTS.some(slot => r.parts && r.parts[slot]) && (() => {
+            const fitHint = mlGearFitHint(r, race);
+            const equipped = PART_SLOTS.filter(slot => r.parts[slot]).map(slot => PARTS[r.parts[slot]]?.label).filter(Boolean);
+            return (
+              <>
+                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>機材</div>
+                <div style={{ background: T.color.surface, padding: T.space.md }}>
+                  <div style={{ fontSize: T.size.caption, color: T.color.text, marginBottom: T.space.sm }}>
+                    {equipped.join("・")}
+                    {fitHint && <span style={{ color: fitHint.startsWith("▲") ? T.color.bad : T.color.accent }}>　{fitHint}</span>}
+                  </div>
+                  <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_shop", shopCat: "parts" }))}>付け替える</QuietBtn>
+                </div>
+              </>
+            );
+          })()}
 
           {/* 第13弾Phase2：今月の行動。1つだけの推奨（塗り）＋他の選択肢（枠）。旧デザインの色分け
               （黄塗り＝おすすめ／黄枠＝他の行動）は踏襲しつつ、新トークンで作り直した。 */}
