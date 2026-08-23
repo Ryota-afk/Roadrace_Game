@@ -102,7 +102,10 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
   if (master && partner) {
     breed = mlBreedBonus(master, partner);
     AB_KEYS.forEach(k => { if (breed.abBonus[k]) player[k] = Math.min(96, (player[k] || 0) + breed.abBonus[k]); });
-    SUB_STAT_KEYS.forEach(k => { if (breed.subBonus[k]) player[k] = Math.max(20, Math.min(95, (player[k] ?? 50) + breed.subBonus[k])); });
+    // 第28弾(判断⑰): subBonusには新ステ（突破力・安定感・スピリット）の遺伝分も入っている
+    // （breeding.jsのINHERIT_SUB_KEYS）。キー集合はmlBreedBonusが管理するのでここでは
+    // subBonusに入っている全キーを同じクランプ[20,95]で適用する。
+    Object.keys(breed.subBonus).forEach(k => { if (breed.subBonus[k]) player[k] = Math.max(20, Math.min(95, (player[k] ?? 50) + breed.subBonus[k])); });
     // v33: 爆発力（配合評価）は初期能力ではなく「伸びしろ」に還元する。生まれた瞬間は普通でも育てると化ける
     if (breed.growthSteps) player.growthPow = bumpGrowthPow(player.growthPow, breed.growthSteps);
     else if (breed.growthBump) player.growthPow = bumpGrowthPow(player.growthPow, 1);

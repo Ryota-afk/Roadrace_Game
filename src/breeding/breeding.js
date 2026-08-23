@@ -8,6 +8,12 @@ import { ARCH_BREED, BREED_NICKS, ML_SPECIAL_MATINGS, PROTEGE_TEACHINGS, TEACH_K
 import { T } from "../data/theme.js";
 import { GOLD_CONDITIONS, SUB_STAT_KEYS, overall } from "../core/core.js";
 
+// 第28弾（判断⑰・ユーザー合意）: 配合で遺伝する新ステータス。突破力・安定感・スピリットの
+// 3つは既存サブステ(SUB_STAT_KEYS)と同じ式「両親の高い方の(値-50)×0.25」で子に上乗せする。
+// 「運」は遺伝させない（完全に生まれつきのランダムのまま＝ユーザー判断）。
+// mlBreedBonusは共通関数のため、マイライフの配合とシーズンの血統ユースの両方に効く（合意済み）。
+export const INHERIT_SUB_KEYS = ["breakthrough", "stability", "spirit"];
+
 export function hasEarnedNickname(r) {
   const log = r.raceLog || [];
   const wins = log.filter(e => e.rank === 1).length;
@@ -258,7 +264,10 @@ export function mlLegendSnapshot(s) {
     // 記録しておくと、次のプレイでこの選手に師事した新人が能力の一部を引き継げる。
     // 旧セーブの殿堂選手にはこれらが無いため、読み出し側は type/戦績からのフォールバックを用いる
     finalAbilities: { flat: Math.round(r.flat), climb: Math.round(r.climb), sprint: Math.round(r.sprint), stamina: Math.round(r.stamina), solo: Math.round(r.solo) },
-    finalSubStats: { accel: Math.round(r.accel ?? 50), build: Math.round(r.build ?? 50), mental: Math.round(r.mental ?? 50) },
+    // 第28弾: 新ステ遺伝（判断⑰）のため突破力・安定感・スピリットも最終値を記録する。
+    // 旧セーブの殿堂選手にはこれらのキーが無い→読み出し側は??50フォールバック＝遺伝ボーナス0。
+    finalSubStats: { accel: Math.round(r.accel ?? 50), build: Math.round(r.build ?? 50), mental: Math.round(r.mental ?? 50),
+      breakthrough: Math.round(r.breakthrough ?? 50), stability: Math.round(r.stability ?? 50), spirit: Math.round(r.spirit ?? 50) },
     growthPow: r.growthPow, specialAbilities: [...(r.abilities || [])], focus: r.focus, overall: overall(r),
     retiredAt,
     // v31: 配合（血統）
@@ -371,9 +380,10 @@ export function mlBreedBonus(parentA, parentB) {
   if (nick.ability) extraAbilities.push(nick.ability);
   for (const id of (parentB.specialAbilities || [])) { if (ABILITIES[id] && !ABILITIES[id].bad && !extraAbilities.includes(id)) { extraAbilities.push(id); break; } }
   if (inbreedAb && !extraAbilities.includes(inbreedAb)) extraAbilities.push(inbreedAb);
-  // 副ステータス：両親の高い方の1/4を上乗せ
+  // 副ステータス：両親の高い方の1/4を上乗せ。
+  // 第28弾: 新ステ（突破力・安定感・スピリット）も同じ式で遺伝させる（判断⑰・運は対象外）。
   const subBonus = {};
-  SUB_STAT_KEYS.forEach(k => {
+  [...SUB_STAT_KEYS, ...INHERIT_SUB_KEYS].forEach(k => {
     const a = (parentA.finalSubStats && parentA.finalSubStats[k]) || 50;
     const b = (parentB.finalSubStats && parentB.finalSubStats[k]) || 50;
     subBonus[k] = Math.round((Math.max(a, b) - 50) * 0.25);

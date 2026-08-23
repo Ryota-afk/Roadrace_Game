@@ -3,7 +3,7 @@
 import { MONTHS, ROSTER_MAX_BY_CLASS } from "../../data/course.js";
 import { ABILITIES, AB_KEYS } from "../../data/abilities.js";
 import { RIVAL_TEAMS } from "../../data/teams.js";
-import { mulberry, newRider, SUB_STAT_KEYS } from "../../core/core.js";
+import { mulberry, newRider } from "../../core/core.js";
 import { mlBloodlineBonus, mlBreedBonus } from "../../breeding/breeding.js";
 import { bumpGrowthPow, computePickupChance, isHallOfFameWorthy } from "../../logic/support.js";
 
@@ -115,7 +115,9 @@ export function signBredYouth(s, legA, legB) {
   const rookie = newRider(34, rng, { banned, age: 16 + Math.floor(rng() * 2), growthPow, type: legA.type });
   const breed = mlBreedBonus(legA, legB);
   AB_KEYS.forEach(k => { if (breed.abBonus[k]) rookie[k] = Math.min(96, (rookie[k] || 0) + breed.abBonus[k]); });
-  SUB_STAT_KEYS.forEach(k => { if (breed.subBonus[k]) rookie[k] = Math.max(20, Math.min(95, (rookie[k] ?? 50) + breed.subBonus[k])); });
+  // 第28弾(判断⑰): 新ステ（突破力・安定感・スピリット）の遺伝分もsubBonusに入っている。
+  // マイライフの配合(createChar.js)と同じく、subBonusの全キーを同じクランプで適用する。
+  Object.keys(breed.subBonus).forEach(k => { if (breed.subBonus[k]) rookie[k] = Math.max(20, Math.min(95, (rookie[k] ?? 50) + breed.subBonus[k])); });
   let abils = [...(breed.goldInherit || []), ...(breed.exclusive || []), ...(rookie.abilities || [])];
   breed.extraAbilities.forEach(id => { if (id && ABILITIES[id] && !abils.includes(id)) abils.push(id); });
   abils = abils.filter((id, i) => abils.indexOf(id) === i);
