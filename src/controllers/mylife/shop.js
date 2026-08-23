@@ -5,7 +5,7 @@ import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
 import { ML_CARS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX } from "../../data/gear.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PARTS } from "../../sim/race.js";
-import { addAb, mlGrowthCap, mlPrivateCampCost } from "../../logic/support.js";
+import { addAb, mlGrowthCapFor, mlPrivateCampCost } from "../../logic/support.js";
 
 export function mlBuyPart(s, pid) {
   const p = PARTS[pid];
@@ -82,11 +82,12 @@ export function mlBuyGrowthShift(s, dir) {
 export function mlPrivateCamp(s) {
   const cost = mlPrivateCampCost(s);
   if (s.money < cost) return s;
-  const growthCap = mlGrowthCap(s.year, s.player, s);
+  // 第29弾(判断③): 成長上限は能力別（脚質×能力のオフセット付き）
   const player = { ...s.player };
+  const capFor = (k) => mlGrowthCapFor(s.year, player, s, k);
   const before = player[player.focus];
-  addAb(player, player.focus, 6, growthCap);
-  AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, 2, growthCap));
+  addAb(player, player.focus, 6, capFor(player.focus));
+  AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, 2, capFor(k)));
   player.fatigue = Math.min(100, player.fatigue + 12);
   const gained = Math.round((player[player.focus] - before) * 10) / 10;
   return {

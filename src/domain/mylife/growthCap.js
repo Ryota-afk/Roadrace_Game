@@ -34,6 +34,26 @@ export function mlGrowthCap(year, player, ml) {
   return Math.min(140, 90 + timeComponent + achievementBonus * diffMul + talent);
 }
 
+// 第29弾（判断③・ユーザー合意「強」）: 脚質ごとの能力別成長上限差。
+// mlGrowthCap（共通の基準値）に脚質×能力のオフセットを足し、育て切ったときの
+// 能力シルエットを脚質が規定する（「極めると全員同じ万能型になる」の是正・v46の
+// 突破力感度と別軸のレバー）。得意+10／準得意+5（パンチャーは双得意+7）／苦手−12。
+// - 上限を下げても既存キャラの能力値は下がらない（addAbは超過分の伸びが急減衰する
+//   だけでクランプはしないため。既存セーブへの影響は「苦手の今後の伸びが鈍る」のみ）。
+// - 配合の才能キャップ・血脈レシピ・突破力は基準値側にそのまま効く（オフセットは最後に加算）。
+// - マイライフ専用（シーズンの上限は難易度別固定値の別系統・対象外）。
+export const ML_TYPE_CAP_OFFSET = {
+  SPR: { flat: 5, climb: -12, sprint: 10, stamina: 0, solo: 0 },
+  CLM: { flat: 0, climb: 10, sprint: -12, stamina: 5, solo: 0 },
+  RUL: { flat: 10, climb: -12, sprint: 0, stamina: 5, solo: 0 },
+  PUN: { flat: 0, climb: 7, sprint: 7, stamina: 0, solo: -12 },
+  TT: { flat: 5, climb: 0, sprint: -12, stamina: 0, solo: 10 },
+};
+export function mlGrowthCapFor(year, player, ml, abKey) {
+  const off = (ML_TYPE_CAP_OFFSET[player && player.type] || {})[abKey] || 0;
+  return Math.max(70, mlGrowthCap(year, player, ml) + off);
+}
+
 // v43(マイライフ難易度調整Phase 2・イベント受動発火): item.weight（既定1）に応じた加重抽選。
 // レア度の高いイベント（覚醒級等）に小さいweightを与えると滅多に出ないようにできる。
 export function weightedPick(items) {

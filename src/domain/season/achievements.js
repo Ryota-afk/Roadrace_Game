@@ -5,7 +5,7 @@ import { MANAGER_DIRECTIVES } from "../../data/directives.js";
 import { ROOM_GRADE_MAX, ROOM_UPGRADE_KEYS } from "../../data/roomUpgrade.js";
 import { T } from "../../data/theme.js";
 import { addAb } from "../shared/growth.js";
-import { mlGrowthCap } from "../mylife/growthCap.js";
+import { mlGrowthCapFor } from "../mylife/growthCap.js";
 import { teamChemistryTier } from "../../sim/buildSim.js";
 
 // v45: ユーザー指摘「イベントで起きた能力変化などは必ず明示したほうがいい」への対応。
@@ -15,10 +15,10 @@ import { teamChemistryTier } from "../../sim/buildSim.js";
 export const ML_OFFSEASON_CHOICES = [
   { key: "domestic", label: "国内で自主トレーニングに励む", desc: "堅実に基礎を積む。伸びは控えめだが安全",
     result: "オフシーズンは国内で黙々と走り込み、着実に地力を蓄えた。",
-    apply: (player, year, ml) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, mlGrowthCap(year, p, ml))); return p; } },
+    apply: (player, year, ml) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 2, mlGrowthCapFor(year, p, ml, k))); return p; } },
   { key: "overseas", label: "海外武者修行に出る", desc: "レベルの高い環境に飛び込む。伸びは大きいが疲労が残る",
     result: "海外の強豪選手たちに揉まれ、大きく成長する手応えを掴んだ。ただし疲労が抜けきらないまま新シーズンを迎えることになった。",
-    apply: (player, year, ml) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, mlGrowthCap(year, p, ml))); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
+    apply: (player, year, ml) => { const p = { ...player }; AB_KEYS.forEach(k => addAb(p, k, 4, mlGrowthCapFor(year, p, ml, k))); p.fatigue = Math.min(100, p.fatigue + 20); return p; } },
   { key: "rest", label: "心身をしっかり休める", desc: "疲労を大きくリセットして万全の状態で新シーズンへ",
     result: "オフシーズンをゆっくり過ごし、心身ともにリフレッシュして新シーズンを迎える。",
     apply: (player) => ({ ...player, fatigue: Math.max(0, player.fatigue - 40) }) },

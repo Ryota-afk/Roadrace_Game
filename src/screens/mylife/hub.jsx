@@ -14,7 +14,7 @@ import { AB_KEYS, AB_LABEL, POW, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { Item, Prose, QuietBtn, Screen, Section } from "../../components/kit.jsx";
-import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCap, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
+import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { PART_SLOTS, PARTS } from "../../data/parts.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 
@@ -63,11 +63,11 @@ export function renderMyLifeHubScreen(ctx) {
       // v46(UI): 次のアクション#15。「今月の練習メニューの推奨」と「今月の行動の推奨」の両方が
       // 同じ計算（能力の伸びしろ）を必要とするため、ここで一度だけ計算して両方から参照する
       // （旧実装はこの計算を練習メニューのIIFE内に閉じ込めていたため再利用できなかった）。
-      const capV = mlGrowthCap(ml.year, r, ml);
+      // 第29弾(判断③): 成長上限は能力別（脚質×能力のオフセット付き）なので伸びしろも能力ごとに算出
       const typeKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[r.type];
       const raceFav = race?.tmpl?.favors;
       const raceKey = { SPR: "sprint", CLM: "climb", RUL: "flat", TT: "solo", PUN: "sprint" }[raceFav];
-      const roomOf = (k) => Math.max(0, Math.round(capV - (r[k] || 0)));
+      const roomOf = (k) => Math.max(0, Math.round(mlGrowthCapFor(ml.year, r, ml, k) - (r[k] || 0)));
       const scoreOf = (k) => (k === typeKey ? 10 : 0) + (k === raceKey ? 6 : 0) + Math.min(6, roomOf(k) / 6);
       const recKey = AB_KEYS.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
       const roomLabel = (k) => { const rm = roomOf(k); return rm >= 22 ? "伸びしろ大" : rm >= 10 ? "伸びしろ中" : rm >= 3 ? "伸びしろ小" : "頭打ち"; };

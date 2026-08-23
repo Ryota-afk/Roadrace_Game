@@ -3,7 +3,7 @@
 // mlResolveEvent専用の内部ヘルパー（controllers/内に留め置く。単体テストのためexportはしておく）。
 import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
 import { ML_SPONSOR_GIGS } from "../../data/events.js";
-import { addAb, bumpGrowthPow, growSub, mlGrowthCap, weightedPick } from "../../logic/support.js";
+import { addAb, bumpGrowthPow, growSub, mlGrowthCapFor, weightedPick } from "../../logic/support.js";
 import { mlAdvanceMonth } from "./month.js";
 
 // v14.2: 私生活・取材イベント（練習/休養以外の月次アクション）
@@ -17,11 +17,12 @@ import { mlAdvanceMonth } from "./month.js";
 export function mlApplyEventEffects(player0, effects, ml) {
   const player = { ...player0 };
   if (effects.fatigueDelta) player.fatigue = Math.max(0, Math.min(100, player.fatigue + effects.fatigueDelta));
-  if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, mlGrowthCap(ml.year, player, ml)));
+  // 第29弾(判断③): 成長上限は能力別（脚質×能力のオフセット付き）
+  const capFor = (k) => mlGrowthCapFor(ml.year, player, ml, k);
+  if (effects.abBoost) AB_KEYS.forEach(k => addAb(player, k, effects.abBoost, capFor(k)));
   if (effects.abKeyDelta) {
-    const cap = mlGrowthCap(ml.year, player, ml);
     Object.entries(effects.abKeyDelta).forEach(([k, v]) => {
-      if (v > 0) addAb(player, k, v, cap);
+      if (v > 0) addAb(player, k, v, capFor(k));
       else player[k] = Math.max(20, (player[k] || 0) + v);
     });
   }
@@ -133,7 +134,9 @@ export function mlResolveProtegeEvent(s, choiceIdx) {
     ovrBonus: (s.protege.ovrBonus || 0) + (pd.ovrBonus || 0),
   };
   let player = s.player;
-  if (md.abBoost) { const cap = mlGrowthCap(s.year, player, s); player = { ...player }; AB_KEYS.forEach(k => { player[k] = Math.min(cap, (player[k] || 0) + md.abBoost); }); }
+  // 第29弾(判断③): 能力別上限＋既に上限超過している能力を下方修正しないようMath.maxで保護
+  // （旧実装のMath.min(cap, ...)は、上限が下がった局面で既存値を削り得た）
+  if (md.abBoost) { player = { ...player }; AB_KEYS.forEach(k => { const cap = mlGrowthCapFor(s.year, player, s, k); player[k] = Math.max(player[k] || 0, Math.min(cap, (player[k] || 0) + md.abBoost)); }); }
   const fatigue = Math.max(0, Math.min(100, (player.fatigue || 0) + (md.fatigueDelta || 0)));
   player = { ...player, fatigue };
   const managerEval = Math.max(0, Math.min(100, s.managerEval + (md.evalDelta || 0)));

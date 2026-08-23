@@ -83,7 +83,7 @@ export {
 } from "../domain/season/achievements.js";
 
 export {
-  mlAchievementBonus, mlGrowthCap, weightedPick, pickMlEvent, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost,
+  mlAchievementBonus, mlGrowthCap, mlGrowthCapFor, ML_TYPE_CAP_OFFSET, weightedPick, pickMlEvent, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost,
 } from "../domain/mylife/growthCap.js";
 
 export {

@@ -10,7 +10,7 @@ import { mulberry, overall, hasAbility } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
   GRADE_MUL, ML_AB_COACH_KEY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, ageRival, computeWorldRank,
-  decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCap, mlLivingCost, mlTeamTier,
+  decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCapFor, mlLivingCost, mlTeamTier,
   mlUpdateRiderStats, mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
 import { mlGenRace } from "../../domain/mylife/race.js";
@@ -44,7 +44,8 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
   // v43(マイライフ難易度調整Phase 1・柱1): 難易度による成長上限の調整は、mlGrowthCap内部の
   // 実績ボーナス×難易度倍率（easy1.3〜oni0.5）に一本化した（旧diffCapAdjの一律加減算は廃止）。
   // ctx.mlStateはmlAdvanceMonth側で渡す実績連動計算用のml状態スナップショット。
-  const growthCap = mlGrowthCap(ctx && ctx.year, player, ctx && ctx.mlState);
+  // 第29弾(判断③): 成長上限は能力別（脚質×能力のオフセット付き）。詳細はgrowthCap.js参照。
+  const capFor = (k) => mlGrowthCapFor(ctx && ctx.year, player, ctx && ctx.mlState, k);
   // v35(バランス): マイライフには選手本人の故障システムが無く、「ガラスの体」（危険度＝濃い配合の代償）が
   // 完全に無効化されていた（＝インブリードがノーリスクで爆発力を得られる抜け穴）。故障システムを新設せず、
   // 脆い体を「疲労が溜まりやすく抜けにくい」形で表現し、健康管理（休養の頻度）に実コストを課す。
@@ -77,7 +78,7 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
       * (hasAbility(player, "sponge") ? 1.25 : 1) // v37: 吸収の天才＝出走経験の伸び+25%
       * vitMul; // v38(#9 B-2): 活力が低いと出走経験の伸びも鈍る
     const ph = growthPhase(player);
-    raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), growthCap));
+    raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), capFor(k)));
     // v38(#9 B-2): レースで活力を消耗（格上ほど大きい）。走らせすぎると伸びの芯が細る
     player.vitality = Math.max(0, player.vitality - (5 + (ctx && ctx.raceGrade ? ctx.raceGrade : 1) * 2));
     // v29: メンタルは「大舞台の経験」で育つ。格上のレースほど大きく伸びる
@@ -110,8 +111,8 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     const focusMul = gear.monitor ? 1.10 : 1;
     // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
     const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
-    addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), growthCap);
-    AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), growthCap));
+    addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), capFor(player.focus));
+    AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), capFor(k)));
     // v29: 通常練習でも加速力・メンタルがわずかに伸びる（focusがsprint/flatなら加速に厚め）
     const subG = 0.28 * ph.gain * POW[player.growthPow].mul;
     growSub(player, "accel", subG * (player.focus === "sprint" || player.focus === "flat" ? 1.3 : 0.7));
@@ -147,10 +148,10 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     const base = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul * spec.gainMul * fatMul;
     const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
     if (spec.keys.length > 0) {
-      spec.keys.forEach(k => addAb(player, k, base * 0.65 * persMul(player, k) * coachMul(k), growthCap));
-      AB_KEYS.filter(k => !spec.keys.includes(k)).forEach(k => addAb(player, k, base * 0.08 * persMul(player, k) * coachMul(k), growthCap));
+      spec.keys.forEach(k => addAb(player, k, base * 0.65 * persMul(player, k) * coachMul(k), capFor(k)));
+      AB_KEYS.filter(k => !spec.keys.includes(k)).forEach(k => addAb(player, k, base * 0.08 * persMul(player, k) * coachMul(k), capFor(k)));
     } else {
-      AB_KEYS.forEach(k => addAb(player, k, base * 0.18 * persMul(player, k) * coachMul(k), growthCap));
+      AB_KEYS.forEach(k => addAb(player, k, base * 0.18 * persMul(player, k) * coachMul(k), capFor(k)));
     }
     // v29: 専門トレの副ステータス育成。スプリント特訓＝加速力、メンタル強化＝メンタルを重点的に鍛える
     const subBase = ph.gain * POW[player.growthPow].mul;

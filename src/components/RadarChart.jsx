@@ -72,9 +72,12 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
 // v46(UI): 見出しに「（外周=88）」と書いていたのをやめ、上限の数字を図の右下隅へ控えめに
 // 置いた（CLAUDE.md §7：説明文を足すのではなく、図そのもので伝える／「外周」は実装側の
 // 語彙でユーザーには通じない）。capLabel=falseで数字なしにもできる。
-export function AbilityRadarChart({ r, cap = 88, size = 168, color = T.color.accent, capLabel = true }) {
+// 第29弾(判断③): capFor（能力キー→その能力の上限）を渡すと外周が軸ごとの上限になる
+// （脚質の得意能力は外周が遠く、苦手は近い）。省略時は従来どおり全軸共通のcap。
+// 右下隅の「上限」数字は基準値（cap）のまま（ユーザー合意済みの表示設計）。
+export function AbilityRadarChart({ r, cap = 88, size = 168, color = T.color.accent, capLabel = true, capFor = null }) {
   if (!r) return null;
-  const axes = AB_KEYS.map(k => ({ label: AB_LABEL[k], value: r[k] ?? 0, max: cap }));
+  const axes = AB_KEYS.map(k => ({ label: AB_LABEL[k], value: r[k] ?? 0, max: capFor ? capFor(k) : cap }));
   return (
     <RadarChart axes={axes} size={size} color={color} showValues
       corner={capLabel ? { label: "上限", value: Math.round(cap) } : null} />
@@ -102,13 +105,13 @@ export function RiderRadarChart({ r, size = 168, color = T.color.accent, showVal
 // あった）。CLAUDE.md §5に従い1つの部品へ集約する。
 // 見出しからは「（外周=88）」「（生涯不変）」を撤去した：前者は上限としてレーダー内の
 // 右下隅へ移し、後者は情報として不要（CLAUDE.md §7）。
-export function AbilitySoshitsuRadarPair({ r, cap, size = 148 }) {
+export function AbilitySoshitsuRadarPair({ r, cap, size = 148, capFor = null }) {
   if (!r) return null;
   return (
     <div style={{ display: "flex", justifyContent: "space-around", alignItems: "stretch", gap: T.space.xs, marginTop: T.space.sm, flexWrap: "wrap", fontFamily: FONT_DOT }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>能力</div>
-        <AbilityRadarChart r={r} cap={cap} size={size} />
+        <AbilityRadarChart r={r} cap={cap} size={size} capFor={capFor} />
       </div>
       <div style={{ width: 1, background: T.color.rule, margin: `${T.space.md}px 2px` }} />
       <div style={{ textAlign: "center" }}>

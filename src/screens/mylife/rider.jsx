@@ -9,7 +9,7 @@ import { RiderPortrait } from "../../components/RiderPortrait.jsx";
 import { overall } from "../../core/core.js";
 import { ABILITIES, GROWTH, PERSONALITIES, TYPES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
+import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
 import { Screen, Section } from "../../components/kit.jsx";
 
@@ -32,6 +32,9 @@ export function renderMyLifeRiderScreen(ctx) {
   const ph = growthPhase(r);
   const powRevealed = mlGrowthPowRevealed(ml);
   const cap = mlGrowthCap(ml.year, r, ml);
+  // 第29弾(判断③): レーダーの外周＝能力別上限（脚質の得意は遠く・苦手は近く）。
+  // 右下隅の「上限」数字は基準値capのまま。
+  const capFor = (k) => mlGrowthCapFor(ml.year, r, ml, k);
   const pot = potentialHint(r, powRevealed);
   const abils = [...(r.abilities || [])];
   const golds = new Set(r.goldAbilities || []);
@@ -52,7 +55,7 @@ export function renderMyLifeRiderScreen(ctx) {
       </div>
 
       <Section title="能力と素質" padded>
-        <AbilitySoshitsuRadarPair r={r} cap={cap} size={140} />
+        <AbilitySoshitsuRadarPair r={r} cap={cap} size={140} capFor={capFor} />
       </Section>
 
       <Section title="コース適性" padded>
