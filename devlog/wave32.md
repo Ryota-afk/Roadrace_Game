@@ -305,6 +305,43 @@ size: {
 5. 実機確認用スクリーンショット3画面分（モード選択／マイライフホーム／選手一覧の折りたたみ
    時・展開時）をユーザーへ提示。
 
+## Phase B 計画（2026-08・ユーザー決定済み）
+
+実測（caption使用数の上位）：`mylife/career.jsx` 56／`season/race.jsx` 35／`panels.jsx` 32／
+`mylife/create.jsx` 23／`mylife/race.jsx` 22／`mylife/events.jsx` 20／`scheduleBoard.jsx` 16。
+脚質名をただのテキストで出している箇所は14超（career/create/scheduleBoard/calendar/ob/
+youth/transfer/race）。`riderCard.jsx`は5画面（hall/scout/transfer/transferEvents/race）が共有。
+
+**ユーザー決定**：①career.jsxは機械変換ではなく**候補提示つき再設計**（B-4）。
+②DEVLOG.mdのスリム化（現在69KB・検討ライン60KB超え）は**Phase B完了後**にまとめて行う。
+
+### 変換ルール（B-1〜B-3の機械適用部分）
+
+- **R1 脚質チップ化**：一覧・カード・見出しで脚質名をテキスト表示している箇所は`TypeChip`へ。
+  文章中の括弧書き（「（クライマー・OVR72）」等）は文章のまま維持。
+- **R2 フォント振り直し**：能力数値=label(11)／高密度表の補足=micro(8)。nano(6)/digit(5)は
+  最密画面のみ・使用初出時に必ず実機確認（theme.jsの規約どおり）。
+- **R3 アフォーダンス統一**：押せる行・カードは面(surfaceUp)＋「›」。枠線ボタンの残党は面へ。
+- **R4 説明文削減**：desc・注釈は「消す→見せ方を変える→短縮」の順で判断。
+- **R5 縦線スイープ**：対象ファイルすべてでborderLeft・縦line・width:1縦divをgrep確認。
+
+### 進行順
+
+1. **B-1 共有部品**：`panels.jsx`（caption32箇所）・`riderCard.jsx`（TypeChip化＋新トークン、
+   5画面へ波及）・`dynasty.jsx`・`chrome.jsx`。1回の修正が複数画面に効くため最優先。
+2. **B-2 マイライフ残り**：`race.jsx`・`events.jsx`・`create.jsx`・`rider.jsx`・`world.jsx`・
+   `archive.jsx`・`help.jsx`（careerはB-4へ分離）。
+3. **B-3 シーズン残り**：`race.jsx`・`scheduleBoard.jsx`・`intro.jsx`・`transferEvents.jsx`・
+   `yearend.jsx`・`hub/`配下の小ファイル群。
+4. **B-4 career.jsx再設計**：8サブ画面のうち`mylife_lineage`/`mylife_factors`はdynasty.jsx
+   共有（B-1）なので、対象は6画面＝チーム名鑑・キャリアグラフ・世界ランキング（現役中に
+   よく見る3画面）＋引退勧告・引退セレモニー・殿堂（キャリア終端の3画面）。Phase Aと同じく
+   実データのモック複数案→合意→実装。現役中3画面を先行バッチにする。
+5. **Phase C 検証**：全画面Playwright実プレイ＋文字数before/after＋縦線スイープ＋DEVLOGスリム化。
+
+各バッチの完了条件はPhase Aと同じ（ビルド・pageerrorゼロ・該当画面の文字数計測・実機
+スクリーンショット確認）。実装はすべてSonnetで行う（B-4の候補作成・合意のみ設計側）。
+
 ### 実機確認での指摘と修正（2026-08）
 
 - **「勾配で、線と赤い図形がズレてるよね？」**（ユーザー指摘）——そのとおりズレていた。
