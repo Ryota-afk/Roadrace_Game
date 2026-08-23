@@ -12,7 +12,7 @@ import { FONT_DOT, T } from "../../data/theme.js";
 import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlSetAutobiography, mlCareerTimeline, mlWorldBoard, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { avgBondFor, bondTier } from "../../domain/mylife/bonds.js";
 import { initMyLife, mlCareerArchetype, computeAchievements, ML_ACHIEVEMENTS } from "../../state/state.js";
-import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section } from "../../components/kit.jsx";
+import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, Tag, TypeChip } from "../../components/kit.jsx";
 
 export function renderMyLifeCareerScreens(ctx) {
   const { askConfirm, becomeManager, ml, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlWrap, setMl, setSuperMode } = ctx;
@@ -226,6 +226,8 @@ export function renderMyLifeCareerScreens(ctx) {
   }
 
   // ---- チーム名鑑 ----
+  // 第32弾（第2次UI改革）B-4案A: ヘッダを2行圧縮（結束はタグでヘッダへ）・あなたカードは
+  // 面パネル2行・チームメイト行は脚質をTypeChip化し絆行は初期tierのときは出さない。
   if (ml.screen === "mylife_teamroster" && ml.player) {
     const mates = ml.teammates || [];
     // 第18弾: 結束＝チームメイトの絆の平均（弟子は指導で育つ別枠のため、この平均には含めない）
@@ -233,36 +235,41 @@ export function renderMyLifeCareerScreens(ctx) {
     const pr = ml.protege ? protegeState(ml.protege, ml.year) : null;
     return mlWrap(
       <Screen>
-        <div style={{ marginBottom: T.space.lg }}>
+        <div style={{ marginBottom: T.space.lg, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <div style={{ fontSize: T.size.title }}>{ml.team}</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>移籍すると顔ぶれが変わります</div>
+          {mates.length > 0 && <Tag>結束 {cohesionTier}</Tag>}
         </div>
-        <Section title="あなた">
-          <div style={{ padding: `${T.space.sm}px 0` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-              <span style={{ color: T.color.accent }}>{ml.player.name} <span style={{ fontSize: T.size.caption, color: T.color.sub }}>(あなた)</span></span>
-              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{TYPES[ml.player.type]?.label}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
-              <span>総合力</span><span style={{ fontSize: T.size.body, color: T.color.accent }}>{overall(ml.player)}</span>
-            </div>
+        <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: T.space.xs }}>
+              <span style={{ fontSize: T.size.head, color: T.color.text }}>{ml.player.name}</span>
+              <Tag>あなた</Tag>
+            </span>
+            <span>
+              <span style={{ fontSize: T.size.title, color: T.color.accent }}>{overall(ml.player)}</span>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>総合力</span>
+            </span>
           </div>
-        </Section>
-        <Section title={`チームメイト ${mates.length}名`} right={mates.length > 0 ? `結束：${cohesionTier}` : null}>
+          <div style={{ marginTop: T.space.xs }}><TypeChip type={ml.player.type} /></div>
+        </div>
+        <Section title={`チームメイト ${mates.length}名`}>
           {mates.length === 0 && <Item first label="—" value="" detail="チームメイトの記録がありません。" />}
           {mates.map((tm, i) => {
             const per = PERSONALITIES[tm.personality];
             const abilLabels = (tm.abilities || []).map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・");
-            const bond = bondTier((ml.bonds || {})[tm.id] || 0);
+            const bondVal = (ml.bonds || {})[tm.id] || 0;
+            const bond = bondTier(bondVal);
+            const bondRaised = bondTier(0) !== bond;
             return (
               <div key={i} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                  <span>{tm.name}</span>
-                  <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{TYPES[tm.type]?.label}</span>
+                  <span>{tm.name}{abilLabels && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>{abilLabels}</span>}</span>
+                  <TypeChip type={tm.type} />
                 </div>
-                {per && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>性格 {per.label}（{per.desc}）</div>}
-                {abilLabels && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{abilLabels}</div>}
-                <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2 }}>絆　{bond}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 2 }}>
+                  {per && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>性格 {per.label}（{per.desc}）</span>}
+                  {bondRaised && <Tag color={T.color.accent}>絆 {bond}</Tag>}
+                </div>
                 {(tm.winsForMe || 0) > 0 && <div style={{ fontSize: T.size.caption, color: T.color.good, marginTop: 2 }}>あなたのアシストとして {tm.winsForMe} 勝を支えた</div>}
               </div>
             );
@@ -273,7 +280,7 @@ export function renderMyLifeCareerScreens(ctx) {
             <div style={{ padding: `${T.space.sm}px 0` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
                 <span>{ml.protege.name}</span>
-                <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{TYPES[ml.protege.type]?.label}</span>
+                <TypeChip type={ml.protege.type} />
               </div>
               <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{pr.age}歳・総合力{pr.ovr}</div>
               <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2 }}>絆　{bondTier(ml.protege.bond || 0)}</div>
@@ -286,9 +293,13 @@ export function renderMyLifeCareerScreens(ctx) {
   }
 
   // ---- キャリアグラフ ----
+  // 第32弾（第2次UI改革）B-4案A: チャート主役化（H170→220）＋世界ランク軸を固定化。
+  // 従来のmin-max正規化は本人の最高順位が常に上端に張り付くため、291位のような
+  // 実際は低い順位でも「グラフの上の方＝好成績」に見える誤解を生んでいた
+  // （devlog/wave32.md B-4実測で確認）。固定軸(1〜300位)で絶対水準がそのまま読めるようにする。
   if (ml.screen === "mylife_graph" && ml.player) {
     const hist = [...(ml.careerHistory || []), { year: ml.year, ovr: overall(ml.player), worldRank: ml.worldRank }];
-    const W = 340, H = 170, padL = 26, padR = 30, padT = 16, padB = 24;
+    const W = 340, H = 220, padL = 26, padR = 30, padT = 18, padB = 26;
     const years = hist.map(h => h.year);
     const minY = Math.min(...years), maxY = Math.max(...years);
     const xAt = (yr) => maxY === minY ? W / 2 : padL + (yr - minY) / (maxY - minY) * (W - padL - padR);
@@ -296,9 +307,9 @@ export function renderMyLifeCareerScreens(ctx) {
     const oMin = Math.min(...ovrs) - 3, oMax = Math.max(...ovrs) + 3;
     const yOvr = (v) => H - padB - ((v - oMin) / Math.max(1, oMax - oMin)) * (H - padT - padB);
     const rankPts = hist.filter(h => h.worldRank != null);
-    const ranks = rankPts.map(h => h.worldRank);
-    const rMin = ranks.length ? Math.min(...ranks) : 1, rMax = ranks.length ? Math.max(...ranks) : 100;
-    const yRank = (v) => padT + ((v - rMin) / Math.max(1, rMax - rMin)) * (H - padT - padB);
+    // 固定軸：1位=上端・300位=下端（世界ロースター定数=300）。min-maxではなく絶対値で描く。
+    const WORLD_ROSTER_SIZE = 300;
+    const yRank = (v) => padT + (v - 1) / (WORLD_ROSTER_SIZE - 1) * (H - padT - padB);
     const ovrPath = hist.map((h, i) => `${i === 0 ? "M" : "L"}${xAt(h.year).toFixed(1)},${yOvr(h.ovr || 0).toFixed(1)}`).join(" ");
     const rankPath = rankPts.map((h, i) => `${i === 0 ? "M" : "L"}${xAt(h.year).toFixed(1)},${yRank(h.worldRank).toFixed(1)}`).join(" ");
     const maxOvrIdx = ovrs.indexOf(Math.max(...ovrs));
@@ -310,7 +321,6 @@ export function renderMyLifeCareerScreens(ctx) {
       <Screen>
         <div style={{ marginBottom: T.space.lg }}>
           <div style={{ fontSize: T.size.title }}>キャリアの推移</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>年ごとの総合力と世界ランクの移り変わり</div>
         </div>
         <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
           <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }}>
@@ -323,22 +333,21 @@ export function renderMyLifeCareerScreens(ctx) {
             {labelIdxs.map(i => {
               const h = hist[i];
               const po = yOvr(h.ovr || 0);
-              return <text key={`ovl${i}`} x={xAt(h.year)} y={po - 6} fontSize="9" fill={T.color.accent} textAnchor="middle">{h.ovr || 0}</text>;
+              return <text key={`ovl${i}`} x={xAt(h.year)} y={po - 6} fontSize="10" fill={T.color.accent} textAnchor="middle">{h.ovr || 0}</text>;
             })}
             {labelIdxs.map(i => {
               const h = hist[i];
               if (h.worldRank == null) return null;
               const po = yOvr(h.ovr || 0), pr = yRank(h.worldRank);
               const ly = Math.abs(pr - po) < 18 ? Math.max(pr, po) + 14 : pr + 13;
-              return <text key={`rkl${i}`} x={xAt(h.year)} y={ly} fontSize="9" fill={T.color.sub} textAnchor="middle">{h.worldRank}位</text>;
+              return <text key={`rkl${i}`} x={xAt(h.year)} y={ly} fontSize="10" fill={T.color.sub} textAnchor="middle">{h.worldRank}位</text>;
             })}
           </svg>
           <div style={{ display: "flex", gap: T.space.lg, justifyContent: "center", fontSize: T.size.caption, marginTop: T.space.xs }}>
             <span style={{ color: T.color.accent }}>— 総合力</span>
-            <span style={{ color: T.color.sub }}>┈ 世界ランク（上ほど上位）</span>
+            <span style={{ color: T.color.sub }}>┈ 世界ランク</span>
           </div>
         </div>
-        {hist.length <= 1 && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>年度を進めるとグラフが伸びていきます。</div>}
         <Section title="キャリアの軌跡">
           {tl.length === 0 ? (
             <Item first label="—" value="" detail="まだ語るべき一戦はない。初勝利・初表彰台がここに刻まれていく。" />
@@ -355,21 +364,25 @@ export function renderMyLifeCareerScreens(ctx) {
   }
 
   // ---- 世界ランキング（詳細） ----
+  // 第32弾（第2次UI改革）B-4案A: 行を「名前が主役」に。順位番号は右揃え固定幅の脇役、
+  // 「あなた／ライバル／好敵手」は括弧書きの文章からTag化して名前の直後へ、通算勝利数は
+  // 0勝なら非表示、右端ptsは強調（あなたはaccent）。
   if (ml.screen === "mylife_ranking" && ml.player) {
     const board = mlWorldBoard(ml);
     const tier = worldRankTier(ml.worldRank);
     const worldNews = ml.worldNews || [];
     const Row = (e) => {
-      const tag = e.isPlayer ? "あなた" : e.isRival ? "ライバル" : e.isRival2 ? "好敵手" : null;
+      const tagLabel = e.isPlayer ? "あなた" : e.isRival ? "ライバル" : e.isRival2 ? "好敵手" : null;
       return (
         <div key={e.rank} style={{ padding: `${T.space.sm}px 0`, borderTop: `1px solid ${T.color.rule}` }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, fontSize: T.size.body }}>
-            <span style={{ width: 22, flex: "none", textAlign: "right", color: e.isPlayer ? T.color.accent : T.color.sub }}>{e.rank}</span>
-            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: e.isPlayer ? T.color.accent : T.color.text }}>
-              {e.name}{tag && <span style={{ fontSize: T.size.caption, color: T.color.sub }}> ({tag})</span>}
+          <div style={{ display: "flex", alignItems: "baseline", gap: T.space.sm }}>
+            <span style={{ width: 22, flex: "none", textAlign: "right", fontSize: T.size.label, color: e.isPlayer ? T.color.accent : T.color.sub, fontVariantNumeric: "tabular-nums" }}>{e.rank}</span>
+            <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: T.space.xs, overflow: "hidden" }}>
+              <span style={{ fontSize: T.size.head, color: e.isPlayer ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
+              {tagLabel && <Tag color={e.isPlayer ? T.color.accent : undefined}>{tagLabel}</Tag>}
+              {e.star && e.star.wins > 0 && <span style={{ fontSize: T.size.micro, color: T.color.sub, flex: "none" }}>通算{e.star.wins}勝</span>}
             </span>
-            <span style={{ flex: "none", width: 64, textAlign: "right", fontSize: T.size.caption, color: T.color.sub }}>{e.star ? `通算${e.star.wins}勝` : ""}</span>
-            <span style={{ flex: "none", width: 48, textAlign: "right", color: T.color.sub }}>{e.pts}</span>
+            <span style={{ flex: "none", fontSize: T.size.label, color: e.isPlayer ? T.color.accent : T.color.sub, fontVariantNumeric: "tabular-nums" }}>{e.pts}</span>
           </div>
           {e.star?.bloodOf && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: 30 }}>{e.star.bloodOf}の血を継ぐ</div>}
         </div>
