@@ -3,7 +3,6 @@
 // ライバル・ニュースをここへ集約した。決定事項「ニュースはホームから外し世界タブへ」の実体。
 import React from "react";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { TYPES } from "../../data/abilities.js";
 import { mlAmbitionPath, mlCurrentAmbition, mlAmbitionProgressText, mlMediaHeadline, mlWorldBoard, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { Screen, Section } from "../../components/kit.jsx";
 
@@ -39,10 +38,11 @@ export function renderMyLifeWorldScreen(ctx) {
   const rank = ml.worldRank == null ? board.myRank : ml.worldRank;
   const tier = worldRankTier(rank);
   const media = mlMediaHeadline(ml);
+  // 第32弾Phase B R3: 枠線ボタンを面(surfaceUp)＋chevronのアフォーダンス規約へ統一
   const linkBtn = (label, screen) => (
     <button onClick={() => setMl(s => ({ ...s, screen }))}
-      style={{ width: "100%", background: "none", border: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.sm, cursor: "pointer", marginBottom: T.space.sm }}>
-      {label}
+      style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%", background: T.color.surfaceUp, border: "none", color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.sm, cursor: "pointer", marginBottom: T.space.sm }}>
+      {label} <span style={{ color: T.color.sub }}>›</span>
     </button>
   );
 

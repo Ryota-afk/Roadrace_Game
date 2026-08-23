@@ -7,7 +7,7 @@ import React from "react";
 import { loadBloodlines, loadMlLegends, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { bestBloodRecipeProgress, bloodRecipeProgress, deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
 import { AbilityGrid, TraitLine } from "../../components/panels.jsx";
-import { Item, PrimaryBtn, QuietBtn, Screen, Section, SelectRow } from "../../components/kit.jsx";
+import { Item, PrimaryBtn, QuietBtn, Screen, Section, SelectRow, TypeChip } from "../../components/kit.jsx";
 import { fmtRelTime, overall } from "../../core/core.js";
 import { ABILITIES, AB_LABEL, TYPES } from "../../data/abilities.js";
 import { DIFFICULTIES } from "../../data/progression.js";
@@ -75,9 +75,12 @@ export function renderMyLifeCreateScreens(ctx) {
                   <SelectRow first label="師事しない（通常のデビュー）" selected={idx === -1} onClick={() => setMl(s => ({ ...s, masterIdx: -1 }))} />
                   {legends.map((leg, i) => (
                     <SelectRow key={i} selected={idx === i} onClick={() => setMl(s => ({ ...s, masterIdx: i }))}
-                      label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span>{leg.name}<span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>{TYPES[leg.type]?.label || leg.type}</span></span>
-                        <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{leg.wins || 0}勝/{leg.podiums || 0}表彰台</span>
+                      label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.xs }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: T.space.xs, minWidth: 0 }}>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{leg.name}</span>
+                          <TypeChip type={leg.type} />
+                        </span>
+                        <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{leg.wins || 0}勝/{leg.podiums || 0}表彰台</span>
                       </div>}
                       detail={leg.nickname ? `「${leg.nickname}」` : null} />
                   ))}
@@ -108,9 +111,12 @@ export function renderMyLifeCreateScreens(ctx) {
                         <SelectRow first label="配合しない（師事のみ）" selected={pIdx === -1} onClick={() => setMl(s => ({ ...s, partnerIdx: -1 }))} />
                         {legends.map((leg, i) => i === idx ? null : (
                           <SelectRow key={i} selected={pIdx === i} onClick={() => setMl(s => ({ ...s, partnerIdx: i }))}
-                            label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                              <span>{leg.name}<span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>{TYPES[leg.type]?.label || leg.type}</span></span>
-                              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{(leg.generation || 0) > 0 ? `${leg.generation}代目・` : ""}+{leg.plusValue || 0}</span>
+                            label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.xs }}>
+                              <span style={{ display: "flex", alignItems: "center", gap: T.space.xs, minWidth: 0 }}>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{leg.name}</span>
+                                <TypeChip type={leg.type} />
+                              </span>
+                              <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{(leg.generation || 0) > 0 ? `${leg.generation}代目・` : ""}+{leg.plusValue || 0}</span>
                             </div>} />
                         ))}
                       </Section>
@@ -164,8 +170,8 @@ export function renderMyLifeCreateScreens(ctx) {
                               <div style={{ background: T.color.surfaceUp, padding: T.space.sm }}>
                                 <div style={{ fontSize: T.size.body, color: T.color.accent }}>血脈レシピ『{recipe.title}』成立！</div>
                                 <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{recipe.note}</div>
-                                <div style={{ fontSize: T.size.caption, color: T.color.text, marginTop: T.space.xs }}>
-                                  👑 伝説の特殊能力「{ABILITIES[recipe.abilityId]?.label}」を宿して生まれる
+                                <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.xs }}>
+                                  伝説の特殊能力「{ABILITIES[recipe.abilityId]?.label}」を宿して生まれる
                                 </div>
                               </div>
                             ) : best ? (
@@ -231,8 +237,11 @@ export function renderMyLifeCreateScreens(ctx) {
               <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1 }}>{tr.rank}</div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: T.size.title, lineHeight: 1.1 }}>{r.name}<span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>{TYPES[r.type].label}</span></div>
-              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{r.age}歳・{ML_BACKGROUNDS[r.background]?.label} ／ 総合力 {overall(r)}</div>
+              <div style={{ fontSize: T.size.title, lineHeight: 1.1 }}>{r.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: T.space.xs, marginTop: T.space.xs }}>
+                <TypeChip type={r.type} />
+                <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{r.age}歳・{ML_BACKGROUNDS[r.background]?.label} ／ 総合力 {overall(r)}</span>
+              </div>
               <div style={{ fontSize: T.size.caption, marginTop: T.space.xs }}>
                 {powRevealed
                   ? <span style={{ color: T.color.text }}>成長力 {r.growthPow}</span>

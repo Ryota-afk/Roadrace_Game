@@ -448,3 +448,27 @@ scratchpadの`b4_mock.html`（git外）。以下が正本。
 コメントのみと確認。`tools/verify_radar.mjs`（レーダー非対象だが回帰確認として）全項目OK。
 市場画面のスクリーンショットでTypeChip・AbilityGrid・BlurGridの新フォントサイズが
 実機で判読可能なことを確認——micro(8px)の初出使用にあたる。
+
+## Phase B-2 実装結果（2026-08・Sonnet・マイライフ残り）
+
+`mylife/rider.jsx`／`world.jsx`／`archive.jsx`／`race.jsx`／`events.jsx`／`create.jsx`を実装。
+`help.jsx`は既に絵文字撤去・トークン移行済みのプローズ画面で、脚質テキストや枠線ボタンの
+対象箇所が無いため無改修（対象6/7ファイル）。
+
+- **R1（TypeChip化）**：`rider.jsx`のヒーロー行、`events.jsx`の弟子イベント見出し、
+  `race.jsx`出走表の「{脚質}有利」、`create.jsx`の師匠/配合相手選択リスト2箇所と
+  デビュー結果ヒーローの計6箇所。
+- **R3（アフォーダンス統一）**：`rider.jsx`「キャリアの推移を見る」・`world.jsx`の
+  ランキング/名鑑/成績/チームメイトへの4本の導線ボタン・`archive.jsx`の実績/記録/殿堂等
+  6項目の索引リストを、枠線(`border:1px solid`)や透明背景から`surfaceUp`面＋「›」へ統一。
+- **副次的に見つけた既存の絵文字違反1件**：`create.jsx`の血脈レシピ成立表示に👑が
+  残っていた（CLAUDE.md §8）。撤去してaccent色の文字だけで強調する形に統一。
+- 未使用になった`TYPES`インポートを`rider.jsx`／`world.jsx`から削除、`events.jsx`の
+  元から未使用だった`ShopBtn`インポートも合わせて整理。
+
+### 検証
+
+`npm run build`通過（4回・各ファイル編集後）。実プレイ（マイライフ作成→デビュー→
+選手/世界/記録/ショップの4タブ）で`pageerror`ゼロ。縦線grep（`borderLeft`）全コードベース
+再実行で残存ゼロ（コメントのみ）。`verify_radar.mjs`全項目OK（レーダー非対象だが回帰確認）。
+選手タブのスクリーンショットでTypeChip・新アフォーダンスボタンの実機表示を確認。

@@ -38,20 +38,22 @@ export function renderMyLifeArchiveScreen(ctx) {
         ))}
       </div>
 
-      <div style={{ background: T.color.surface }}>
-        {items.map((it, i) => (
-          <button key={it.screen} onClick={() => setMl(s => ({ ...s, screen: it.screen }))}
-            style={{
-              display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
-              background: "none", border: 0, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
-              color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
-              padding: `${T.space.md}px`, cursor: "pointer", textAlign: "left",
-            }}>
-            <span>{it.label}</span>
+      {/* 第32弾Phase B R3: 枠線・透明背景の一覧行を面(surfaceUp)＋chevronのアフォーダンス規約へ統一 */}
+      {items.map((it, i) => (
+        <button key={it.screen} onClick={() => setMl(s => ({ ...s, screen: it.screen }))}
+          style={{
+            display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+            background: T.color.surfaceUp, border: 0, marginBottom: T.space.xs,
+            color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+            padding: `${T.space.md}px`, cursor: "pointer", textAlign: "left",
+          }}>
+          <span>{it.label}</span>
+          <span style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
             {it.note && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{it.note}</span>}
-          </button>
-        ))}
-      </div>
+            <span style={{ color: T.color.sub }}>›</span>
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

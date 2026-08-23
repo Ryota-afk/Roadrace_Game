@@ -3,7 +3,7 @@
 // season側と共有のため中身は据え置き（Phase3-D-3担当）。
 import React from "react";
 import { FatigueBar } from "../../components/panels.jsx";
-import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopBtn, ShopRow } from "../../components/kit.jsx";
+import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopRow, TypeChip } from "../../components/kit.jsx";
 import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
@@ -195,7 +195,12 @@ export function renderMyLifeEventScreens(ctx) {
         <Screen>
           <div style={{ fontSize: T.size.caption, color: T.color.sub }}>弟子との時間</div>
           <div style={{ fontSize: T.size.title, marginTop: T.space.xs }}>{ev.title}</div>
-          {ml.protege && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{ml.protege.name}・{t?.label}</div>}
+          {ml.protege && (
+            <div style={{ display: "flex", alignItems: "center", gap: T.space.xs, marginTop: T.space.xs }}>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{ml.protege.name}</span>
+              {t && <TypeChip type={ml.protege.type} />}
+            </div>
+          )}
           <div style={{ marginTop: T.space.md }}><Prose>{ev.text}</Prose></div>
           {ev.choices.map((c, i) => (
             <QuietBtn key={i} onClick={() => mlResolveProtegeEvent(i)}>{c.label}</QuietBtn>

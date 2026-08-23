@@ -7,7 +7,7 @@ import { StartListPanel } from "../../components/panels.jsx";
 import { fmtTime } from "../../core/core.js";
 import { TYPES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { Item, PrimaryBtn, QuietBtn, Screen, Section } from "../../components/kit.jsx";
+import { Item, PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
 
 function resultTitle(rank) {
   return rank === 1 ? "優勝" : rank <= 3 ? "表彰台" : rank <= 10 ? "上位入賞" : "フィニッシュ";
@@ -79,8 +79,9 @@ export function renderMyLifeRaceScreens(ctx) {
         <div style={{ marginBottom: T.space.lg }}>
           <div style={{ fontSize: T.size.caption, color: T.color.sub }}>出走表</div>
           <div style={{ fontSize: T.size.title, marginTop: T.space.xs, lineHeight: 1.3 }}>{raceMeta.name}</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>
-            {"★".repeat(raceMeta.grade)}・{TYPES[raceMeta.tmpl.favors].label}が有利
+          <div style={{ display: "flex", alignItems: "center", gap: T.space.xs, marginTop: T.space.sm }}>
+            <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{"★".repeat(raceMeta.grade)}</span>
+            <TypeChip type={raceMeta.tmpl.favors} label={`${TYPES[raceMeta.tmpl.favors].label}有利`} />
           </div>
         </div>
         <StartListPanel entrants={ml.result.entrants} favors={raceMeta.tmpl.favors} />

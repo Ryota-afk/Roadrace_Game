@@ -7,11 +7,11 @@ import { DisciplineGrid } from "../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { RiderPortrait } from "../../components/RiderPortrait.jsx";
 import { overall } from "../../core/core.js";
-import { ABILITIES, GROWTH, PERSONALITIES, TYPES } from "../../data/abilities.js";
+import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
-import { Screen, Section } from "../../components/kit.jsx";
+import { Screen, Section, TypeChip } from "../../components/kit.jsx";
 
 const Row = ({ k, v, first }) => (
   <div style={{
@@ -46,7 +46,10 @@ export function renderMyLifeRiderScreen(ctx) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: T.size.title, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
           {riderNickname(r) && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.xs }}>{riderNickname(r)}</div>}
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{r.age}歳 / {TYPES[r.type]?.label}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: T.space.xs, marginTop: T.space.xs }}>
+            <TypeChip type={r.type} />
+            <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{r.age}歳</span>
+          </div>
         </div>
         <div style={{ textAlign: "right", flex: "none" }}>
           <div style={{ fontSize: T.size.display, lineHeight: 1, color: T.color.accent }}>{overall(r)}</div>
@@ -100,9 +103,10 @@ export function renderMyLifeRiderScreen(ctx) {
         </div>
       </Section>
 
+      {/* 第32弾Phase B R3: 枠線ボタンを面(surfaceUp)＋chevronのアフォーダンス規約へ統一 */}
       <button onClick={() => setMl(s => ({ ...s, screen: "mylife_graph" }))}
-        style={{ width: "100%", background: "none", border: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.sm, cursor: "pointer" }}>
-        キャリアの推移を見る
+        style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 4, width: "100%", background: T.color.surfaceUp, border: "none", color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.sm, cursor: "pointer" }}>
+        キャリアの推移を見る <span style={{ color: T.color.sub }}>›</span>
       </button>
     </Screen>
   );
