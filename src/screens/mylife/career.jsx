@@ -12,22 +12,51 @@ import { FONT_DOT, T } from "../../data/theme.js";
 import { mlFactorCollection, mlLineageForest, bloodIdToName, breedNickTableRows, buildBloodMap, clearMyLifeSave, mlAutobiographyOptions, mlSetAutobiography, mlCareerTimeline, mlWorldBoard, protegeState, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { avgBondFor, bondTier } from "../../domain/mylife/bonds.js";
 import { initMyLife, mlCareerArchetype, computeAchievements, ML_ACHIEVEMENTS } from "../../state/state.js";
-import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, Tag, TypeChip } from "../../components/kit.jsx";
+import { Item, Prose, QuietBtn, Screen, Section, Tag, TypeChip } from "../../components/kit.jsx";
+
+// 第32弾（第2次UI改革）B-4第2バッチ: 進退・その後の決断を表す選択肢カード。
+// 面（surfaceUp／主ボタンはaction）＋1行タイトル＋1行の帰結説明。「今この選択肢を
+// 押すと何が起きるか」を浮いた注釈ではなくカード自身に持たせる。
+// career.jsx内でのみ使用（画面1「引退勧告」と画面2「これから」の2箇所）。
+const ChoiceCard = ({ title, note, onClick, primary, danger }) => (
+  <button onClick={onClick} style={{
+    display: "block", width: "100%", textAlign: "left", border: "none", cursor: "pointer",
+    fontFamily: FONT_DOT, padding: T.space.md, marginBottom: T.space.sm,
+    background: primary ? T.color.action : T.color.surfaceUp,
+  }}>
+    <div style={{ fontSize: T.size.head, color: primary ? T.color.bg : (danger ? T.color.bad : T.color.text) }}>{title}</div>
+    <div style={{ fontSize: T.size.caption, color: primary ? T.color.bg : T.color.sub, marginTop: 2, opacity: primary ? 0.75 : 1 }}>{note}</div>
+  </button>
+);
 
 export function renderMyLifeCareerScreens(ctx) {
   const { askConfirm, becomeManager, ml, mlRetireAdviceAccept, mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlWrap, setMl, setSuperMode } = ctx;
 
   // ---- 引退勧告／契約更改 ----
+  // 第32弾（第2次UI改革）B-4第2バッチ案A: 見出し1行＋判断材料3列＋選択肢カード化。
+  // 「全盛期」の実体はjoinOvr＝デビュー時の総合力で、いま全盛期の倍近く強いという
+  // 誤表示だった（実測）。実際のピーク＝careerHistoryの最大値へ差し替える。
   if (ml.screen === "mylife_retire_advice" && ml.player) {
     const r = ml.player;
     const info = ml.adviceInfo || { age: r.age, ovr: overall(r), joinOvr: r.joinOvr, declining: false, reducedRole: false };
     const decl = info.declining;
+    const peakOvr = Math.max(...(ml.careerHistory || []).map(h => h.ovr || 0), info.ovr);
     return mlWrap(
       <Screen>
-        <div style={{ marginBottom: T.space.lg }}>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{decl ? "チームからの引退勧告" : "契約更改"}</div>
-          <div style={{ fontSize: T.size.title, marginTop: T.space.xs }}>{info.age}歳・{decl ? "進退を決める" : "進退はあなた次第"}</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{decl ? "全盛期の力に陰りが見える" : "まだやれる脚だ"}</div>
+        <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>{info.age}歳・進退を決める</div>
+        <div style={{ display: "flex", gap: T.space.sm, marginBottom: T.space.md }}>
+          <div style={{ flex: 1, background: T.color.surface, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: T.size.micro, color: T.color.sub }}>総合力</div>
+            <div style={{ fontSize: T.size.title, color: T.color.accent, marginTop: 2 }}>{info.ovr}</div>
+          </div>
+          <div style={{ flex: 1, background: T.color.surface, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: T.size.micro, color: T.color.sub }}>ピーク</div>
+            <div style={{ fontSize: T.size.title, marginTop: 2 }}>{peakOvr}</div>
+          </div>
+          <div style={{ flex: 1, background: T.color.surface, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: T.size.micro, color: T.color.sub }}>最高世界ランク</div>
+            <div style={{ fontSize: T.size.title, marginTop: 2 }}>{ml.worldRankBest == null ? "—" : <>{ml.worldRankBest}<span style={{ fontSize: T.size.micro, color: T.color.sub }}>位</span></>}</div>
+          </div>
         </div>
         <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>監督</div>
@@ -37,18 +66,12 @@ export function renderMyLifeCareerScreens(ctx) {
               : `「${r.name}、来季の契約をどうする？まだやれる脚だ。もう一年勝負するもよし、役割を落として長く続けるもよし。引き際もまた、君自身が決めることだ」`}
           </div>
         </div>
-        <Section title="いまの力">
-          <Item first label="総合力" value={info.ovr} />
-          <Item label="全盛期" value={info.joinOvr} />
-        </Section>
-        <PrimaryBtn onClick={mlRetireAdviceContinue}>現役を続ける</PrimaryBtn>
+        <ChoiceCard primary title="現役を続ける" note="来季も同じように走ります" onClick={mlRetireAdviceContinue} />
         {!info.reducedRole && (
-          <>
-            <QuietBtn onClick={mlRetireAdviceReduceRole}>役割を縮小して続ける</QuietBtn>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub, margin: `-${T.space.xs}px 0 ${T.space.md}px` }}>レースの負荷が15%下がり、選手寿命が延びます</div>
-          </>
+          <ChoiceCard title="役割を縮小して続ける" note="レースでの負担が減り、長く走れます" onClick={mlRetireAdviceReduceRole} />
         )}
-        <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${r.age}歳で引退しますか？この操作は取り消せません。`, mlRetireAdviceAccept, "引退する")}>今季限りで引退する</QuietBtn>
+        <ChoiceCard danger title="今季限りで引退する" note="キャリアを振り返る画面へ進みます"
+          onClick={() => askConfirm(`${r.age}歳で引退しますか？この操作は取り消せません。`, mlRetireAdviceAccept, "引退する")} />
       </Screen>
     );
   }
@@ -68,44 +91,65 @@ export function renderMyLifeCareerScreens(ctx) {
     const missed = computeAchievements(ml).filter(a => !a.achieved);
     const tl = mlCareerTimeline(ml).slice(0, 10);
 
+    // 第32弾（第2次UI改革）B-4第2バッチ案B: 生涯成績3列を名前直下へ・「歩んだ道のり」を
+    // 3行へ縮小・「成し遂げたこと」を2列化。ラストレース名の先頭に自分の名前が
+    // 焼き込まれている（controllers/mylife/raceStart.js:26）ため、直上のヒーローと
+    // 重複しないよう既知の接頭辞だけを表示時に外す。
+    const lastRaceName = ml.lastRaceResult && ml.lastRaceResult.name && ml.lastRaceResult.name.startsWith(r.name + " ")
+      ? ml.lastRaceResult.name.slice(r.name.length + 1)
+      : (ml.lastRaceResult && ml.lastRaceResult.name);
+
     return mlWrap(
       <Screen>
-        <div style={{ background: T.color.surface, padding: T.space.lg, marginBottom: T.space.md, textAlign: "center" }}>
+        <div style={{ background: T.color.surface, padding: T.space.lg, marginBottom: T.space.sm, textAlign: "center" }}>
           <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{ml.year}年目・{r.age}歳で引退</div>
-          <div style={{ fontSize: T.size.title, margin: `${T.space.sm}px 0 0` }}>{r.name}</div>
-          <div style={{ marginTop: T.space.lg, paddingTop: T.space.md, borderTop: `1px solid ${T.color.rule}` }}>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub }}>この選手の生き様</div>
-            <div style={{ fontSize: T.size.head, color: T.color.accent, marginTop: T.space.xs }}>{arch.title}</div>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm, lineHeight: 1.7 }}>{arch.desc}</div>
+          <div style={{ fontSize: T.size.title, marginTop: T.space.sm }}>{r.name}</div>
+          <div style={{ fontSize: T.size.head, color: T.color.accent, marginTop: T.space.md }}>{arch.title}</div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, lineHeight: 1.7 }}>{arch.desc}</div>
+        </div>
+        <div style={{ display: "flex", gap: T.space.sm, marginBottom: T.space.md }}>
+          <div style={{ flex: 1, background: T.color.surface, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: T.size.micro, color: T.color.sub }}>出走</div>
+            <div style={{ fontSize: T.size.title, marginTop: 2 }}>{races.length}</div>
+          </div>
+          <div style={{ flex: 1, background: T.color.surface, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: T.size.micro, color: T.color.sub }}>優勝</div>
+            <div style={{ fontSize: T.size.title, color: T.color.accent, marginTop: 2 }}>{wins}</div>
+          </div>
+          <div style={{ flex: 1, background: T.color.surface, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: T.size.micro, color: T.color.sub }}>表彰台</div>
+            <div style={{ fontSize: T.size.title, marginTop: 2 }}>{podiums}</div>
           </div>
         </div>
 
         {ml.lastRaceResult && (
-          <>
-            <Section title="ラストレース">
-              <div style={{ padding: `${T.space.sm}px 0` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                  <span>{ml.lastRaceResult.name}</span>
-                  <span style={{ color: T.color.sub }}>{ml.lastRaceResult.rank}位 / {ml.lastRaceResult.total}人中</span>
-                </div>
-                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, lineHeight: 1.7 }}>{ml.lastRaceResult.flavor}</div>
+          <Section title="ラストレース">
+            <div style={{ padding: `${T.space.sm}px 0` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                <span>{lastRaceName}</span>
+                <span style={{ color: T.color.sub }}>{ml.lastRaceResult.rank}位 / {ml.lastRaceResult.total}人中</span>
               </div>
-            </Section>
-          </>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, lineHeight: 1.7 }}>{ml.lastRaceResult.flavor}</div>
+            </div>
+          </Section>
         )}
 
         <Section title="歩んだ道のり">
           <Item first label="到達クラス" value={`${CLASSES[0].label} → ${CLASSES[ml.classIdx]?.label || CLASSES[0].label}`} valueColor={T.color.accent} />
-          <Item label="出走" value={`${races.length}戦`} />
-          <Item label="優勝" value={`${wins}勝`} valueColor={T.color.accent} />
-          <Item label="表彰台" value={`${podiums}回`} />
           {maxOvrEntry && <Item label="最高総合力" value={maxOvrEntry.ovr} detail={`${maxOvrEntry.year}年目に到達`} />}
           {bestRankEntry && <Item label="最高世界ランク" value={`${bestRankEntry.worldRank}位`} detail={`${bestRankEntry.year}年目に到達`} />}
         </Section>
 
         <Section title="成し遂げたこと" right={`${achieved.length} / ${ML_ACHIEVEMENTS.length}`}>
-          {achieved.map((a, i) => <Item key={a.id} first={i === 0} label={a.label} value="" />)}
-          {achieved.length === 0 && <Item first label="—" value="" detail="心に残る一勝は無かったが、走り続けた日々そのものが記録だ。" />}
+          {achieved.length === 0 ? (
+            <Item first label="—" value="" detail="心に残る一勝は無かったが、走り続けた日々そのものが記録だ。" />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: `2px ${T.space.md}px` }}>
+              {achieved.map(a => (
+                <div key={a.id} style={{ fontSize: T.size.label, padding: "5px 0", borderTop: `1px solid ${T.color.rule}` }}>{a.label}</div>
+              ))}
+            </div>
+          )}
         </Section>
         {missed.length > 0 && (
           <div onClick={() => setMl(s => ({ ...s, retiredMissedOpen: !s.retiredMissedOpen }))}
@@ -189,15 +233,19 @@ export function renderMyLifeCareerScreens(ctx) {
         )}
 
         {ml.autobiographyText ? (
-          <Section title="自伝">
+          <Section title="自伝に残す言葉">
             <Prose>「{ml.autobiographyText}」</Prose>
           </Section>
         ) : (
           <>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>自伝を出版する</div>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub, margin: `-${T.space.xs}px 0 ${T.space.sm}px` }}>座右の言葉が殿堂の記録に残ります</div>
+            <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>自伝に残す言葉</div>
             {mlAutobiographyOptions(ml).map((o, i) => (
-              <QuietBtn key={i} onClick={() => { mlSetAutobiography(o.quote); setMl(s => ({ ...s, autobiographyText: o.quote })); }}>{o.title}</QuietBtn>
+              <button key={i} onClick={() => { mlSetAutobiography(o.text); setMl(s => ({ ...s, autobiographyText: o.text })); }}
+                style={{ display: "block", width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT_DOT,
+                  background: T.color.surfaceUp, padding: T.space.md, marginBottom: T.space.sm,
+                  fontSize: T.size.body, lineHeight: 1.7, color: T.color.text }}>
+                「{o.text}」
+              </button>
             ))}
           </>
         )}
@@ -210,17 +258,19 @@ export function renderMyLifeCareerScreens(ctx) {
             </div>
             {ml.awardedCP.parts.map((p, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, padding: "3px 0", borderTop: i === 0 ? `1px solid ${T.color.rule}` : "none", paddingTop: i === 0 ? T.space.sm : 3 }}>
-                <span>{p.label}</span><span>+{p.cp}</span>
+                <span>{p.label}</span><span>{p.cp >= 0 ? "+" : ""}{p.cp}</span>
               </div>
             ))}
           </Section>
         )}
 
-        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>これから</div>
-        <PrimaryBtn onClick={becomeManager}>監督として新チームを率いる</PrimaryBtn>
-        <div style={{ fontSize: T.size.caption, color: T.color.sub, margin: `-${T.space.xs}px 0 ${T.space.md}px` }}>{r.name}を創設メンバーに迎え、同じ世界でチームを率います</div>
-        <QuietBtn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</QuietBtn>
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends", careerBack: s.screen }))}>歴代選手の殿堂を見る</QuietBtn>
+        <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>これから</div>
+        <ChoiceCard primary title="監督として新チームを率いる" note={`${r.name}を創設メンバーに迎え、同じ世界で戦います`} onClick={becomeManager} />
+        <ChoiceCard title="新たな選手でキャリアを始める" note="この選手の記録は殿堂に残ります"
+          onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }} />
+        <div style={{ marginTop: T.space.md }}>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends", careerBack: s.screen }))}>歴代選手の殿堂を見る</QuietBtn>
+        </div>
       </Screen>
     );
   }
@@ -444,30 +494,30 @@ export function renderMyLifeCareerScreens(ctx) {
   }
 
   // ---- 殿堂 ----
+  // 第32弾（第2次UI改革）B-4第2バッチ案A: 説明を1行に・件数は見出し右へ・配合の相性表を
+  // トグルからボタン3つ並びへ（開いた時に見出しが二重に出ていたのを解消）・脚質をTypeChip化・
+  // 展開部の好敵手／弟子はItemのvalueに文章を詰めていたため右揃えが破綻していた
+  // （弟子は2行に折り返し）。名前をvalue・説明をdetailへ分ける。
   if (ml.screen === "mylife_legends") {
     const allLegends = loadMlLegends();
     const legends = [...allLegends].reverse();
     const bloodMap = buildBloodMap(allLegends);
     return mlWrap(
       <Screen>
-        <div style={{ marginBottom: T.space.lg }}>
+        <div style={{ marginBottom: T.space.sm, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <div style={{ fontSize: T.size.title }}>殿堂</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, lineHeight: 1.7 }}>
-            これまでに引退した{legends.length}名の記録です。1人を師匠に選べば教え子として、2人を親に選べば「配合」でその血を引く子として、次のキャリアに迎えられます。
-          </div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{legends.length}名</div>
         </div>
+        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>引退した選手は、次のキャリアで師匠や親に選べます。</div>
 
         <div style={{ display: "flex", gap: T.space.sm, marginBottom: T.space.md }}>
           <div style={{ flex: 1 }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_lineage", dexBack: "mylife_legends" }))}>系譜ツリー</QuietBtn></div>
           <div style={{ flex: 1 }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_factors", dexBack: "mylife_legends" }))}>因子図鑑</QuietBtn></div>
+          <div style={{ flex: 1 }}><QuietBtn color={ml.showNicks ? T.color.action : undefined} onClick={() => setMl(s => ({ ...s, showNicks: !s.showNicks }))}>配合の相性表</QuietBtn></div>
         </div>
 
-        <div onClick={() => setMl(s => ({ ...s, showNicks: !s.showNicks }))}
-          style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>
-          <span>配合の相性表</span><span style={{ color: T.color.accent }}>{ml.showNicks ? "閉じる ▴" : "開く ▾"}</span>
-        </div>
         {ml.showNicks && (
-          <Section title="配合の相性表">
+          <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
             {breedNickTableRows().map((r, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: T.space.sm, fontSize: T.size.caption, padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
                 <span style={{ width: 18, color: r.rank === "◎" ? T.color.accent : T.color.text }}>{r.rank}</span>
@@ -475,7 +525,7 @@ export function renderMyLifeCareerScreens(ctx) {
                 <span style={{ color: T.color.sub, flex: 1 }}>{r.label}{r.ability && ABILITIES[r.ability] ? `（${ABILITIES[r.ability].label}）` : ""}</span>
               </div>
             ))}
-          </Section>
+          </div>
         )}
 
         {legends.length === 0 && <div style={{ fontSize: T.size.body, color: T.color.sub, marginBottom: T.space.md }}>まだ引退した選手はいません。</div>}
@@ -489,8 +539,8 @@ export function renderMyLifeCareerScreens(ctx) {
           return (
             <div key={i} onClick={() => setMl(s => ({ ...s, expandedLegend: expanded ? null : legId }))}
               style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.sm, cursor: "pointer" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                <span>{leg.name} <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{TYPES[leg.type]?.label}</span></span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.head }}>
+                <span style={{ display: "flex", alignItems: "center", gap: T.space.xs }}>{leg.name} <TypeChip type={leg.type} /></span>
                 <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{leg.endYear}年目引退・{leg.age}歳</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.xs }}>
@@ -510,11 +560,11 @@ export function renderMyLifeCareerScreens(ctx) {
                     <Item label="実績" value={`${leg.achievedCount}/${leg.achievedTotal}`} />
                     {leg.rivalName && (() => {
                       const ht = rivalHeatTier(leg.rivalRecord?.heat ?? leg.rivalRecord?.meetings ?? 0);
-                      return <Item label="好敵手" value={`${ht.label} ${leg.rivalName}に${leg.rivalRecord?.wins || 0}勝${leg.rivalRecord?.losses || 0}敗`} />;
+                      return <Item label="好敵手" value={leg.rivalName} detail={`${ht.label}・${leg.rivalRecord?.wins || 0}勝${leg.rivalRecord?.losses || 0}敗`} />;
                     })()}
                     {leg.protege && (() => {
                       const pr = protegeState(leg.protege, leg.endYear);
-                      return <Item label="弟子" value={`${leg.protege.name}（${TYPES[leg.protege.type]?.label}）を総合力${pr.ovr}まで育てた`} />;
+                      return <Item label="弟子" value={leg.protege.name} detail={`${TYPES[leg.protege.type]?.label}・総合力${pr.ovr}まで育てた`} />;
                     })()}
                     {leg.specialMatingTitle && <Item label="特殊配合" value={leg.specialMatingTitle} valueColor={T.color.accent} />}
                     {leg.lineageName && (
