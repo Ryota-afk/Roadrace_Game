@@ -342,6 +342,66 @@ youth/transfer/race）。`riderCard.jsx`は5画面（hall/scout/transfer/transfe
 各バッチの完了条件はPhase Aと同じ（ビルド・pageerrorゼロ・該当画面の文字数計測・実機
 スクリーンショット確認）。実装はすべてSonnetで行う（B-4の候補作成・合意のみ設計側）。
 
+## B-4 第1バッチ（現役中3画面）合意・実装仕様（2026-08確定・Sonnet向け）
+
+実プレイ4年目のセーブ（クライマー青木駿介・ウィンドミル北海道・世界291位）から採取した
+実データで現状＋案A/案Bを提示し、**3画面すべて案Aで合意**。モックは
+scratchpadの`b4_mock.html`（git外）。以下が正本。
+
+### 1. チーム名鑑（`career.jsx` mylife_teamroster）＝案A・2行圧縮
+
+- ヘッダ行：チーム名 title(20)＋右に`Tag`「結束 {bondTier(avgBondFor(...))}」。
+  説明文「移籍すると顔ぶれが変わります」は削除。「あなた」セクション見出しも削除
+  （面とタグで分かる）。
+- あなたカード（surface・padding 12px）：行1＝名前 head(16)＋`Tag`「あなた」｜右＝
+  `overall(ml.player)` title(20) accent＋caption sub「総合力」。行2＝`TypeChip(player.type)`。
+- チームメイト見出し：`Section`見出し形式「チームメイト {n}名」（rightは無し——結束は
+  ヘッダのタグへ移動済み）。
+- チームメイト行（1人=2行・borderTop区切り）：
+  - 行1＝名前 head(16)＋特能があれば caption accent で特能ラベルを名前の直後に
+    （`(tm.abilities||[]).map(id=>ABILITIES[id]?.label)`。金特相当の色分けは現状どおり
+    ABILITIESの定義に従う）｜右端＝`TypeChip(tm.type)`。
+  - 行2＝caption subで「性格 {per.label}（{per.desc}）」（現行文言のまま）。
+  - **絆行は初期tier（bondTier最下位）のときは出さない**。tierが上がっている選手のみ
+    行2の右端に`Tag`「絆 {bond}」。`winsForMe>0`のgood行は現状維持。
+- 弟子セクション：現行構成のまま`TypeChip`化（行1右端）。
+- empty state：チームメイト0名時の「チームメイトの記録がありません。」は現状維持。
+
+### 2. キャリアの推移（`career.jsx` mylife_graph）＝案A・チャート主役化＋固定軸
+
+- 見出し title「キャリアの推移」のみ。説明キャプション（「年ごとの総合力と〜」・
+  「年度を進めるとグラフが〜」）は削除。
+- チャート：H=170→220・padL/padR/padT/padB=30/34/18/26。総合力線はaccent 2px＋
+  端点/最高点の値ラベル10px（現行のlabelIdxs方式のまま）。年ラベルはmicro(8)。
+- **世界ランクの軸をmin-max正規化から固定軸へ変更**：`yRank(v) = padT +
+  (v-1)/299 * (H-padT-padB)`（1位=上端・300位=下端。300=世界ロースター定数。
+  現行のrMin/rMax正規化は291位が最上端に張り付き好成績に見える誤解を生んでいた）。
+  rank点が1つも無い年はスキップ（現行どおりworldRank!=nullの点のみ）。
+- 凡例：「— 総合力」「┈ 世界ランク」のみ。「（上ほど上位）」は削除（固定軸化により
+  端点の「{n}位」ラベルだけで読める）。
+- キャリアの軌跡セクション：現行構成のまま（年label caption幅80・本文body）。
+  empty flavor「まだ語るべき一戦はない。〜」は維持。
+
+### 3. 世界ランキング（`career.jsx` mylife_ranking）＝案A・名前主役の行
+
+- ヒーロー（surface・中央揃え）：現行構成のまま（caption「{year}年目の世界ランキング」／
+  display(28) accent順位＋body sub「位」／head tier.label／caption sub「{pt}pt・自己最高」）。
+- 今年の世界の動き：行はbody・現行のまま。**ニュース文字列の絵文字（👑🔄等）は
+  `view/news.js`側で撤去**（データ層の修正としてB-4に含める。CLAUDE.md §8絵文字原則）。
+- トップ10/周辺の行（1行構成）：rank番号 label(11) sub 右揃え幅22（あなたはaccent）／
+  名前 head(16)（あなたはaccent）／「あなた」「ライバル」「好敵手」は括弧書きをやめ
+  `Tag`化して名前の直後／通算n勝は micro(8) sub（0勝は非表示）／右端 pts label(11)
+  tabular（あなたはaccent）。
+- 血統注記「{star.bloodOf}の血を継ぐ」caption行は現状維持。
+- ライバル圏外注記2行（「ライバル {name}：世界{n}位」）は現状維持。
+
+### 実装対象ファイル（B-4第1バッチ）
+
+`src/screens/mylife/career.jsx`（3サブ画面のJSX）＋`src/view/news.js`（絵文字撤去）。
+検証：ビルド・pageerrorゼロ・3画面のスクリーンショット提示・縦線grep。
+残り3画面（引退勧告・引退セレモニー・殿堂）は第2バッチとして別途候補提示
+（引退到達セーブの採取が必要）。
+
 ### 実機確認での指摘と修正（2026-08）
 
 - **「勾配で、線と赤い図形がズレてるよね？」**（ユーザー指摘）——そのとおりズレていた。
