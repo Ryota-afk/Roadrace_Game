@@ -77,7 +77,11 @@ export function growthPhase(r) {
     : (hasAbility(r, "destiny") || hasAbility(r, "unfallen")) ? 0.5
     : (hasAbility(r, "revenant") || hasAbility(r, "twinsoul")) ? 0.7
     : 1;
-  return { gain: 0.1 * mul, dec: Math.min(1.2, 0.25 * (r.age - pe)) * decayMul, tag: "衰え期" };
+  // 第33弾（バランス是正）: 衰えが急すぎてピーク後わずか4年で崩壊していた（devlog/wave33.md
+  // 実測：33歳で全能力94から63まで低下）。slope/capを緩め、キャリア終盤が「上昇→プラトー→
+  // 緩やかな下降」の形になるようにした（33歳で78程度に留まる）。この関数はシーズン/マイライフ
+  // 共有のため両モードのベテランが長持ちする。実測ではGF優勝率をほぼ動かさない（誤差範囲）。
+  return { gain: 0.1 * mul, dec: Math.min(0.6, 0.12 * (r.age - pe)) * decayMul, tag: "衰え期" };
 }
 
 // v43(マイライフ難易度調整Phase 1・成長力マスク化): revealPow=falseの間はpowScoreを除外する

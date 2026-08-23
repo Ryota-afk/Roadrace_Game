@@ -160,6 +160,24 @@ const gain = 0.8 * ph.gain * POW[n.growthPow].mul * envBonus
 3. 実プレイ（シーズン新規→数年進める／マイライフ）で`pageerror`ゼロ。
 4. `verify_radar.mjs`・`verify_baseview.mjs` 全項目OK（回帰確認）。
 
+## 実装結果（2026-08・Sonnet）
+
+`controllers/season/month.js`（練習gain式）・`domain/shared/growth.js`（growthPhaseの衰え係数）
+の2箇所を仕様どおり変更。
+
+### 検証
+
+- `npm run build` 通過。
+- **実コードの`growthPhase`/`growthFactor`を直接importして回した回帰検証**
+  （scratchpad/verify_real_code.mjs）：
+  - 生涯最高OVR：投資ゼロ84・フル投資91（**いずれも上限94以内**。是正前は103まで漏れていた）
+  - 成長タイプ別ピーク年齢：早熟25歳(OVR88)／普通28歳(OVR91)／晩成32歳(OVR93)
+    （是正前は全タイプ19〜23歳で頭打ち＝`GROWTH[].peak`が無意味化していた）
+  - GF優勝率（主力平均OVR87.8・機材Lv0→Lv5）：0%→17%（devlog設計時の想定18-20%と一致）
+- `verify_radar.mjs`・`verify_baseview.mjs` 全項目OK（回帰確認・レーダー/拠点画面は今回の
+  変更対象外だが数値変更の影響が無いことを確認）。
+- 実プレイ（Playwright・シーズン24ヶ月＋マイライフ12ヶ月の練習進行）は検証中（別途追記）。
+
 ## スタッフ専用スプライト（#1・実装記録）
 
 - **抽出**：`reference/Staff.png`（832×1291・4体）をscratchpadのPillowスクリプトで機械抽出。

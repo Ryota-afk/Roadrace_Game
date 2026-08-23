@@ -62,10 +62,13 @@ export function monthlyUpdate(state, raceInfo) {
       } else {
         const ph = growthPhase(n);
         const winter = state.month === 8 || state.month === 9;
-        const gain = 1.5 * ph.gain * POW[n.growthPow].mul
-          * (winter ? 1.3 : 1) * (state.camp ? 2 : 1)
-          * (1 + state.equip.facility * 0.15)
-          * (1 + (state.staff?.trainer || 0) * 0.12)
+        // 第33弾（バランス是正）: 環境倍率（設備・トレーナー・キャンプ・冬）は従来すべて乗算で
+        // 重なっており、フル投資時に6倍超まで積み上がって数年でカンストしていた（devlog/wave33.md
+        // 実測）。環境ボーナスは加算で合流させ、基礎係数も1.5→0.8に下げる。特能・主将由来の
+        // 倍率は選手個体の特性であり環境投資ではないため、従来どおり乗算のまま残す。
+        const envBonus = 1 + state.equip.facility * 0.05 + (state.staff?.trainer || 0) * 0.08
+          + (state.camp ? 0.3 : 0) + (winter ? 0.1 : 0);
+        const gain = 0.8 * ph.gain * POW[n.growthPow].mul * envBonus
           * (hasAbility(n, "trainer") ? 1.2 : hasAbility(n, "lazy_sp") ? 0.8 : 1)
           * (hasAbility(n, "lateblow_sp") && n.age >= 28 ? 1.15 : 1)
           * captainMentorMul(n);
