@@ -437,6 +437,201 @@ export const ML_EVENTS = [
       { label: "代替品でなんとか乗り切る", result: "急場をしのいだが、いつもの調子は出なかった。", effects: { formDelta: -5, fatigueDelta: 5 } },
       { label: "取りに戻ってやり直す", result: "時間をロスした焦りが、そのまま体に出てしまった。", effects: { formDelta: -4, fatigueDelta: 8 } },
     ] },
+
+  // 第27弾: イベント拡充第2弾（+30件）。v43で確立した5分類のタグ付け方針を踏襲。
+
+  // --- ①個別能力ブースト（abKeyDelta） ---
+  { title: "向かい風の日の平坦練", text: "強い向かい風の日。あえて平坦の長い区間で走り込むチャンスでもある。",
+    choices: [
+      { label: "風に逆らって踏み抜く", result: "重いギアを踏み続けた脚に、確かな巡航力が刻まれた。", effects: { abKeyDelta: { flat: 6 }, fatigueDelta: 7 } },
+      { label: "風を読んで省エネで走る", result: "風向きと姿勢の関係を体で学び、無駄のない走りが身についた。", effects: { abKeyDelta: { flat: 4 }, mentalDelta: 2 } },
+    ] },
+  { title: "近所の激坂チャレンジ", text: "地元で「登れたら一人前」と噂の激坂に、時間を作って挑むことにした。",
+    choices: [
+      { label: "足つきなしで登り切るまで帰らない", result: "何本目かでついに登り切った。脚に残る痛みが勲章に思えた。", effects: { abKeyDelta: { climb: 6 }, fatigueDelta: 8 } },
+      { label: "区間を区切って攻略する", result: "急がば回れ。区間ごとの攻略で、着実に登りの引き出しが増えた。", effects: { abKeyDelta: { climb: 4 } } },
+    ] },
+  { title: "ゴール勝負に誘われる", text: "練習の締めに、チームメイトから「最後の看板までスプリント勝負」を持ちかけられた。",
+    choices: [
+      { label: "真っ向から受けて立つ", result: "全力のもがき合いで、トップスピードの伸びが一段変わった。", effects: { abKeyDelta: { sprint: 6 }, fatigueDelta: 6 } },
+      { label: "発射のタイミングを研究して挑む", result: "仕掛けどころを考え抜いた勝負は、スプリントの理解を深めた。", effects: { abKeyDelta: { sprint: 4 }, mentalDelta: 2 } },
+    ] },
+  { title: "ロングライドで掴んだ燃費", text: "休日を使った200kmのロングライド。後半、自分の体の「燃費」が見えてきた気がした。",
+    choices: [
+      { label: "補給を絞って限界を探る", result: "ぎりぎりの状態で走り続けた経験が、スタミナの底を押し広げた。", effects: { abKeyDelta: { stamina: 6 }, fatigueDelta: 9 } },
+      { label: "計画的な補給で走り切る", result: "補給計画どおりに走り切り、長丁場の組み立てが上手くなった。", effects: { abKeyDelta: { stamina: 4 } } },
+    ] },
+  { title: "ひとりで踏む時間", text: "チーム練の予定が流れ、めずらしく一日をまるごと一人で使えることになった。",
+    choices: [
+      { label: "誰にも合わせず自分の限界で走る", result: "誰の後ろにも隠れられない時間が、独走の地力を底上げした。", effects: { abKeyDelta: { solo: 6 }, fatigueDelta: 7 } },
+      { label: "コース研究を兼ねて淡々と走る", result: "自分のペースを刻み続ける感覚が、独走の自信につながった。", effects: { abKeyDelta: { solo: 4 }, mentalDelta: 2 } },
+    ] },
+  { title: "ペダリング解析の結果", text: "測定機器を借りてペダリングを解析したところ、左右差と出力の癖がはっきり数字に出た。",
+    choices: [
+      { label: "巡航の効率を突き詰める", result: "数字を手がかりに回し方を作り替え、巡航の質が上がった。", effects: { abKeyDelta: { flat: 5 }, fatigueDelta: 4 } },
+      { label: "もがきの出力を突き詰める", result: "力の逃げを潰していくと、スプリントの出力が目に見えて伸びた。", effects: { abKeyDelta: { sprint: 5 }, fatigueDelta: 4 } },
+    ] },
+  { title: "苦手つぶし月間", text: "今月は苦手分野に向き合うと決めた。さて、どこから手をつけるか。",
+    choices: [
+      { label: "逃げていた登りと向き合う", result: "苦手意識の根っこを一つずつ潰し、登りが少し好きになった。", effects: { abKeyDelta: { climb: 5 }, fatigueDelta: 6 } },
+      { label: "後半に垂れる悪癖と向き合う", result: "ペース管理と補給を見直し、最後まで垂れない体に近づいた。", effects: { abKeyDelta: { stamina: 5 }, fatigueDelta: 6 } },
+    ] },
+
+  // --- ②新ステ変動（breakthrough/stability/luck） ---
+  { title: "本番さながらの通し稽古", text: "大一番を想定し、入場からゴールまでの流れを一日かけて再現してみることにした。",
+    choices: [
+      { label: "勝負どころの一撃を何度も再現する", result: "「ここで行く」という一撃の感覚が、体に深く刻まれた。", effects: { breakthroughDelta: 5, fatigueDelta: 8 } },
+      { label: "流れ全体を丁寧になぞる", result: "本番の景色が頭に入り、当日の迷いが減りそうだ。", effects: { breakthroughDelta: 3, mentalDelta: 3 } },
+    ] },
+  { title: "崩れない走りの研究", text: "どんな日でも大崩れしない選手の走りを、映像で徹底的に研究してみた。",
+    choices: [
+      { label: "自分の走りに取り入れて試す", result: "淡々と出力を刻む術を試すうち、走りのむらが減ってきた。", effects: { stabilityDelta: 5, fatigueDelta: 5 } },
+      { label: "ノートにまとめて引き出しにする", result: "崩れる予兆と立て直し方を整理し、心の保険が一つ増えた。", effects: { stabilityDelta: 3, mentalDelta: 3 } },
+    ] },
+  { title: "四つ葉のクローバー", text: "練習コースの脇で足を止めた拍子に、四つ葉のクローバーを見つけた。",
+    choices: [
+      { label: "押し花にして手帳に挟む", result: "小さな幸運のお守りができた。なんだか良いことが起きそうだ。", effects: { luckDelta: 4, mentalDelta: 2 } },
+      { label: "その場にそっと残しておく", result: "幸運は独り占めしないことにした。心が少し軽くなった。", effects: { luckDelta: 2, fatigueDelta: -5 } },
+    ] },
+  { title: "勝負勘を磨く夜", text: "過去レースの分岐点だけを集めた映像を見ながら、「自分ならいつ行くか」を考え続けた。",
+    choices: [
+      { label: "決断の瞬間を体に覚え込ませる", result: "行くか、待つか。決断の物差しが自分の中にできてきた。", effects: { breakthroughDelta: 4, mentalDelta: 2 } },
+      { label: "失敗例から学ぶ", result: "仕掛け損ないの共通点が見え、無駄足が減りそうだ。", effects: { breakthroughDelta: 3, stabilityDelta: 2 } },
+    ] },
+  { title: "朝のルーティンを整える", text: "起床から練習開始までの流れがばらばらなことに気づき、朝の過ごし方を見直すことにした。",
+    choices: [
+      { label: "分刻みの型を作って守る", result: "毎朝同じ流れで体が起きるようになり、走り出しが安定した。", effects: { stabilityDelta: 5 } },
+      { label: "ゆとり重視のゆるい型にする", result: "余白のある朝は心にも効いた。落ち着いて一日に入れる。", effects: { stabilityDelta: 3, mentalDelta: 2, fatigueDelta: -4 } },
+    ] },
+  { title: "早朝の神社参拝", text: "練習コースの途中にある小さな神社。ふと思い立って、朝のうちに手を合わせていくことにした。",
+    choices: [
+      { label: "勝負運を願う", result: "静かな境内で頭が整った。妙に運が向いてきた気がする。", effects: { luckDelta: 4 } },
+      { label: "無事故を願う", result: "安全への意識が高まり、心も静かに落ち着いた。", effects: { luckDelta: 2, mentalDelta: 3 } },
+    ] },
+
+  // --- ③賭け（outcomes） ---
+  { title: "新型フレームのテスト依頼", text: "機材メーカーから「開発中のフレームを実走テストしてほしい」という依頼が届いた。",
+    choices: [
+      { label: "引き受けてみる",
+        outcomes: [
+          { weight: 0.35, result: "新型は驚くほど進み、機材の知見と自信を同時に手に入れた。", effects: { abKeyDelta: { flat: 5 }, popularityDelta: 4 } },
+          { weight: 0.4, result: "セッティングが合わず、いつもの感覚を取り戻すのに苦労した。", effects: { formDelta: -5, fatigueDelta: 6 } },
+          { weight: 0.25, result: "可もなく不可もなし。レポートを書いて謝礼を受け取った。", effects: { moneyDelta: 15 } },
+        ] },
+      { label: "今の機材に集中する", result: "慣れた機材で練習の質を守った。", effects: { formDelta: 2 } },
+    ] },
+  { title: "トレイルランへのお誘い", text: "山仲間から「気分転換にトレイルランでもどうだ」と誘われた。未知の刺激か、余計な疲労か。",
+    choices: [
+      { label: "思い切って参加する",
+        outcomes: [
+          { weight: 0.35, result: "自転車と違う筋肉と心肺への刺激が新鮮で、登りの体の使い方まで変わった。", effects: { abKeyDelta: { climb: 5 }, fatigueDelta: 8 } },
+          { weight: 0.35, result: "慣れない下りで脚が笑い、数日引きずる筋肉痛だけが残った。", effects: { fatigueDelta: 14, formDelta: -3 } },
+          { weight: 0.3, result: "景色を楽しむ良いリフレッシュになった。", effects: { mentalDelta: 3, fatigueDelta: -6 } },
+        ] },
+      { label: "丁重に断る", result: "誘いは嬉しかったが、今は専門に集中することにした。", effects: {} },
+    ] },
+  { title: "名物大盛りチャレンジ", text: "チームで寄った食堂に「完食無料」の大盛りチャレンジがあった。周囲の視線が集まる。",
+    choices: [
+      { label: "受けて立つ",
+        outcomes: [
+          { weight: 0.3, result: "見事完食。店の壁に写真が飾られ、思わぬ人気者になった。", effects: { popularityDelta: 5, fatigueDelta: 4 } },
+          { weight: 0.45, result: "後半で完全に失速。しばらく満腹で動けなかった。", effects: { fatigueDelta: 10, formDelta: -3 } },
+          { weight: 0.25, result: "惜しくも一歩及ばず。だが店主と仲良くなり、裏メニューを教わった。", effects: { mentalDelta: 2, fatigueDelta: 5 } },
+        ] },
+      { label: "栄養バランスを優先する", result: "誘惑を断ち、アスリートらしい食事を選んだ。", effects: { stabilityDelta: 2 } },
+    ] },
+  { title: "眠れない夜の自主練", text: "妙に目が冴えて眠れない夜。いっそ走りに出てしまおうかという考えが頭をよぎる。",
+    choices: [
+      { label: "夜の街へ走りに出る",
+        outcomes: [
+          { weight: 0.3, result: "誰もいない夜道で無心に回すうち、頭の中が澄み渡った。", effects: { mentalDelta: 4, abKeyDelta: { solo: 3 } } },
+          { weight: 0.45, result: "帰る頃には空が白み、翌日の練習はさんざんだった。", effects: { fatigueDelta: 12, formDelta: -4 } },
+          { weight: 0.25, result: "少し走ったら眠気が来た。ほどよい運動で朝までぐっすり。", effects: { fatigueDelta: -8 } },
+        ] },
+      { label: "布団の中で目を閉じ続ける", result: "眠れないなりに体は休まった。", effects: { fatigueDelta: -4 } },
+    ] },
+  { title: "古い自転車店の掘り出し物", text: "路地裏の古い自転車店で、値札のない年代物のパーツ箱を見せてもらった。「好きに漁っていい」らしい。",
+    choices: [
+      { label: "箱の底まで漁る",
+        outcomes: [
+          { weight: 0.3, result: "職人が惚れ込むような銘品を発掘。整備の腕前まで上がった気がする。", effects: { moneyDelta: 20, mentalDelta: 2 } },
+          { weight: 0.4, result: "錆びた部品で手を汚しただけだった。店主の昔話は長かった。", effects: { fatigueDelta: 5 } },
+          { weight: 0.3, result: "掘り出し物は無かったが、店主に地元の隠れた練習コースを教わった。", effects: { abKeyDelta: { climb: 3 }, mentalDelta: 2 } },
+        ] },
+      { label: "眺めるだけにしておく", result: "目の保養だけして店を後にした。", effects: {} },
+    ] },
+  { title: "嵐の前の走り込み", text: "夕方から荒れる予報。今のうちに走るか、判断が分かれるところだ。",
+    choices: [
+      { label: "予報とにらめっこで出発する",
+        outcomes: [
+          { weight: 0.35, result: "ぎりぎりまで走って雨雲から逃げ切った。判断力に自信がついた。", effects: { luckDelta: 3, abKeyDelta: { stamina: 3 } } },
+          { weight: 0.4, result: "読みが外れて土砂降りに捕まり、ずぶ濡れで帰宅した。", effects: { fatigueDelta: 10, formDelta: -4 } },
+          { weight: 0.25, result: "予報より早く天気が崩れ、短時間で切り上げた。無難な一日。", effects: { fatigueDelta: 3 } },
+        ] },
+      { label: "今日は屋内トレーニングに切り替える", result: "無理をせずローラーで汗を流した。", effects: { fatigueDelta: 4, stabilityDelta: 2 } },
+    ] },
+
+  // --- ④覚醒級（weightを低くし滅多に引かない） ---
+  { title: "無心のペダリング", text: "気づけば何も考えずに回していた。呼吸も鼓動も景色も、すべてが一つに溶けるような時間だった。",
+    weight: 0.15,
+    choices: [
+      { label: "この境地を追い求める", result: "「あの感覚」を再現しようとする過程そのものが、自分を作り替えていった。", effects: { growthPowBump: true, fatigueDelta: 8 } },
+      { label: "たまたまの奇跡として胸にしまう", result: "執着せず胸にしまったが、あの日を境に走りの質が確かに変わった。", effects: { growthPowBump: true, mentalDelta: 3 } },
+    ] },
+  { title: "師と呼べる人との出会い", text: "引退した往年の名選手と話し込む機会を得た。数十年分の学びが、惜しげもなく注がれる。",
+    weight: 0.15,
+    choices: [
+      { label: "弟子入りを申し出る", result: "定期的に教えを受けられることになった。見える世界が変わり始めている。", effects: { talentCapDelta: 4, breakthroughDelta: 3, fatigueDelta: 6 } },
+      { label: "その日の教えを深く刻む", result: "一度きりの対話だったが、その言葉は長く自分を導く羅針盤になった。", effects: { talentCapDelta: 3, mentalDelta: 4 } },
+    ] },
+  { title: "すべてが噛み合う一ヶ月", text: "練習も食事も睡眠も、この一ヶ月はすべてが面白いように噛み合っている。",
+    weight: 0.2,
+    choices: [
+      { label: "この波に乗って一気に伸ばす", result: "絶好調の波を逃さず攻め続け、全体の地力が一段引き上がった。", effects: { abBoost: 8, fatigueDelta: 12 } },
+      { label: "波の要因を分析して仕組みにする", result: "好調の理由を言語化し、いつでも再現できる仕組みに変えた。", effects: { abBoost: 5, stabilityDelta: 4 } },
+    ] },
+
+  // --- ⑤悪イベント（bad:true） ---
+  { title: "集団落車に巻き込まれる", bad: true, text: "練習会の集団走行で前方の落車に巻き込まれ、派手に転んでしまった。",
+    choices: [
+      { label: "体のケアを最優先する", result: "幸い骨に異常はなかったが、打ち身の痛みはしばらく残った。", effects: { fatigueDelta: 14, formDelta: -5 } },
+      { label: "機材のチェックを優先する", result: "体は動くが、あちこちの擦り傷と機材の傷が痛々しい。", effects: { fatigueDelta: 10, formDelta: -4, mentalDelta: -2 } },
+    ] },
+  { title: "雨続きの一週間", bad: true, text: "来る日も来る日も冷たい雨。予定していた練習が思うようにこなせない。",
+    choices: [
+      { label: "雨でも構わず走る", result: "濡れて冷えた体に疲労が溜まり、風邪の一歩手前までいった。", effects: { fatigueDelta: 12, formDelta: -3 } },
+      { label: "室内メニューに切り替える", result: "できることはやったが、実走の感覚は少し鈍ってしまった。", effects: { formDelta: -4 } },
+    ] },
+  { title: "機材トラブルの連鎖", bad: true, text: "パンク、変速不調、ライトの故障。なぜか機材トラブルが立て続けに起きる。",
+    choices: [
+      { label: "全部まとめて総点検する", result: "丸一日かけて全て直したが、貴重な練習時間を失った。", effects: { fatigueDelta: 8, formDelta: -3 } },
+      { label: "応急処置でしのぐ", result: "だましだまし乗り続けたが、機材への不安が頭から離れない。", effects: { mentalDelta: -3, formDelta: -3 } },
+    ] },
+  { title: "遠征先での食あたり", bad: true, text: "遠征先で食べた物が悪かったのか、腹の調子が最悪だ。",
+    choices: [
+      { label: "無理せず一日休む", result: "丸一日寝込んだ。回復はしたが、体が軽くなるまで時間がかかった。", effects: { fatigueDelta: 10, formDelta: -5 } },
+      { label: "薬で抑えて予定をこなす", result: "なんとか予定はこなしたが、内容は散々だった。", effects: { fatigueDelta: 14, formDelta: -4 } },
+    ] },
+  { title: "動画の見過ぎで夜更かし", bad: true, text: "気づけば深夜。ついレース動画を延々と見続けてしまった。",
+    choices: [
+      { label: "せめて学びに変える", result: "得たものはあったが、寝不足の朝練はさすがに堪えた。", effects: { fatigueDelta: 8, mentalDelta: 1 } },
+      { label: "反省して即寝る", result: "慌てて寝たが、睡眠リズムはしばらく乱れたままだった。", effects: { fatigueDelta: 6, formDelta: -3 } },
+    ] },
+  { title: "比べられるつらさ", bad: true, text: "同期の活躍がメディアで大きく取り上げられ、周囲がなにかと自分と比べてくる。",
+    choices: [
+      { label: "闘志に変えようとする", result: "奮い立とうとするほど空回りし、心がすり減っていった。", effects: { mentalDelta: -4, stabilityDelta: -3 } },
+      { label: "耳をふさいで自分に集中する", result: "気にしないふりはできたが、心のざわつきは消えなかった。", effects: { mentalDelta: -3 } },
+    ] },
+  { title: "定番コースが通行止め", bad: true, text: "いつもの練習コースが工事で長期通行止めに。代わりのコース探しを迫られる。",
+    choices: [
+      { label: "手探りで新コースを開拓する", result: "迷いながらの手探りで、練習の質がしばらく落ちてしまった。", effects: { formDelta: -4, fatigueDelta: 6 } },
+      { label: "ローラー中心に切り替える", result: "単調なメニューが続き、気持ちの張りが失われていった。", effects: { mentalDelta: -3, formDelta: -3 } },
+    ] },
+  { title: "空回りの焦り", bad: true, text: "結果を急ぐあまり、練習がすべて裏目に出ているような感覚が続いている。",
+    choices: [
+      { label: "量を増やして取り返そうとする", result: "焦って積んだ距離は身にならず、疲労だけが積み上がった。", effects: { breakthroughDelta: -6, fatigueDelta: 12 } },
+      { label: "一度立ち止まって見直す", result: "原因を探るうちに時間が過ぎ、伸び盛りの勢いを少し失った。", effects: { breakthroughDelta: -4, mentalDelta: -2 } },
+    ] },
 ];
 
 // v36(#9): 性格ベースの私生活イベント（マイライフ）。プレイヤー自身の性格に応じた出来事が起き、
