@@ -865,3 +865,230 @@ Artifact「引退画面の作り直し」で現状／案A／案Bを実データ�
    残っていることを確認（後者は同一セーブに出ないことがあるので、出なければNodeで
    `mlCareerTimeline`に合成logを与えて確認する）。
 5. 縦線grep（`borderLeft`）と絵文字grepで新たな違反ゼロ。
+
+## B-4 第2バッチ 追補：自伝と「これから」（2026-08確定・Sonnet向け）
+
+**合意**：自伝＝**案A**（書名を捨て、殿堂に刻まれる言葉そのものを並べる）。言葉は**5個→48個**へ拡張。
+選び方は「最高位1つだけ残す」から「**当てはまった全部を候補にし、最高位の1段下まで同格**」へ変更。
+「これから」も**一緒に直す**。モックの正本は`scratchpad/b4b2_autobio.html`（git外）。
+
+### 0. なぜ選び方ごと変えるのか（実測）
+
+ユーザー指摘「マイライフはやりきって各条件の最高位に到達することが多い」を実セーブで検証した。
+採取した今村 雄大は**4グループすべてで最高位**だった（最高世界ランク1位／好敵手に79戦65勝14敗の
+勝ち越し／弟子あり／133戦・12年・最上位クラス）。この状態では「一番めずらしい1つだけ残す」規則が
+毎回同じ4つを指し、**やり込んだこと自体が変化の無さの原因になる**。
+
+試作（`scratchpad/proto_autobio.mjs`）で、今村と同戦績・名前だけ違う20人を計算した実測：
+
+| 扱い方 | 20人で出た組み合わせ | 先頭に来た話題の内訳 |
+|---|---|---|
+| 最高位だけ（tol=0） | 20通り | **世界1位の話が20人全員** |
+| 最高位の1段下も同格（tol=1） | 20通り | 世界1位7／古典制覇5／通算20勝3／勝ち越し3／100戦1／弟子1 |
+
+組み合わせ自体はどちらも散るが、**先頭の話題が固定されるか**が決定的に違う。**tol=1を採用**。
+世界1位という実績自体はヒーローの称号「世界の頂に立った者」で必ず表示されるため、自伝は
+実績の再掲ではなく選手の言葉を置く場所として扱う。
+
+なお種の撹拌は必須：単純な`seed + i*13`では実測で10人中6通りにしか散らず、1つの言い回しが
+7/10に偏った。下記`mix()`（splitmix系の撹拌）にして10人中10通りになった。
+
+### 1. `src/domain/mylife/career.js`：`mlAutobiographyOptions`を差し替える
+
+現行の`:19〜30`（`title`/`quote`の5件・`slice(0,3)`）を破棄し、以下へ置換する。
+**`title`は廃止**（案Aで書名を使わないため。保存もされていなかった＝`mlSetAutobiography`は無改修）。
+戻り値は`[{ text }, ...]`の3件。呼び出し側（`career.jsx`）は`o.text`を使う。
+
+以下は試作で実測済みのコードそのもの。**`c`（キャリアの事実）を作る`careerFacts(ml)`を新設**し、
+`POOL`の条件はすべて`c`だけを見る純関数にする。
+
+```js
+// 呼び出し側が渡すのは ml（マイライフstate）。事実の抽出はここに閉じる。
+export function careerFacts(ml) {
+  const p = ml.player || {}, log = p.raceLog || [], rr = ml.rivalRecord || {}, f = ml.flags || {};
+  return {
+    name: p.name, year: ml.year || 0, races: log.length,
+    wins: log.filter(e => e.rank === 1).length,
+    podiums: log.filter(e => e.rank <= 3).length,
+    monumentWins: log.filter(e => e.monument && e.rank === 1).length,
+    worldRankBest: ml.worldRankBest, classIdx: ml.classIdx || 0, classMax: CLASSES.length - 1,
+    rival: (ml.rival || {}).name, rm: rr.meetings || 0, rw: rr.wins || 0, rl: rr.losses || 0,
+    protege: (ml.protege || {}).name, master: p.master || null,
+    hasParents: !!(p.parentBloodIds || []).length,
+    mentor: !!f.mentor, married: !!f.married, reducedRole: !!f.reducedRole,
+  };
+}
+
+const POOL = [
+  // ---- 戦績 ----
+  { grp: "戦績", r: 5, cond: "最高世界ランクが1位", ok: c => c.worldRankBest === 1, vs: [
+    "世界の頂に立った日の風は、今も忘れられない。",
+    "頂点から見た景色を知っている。それだけで一生分だ。",
+    "世界の一番上に、確かに名前が刻まれた。"] },
+  { grp: "戦績", r: 4, cond: "古典レースを制覇", ok: c => c.monumentWins >= 1, vs: [
+    "古典と呼ばれるレースを制した。あの一日は生涯色褪せない。",
+    "百年続く道で先頭を走った。歴史に一行だけ書き足せた。"] },
+  { grp: "戦績", r: 4, cond: "通算20勝以上", ok: c => c.wins >= 20, vs: [
+    "勝ち続けることでしか見えない景色があった。悔いはない。",
+    "数えきれないほど手を挙げた。どの一回も同じではなかった。",
+    "勝つことに慣れてしまう日は、ついに来なかった。"] },
+  { grp: "戦績", r: 3, cond: "通算8勝以上", ok: c => c.wins >= 8, vs: [
+    "あの一勝があったから、次の一勝を追いかけられた。",
+    "勝てる日が来ると信じて続けた。その通りになった。"] },
+  { grp: "戦績", r: 3, cond: "表彰台10回以上・勝利2回以下", ok: c => c.podiums >= 10 && c.wins <= 2, vs: [
+    "あと一歩が、これほど遠いとは思わなかった。",
+    "二番手の景色ばかり見てきた。それでも走る理由はあった。"] },
+  { grp: "戦績", r: 2, cond: "表彰台10回以上", ok: c => c.podiums >= 10, vs: [
+    "何度あの台に立っても、頂点への渇きは消えなかった。",
+    "表彰台の高さに慣れるほど、上の段が遠く見えた。"] },
+  { grp: "戦績", r: 2, cond: "出走あり・勝利0", ok: c => c.wins === 0 && c.races > 0, vs: [
+    "一度も勝てなかった。それでも毎朝、自転車に跨った。",
+    "記録には残らない走りばかりだった。悔いは、少しある。"] },
+  { grp: "戦績", r: 0, cond: "受け皿", ok: () => true, vs: [
+    "勝てない日も、腐らずペダルを回し続けた。それが誇りだ。"] },
+
+  // ---- 好敵手 ----
+  { grp: "好敵手", r: 4, cond: "10戦以上・勝ち越し", ok: c => c.rival && c.rm >= 10 && c.rw > c.rl, vs: [
+    "{rival}と競り合った日々こそが、全盛期だった。",
+    "{rival}を退けた数だけ、強くなれた気がする。",
+    "{rival}がいなければ、ここまで踏めなかった。"] },
+  { grp: "好敵手", r: 4, cond: "10戦以上・負け越し", ok: c => c.rival && c.rm >= 10 && c.rl >= c.rw, vs: [
+    "{rival}の背中は、最後まで追いつけなかった。",
+    "{rival}に届かなかった。その悔しさが脚を作った。",
+    "生涯をかけて{rival}を追った。悪くない一生だった。"] },
+  { grp: "好敵手", r: 3, cond: "1戦以上", ok: c => c.rival && c.rm >= 1, vs: [
+    "{rival}という存在が、走り続ける理由をくれた。",
+    "{rival}と同じ時代を走れたのは、幸運だった。"] },
+  { grp: "好敵手", r: 0, cond: "受け皿", ok: () => true, vs: [
+    "ライバルとは、鏡に映したもう一人の自分だった。"] },
+
+  // ---- 受け継ぎ ----
+  { grp: "受け継ぎ", r: 4, cond: "弟子がいる", ok: c => !!c.protege, vs: [
+    "{protege}の走りの中に、確かに何かが残っている。",
+    "{protege}に渡せるものは渡した。あとは託すだけだ。",
+    "{protege}が勝つ日を、誰より楽しみにしている。"] },
+  { grp: "受け継ぎ", r: 3, cond: "メンターになった", ok: c => c.mentor, vs: [
+    "若い者に伝えられることは、全部伝えたつもりだ。",
+    "教えることで、自分の走りをもう一度覚え直した。"] },
+  { grp: "受け継ぎ", r: 3, cond: "師匠から教わって始めた", ok: c => !!c.master, vs: [
+    "{master}に教わった一言を、今日まで胸に置いてきた。",
+    "{master}の走りを真似ることから、全部が始まった。"] },
+  { grp: "受け継ぎ", r: 2, cond: "配合で生まれた", ok: c => c.hasParents, vs: [
+    "受け継いだものを、少しは太くできただろうか。",
+    "血の中に走り方が入っていた。抗う気はなかった。"] },
+  { grp: "受け継ぎ", r: 0, cond: "受け皿", ok: () => true, vs: [
+    "この道は、後に続く者たちへ託したい。走る歓びよ、続け。"] },
+
+  // ---- 歩み ----
+  { grp: "歩み", r: 4, cond: "100戦以上に出走", ok: c => c.races >= 100, vs: [
+    "百を超えるレースを走った。同じ一日は一度もなかった。",
+    "数えるのをやめるほど走った。脚が覚えている。",
+    "走った道を全部つなげたら、どこまで行けただろう。"] },
+  { grp: "歩み", r: 3, cond: "現役12年以上", ok: c => c.year >= 12, vs: [
+    "長く走り続けられたこと、それ自体が勲章だ。",
+    "辞めどきを何度も考えた。そのたびにもう一年走った。"] },
+  { grp: "歩み", r: 3, cond: "家庭を持った", ok: c => c.married, vs: [
+    "帰る家があったから、最後まで踏み続けられた。",
+    "待っている人がいる。それが一番のペースメーカーだった。"] },
+  { grp: "歩み", r: 2, cond: "役割を縮小して続けた", ok: c => c.reducedRole, vs: [
+    "エースの座を降りてからの数年に、一番多くを学んだ。",
+    "誰かのために踏む走りにも、確かな誇りがあった。"] },
+  { grp: "歩み", r: 2, cond: "最上位クラスに到達", ok: c => c.classIdx >= c.classMax, vs: [
+    "一番上の舞台で戦えた。それで十分だ。",
+    "上がれるところまで上がった。景色は思った通りだった。"] },
+  { grp: "歩み", r: 0, cond: "受け皿", ok: () => true, vs: [
+    "うまくいかない日のほうが多かった。それでも走り続けた。"] },
+];
+
+const GROUPS = ["戦績", "好敵手", "受け継ぎ", "歩み"];
+
+// キャリア固有の種。同じキャリアなら毎回同じ言葉（再描画で入れ替わらない）。
+const seedOf = (c) => {
+  const s = `${c.name}|${c.year}|${c.races}|${c.wins}|${c.podiums}`;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+};
+// 種から派生させた値がよく散るように毎回撹拌する（単に seed+i*13 を足すだけだと
+// 同じ言葉に偏る。実測で10人中6通り→撹拌後を再測定する）。
+const mix = (seed, salt) => {
+  let h = (seed ^ Math.imul(salt + 1, 0x9E3779B1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85EBCA6B) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xC2B2AE35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+};
+const fill = (t, c) => t.replace("{rival}", c.rival || "").replace("{protege}", c.protege || "").replace("{master}", c.master || "");
+
+function pickQuotes(c, n = 3, tol = 0) {
+  const seed = seedOf(c);
+  // 1) 当てはまった言葉を全部候補にする（捨てない）
+  const hits = POOL.filter(q => q.ok(c));
+  // 2) グループごとに、当てはまった中から種で1つ選ぶ（同率でも言い回しが変わる）
+  const perGroup = GROUPS.map((g, gi) => {
+    const gh = hits.filter(q => q.grp === g);
+    const top = Math.max(...gh.map(q => q.r));
+    const best = gh.filter(q => q.r >= top - tol);
+    const q = best[mix(seed, gi * 3 + 1) % best.length];
+    const text = q.vs[mix(seed, gi * 3 + 2) % q.vs.length];
+    return { grp: g, r: q.r, cond: q.cond, text: fill(text, c), pool: gh.length, variants: gh.reduce((a, x) => a + x.vs.length, 0) };
+  });
+  // 3) めずらしさの高いグループから3つ（同率は種で順を入れ替える）
+  const order = [...perGroup].sort((a, b) =>
+    (b.r - a.r) || (mix(seed, 100 + GROUPS.indexOf(a.grp)) % 997) - (mix(seed, 100 + GROUPS.indexOf(b.grp)) % 997));
+  return { picked: order.slice(0, n), all: perGroup, hits: hits.length,
+    totalVariants: hits.reduce((a, q) => a + q.vs.length, 0) };
+}
+export function mlAutobiographyOptions(ml) {
+  return pickQuotes(careerFacts(ml), 3, 1).picked.map(q => ({ text: q.text }));
+}
+```
+
+- `CLASSES`は`data/progression.js`からimportする（`career.js`に未importなら追加）。
+- `pickQuotes`の`tol`既定は**1**（上記の実測に基づく）。`POOL`/`GROUPS`/`seedOf`/`mix`/`fill`/
+  `pickQuotes`はexportせずモジュール内に閉じてよい（`mlAutobiographyOptions`だけがexport）。
+- 受け皿（`r: 0`）は各グループに必ず1つあるので、**どのキャリアでも必ず3つ返る**（empty stateなし）。
+
+### 2. `career.jsx`：自伝セクション（`:191〜203`）
+
+見出しは**選ぶ前も後も「自伝に残す言葉」**で統一する（現行は選ぶ前「自伝を出版する」／
+選んだ後「自伝」と変わっていた）。
+
+- **未選択（`!ml.autobiographyText`）**：
+  - 見出し：`fontSize: T.size.caption`・`color: T.color.accent`・`marginBottom: T.space.sm`の`div`で
+    「自伝に残す言葉」。`Section`は使わない（カード自身が面を持つため二重の面になる）。
+  - **削除**：`:197`「自伝を出版する」・`:198`「座右の言葉が殿堂の記録に残ります」の2行。
+    見出しが選ぶものと残るものを同時に言っているため不要。
+  - 3枚のカード：`<button>`・`width:100%`・`textAlign:left`・`border:none`・
+    `background: T.color.surfaceUp`・`padding: T.space.md`・`marginBottom: T.space.sm`・
+    `fontFamily: FONT_DOT`・`fontSize: T.size.body`(13)・`lineHeight:1.7`・`color: T.color.text`・
+    `cursor:pointer`。中身は `「{o.text}」`（かぎ括弧つき）。
+  - onClick：`mlSetAutobiography(o.text); setMl(s => ({ ...s, autobiographyText: o.text }));`
+    （現行の`o.quote`が`o.text`に変わるだけ。`mlSetAutobiography`自体は無改修）。
+- **選択済み**：`<Section title="自伝に残す言葉"><Prose>「{ml.autobiographyText}」</Prose></Section>`
+  （現行の`title="自伝"`のみ変更）。
+
+### 3. `career.jsx`：「これから」（`:219〜223`）
+
+人生の選択2つと寄り道1つが同じ見た目で並んでいるのを分ける。**画面1で作る`ChoiceCard`を再利用**する。
+
+- 見出し：`fontSize: T.size.caption`・`color: T.color.accent`・`marginBottom: T.space.sm`で「これから」
+  （現行はsub色。他の見出しに合わせてaccentへ）。
+- `ChoiceCard`×2：
+
+  | title | note | onClick | primary |
+  |---|---|---|---|
+  | 監督として新チームを率いる | `${r.name}を創設メンバーに迎え、同じ世界で戦います` | `becomeManager` | true |
+  | 新たな選手でキャリアを始める | この選手の記録は殿堂に残ります | `clearMyLifeSave(); setMl(initMyLife());` | false |
+
+  - **削除**：`:221`の浮いた注釈（カード内のnoteへ移した。文末を「率います」→「戦います」に平易化）。
+  - 「新たな選手で〜」のnoteは新規追加。現行は説明が無く、いまの選手が消えるのか残るのかが
+    分からないまま押す操作だった。
+- 「歴代選手の殿堂を見る」は選択ではないので、`marginTop: T.space.md`を空けて**`QuietBtn`のまま**下に置く
+  （onClickは現行どおり）。
+
+### 4. 追加の検証項目（第2バッチの完了条件に加える）
+
+6. 自伝の3つが実データで出ること・選ぶと`「…」`付きで残ること・殿堂の記録（`leg.autobiography`）に
+   同じ文が入ることを実プレイで確認。
+7. `mlAutobiographyOptions`をNodeで直接呼び、**同じキャリアなら何度呼んでも同じ3つ**（再描画で
+   入れ替わらない）ことと、**名前だけ違う同戦績20人で先頭の話題が2種類以上に散る**ことを確認。
