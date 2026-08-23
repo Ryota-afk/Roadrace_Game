@@ -2,8 +2,9 @@
 // リテラルのみを持つデータ層——ロジックは domain/season/riderChatter.js が担う。
 //
 // 各行の意味：
-//   when    : 状況キー。"ride"＝練習コース周回中、それ以外は持ち場の部屋キー
-//             （training/mechanic/medical/scout）。移動中は喋らないので該当キーは無い。
+//   when    : 状況キー。"ride"＝練習コース周回中、"any"＝場所に関わらない汎用（全状況の
+//             候補に合流する・第23弾）、それ以外は持ち場のキー（training/mechanic/medical/
+//             scout/bench/gym/pond/stream）。移動中は喋らないので該当キーは無い。
 //   persona : null＝全性格共通、指定あり＝その性格の選手だけが言う（data/abilities.jsのPERSONALITIES）
 //   state   : null＝常時、指定あり＝その状態のときだけ言う
 //             injured=故障中／tired=疲労80以上／hot=調子4以上／cold=調子2以下
@@ -16,6 +17,32 @@
 // 【不変条件】各whenについて`persona:null かつ state:null`の行が最低1つ必要
 //（絞り込みの最終フォールバックになるため。riderChatter.jsのNodeテストで検証している）。
 export const BASE_VIEW_CHATTER = [
+  // ── 汎用（場所に関わらない・第23弾）────────────────────
+  // when:"any" は riderChatter.js の chatterCandidates が全状況の候補に合流させる特別キー。
+  // 天気・食事・次のレースなど「どこにいても言える」話題だけを置く（場所の話はしない）。
+  { when: "any", persona: null, state: null, text: "腹減ったな" },
+  { when: "any", persona: null, state: null, text: "今日の夕飯は何だろう" },
+  { when: "any", persona: null, state: null, text: "次のレースが楽しみだ" },
+  { when: "any", persona: null, state: null, text: "早く走りたいな" },
+  { when: "any", persona: null, state: null, text: "昨日はよく眠れた" },
+  { when: "any", persona: null, state: null, text: "新しいシューズ欲しいな" },
+  { when: "any", persona: null, state: null, text: "いいチームだよな、ここ" },
+  { when: "any", persona: null, state: null, text: "監督に見られてる気がする" },
+  { when: "any", persona: null, state: "tired", text: "そろそろ休みたい…" },
+  { when: "any", persona: null, state: "injured", text: "体が資本だからな" },
+  { when: "any", persona: null, state: "hot", text: "何でもできる気がする" },
+  { when: "any", persona: null, state: "cold", text: "なんとなく気分が乗らない" },
+  { when: "any", persona: "normal", state: null, text: "今日も一日がんばろう" },
+  { when: "any", persona: "genius", state: null, text: "練習しすぎもよくない" },
+  { when: "any", persona: "hotblood", state: null, text: "燃えてきたぜ！" },
+  { when: "any", persona: "seeker", state: null, text: "強さとは何だろうな" },
+  { when: "any", persona: "artisan", state: null, text: "続けることに意味がある" },
+  { when: "any", persona: "free", state: null, text: "気ままが一番" },
+  { when: "any", persona: "smart", state: null, text: "効率よくいこう" },
+  { when: "any", persona: "maverick", state: null, text: "群れるのは好きじゃない" },
+  { when: "any", persona: "showman", state: null, text: "誰か見てるかな" },
+  { when: "any", persona: "tactician", state: null, text: "次の一手を考えておく" },
+
   // ── 練習コース周回中 ──────────────────────────────
   { when: "ride", persona: null, state: null, text: "いいペースだ" },
   { when: "ride", persona: null, state: null, text: "脚が回る" },
@@ -24,6 +51,16 @@ export const BASE_VIEW_CHATTER = [
   { when: "ride", persona: null, state: null, text: "ペダルが軽い" },
   { when: "ride", persona: null, state: null, text: "この道は覚えた" },
   { when: "ride", persona: null, state: null, text: "呼吸を整える" },
+  { when: "ride", persona: null, state: null, text: "コーナーの先を見る" },
+  { when: "ride", persona: null, state: null, text: "ケイデンスを一定に" },
+  { when: "ride", persona: null, state: null, text: "あと3周いこう" },
+  { when: "ride", persona: null, state: null, text: "今日は路面がいいな" },
+  { when: "ride", persona: null, state: null, text: "向かい風か…" },
+  { when: "ride", persona: null, state: "tired", text: "ペースを落とそう" },
+  { when: "ride", persona: null, state: "hot", text: "タイムが出そうだ" },
+  { when: "ride", persona: "hotblood", state: null, text: "誰か勝負しないか！" },
+  { when: "ride", persona: "smart", state: null, text: "この出力で巡航する" },
+  { when: "ride", persona: "showman", state: null, text: "フォームも決まってる" },
   { when: "ride", persona: null, state: "tired", text: "脚が…重い" },
   { when: "ride", persona: null, state: "tired", text: "そろそろ限界だ" },
   { when: "ride", persona: null, state: "injured", text: "無理はできないな" },
@@ -48,6 +85,16 @@ export const BASE_VIEW_CHATTER = [
   { when: "training", persona: null, state: null, text: "回転数を上げていく" },
   { when: "training", persona: null, state: null, text: "汗が止まらない" },
   { when: "training", persona: null, state: null, text: "地味だが効いている" },
+  { when: "training", persona: null, state: null, text: "ローラーは正直だ" },
+  { when: "training", persona: null, state: null, text: "一定の力で回し続ける" },
+  { when: "training", persona: null, state: null, text: "あと5分…長い" },
+  { when: "training", persona: null, state: null, text: "誰か窓を開けてくれ" },
+  { when: "training", persona: null, state: null, text: "音楽でもかけたいな" },
+  { when: "training", persona: null, state: null, text: "インターバルはキツい" },
+  { when: "training", persona: null, state: "tired", text: "視界がかすんできた" },
+  { when: "training", persona: null, state: "injured", text: "今日はリハビリメニューだ" },
+  { when: "training", persona: null, state: "hot", text: "もう1セットいける" },
+  { when: "training", persona: null, state: "cold", text: "こんな日こそ基礎練だ" },
   { when: "training", persona: null, state: "tired", text: "今日はここまでか" },
   { when: "training", persona: null, state: "injured", text: "軽めに回そう" },
   { when: "training", persona: null, state: "hot", text: "体が動く！" },
@@ -92,6 +139,16 @@ export const BASE_VIEW_CHATTER = [
   { when: "medical", persona: null, state: null, text: "体を診てもらおう" },
   { when: "medical", persona: null, state: null, text: "定期的なチェックは大切だ" },
   { when: "medical", persona: null, state: null, text: "軽くマッサージしてもらう" },
+  { when: "medical", persona: null, state: null, text: "ストレッチも入念に" },
+  { when: "medical", persona: null, state: null, text: "テーピングしてもらおう" },
+  { when: "medical", persona: null, state: null, text: "血圧は正常だって" },
+  { when: "medical", persona: null, state: null, text: "睡眠が一番の薬らしい" },
+  { when: "medical", persona: null, state: null, text: "アイシングしておくか" },
+  { when: "medical", persona: null, state: null, text: "食事のことも相談しよう" },
+  { when: "medical", persona: null, state: "tired", text: "マッサージが染みる…" },
+  { when: "medical", persona: null, state: "injured", text: "完治まであと少し" },
+  { when: "medical", persona: null, state: "cold", text: "栄養面も見直すか" },
+  { when: "medical", persona: "free", state: null, text: "ここのベッド気持ちいい" },
   { when: "medical", persona: null, state: "tired", text: "体が悲鳴を上げてる" },
   { when: "medical", persona: null, state: "injured", text: "早く治さないと…" },
   { when: "medical", persona: null, state: "hot", text: "念のための検診だ" },

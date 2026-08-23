@@ -54,9 +54,12 @@ export function riderChatterState(rider) {
 
 // 状況・性格・状態でセリフ候補を絞る。状態つきのセリフが存在すればそれを優先し
 // （「この選手は今まずい」が一目で伝わる）、無ければ状態非依存のセリフへフォールバックする。
+// 第23弾: `when:"any"`（場所に関わらない汎用セリフ）を全状況の候補に合流させる。
+// 場所固有のセリフだけだと同じ話ばかりになるため、天気・食事・次のレースといった
+// 「どこにいても言える」話題が全持ち場に混ざる。
 export function chatterCandidates(situation, persona, state) {
   const byPersona = BASE_VIEW_CHATTER.filter(c =>
-    c.when === situation && (c.persona == null || c.persona === persona));
+    (c.when === situation || c.when === "any") && (c.persona == null || c.persona === persona));
   if (state) {
     const stateful = byPersona.filter(c => c.state === state);
     if (stateful.length > 0) return stateful;
