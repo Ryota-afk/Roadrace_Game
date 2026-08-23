@@ -11,6 +11,11 @@ import { fitScale, coverScale, clampCam, cameraTransform, zoomAbout, viewToScene
 const TAP_SLOP = 8;         // これ未満の移動はタップ扱い（px）
 const MAX_ZOOM_MUL = 3;     // 下限(fit)に対する上限倍率の基準値
 const COVER_HEADROOM = 1.3; // 上限(max)がcoverよりどれだけ大きい余地を持つか
+// 22b: ズームボタン・リセットの補間時間（2026-08ユーザー合意：160ms・easeOutCubic・
+// 連打は目標を積み上げ・手動操作（ドラッグ/ピンチ/ホイール）開始で即中断）。
+// ホイール・ピンチは連続入力なので補間しない（挟むと遅延に感じる）。
+const ZOOM_ANIM_MS = 160;
+const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
 export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
   const [cam, setCam] = useState(null);   // {x,y} scene座標のカメラ中心
@@ -18,6 +23,10 @@ export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
   const ptrs = useRef(new Map());         // pointerId -> {x,y}
   const pinch = useRef(null);             // {dist, cx, cy}
   const moved = useRef(0);                // 直近ジェスチャの累積移動量
+  // 22b: アニメーション用。kRef/camRefはコールバック内から最新値を読むための鏡。
+  const kRef = useRef(null); kRef.current = k;
+  const camRef = useRef(null); camRef.current = cam;
+  const animRef = useRef(null);           // { raf, toK } 実行中のズーム補間
 
   const limits = useMemo(() => {
     const min = fitScale(bounds, viewW, viewH);
@@ -54,12 +63,68 @@ export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
     });
   }, [bounds, viewW, viewH, limits]);
 
+  // 22b: 実行中のズーム補間を中断する（手動操作の開始・アンマウント時）。
+  const cancelAnim = useCallback(() => {
+    if (animRef.current) { cancelAnimationFrame(animRef.current.raf); animRef.current = null; }
+  }, []);
+  useEffect(() => cancelAnim, [cancelAnim]);
+
+  // 22b: 現在の倍率から目標倍率へ、画面中央アンカーで160ms補間する。
+  // 毎フレーム「現在k→次フレームk」の中央アンカーzoomAboutを積むだけなので、
+  // 既存のclampCam・限界値処理がそのまま効く（中央固定ズームの合成は中央固定のまま）。
+  const startZoomAnim = useCallback((toK) => {
+    cancelAnim();
+    const fromK = kRef.current;
+    if (fromK == null || Math.abs(toK - fromK) < 1e-6) return;
+    const t0 = performance.now();
+    const handle = { raf: 0, toK };
+    animRef.current = handle;
+    const step = (now) => {
+      if (animRef.current !== handle) return;
+      const p = Math.min(1, (now - t0) / ZOOM_ANIM_MS);
+      const nk = fromK + (handle.toK - fromK) * easeOutCubic(p);
+      setK(curK => {
+        if (curK == null) return curK;
+        setCam(curCam => clampCam(zoomAbout(curCam, curK, nk, viewW / 2, viewH / 2, viewW, viewH), nk, bounds, viewW, viewH));
+        return nk;
+      });
+      if (p < 1) handle.raf = requestAnimationFrame(step);
+      else animRef.current = null;
+    };
+    handle.raf = requestAnimationFrame(step);
+  }, [bounds, viewW, viewH, cancelAnim]);
+
+  // 22b: リセットは倍率と位置の両方を同じ160msで補間する。
+  const startResetAnim = useCallback(() => {
+    cancelAnim();
+    const fromK = kRef.current, fromCam = camRef.current;
+    if (fromK == null || !fromCam) return;
+    const toK = limits.initial;
+    const toCam = clampCam({ x: bounds.cx, y: bounds.cy }, toK, bounds, viewW, viewH);
+    const t0 = performance.now();
+    const handle = { raf: 0, toK };
+    animRef.current = handle;
+    const step = (now) => {
+      if (animRef.current !== handle) return;
+      const p = Math.min(1, (now - t0) / ZOOM_ANIM_MS);
+      const e = easeOutCubic(p);
+      const nk = fromK + (toK - fromK) * e;
+      const nc = { x: fromCam.x + (toCam.x - fromCam.x) * e, y: fromCam.y + (toCam.y - fromCam.y) * e };
+      setK(nk);
+      setCam(clampCam(nc, nk, bounds, viewW, viewH));
+      if (p < 1) handle.raf = requestAnimationFrame(step);
+      else animRef.current = null;
+    };
+    handle.raf = requestAnimationFrame(step);
+  }, [bounds, viewW, viewH, limits, cancelAnim]);
+
   const localPoint = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
   const onPointerDown = useCallback((e) => {
+    cancelAnim(); // 22b: 手動操作の開始で補間を即中断（ユーザーの手を最優先）
     e.currentTarget.setPointerCapture?.(e.pointerId);
     ptrs.current.set(e.pointerId, localPoint(e));
     if (ptrs.current.size === 1) moved.current = 0;
@@ -67,7 +132,7 @@ export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
       const [a, b] = [...ptrs.current.values()];
       pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) };
     }
-  }, []);
+  }, [cancelAnim]);
 
   const onPointerMove = useCallback((e) => {
     if (!ptrs.current.has(e.pointerId) || k == null) return;
@@ -101,9 +166,10 @@ export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
   const onWheel = useCallback((e) => {
     if (k == null) return;
     e.preventDefault();
+    cancelAnim(); // 22b: ホイールは即時ズーム（補間中なら中断して手動を優先）
     const p = localPoint(e);
     applyZoom(k * Math.pow(1.0015, -e.deltaY), p.x, p.y);
-  }, [k, applyZoom]);
+  }, [k, applyZoom, cancelAnim]);
 
   const ready = cam != null && k != null && !!viewW && !!viewH;
   return {
@@ -111,8 +177,13 @@ export function useIsoCamera({ bounds, viewW, viewH, onTap }) {
     zoom: k,
     limits,
     transform: ready ? cameraTransform(cam, k, viewW, viewH) : "",
-    zoomBy: (mul) => applyZoom((k || 1) * mul, viewW / 2, viewH / 2),
-    reset: () => { setK(limits.initial); setCam(clampCam({ x: bounds.cx, y: bounds.cy }, limits.initial, bounds, viewW, viewH)); },
+    // 22b: ボタンズームは160ms補間。連打はアニメーション中の目標倍率に積み上げて
+    // 滑らかに再目標化する（1回ずつ完了を待たされない）。
+    zoomBy: (mul) => {
+      const base = animRef.current ? animRef.current.toK : (kRef.current || 1);
+      startZoomAnim(Math.min(Math.max(base * mul, limits.min), limits.max));
+    },
+    reset: startResetAnim,
     handlers: { onPointerDown, onPointerMove, onPointerUp: endPointer, onPointerCancel: endPointer, onWheel },
   };
 }
