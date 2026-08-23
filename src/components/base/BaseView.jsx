@@ -265,23 +265,19 @@ export function BaseView({ g, paused, onRoomTap }) {
   const gymDecor = unlockedDecor.find(d => d.kind === "gym");
   const otherDecor = unlockedDecor.filter(d => d.kind !== "gym");
   const propRows = propItems(PROJ, { ...BASE_VIEW_PROPS, groundsDecor: otherDecor }, palette).map(item => ({ kind: "prop", ...item }));
-  // 第23弾: 前面帯ルール。クラブハウスの敷地矩形より南（l<frontL）・東（w>frontWMax）・
-  // 西（w<frontWMin、ただし建物のl奥行き範囲内に限る＝背景の遠い木まで巻き込まない）に
+  // 第23弾: 前面帯ルール。クラブハウスの敷地矩形より南（l<frontL）・東（w>frontWMax）に
   // ある要素は、建物全体の1点sortY（footprintの最も手前の角）との単純比較では正しい前後関係に
   // ならないことがある（実際にはその角より奥にいても、建物の外側＝手前にいるのは確定している
   // のに埋もれてしまう）。チームカー・入館直前の選手・玄関前の床などで発生していた不具合
   // （2026-08ユーザー指摘の複数症状）の根本原因。
-  // 第23弾追記：西側（w<frontWMin）の判定を当初は入れていなかったため、前庭ベンチ
-  // （bench-plaza0/1、壁からわずか0.7しか離れていない）に座る選手とベンチ本体そのものが
-  // クラブハウス全体の後ろへ埋もれて完全に見えなくなる不具合が残っていた（2026-08ユーザー
-  // 再指摘「ベンチと座る向きが治ってない」→実際は向き以前に描画自体が消えていた）。
-  // 湖のほとり(stroll-pond、w=0.9)も同じ理由で影響を受けるため、西側も対象に加える。
+  // 第23弾追記・訂正：西（w<frontWMin）も一時的に対象へ加えたが誤りだった。前庭ベンチ
+  // （bench-plaza0/1）はクラブハウスの西壁（Room.jsxがbackFacePairで不透明に描画する
+  // 本物の奥壁）のすぐ外側にあり、そこで見えなくなるのはこのカメラ角度における正しい
+  // 遮蔽であって不具合ではない（2026-08ユーザー指摘「それは壁の向こう側にあるので
+  // 見えないだけ」）。南・東の2方向のみに戻した。詳細はdevlog/wave23.md参照。
   const FRONT_L = BASE_VIEW_CLUBHOUSE.l - BASE_VIEW_CLUBHOUSE.hl;
-  const BACK_L = BASE_VIEW_CLUBHOUSE.l + BASE_VIEW_CLUBHOUSE.hl;
   const FRONT_W_MAX = BASE_VIEW_CLUBHOUSE.w + BASE_VIEW_CLUBHOUSE.hw;
-  const FRONT_W_MIN = BASE_VIEW_CLUBHOUSE.w - BASE_VIEW_CLUBHOUSE.hw;
-  const inFrontBand = (w, l) => l < FRONT_L || w > FRONT_W_MAX
-    || (w < FRONT_W_MIN && l >= FRONT_L && l <= BACK_L);
+  const inFrontBand = (w, l) => l < FRONT_L || w > FRONT_W_MAX;
   const frontBandSortY = (w, l, rawY) => (inFrontBand(w, l) ? clubhouseRow.sortY + 1 + rawY * 1e-4 : rawY);
   const propRowsAdj = propRows.map(item => ({ ...item, sortY: frontBandSortY(item.w, item.l, item.sortY) }));
   const outdoorRidersAdj = outdoorRiders.map(item => ({ ...item, sortY: frontBandSortY(item.act.w, item.act.l, item.sortY) }));

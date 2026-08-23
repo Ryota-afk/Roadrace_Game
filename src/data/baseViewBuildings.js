@@ -271,8 +271,12 @@ export const BASE_VIEW_PROPS = {
   // （什器と座る選手を同じ値で一緒に鏡像反転させるため。座標が一致する両者は同じ物を指す
   // 二重管理だが、Props.jsx側は「常設プロップとしての見た目」、OUTDOOR_SPOTS側は
   // 「選手の導線・座り方」という別関心事のため、あえて分けたまま値だけ揃えている）。
+  // 第23弾追記：前庭ベンチのflipは実測でfalseだと着席者がベンチの座面からずれて
+  // 見える不具合が確認された（ユーザー指摘）。人物のSITスプライトはアンカー列が
+  // 頭中心（6/22列）で座面側に大きく偏っており、什器と「同じ値で」揃える設計の
+  // 前提上、trueの側でしか自然に収まらない。ホームストレートと同じtrueに統一した。
   benches: [
-    { w: 4.3, l: 2.4, flip: false }, { w: 4.2, l: 3.6, flip: false },   // 前庭（既存）
+    { w: 4.3, l: 2.4, flip: true }, { w: 4.2, l: 3.6, flip: true },     // 前庭
     { w: -4.8, l: -6.6, flip: true }, { w: -1.6, l: -6.6, flip: true }, // ホームストレート観戦ベンチ
   ],
   lamps: [{ w: 3.9, l: 0.2 }, { w: 0.5, l: -6.6 }, { w: -7.8, l: 0.5 }],
@@ -342,9 +346,9 @@ export const BASE_VIEW_GROUNDS_DECOR = [
 // 常に同じ値を使うことで「ベンチの背もたれと座る向きが逆」を構造的に防ぐ（第23弾で修正。
 // 旧実装は什器側が常に無反転・人物側だけ`!flip`で反転しており、この2つがズレていた）。
 export const BASE_VIEW_OUTDOOR_SPOTS = [
-  { key: "bench-plaza0", kind: "bench", spot: { w: 4.3, l: 2.4 }, pose: "sit", flip: false,
+  { key: "bench-plaza0", kind: "bench", spot: { w: 4.3, l: 2.4 }, pose: "sit", flip: true,
     waypoints: [{ w: 4.7, l: -5.4 }, { w: 4.7, l: 0.5 }] },
-  { key: "bench-plaza1", kind: "bench", spot: { w: 4.2, l: 3.6 }, pose: "sit", flip: false,
+  { key: "bench-plaza1", kind: "bench", spot: { w: 4.2, l: 3.6 }, pose: "sit", flip: true,
     waypoints: [{ w: 2.9, l: -5.4 }, { w: 2.9, l: 1.0 }, { w: 3.4, l: 3.6 }] },
   { key: "bench-home0", kind: "bench", spot: { w: -1.6, l: -6.6 }, pose: "sit", flip: true,
     waypoints: [{ w: 2.8, l: -5.8 }, { w: -1.6, l: -5.8 }] },
