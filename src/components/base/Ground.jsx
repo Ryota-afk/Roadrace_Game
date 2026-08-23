@@ -46,23 +46,9 @@ export function Ground({ proj, ground, plaza, loop, palette, bounds }) {
           fill={palette.grassPatch} opacity="0.5" />;
       })}
 
-      {/* 舗装プラザ（建物が建つ敷地）＋敷石の目地。目地が無いと広い無地の面になり
-          「謎の台形」に見えるため、world軸に沿った線を等間隔で入れて方向を示す */}
-      <polygon points={pz.map(pt).join(" ")} fill={palette.plaza} stroke={palette.plazaEdge} strokeWidth="1.5" />
-      <g stroke={palette.plazaEdge} strokeWidth="0.7" opacity="0.5">
-        {(() => {
-          const lines = [];
-          for (let w = Math.ceil(plaza.wMin / 2) * 2; w <= plaza.wMax; w += 2) {
-            const a = P(w, plaza.lMin), b = P(w, plaza.lMax);
-            lines.push(<line key={`pw${w}`} x1={a.x.toFixed(1)} y1={a.y.toFixed(1)} x2={b.x.toFixed(1)} y2={b.y.toFixed(1)} />);
-          }
-          for (let l = Math.ceil(plaza.lMin / 2) * 2; l <= plaza.lMax; l += 2) {
-            const a = P(plaza.wMin, l), b = P(plaza.wMax, l);
-            lines.push(<line key={`pl${l}`} x1={a.x.toFixed(1)} y1={a.y.toFixed(1)} x2={b.x.toFixed(1)} y2={b.y.toFixed(1)} />);
-          }
-          return lines;
-        })()}
-      </g>
+      {/* 舗装プラザ（建物が建つ敷地）。第25弾：ベクター目地線→石畳のピクセルテクスチャへ
+          （目地はタイルに焼き込み済み。groundTextures.jsxのtexPavers参照） */}
+      <polygon points={pz.map(pt).join(" ")} fill="url(#texPavers)" stroke={palette.plazaEdge} strokeWidth="1.5" />
 
       {/* 草むら（芝の上のみ） */}
       {tufts.map((s, i) => {

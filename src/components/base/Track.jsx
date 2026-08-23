@@ -24,8 +24,9 @@ export function Track({ proj, loop, rack }) {
 
   return (
     <g>
-      {/* 路面（evenoddで内側をくり抜いた1本のリボン） */}
-      <path d={`M ${chain(outerPx)} Z M ${chain(innerPx)} Z`} fill="#54565f" fillRule="evenodd" />
+      {/* 路面（evenoddで内側をくり抜いた1本のリボン）。第25弾：アスファルトの
+          粒テクスチャ（BaseView.jsxのGroundTextureDefsが定義するpattern） */}
+      <path d={`M ${chain(outerPx)} Z M ${chain(innerPx)} Z`} fill="url(#texAsphalt)" fillRule="evenodd" />
       {/* 路肩の白線（外側・内側） */}
       <polygon points={closed(outerPx)} fill="none" stroke="#eceadf" strokeWidth="1.6" opacity="0.75" />
       <polygon points={closed(innerPx)} fill="none" stroke="#eceadf" strokeWidth="1.6" opacity="0.75" />

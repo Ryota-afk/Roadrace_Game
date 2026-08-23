@@ -44,6 +44,7 @@ import { Stream } from "./Stream.jsx";
 import { propItems, decorNode } from "./Props.jsx";
 import { fixtureItems } from "./Fixtures.jsx";
 import { PixelPerson } from "../sprites/pixelPerson.jsx";
+import { GroundTextureDefs } from "./groundTextures.jsx";
 import { SpeechBubble } from "./SpeechBubble.jsx";
 import { TYPES } from "../../data/abilities.js";
 
@@ -293,9 +294,11 @@ export function BaseView({ g, paused, onRoomTap }) {
               ビューポートを埋める。所有敷地（陸地）は緑の芝としてカメラ内側に別途描き、
               「敷地の外は海」で境界をはっきりさせる（ユーザー指摘：緑の範囲が広すぎる）。 */}
           <rect x="0" y="0" width={view.w} height={view.h} fill={palette.sky} />
+          {/* 第25弾: 地面・路面・プラザのピクセルテクスチャ（groundTextures.jsx参照） */}
+          <GroundTextureDefs palette={palette} />
           {camera.ready && (
             <g transform={camera.transform}>
-              <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill={palette.grass} stroke={palette.plazaEdge} strokeWidth="1.5" opacity="0.9" />
+              <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill="url(#texGrass)" stroke={palette.plazaEdge} strokeWidth="1.5" opacity="0.9" />
               {/* 第21弾: 芝の装飾（Ground）と小川は敷地（陸地）ポリゴンでクリップする。
                   Groundの濃淡パッチ（中心から半幅1.1の菱形）は散布点が縁ぎりぎりだと
                   必ず菱形の一部が敷地の外へはみ出し、海の上に緑の四角が浮いて見えていた
