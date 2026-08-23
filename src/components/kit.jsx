@@ -4,7 +4,43 @@
 // 第13弾Phase3-D-4-aでseason側（race/status.jsx）がSection/Itemを使い始め、
 // Phase3-D-4-bでShopRow/ShopBtnもmylife/events.jsxから移設——mlUi.jsxからkit.jsxへ改名。
 import React from "react";
+import { TYPES } from "../data/abilities.js";
 import { FONT_DOT, T } from "../data/theme.js";
+
+// 第32弾（第2次UI改革）: 脚質の意味色チップ。塗り＝TYPES[type].color、文字は背景に対して
+// 常に暗色（#0E0E10）固定でよい（脚質色はいずれも明るい原色系のため）。
+export const TypeChip = ({ type, label }) => (
+  <span style={{
+    display: "inline-block", background: TYPES[type].color, color: "#0E0E10",
+    fontSize: T.size.caption, padding: "2px 7px 1px", fontFamily: FONT_DOT,
+  }}>{label || TYPES[type].label}</span>
+);
+
+// 状態タグ（成長フェーズ・全盛期など）。押せない・意味色でもない、控えめな添え字。
+export const Tag = ({ children, color }) => (
+  <span style={{
+    display: "inline-block", background: T.color.surfaceUp, color: color || T.color.sub,
+    fontSize: T.size.caption, padding: "1px 6px", fontFamily: FONT_DOT,
+  }}>{children}</span>
+);
+
+// 第32弾: 押せる行の共通形——static面(surface)の中に置く、面(surfaceUp)＋右端「›」の1行。
+// アフォーダンス規約：押せる＝面の明暗差＋›/▸、静的＝surfaceのまま（CLAUDE.md §8・devlog/wave32.md）。
+export const PressRow = ({ label, value, onClick, valueColor }) => (
+  <button onClick={onClick} style={{
+    display: "block", width: "100%", textAlign: "left", cursor: "pointer",
+    background: T.color.surfaceUp, border: "none", fontFamily: FONT_DOT,
+    padding: `${T.space.sm}px ${T.space.md}px`, marginBottom: T.space.xs,
+  }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
+      <span style={{ color: T.color.sub, fontSize: T.size.caption }}>{label}</span>
+      <span style={{ flex: "none", display: "flex", alignItems: "baseline", gap: 4 }}>
+        <span style={{ color: valueColor || T.color.accent, fontSize: T.size.body }}>{value}</span>
+        <span style={{ color: T.color.sub, fontSize: T.size.body }}>›</span>
+      </span>
+    </div>
+  </button>
+);
 
 // 第13弾Phase3-D-5: 見出し自体をaccent（黄）にする（CLAUDE.md §9「中間」の量）。
 // 黄はデータ強調用のまま——見出しは「今どの情報を読んでいるか」を示すデータ的な役割。

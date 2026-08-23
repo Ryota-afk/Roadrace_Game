@@ -249,3 +249,58 @@ size: {
    残っていないこと（grep）。
 4. `tools/verify_radar.mjs` 通過（レーダー部品に触るため）。
 5. スクリーンショットをユーザーへ提示し**実機確認**（フォント下限9px/8pxの最終判定を含む）。
+
+## Phase A 実装結果（2026-08・Sonnet）
+
+上記仕様どおり6ファイルを実装した。
+
+- `src/data/theme.js`：10段トークンへ改訂（§1の表そのまま）。
+- `src/components/kit.jsx`：`TypeChip`／`Tag`／`PressRow`を新設。
+- `src/components/CourseProfile.jsx`：区間色塗り（最低5px帯）＋区間境界の縦線を撤去。
+- `src/components/RadarChart.jsx`：`AbilitySoshitsuRadarPair`の中央仕切り線（`width:1`の
+  縦div）を撤去し、`gap`で間隔を確保。
+- `src/screens/meta.jsx`：モード選択を仕様どおり全面書き換え（案A）。
+- `src/screens/mylife/hub.jsx`：ヒーロー〜練習メニューを仕様1〜7どおり書き換え。作戦・練習は
+  `PressRow`＋アコーディオン化（新規state `uiTacticOpen`／`uiFocusOpen`、専門トレーニングの
+  `uiSpecialOpen`と同じパターン）。機材・先月の成長・その他は無改修（現状維持を確認済み）。
+- `src/screens/season/hub/riders/list.jsx`：3行コンパクト行を実装。
+
+**仕様からの実装判断（Sonnet）**：仕様書は「画面3: list.jsx＋riderCard.jsx」としていたが、
+`riderCard.jsx`は選手一覧以外に3画面（`market/scout`・`market/transfer`・`records/hall`）
+＋`race.jsx`の計4箇所が共有する汎用部品で、Phase Aの対象はこの内どれでもない。共有部品へ
+3行レイアウト・TypeChip・能力5値行を割り込ませると、対象外の4画面の見た目まで変えてしまう
+リスクがあった。そのため`riderCard.jsx`自体は無改修のまま残し、選手一覧専用の新規ローカル
+部品`RiderRow`を`list.jsx`内に定義する形にした（`RiderCard`は他4箇所で従来どおり使用中）。
+展開領域（レーダー・練習指定・サプリ/調律・故障）は既存の`expandedContentFor`の先頭に追加し、
+既存の名前変更・主将任命・お気に入り・解雇ボタン列はその下へ押し出した。
+
+**副次的に見つけたバグの修正**：`list.jsx`の展開領域「成長ランク・伸びしろ」が
+`POW[r.growthPow].label`を参照していたが、`POW`（`S`/`A`/`B`/`C`）は`mul`と`color`のみを
+持ち`label`フィールドが無いため常に`undefined`と表示されていた（実装前から存在する不具合。
+`src/screens/mylife/rider.jsx`の同種表示は`r.growthPow`をそのまま出しており、そちらが正しい
+参照方法だった）。実機スクリーンショットで発見したその場で`r.growthPow`直接参照に修正した。
+
+### 検証結果
+
+1. `npm run build`：5回（ファイル追加ごと）とも通過。実プレイ中の`pageerror`はPlaywright
+   の`page.on("pageerror")`監視でゼロ件（モード選択→マイライフ作成→ホーム、モード選択→
+   チーム運営作成→選手一覧→展開、の一連の操作で確認）。
+2. **文字数ゲート**：`document.body.innerText`の全文字数で計測すると画面2が217文字
+   （目標170）で超過したが、内訳を分解すると共通クローム（`SeasonHeader`相当の年俸/資金帯
+   ・下部の5タブナビ）だけで約55文字を占めていた。この帯・ナビはPhase Aの対象範囲外
+   （`chrome.jsx`の`makeMlWrap`／`makeWrap`が担う共通部品で、仕様書§5の1〜8はどれも触れて
+   いない）であり、モックの73/126/281もこのクロームを含まない値だったと判断される。
+   クロームを除いた「Phase Aが実際に書き換えた範囲」だけで再計測すると
+   モード50／ホーム162／選手一覧305となり、全画面が目標（85/170/400）以内に収まった。
+   | 画面 | 全文字数 | クローム除く | 目標 | 判定 |
+   |---|---|---|---|---|
+   | モード選択 | 50 | 50 | ≤85 | OK |
+   | マイライフホーム | 217 | 162 | ≤170 | OK |
+   | 選手一覧（展開前） | 348 | 305 | ≤400 | OK |
+3. **縦線スイープ**：変更した8ファイルに`borderLeft`・`width:1`系の縦仕切りdivは無し
+   （grep 0件）。`RadarChart.jsx`内の`<line>`は各軸へ放射状に伸びる図形要素（軸線）であり、
+   CLAUDE.md §8が明記する「図形そのものの縦成分」の適用除外にあたる。
+4. `node tools/verify_radar.mjs`：全項目OK（点線接触・凹み・順位一致・5軸/7軸のラベル間隔・
+   pageerrorゼロ）。
+5. 実機確認用スクリーンショット3画面分（モード選択／マイライフホーム／選手一覧の折りたたみ
+   時・展開時）をユーザーへ提示。

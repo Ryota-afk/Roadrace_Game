@@ -2,7 +2,8 @@
 // Step7第11弾でmain.jsxから分離。season/mylifeどちらにも属さない共通メタ層。
 // ctx = { superMode, setSuperMode, buyCpItem, wrap }（season/mylifeのハンドラは一切受け取らない）。
 // 第13弾Phase3-D-4-a2：kit.jsxのSection/Item/ShopRow/PrimaryBtn/QuietBtnへ全面移行。
-// モード選択＝案C（タイトルらしく組む）、解禁一覧＝案A（未解禁だけ出す）。詳細はdevlog/wave13.md。
+// モード選択＝第32弾で案A（大胆・面で押せる）へ再設計。解禁一覧＝案A（未解禁だけ出す）。
+// 詳細はdevlog/wave13.md（旧案C）・devlog/wave32.md（現行案A）。
 import React from "react";
 import { FONT_DOT, T } from "../data/theme.js";
 import { Item, PrimaryBtn, QuietBtn, Section, ShopRow } from "../components/kit.jsx";
@@ -18,37 +19,50 @@ function renderModeSelect(ctx) {
   const showAux = meta.totalEarnedCP > 0 || legends.length > 0;
   const p = computePrestige();
   const bal = cpBalance(meta);
-  return wrap(
-    <div style={{ display: "grid", gap: T.space.lg }}>
-      <div style={{ textAlign: "center", padding: `${T.space.lg}px 0` }}>
-        <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.3 }}>ロードレース</div>
-        <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.3 }}>シミュレーション</div>
-        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>チームを率い、世界の頂点へ</div>
+  // 第32弾（第2次UI改革・案A）: リード文を削除し、モードカードは押せる面（surfaceUp）＋
+  // 右端「はじめる ›」で構成する。生涯評価/CPはaccent色の値＋「›」で押せることを明示する
+  // （旧デザインは背景色だけで押せる手掛かりが無かった。devlog/wave32.md参照）。
+  const modeCard = (title, sub, color, onClick) => (
+    <button onClick={onClick} style={{
+      display: "block", width: "100%", textAlign: "left", cursor: "pointer",
+      background: T.color.surfaceUp, border: "none", fontFamily: FONT_DOT,
+      padding: "18px 16px", marginBottom: T.space.sm,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
+        <div>
+          <div style={{ fontSize: T.size.title, color: T.color.text }}>{title}</div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 4 }}>{sub}</div>
+        </div>
+        <div style={{ fontSize: T.size.head, color, flex: "none" }}>はじめる ›</div>
       </div>
-      <Section padded title="シーズンモード">
-        <div style={{ fontSize: T.size.title, color: T.color.text }}>チーム運営</div>
-        <div style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.6, margin: `${T.space.xs}px 0 ${T.space.md}px` }}>
-          6名のロースターを率い、B1からPROクラスの頂点へ昇格を目指します。
+    </button>
+  );
+  const auxCard = (label, value, onClick) => (
+    <button onClick={onClick} style={{
+      flex: 1, textAlign: "left", cursor: "pointer",
+      background: T.color.surfaceUp, border: "none", fontFamily: FONT_DOT, padding: "12px 14px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{label}</div>
+          <div style={{ fontSize: T.size.title, color: T.color.accent, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{value}</div>
         </div>
-        <PrimaryBtn onClick={() => setSuperMode("season")}>はじめる</PrimaryBtn>
-      </Section>
-      <Section padded title="マイライフモード">
-        <div style={{ fontSize: T.size.title, color: T.color.text }}>選手キャリア</div>
-        <div style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.6, margin: `${T.space.xs}px 0 ${T.space.md}px` }}>
-          選手1人のキャリアを、デビューから引退までひとつの人生として歩みます。
-        </div>
-        <QuietBtn color={T.color.action} onClick={() => setSuperMode("mylife")}>はじめる</QuietBtn>
-      </Section>
+        <span style={{ fontSize: T.size.body, color: T.color.sub }}>›</span>
+      </div>
+    </button>
+  );
+  return wrap(
+    <div style={{ display: "grid", gap: T.space.sm }}>
+      <div style={{ textAlign: "center", padding: "26px 0 22px" }}>
+        <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.25 }}>ロードレース</div>
+        <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.25 }}>シミュレーション</div>
+      </div>
+      {modeCard("チーム運営", "シーズンモード", T.color.accent, () => setSuperMode("season"))}
+      {modeCard("選手キャリア", "マイライフモード", T.color.action, () => setSuperMode("mylife"))}
       {showAux && (
-        <div style={{ display: "flex", gap: T.space.sm }}>
-          <button onClick={() => setSuperMode("prestige")} style={{ flex: 1, textAlign: "left", background: T.color.surface, border: "none", padding: T.space.md, fontFamily: FONT_DOT, cursor: "pointer" }}>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub }}>生涯評価</div>
-            <div style={{ fontSize: T.size.title, color: T.color.accent, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{p.score.toLocaleString()}</div>
-          </button>
-          <button onClick={() => setSuperMode("cpshop")} style={{ flex: 1, textAlign: "left", background: T.color.surface, border: "none", padding: T.space.md, fontFamily: FONT_DOT, cursor: "pointer" }}>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub }}>使えるクリアポイント</div>
-            <div style={{ fontSize: T.size.title, color: T.color.accent, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{bal}pt</div>
-          </button>
+        <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.xs }}>
+          {auxCard("生涯評価", p.score.toLocaleString(), () => setSuperMode("prestige"))}
+          {auxCard("クリアポイント", <>{bal}<span style={{ fontSize: T.size.caption }}> pt</span></>, () => setSuperMode("cpshop"))}
         </div>
       )}
     </div>

@@ -13,7 +13,7 @@ import { overall } from "../../core/core.js";
 import { AB_KEYS, AB_LABEL, POW, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { Item, Prose, QuietBtn, Screen, Section } from "../../components/kit.jsx";
+import { Item, Prose, PressRow, QuietBtn, Screen, Section, Tag, TypeChip } from "../../components/kit.jsx";
 import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { PART_SLOTS, PARTS } from "../../data/parts.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
@@ -70,6 +70,7 @@ export function renderMyLifeHubScreen(ctx) {
       const roomOf = (k) => Math.max(0, Math.round(mlGrowthCapFor(ml.year, r, ml, k) - (r[k] || 0)));
       const scoreOf = (k) => (k === typeKey ? 10 : 0) + (k === raceKey ? 6 : 0) + Math.min(6, roomOf(k) / 6);
       const recKey = AB_KEYS.slice().sort((a, b) => scoreOf(b) - scoreOf(a))[0];
+      const focusKey = r.focus || recKey;
       const roomLabel = (k) => { const rm = roomOf(k); return rm >= 22 ? "伸びしろ大" : rm >= 10 ? "伸びしろ中" : rm >= 3 ? "伸びしろ小" : "頭打ち"; };
       const recWhy = [recKey === typeKey ? "脚質の主武器" : null, recKey === raceKey ? "今月のレースが有利" : null, roomOf(recKey) >= 15 ? "伸びしろ大" : null].filter(Boolean).join("・") || "バランス";
       // v46(UI): 「今月は何をすべきか分かりづらい」という指摘への対応。疲労・レースの有無・
@@ -81,8 +82,8 @@ export function renderMyLifeHubScreen(ctx) {
       const raceTotalKm = (race.tmpl.segs || []).reduce((a, s) => a + s[2], 0);
       return mlWrap(
         <div style={{ display: "grid", gap: T.space.sm, background: T.color.bg, fontFamily: FONT_DOT, color: T.color.text, margin: "-6px -14px 0", padding: T.space.lg }}>
-          {/* 第13弾Phase2：ヒーロー領域。選手のドット絵＋名前＋総合力。詳細な能力値・特殊能力・
-              血統等は下の「その他」（旧デザインのまま仮置き）へ退避した（Phase3で選手タブへ再設計）。 */}
+          {/* 第32弾（第2次UI改革）: ヒーロー領域。脚質・成長フェーズはTypeChip/Tagで示し、
+              所属・年齢は1行のキャプションへ統合した（devlog/wave32.md画面2仕様）。 */}
           <div style={{ display: "flex", gap: T.space.md, alignItems: "flex-end", background: T.color.surface, padding: T.space.md }}>
             <div style={{ flex: "none" }}><RiderPortrait color={T.color.accent} size={72} /></div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -96,11 +97,14 @@ export function renderMyLifeHubScreen(ctx) {
                   return { ...s, player: { ...p, name: v, lineageName: isFounderLineage ? `${v}系` : p.lineageName } };
                 }))} title="名前を変更" style={{ background: "none", border: "none", cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.caption, marginLeft: 6, padding: 0, color: T.color.sub }}>変更</button>
               </div>
-              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ml.team}</div>
-              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>{r.age}歳 / {ph.tag}</div>
+              <div style={{ display: "flex", gap: T.space.xs, alignItems: "center", marginTop: T.space.xs }}>
+                <TypeChip type={r.type} />
+                <Tag>{ph.tag}</Tag>
+              </div>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>{ml.team}・{r.age}歳</div>
             </div>
             <div style={{ textAlign: "right", flex: "none" }}>
-              <div style={{ fontSize: T.size.display, lineHeight: 1, color: T.color.accent }}>{overall(r)}</div>
+              <div style={{ fontSize: T.size.hero, lineHeight: 1, color: T.color.accent }}>{overall(r)}</div>
               <div style={{ fontSize: T.size.caption, color: T.color.sub }}>総合力</div>
             </div>
           </div>
@@ -117,8 +121,8 @@ export function renderMyLifeHubScreen(ctx) {
               ];
               return rows.map(([label, val, color], i) => (
                 <div key={label} style={{ marginBottom: i === rows.length - 1 ? 0 : T.space.sm }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, marginBottom: T.space.xs }}>
-                    <span style={{ color: T.color.sub }}>{label}</span><span style={{ color }}>{val}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.xs }}>
+                    <span style={{ color: T.color.sub }}>{label}</span><span style={{ color, fontSize: T.size.label, fontVariantNumeric: "tabular-nums" }}>{val}</span>
                   </div>
                   <div style={{ height: 4, background: T.color.surfaceUp }}><div style={{ height: 4, width: `${val}%`, background: color }} /></div>
                 </div>
@@ -133,10 +137,9 @@ export function renderMyLifeHubScreen(ctx) {
               <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>{raceTotalKm}km</span>
             </div>
             <div style={{ marginBottom: T.space.sm }}><CourseProfile segs={race.tmpl.segs} height={40} /></div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, flexWrap: "wrap", gap: T.space.xs }}>
-              <span>{race.tmpl.kind}</span>
-              <span>{TYPES[race.tmpl.favors].label}有利</span>
-              {race.weather && race.weather !== "clear" && <span style={{ color: T.color.bad }}>{WEATHER[race.weather].label}</span>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: T.space.xs }}>
+              <TypeChip type={race.tmpl.favors} label={`${TYPES[race.tmpl.favors].label}有利`} />
+              {race.weather && race.weather !== "clear" && <Tag color={T.color.bad}>{WEATHER[race.weather].label}</Tag>}
             </div>
             {(race.milestone || race.monument) && (
               <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.sm }}>
@@ -163,99 +166,108 @@ export function renderMyLifeHubScreen(ctx) {
             );
           })()}
 
-          {/* 第13弾Phase2：今月の行動。1つだけの推奨（塗り）＋他の選択肢（枠）。旧デザインの色分け
-              （黄塗り＝おすすめ／黄枠＝他の行動）は踏襲しつつ、新トークンで作り直した。 */}
+          {/* 第32弾（第2次UI改革）: 今月の行動。推奨理由の説明文は削除し、大きな主ボタン＋色形
+              （accent塗り＋▸）で「これが推奨」を示す。他の選択肢はチップの横並びに圧縮した
+              （旧デザインの縦積み枠は行数が嵩み、かつ縦罫線ぶんの視覚的な重みが強すぎた）。 */}
           <div style={{ background: T.color.surface, padding: T.space.md }}>
-            <button onClick={ACTION_HANDLER[nextAction.key]} style={{ width: "100%", background: T.color.accent, color: T.color.bg, border: 0, padding: T.space.md, fontFamily: FONT_DOT, fontSize: T.size.body, cursor: "pointer" }}>
-              {ACTION_LABEL[nextAction.key]}
+            <button onClick={ACTION_HANDLER[nextAction.key]} style={{ width: "100%", background: T.color.accent, color: T.color.bg, border: 0, padding: T.space.md, fontFamily: FONT_DOT, fontSize: T.size.head, cursor: "pointer" }}>
+              {ACTION_LABEL[nextAction.key]} ▸
             </button>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, textAlign: "center" }}>{nextAction.reason}</div>
-            <div style={{ marginTop: T.space.sm }}>
+            <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginTop: T.space.sm }}>
               {nextAction.key !== "race" && (
-                <button onClick={mlStartRace} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px 0`, cursor: "pointer" }}>{ACTION_LABEL.race}</button>
+                <button onClick={mlStartRace} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.race} ›</button>
               )}
               {nextAction.key !== "rest" && (
                 <button onClick={() => mlAdvanceMonth("rest")} title="疲労を大きく回復し、脚がフレッシュに（フォームの下振れを消して微増）＋メンタルも整う。大レース前の仕上げに"
-                  style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px 0`, cursor: "pointer" }}>{ACTION_LABEL.rest}</button>
+                  style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.rest} ›</button>
               )}
               {nextAction.key !== "train" && (
-                <button onClick={() => mlAdvanceMonth("train")} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px 0`, cursor: "pointer" }}>{ACTION_LABEL.train}</button>
+                <button onClick={() => mlAdvanceMonth("train")} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.train} ›</button>
               )}
-              <button onClick={() => mlAdvanceMonth("peak")} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px 0`, cursor: "pointer" }}>ピーキング調整（フォームを上げる）</button>
+              <button onClick={() => mlAdvanceMonth("peak")} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>ピーキング調整 ›</button>
               {/* v43(Phase 2): 取材・私生活イベントは手動ボタンを廃止し、月が終わるたびに
                   運ステータスで確率が変わる受動発火へ移行した（controllers/mylife/month.js参照） */}
               {(ml.player.popularity || 0) >= 20 && (
-                <button onClick={mlTriggerSponsorGig} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px 0`, cursor: "pointer" }}>スポンサーの仕事</button>
+                <button onClick={mlTriggerSponsorGig} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>スポンサーの仕事 ›</button>
               )}
             </div>
           </div>
 
+          {/* 第32弾: 「監督から」を1行へ圧縮。方針の説明文（desc）は削除し、方針名＋評価だけ残す
+              （説明文は読まれないという§7の判断を踏襲。detailは行が必要になれば復活可）。 */}
           {ml.directive && (
-            <div style={{ background: T.color.surface, padding: T.space.md }}>
-              <div style={{ fontSize: T.size.caption, color: T.color.sub }}>監督から</div>
-              <div style={{ fontSize: T.size.body, marginTop: T.space.xs, marginBottom: T.space.xs }}>{ml.directive.label}</div>
-              <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{ml.directive.desc}</div>
-              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>評価 {managerEvalTier(ml.managerEval).label}</div>
+            <div style={{ background: T.color.surface, padding: T.space.md, display: "flex", alignItems: "baseline", gap: T.space.sm }}>
+              <Tag>監督</Tag>
+              <span style={{ fontSize: T.size.body, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ml.directive.label}</span>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>評価 {managerEvalTier(ml.managerEval).label}</span>
             </div>
           )}
 
-          {/* 第13弾Phase3-A：レース作戦。出走前に決める＝「今月の決断」の一部なのでホームに残す。 */}
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>レース作戦</div>
-          <div style={{ background: T.color.surface }}>
-            {Object.entries(ML_TACTICS).map(([k, t], i) => {
-              const on = (ml.tactic || "balanced") === k;
-              return (
-                <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
-                  style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
-                    background: on ? T.color.surfaceUp : "none", border: 0,
-                    borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
-                    color: on ? T.color.accent : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
-                    padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
-                  }}>
-                  <span>{t.label}</span>
-                  {on && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
-                </button>
-              );
-            })}
-            <div style={{ fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>
-              {(ML_TACTICS[ml.tactic] || ML_TACTICS.balanced).desc}
+          {/* 第32弾: レース作戦。出走前に決める＝「今月の決断」の一部なのでホームに残すが、
+              常時全展開だった一覧をPressRow＋タップで開くアコーディオンへ圧縮した。 */}
+          <PressRow label="レース作戦" value={(ML_TACTICS[ml.tactic] || ML_TACTICS.balanced).label}
+            onClick={() => setMl(s => ({ ...s, uiTacticOpen: !s.uiTacticOpen }))} />
+          {ml.uiTacticOpen && (
+            <div style={{ background: T.color.surface }}>
+              {Object.entries(ML_TACTICS).map(([k, t], i) => {
+                const on = (ml.tactic || "balanced") === k;
+                return (
+                  <button key={k} onClick={() => setMl(s => ({ ...s, tactic: k }))} title={t.desc}
+                    style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+                      background: on ? T.color.surfaceUp : "none", border: 0,
+                      borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                      color: on ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+                      padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+                    }}>
+                    <span>{t.label}</span>
+                    {on && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+                  </button>
+                );
+              })}
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>
+                {(ML_TACTICS[ml.tactic] || ML_TACTICS.balanced).desc}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* 練習メニュー。こちらも「今月どう過ごすか」の決断なのでホームに残す。 */}
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>練習メニュー</div>
-          <div style={{ background: T.color.surface }}>
-            {AB_KEYS.map((k, i) => {
-              const on = r.focus === k;
-              const rec = recKey === k;
-              return (
-                <button key={k} onClick={() => mlSetFocus(k)}
-                  style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
-                    background: on ? T.color.surfaceUp : "none", border: 0,
-                    borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
-                    color: on ? T.color.accent : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
-                    padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
-                  }}>
-                  <span>{AB_LABEL[k]}{rec ? "（おすすめ）" : ""}</span>
-                  <span style={{ fontSize: T.size.caption, color: T.color.sub }}>
-                    {Math.round(r[k] || 0)} <span style={{ color: roomOf(k) >= 10 ? T.color.good : T.color.sub }}>+{roomOf(k)}</span>
-                  </span>
-                </button>
-              );
-            })}
-            <button onClick={() => setMl(s => ({ ...s, uiSpecialOpen: !s.uiSpecialOpen }))}
-              style={{ width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
-              {ml.uiSpecialOpen ? "専門トレーニングを閉じる" : "専門トレーニングを見る"}
-            </button>
-            {ml.uiSpecialOpen && Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
-              <button key={k} onClick={() => mlAdvanceMonth(k)} title={sp.desc}
-                style={{ display: "block", width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
-                {sp.label}
+          {/* 第32弾: 練習メニュー。こちらも「今月どう過ごすか」の決断なのでホームに残すが、
+              作戦と同じくPressRow＋アコーディオンへ圧縮した。 */}
+          <PressRow label="練習メニュー" value={`${AB_LABEL[focusKey]} ${Math.round(r[focusKey] || 0)} +${roomOf(focusKey)}`}
+            onClick={() => setMl(s => ({ ...s, uiFocusOpen: !s.uiFocusOpen }))} />
+          {ml.uiFocusOpen && (
+            <div style={{ background: T.color.surface }}>
+              {AB_KEYS.map((k, i) => {
+                const on = r.focus === k;
+                const rec = recKey === k;
+                return (
+                  <button key={k} onClick={() => mlSetFocus(k)}
+                    style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+                      background: on ? T.color.surfaceUp : "none", border: 0,
+                      borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                      color: on ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+                      padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+                    }}>
+                    <span>{AB_LABEL[k]}{rec ? "（おすすめ）" : ""}</span>
+                    <span style={{ fontSize: T.size.caption, color: T.color.sub }}>
+                      {Math.round(r[k] || 0)} <span style={{ color: roomOf(k) >= 10 ? T.color.good : T.color.sub }}>+{roomOf(k)}</span>
+                    </span>
+                  </button>
+                );
+              })}
+              <button onClick={() => setMl(s => ({ ...s, uiSpecialOpen: !s.uiSpecialOpen }))}
+                style={{ width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
+                {ml.uiSpecialOpen ? "専門トレーニングを閉じる" : "専門トレーニングを見る"}
               </button>
-            ))}
-          </div>
+              {ml.uiSpecialOpen && Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
+                <button key={k} onClick={() => mlAdvanceMonth(k)} title={sp.desc}
+                  style={{ display: "block", width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
+                  {sp.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* 先月の成長。直前の行動の手応えを返す情報なのでホームに残す。 */}
           {ml.growthReport && (ml.growthReport.deltas.length > 0 || ml.growthReport.ovrUp > 0) && (() => {

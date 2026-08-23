@@ -127,15 +127,16 @@ export function RiderRadarChart({ r, size = 168, color = T.color.accent, showVal
 // あった）。CLAUDE.md §5に従い1つの部品へ集約する。
 // 見出しからは「（外周=88）」「（生涯不変）」を撤去した：前者は上限としてレーダー内の
 // 右下隅へ移し、後者は情報として不要（CLAUDE.md §7）。
+// 第32弾: 2枚の間の縦の仕切り線を削除（縦線は装飾・区切り目的で使用禁止・2026-08明示）。
+// 区切りは余白のみで表現する。
 export function AbilitySoshitsuRadarPair({ r, cap, size = 148, capFor = null }) {
   if (!r) return null;
   return (
-    <div style={{ display: "flex", justifyContent: "space-around", alignItems: "stretch", gap: T.space.xs, marginTop: T.space.sm, flexWrap: "wrap", fontFamily: FONT_DOT }}>
+    <div style={{ display: "flex", justifyContent: "space-around", alignItems: "stretch", gap: T.space.lg, marginTop: T.space.sm, flexWrap: "wrap", fontFamily: FONT_DOT }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>能力</div>
         <AbilityRadarChart r={r} cap={cap} size={size} capFor={capFor} />
       </div>
-      <div style={{ width: 1, background: T.color.rule, margin: `${T.space.md}px 2px` }} />
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>素質</div>
         <RiderRadarChart r={r} size={size} />
