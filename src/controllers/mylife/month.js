@@ -208,6 +208,11 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
 }
 
 export function mlAdvanceMonth(s, mode) {
+  // 第33弾: 専門トレーニングは「練習メニューで選択→通常の練習で実行」の一回きり。
+  // 旧実装は専門トレのボタンを押した瞬間に月が進む（通常練習だけ2段階の）動線非対称だった。
+  // どの形で月が進んでも選択は消える＝その月だけで、翌月は元の練習メニューへ自動的に戻る。
+  if (mode === "train" && s.plannedSpecial && ML_SPECIAL_TRAINING[s.plannedSpecial]) mode = s.plannedSpecial;
+  if (s.plannedSpecial) s = { ...s, plannedSpecial: null };
   // v25: シーズンモードと同様、マイライフでも出走した種目に応じた「出走経験」で能力が伸びるようにする
   // （従来は出走しても疲労とストリークが変化するだけで能力は一切伸びなかった）
   const raceExpKeys = (mode === "race" && s.result && s.result.course)

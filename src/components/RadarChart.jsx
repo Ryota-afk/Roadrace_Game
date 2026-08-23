@@ -27,8 +27,12 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
   const dataPoints = axes.map((ax, i) => pointFor(i, fracFor(ax)));
   const dataPath = dataPoints.map(p => p.join(",")).join(" ");
   const ringPath = capRing ? axes.map((_, i) => pointFor(i, capRing[i]).join(",")).join(" ") : null;
+  // 第33弾: corner注記はy=size+16（=SVGの高さの外）に描いていたため、overflow:visibleで
+  // 見えてはいてもレイアウト高さに含まれず、直後の要素（選手一覧の練習セレクト等）が
+  // 上に重なっていた。注記があるときはSVG自体の高さを注記ぶん広げる。
+  const svgH = corner ? size + 22 : size;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: "visible", display: "block" }}>
+    <svg width={size} height={svgH} viewBox={`0 0 ${size} ${svgH}`} style={{ overflow: "visible", display: "block" }}>
       {[0.25, 0.5, 0.75, 1].map((lv, i) => (
         <polygon key={i} points={axes.map((_, ai) => pointFor(ai, lv).join(",")).join(" ")}
           fill="none" stroke={T.color.rule} strokeWidth={i === 3 ? 1.4 : 1} opacity={i === 3 ? 0.9 : 0.5} />

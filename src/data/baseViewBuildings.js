@@ -206,7 +206,7 @@ export const BASE_VIEW_STAFF = [
   // なったため机の手前側へ（tools/verify_baseview.mjsが検出）。
   { key: "scout", staffKey: "scout", room: "scout", label: "スカウト",
     w: 12.9, l: 0.9, color: "#c98bf0", cap: "#5c4a68", flip: false },
-  { key: "manager", staffKey: "manager", room: "hall", label: "マネージャー",
+  { key: "manager", staffKey: "manager", room: "hall", label: "監督",
     w: 10.4, l: -3.3, color: "#3a4250", cap: "#c9a23c", flip: true },
 ];
 

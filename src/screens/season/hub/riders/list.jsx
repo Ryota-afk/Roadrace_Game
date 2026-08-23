@@ -6,7 +6,7 @@
 // 逃がす。ユースバッジ（age<=18）は年齢表示と重複するため廃止（詳細はdevlog/wave13.md）。
 // 第32弾（第2次UI改革）: RiderCardの汎用カード（他3画面と共有）から、この画面専用の
 // 3行コンパクト行（RiderRow）へ差し替えた。行全体がタップ対象で、レーダー・練習指定・
-// サプリ/調律・故障の詳細は展開領域へ集約する（縦線は使わない・devlog/wave32.md画面3仕様）。
+// サプリ/調子アップ・故障の詳細は展開領域へ集約する（縦線は使わない・devlog/wave32.md画面3仕様）。
 import React from "react";
 import { DisciplineGrid, PersonaLine, TraitLine } from "../../../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../../../components/RadarChart.jsx";
@@ -75,7 +75,7 @@ function RiderRow({ r, first, ovr, badge, ph, expanded, onToggle }) {
 }
 
 export function renderRidersListSection(ctx) {
-  const { askConfirm, availParts, expandedRiderId, g, growthCap, openRename, releaseRider, rosterMax, setCaptain, setExpandedRiderId, setFocus, setG, setPart, toggleFavorite, useSupp, useTune } = ctx;
+  const { askConfirm, availParts, expandedRiderId, g, growthCap, releaseRider, rosterMax, setCaptain, setExpandedRiderId, setFocus, setG, setPart, toggleFavorite, useSupp, useTune } = ctx;
 
   const expandedContentFor = (r, isCaptain) => (
       <>
@@ -91,12 +91,11 @@ export function renderRidersListSection(ctx) {
         {((g.inv.supp > 0 && r.fatigue > 30) || (g.inv.tune > 0 && r.cond < 5)) && (
           <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.sm }}>
             {g.inv.supp > 0 && r.fatigue > 30 && <QuietBtn color={T.color.action} onClick={() => useSupp(r.id)}>サプリ（疲労-40）</QuietBtn>}
-            {g.inv.tune > 0 && r.cond < 5 && <QuietBtn color={T.color.action} onClick={() => useTune(r.id)}>調律（調子+2）</QuietBtn>}
+            {g.inv.tune > 0 && r.cond < 5 && <QuietBtn color={T.color.action} onClick={() => useTune(r.id)}>調子アップ（+2）</QuietBtn>}
           </div>
         )}
         {r.injury > 0 && <div style={{ fontSize: T.size.caption, color: T.color.bad, marginTop: T.space.sm }}>故障 残{r.injury}ヶ月</div>}
         <div style={{ display: "flex", gap: T.space.sm, flexWrap: "wrap", marginTop: T.space.sm, paddingTop: T.space.sm, borderTop: `1px solid ${T.color.rule}` }}>
-          <QuietBtn onClick={() => openRename("選手名を変更", r.name, v => setG(s => ({ ...s, roster: s.roster.map(x => x.id === r.id ? { ...x, name: v } : x) })))}>名前を変更</QuietBtn>
           {!isCaptain && <QuietBtn onClick={() => setCaptain(r.id)}>主将に任命</QuietBtn>}
           <QuietBtn color={r.favorite ? T.color.action : T.color.sub} onClick={() => toggleFavorite(r.id)}>{r.favorite ? "お気に入り解除" : "お気に入り登録"}</QuietBtn>
           {g.month === 0 && <QuietBtn color={T.color.bad} onClick={() => askConfirm(`${r.name}を解雇しますか？`, () => releaseRider(r.id), "解雇する")}>解雇</QuietBtn>}
@@ -154,7 +153,18 @@ export function renderRidersListSection(ctx) {
               badge={isCaptain ? "主将" : r.isLegendRecruit ? "伝説の招待選手" : null}
               ph={ph} expanded={expanded}
               onToggle={() => setExpandedRiderId(expanded ? null : r.id)} />
-            {expanded && <div style={{ paddingBottom: T.space.sm }}>{expandedContentFor(r, isCaptain)}</div>}
+            {/* 第33弾: 展開領域は面(surface)で括り、末尾にも「閉じる」を置く——展開の範囲と
+                次の選手との境目を面の色だけで読めるようにする（ユーザー指摘・候補合意済み）。 */}
+            {expanded && (
+              <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+                {expandedContentFor(r, isCaptain)}
+                <button onClick={() => setExpandedRiderId(null)} style={{
+                  display: "block", width: "100%", background: "none", border: 0,
+                  borderTop: `1px solid ${T.color.rule}`, marginTop: T.space.md, paddingTop: T.space.sm,
+                  color: T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.caption, textAlign: "center", cursor: "pointer",
+                }}>▲ 閉じる</button>
+              </div>
+            )}
           </React.Fragment>
         );
       })}

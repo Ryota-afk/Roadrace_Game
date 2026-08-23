@@ -220,7 +220,7 @@ export function renderMyLifeCareerScreens(ctx) {
         <PrimaryBtn onClick={becomeManager}>監督として新チームを率いる</PrimaryBtn>
         <div style={{ fontSize: T.size.caption, color: T.color.sub, margin: `-${T.space.xs}px 0 ${T.space.md}px` }}>{r.name}を創設メンバーに迎え、同じ世界でチームを率います</div>
         <QuietBtn onClick={() => { clearMyLifeSave(); setMl(initMyLife()); }}>新たな選手でキャリアを始める</QuietBtn>
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>歴代選手の殿堂を見る</QuietBtn>
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends", careerBack: s.screen }))}>歴代選手の殿堂を見る</QuietBtn>
       </Screen>
     );
   }
@@ -409,12 +409,16 @@ export function renderMyLifeCareerScreens(ctx) {
   }
 
   // ---- 系譜ツリー／因子図鑑（meta.jsxと共有・据え置き・Phase3-D担当） ----
+  // 第33弾: 戻り先を開いた場所に追従させる（記録タブから直接開いた場合は記録へ。
+  // 従来は殿堂固定→殿堂の戻るがタイトル側のキャリア作成へ飛ぶ二重の迷子だった）。
+  const dexBackScreen = ml.dexBack || "mylife_legends";
+  const dexBackLabel = dexBackScreen === "mylife_archive" ? "← 記録に戻る" : "← 殿堂に戻る";
   if (ml.screen === "mylife_lineage") {
     const forest = mlLineageForest();
     const totalLeg = loadMlLegends().length;
     return mlWrap(
       <LineageForestView forest={forest} totalLeg={totalLeg} variant="mylife"
-        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>← 殿堂に戻る</QuietBtn>} />
+        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: dexBackScreen }))}>{dexBackLabel}</QuietBtn>} />
     );
   }
   if (ml.screen === "mylife_factors") {
@@ -422,7 +426,7 @@ export function renderMyLifeCareerScreens(ctx) {
     const totalLeg = loadMlLegends().length;
     return mlWrap(
       <FactorCollectionView cats={cats} totalLeg={totalLeg} variant="mylife"
-        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends" }))}>← 殿堂に戻る</QuietBtn>} />
+        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: dexBackScreen }))}>{dexBackLabel}</QuietBtn>} />
     );
   }
 
@@ -441,8 +445,8 @@ export function renderMyLifeCareerScreens(ctx) {
         </div>
 
         <div style={{ display: "flex", gap: T.space.sm, marginBottom: T.space.md }}>
-          <div style={{ flex: 1 }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_lineage" }))}>系譜ツリー</QuietBtn></div>
-          <div style={{ flex: 1 }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_factors" }))}>因子図鑑</QuietBtn></div>
+          <div style={{ flex: 1 }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_lineage", dexBack: "mylife_legends" }))}>系譜ツリー</QuietBtn></div>
+          <div style={{ flex: 1 }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_factors", dexBack: "mylife_legends" }))}>因子図鑑</QuietBtn></div>
         </div>
 
         <div onClick={() => setMl(s => ({ ...s, showNicks: !s.showNicks }))}
@@ -527,7 +531,8 @@ export function renderMyLifeCareerScreens(ctx) {
             </div>
           );
         })}
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_create" }))}>← 戻る</QuietBtn>
+        {/* 第33弾: 戻り先は開いた場所（記録タブ／キャリア作成／引退後）に追従する。 */}
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: s.careerBack || "mylife_create" }))}>← 戻る</QuietBtn>
       </Screen>
     );
   }

@@ -39,8 +39,14 @@ export function renderMyLifeArchiveScreen(ctx) {
       </div>
 
       {/* 第32弾Phase B R3: 枠線・透明背景の一覧行を面(surfaceUp)＋chevronのアフォーダンス規約へ統一 */}
+      {/* 第33弾: 殿堂・系譜・因子図鑑はタイトル側（キャリア作成・引退後）と画面を共有しているため、
+          記録タブから開いたことを覚えて戻り先をここに戻す（従来はキャリア作成画面へ飛んでいた）。 */}
       {items.map((it, i) => (
-        <button key={it.screen} onClick={() => setMl(s => ({ ...s, screen: it.screen }))}
+        <button key={it.screen} onClick={() => setMl(s => ({
+          ...s, screen: it.screen,
+          ...(["mylife_legends", "mylife_lineage", "mylife_factors"].includes(it.screen)
+            ? { careerBack: "mylife_archive", dexBack: "mylife_archive" } : {}),
+        }))}
           style={{
             display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
             background: T.color.surfaceUp, border: 0, marginBottom: T.space.xs,

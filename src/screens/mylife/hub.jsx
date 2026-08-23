@@ -77,7 +77,10 @@ export function renderMyLifeHubScreen(ctx) {
       // 大舞台かどうかから今月のおすすめを1つだけ判定する（domain/mylife/nextAction.js）。
       // ラベル文言とハンドラはUI都合（フォーカス中の能力名など）なのでここで組み立てる。
       const nextAction = mlNextAction({ fatigue: r.fatigue, race, recTrainLabel: AB_LABEL[recKey], declining: ph.tag === "衰え期" });
-      const ACTION_LABEL = { race: "このレースに出場する", rest: "完全休養", train: `練習（${AB_LABEL[r.focus] || "バランス"}中心）` };
+      // 第33弾: 専門トレーニングを「選択→通常の練習ボタンで実行」に統一（旧: ボタンで即翌月へ）。
+      // 選択中は練習ボタンのラベルにもそのまま出す。実行は month.js 側が plannedSpecial を消費する。
+      const plannedSp = ml.plannedSpecial && ML_SPECIAL_TRAINING[ml.plannedSpecial];
+      const ACTION_LABEL = { race: "このレースに出場する", rest: "完全休養", train: plannedSp ? `練習（${plannedSp.label}）` : `練習（${AB_LABEL[r.focus] || "バランス"}中心）` };
       const ACTION_HANDLER = { race: mlStartRace, rest: () => mlAdvanceMonth("rest"), train: () => mlAdvanceMonth("train") };
       const raceTotalKm = (race.tmpl.segs || []).reduce((a, s) => a + s[2], 0);
       return mlWrap(
@@ -233,15 +236,15 @@ export function renderMyLifeHubScreen(ctx) {
 
           {/* 第32弾: 練習メニュー。こちらも「今月どう過ごすか」の決断なのでホームに残すが、
               作戦と同じくPressRow＋アコーディオンへ圧縮した。 */}
-          <PressRow label="練習メニュー" value={`${AB_LABEL[focusKey]} ${Math.round(r[focusKey] || 0)} +${roomOf(focusKey)}`}
+          <PressRow label="練習メニュー" value={plannedSp ? `${plannedSp.label}・今月のみ` : `${AB_LABEL[focusKey]} ${Math.round(r[focusKey] || 0)} +${roomOf(focusKey)}`}
             onClick={() => setMl(s => ({ ...s, uiFocusOpen: !s.uiFocusOpen }))} />
           {ml.uiFocusOpen && (
             <div style={{ background: T.color.surface }}>
               {AB_KEYS.map((k, i) => {
-                const on = r.focus === k;
+                const on = r.focus === k && !plannedSp;
                 const rec = recKey === k;
                 return (
-                  <button key={k} onClick={() => mlSetFocus(k)}
+                  <button key={k} onClick={() => { mlSetFocus(k); setMl(s => ({ ...s, plannedSpecial: null })); }}
                     style={{
                       display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
                       background: on ? T.color.surfaceUp : "none", border: 0,
@@ -260,12 +263,18 @@ export function renderMyLifeHubScreen(ctx) {
                 style={{ width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
                 {ml.uiSpecialOpen ? "専門トレーニングを閉じる" : "専門トレーニングを見る"}
               </button>
-              {ml.uiSpecialOpen && Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => (
-                <button key={k} onClick={() => mlAdvanceMonth(k)} title={sp.desc}
-                  style={{ display: "block", width: "100%", background: "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
-                  {sp.label}
-                </button>
-              ))}
+              {/* 第33弾: 押した瞬間に月が進む旧動線を廃止。通常の練習メニューと同じ
+                  「選ぶ→ホームの練習ボタンで実行」に統一（もう一度押すと選択解除）。 */}
+              {ml.uiSpecialOpen && Object.entries(ML_SPECIAL_TRAINING).map(([k, sp]) => {
+                const on = ml.plannedSpecial === k;
+                return (
+                  <button key={k} onClick={() => setMl(s => ({ ...s, plannedSpecial: s.plannedSpecial === k ? null : k }))} title={sp.desc}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%", background: on ? T.color.surfaceUp : "none", border: 0, borderTop: `1px solid ${T.color.rule}`, color: on ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left" }}>
+                    <span>{sp.label}</span>
+                    {on && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>今月のみ・練習で実行</span>}
+                  </button>
+                );
+              })}
             </div>
           )}
 
