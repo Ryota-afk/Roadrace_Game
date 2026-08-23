@@ -148,6 +148,9 @@ export function wallPoint(botA, botB, topA, topB, u, v) {
 }
 
 // シーズン状態(g)から各建物スロットのLvを導出する。g自体は変更しない読み取り専用の導出。
+// 第22弾: hall/diner/locker/trophy（第20弾の条件解禁3部屋＋玄関ホール）を追加。
+// いずれも各部屋の解禁条件（domain/season/baseViewLayout.jsのroomUnlocks）と同じ実データ
+// から導く＝「拠点を一目見てチーム状態が分かる」思想の踏襲（第21弾の屋外行き先と同系）。
 export function buildingLevels(g) {
   const equip = g.equip || {};
   const staff = g.staff || {};
@@ -157,6 +160,13 @@ export function buildingLevels(g) {
     mechanic: Math.max(equip.frame || 0, equip.wheels || 0),       // 0〜5
     medical: Math.max(staff.doctor || 0, staff.manager || 0),      // 0〜3
     scout: staff.scout || 0,                                       // 0〜3
+    hall: g.classIdx || 0,                                         // 0=B1 / 1=A / 2=PRO
+    diner: Object.values(staff).filter(v => v > 0).length,         // 0〜4（roomUnlocksと同式）
+    locker: (g.roster || []).length,                               // 人数そのもの（8〜16）
+    // 年度末に前年のchampBestはcareerHistoryへ積まれnullへ戻る（controllers/season/month.js）
+    // ため、当期分(champBest)と過去分(careerHistory)を足しても二重計上にならない。
+    trophy: (g.careerHistory || []).filter(h => h && h.champBest === 1).length
+      + (g.champBest === 1 ? 1 : 0),
   };
 }
 

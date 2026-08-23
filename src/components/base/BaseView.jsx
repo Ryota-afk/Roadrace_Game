@@ -293,7 +293,11 @@ export function BaseView({ g, paused, onRoomTap }) {
                     ...BASE_VIEW_LOCKED_ROOMS.filter(s => !unlocks[s.room]).map(s => ({ y: py(s.w, s.l),
                       node: <Station key={s.key} s={s} proj={PROJ} selected={false} grade={0} /> })),
                     ...fixtureItems(PROJ, BASE_VIEW_FIXTURES.filter(f => {
-                      if (f.room === "diner" || f.room === "locker" || f.room === "trophy") return unlocks[f.room];
+                      // 第22弾: 奥3部屋は「解禁済み」に加え、什器ごとのminLevelにも実データ
+                      // 連動のlevels[f.room]で到達しているかを見る（旧セーブ等levels[f.room]が
+                      // 無ければ0扱い＝解禁直後は基本什器のみで既存の見た目のまま）。
+                      if (f.room === "diner" || f.room === "locker" || f.room === "trophy")
+                        return unlocks[f.room] && (f.minLevel ?? 0) <= (levels[f.room] ?? 0);
                       return (f.minLevel ?? 0) <= (levels[f.room] ?? Infinity);
                     })).map(it => ({ y: it.sortY, node: it.node })),
                     // 人物。座る選手は椅子と同座標のため+0.1で必ず椅子の上に。ローラーの選手は

@@ -163,18 +163,33 @@ export const BASE_VIEW_FIXTURES = [
   { key: "hall-magazines", room: "hall", kind: "magazineRack", w: 10.6, l: -4.0, minLevel: 0 },
   // 置き時計（Kシート）は玄関ホールの受付脇へ（スカウト室は椅子の移動で手狭になった）
   { key: "hall-clock", room: "hall", kind: "deskClock", w: 10.3, l: -1.3, minLevel: 0 },
+  // 第22弾: 玄関ホールはクラブのクラス(hall Lv=classIdx)で育つ。A昇格で観葉植物、
+  // PRO昇格で来客用の待合ベンチ（第21弾の屋外ベンチと同スプライトの屋内転用）。
+  { key: "hall-plant", room: "hall", kind: "pottedPlant", w: 8.3, l: -3.5, minLevel: 1 },
+  { key: "hall-bench", room: "hall", kind: "bench", w: 10.7, l: -1.2, minLevel: 2, flip: true },
   // --- 条件解禁の奥3部屋（J/Kシートの専用什器。解禁前はBaseView側で
   //     このグループごと非表示にし、st_emptyの納戸を描く） ---
   // 食堂：テーブルセット＋配膳カウンター＋メニュー掲示のコルクボード（立てかけ）
   { key: "diner-table", room: "diner", kind: "cafeteriaTable", w: 6.0, l: 4.3, minLevel: 0 },
   { key: "diner-counter", room: "diner", kind: "cateringCounter", w: 7.2, l: 4.95, minLevel: 0 },
   { key: "diner-menu", room: "diner", kind: "corkboardLean", w: 5.5, l: 5.0, minLevel: 0 },
+  // 第22弾: 食堂はスタッフ人数(diner Lv)で育つ。3人で給水台、4人（全員）でテーブル2卓目。
+  { key: "diner-water", room: "diner", kind: "waterTable", w: 7.6, l: 4.0, minLevel: 3 },
+  { key: "diner-table2", room: "diner", kind: "cafeteriaTable", w: 5.6, l: 3.9, minLevel: 4 },
   // ロッカールーム：ロッカー列＋コート掛け
   { key: "locker-row", room: "locker", kind: "lockerRow", w: 9.6, l: 4.95, minLevel: 0 },
   { key: "locker-coats", room: "locker", kind: "coatRack", w: 8.7, l: 4.0, minLevel: 0 },
+  // 第22弾: ロッカールームは所属選手数(locker Lv)で育つ。10人でロッカー列2列目、
+  // 12人で着替えベンチ。
+  { key: "locker-row2", room: "locker", kind: "lockerRow", w: 10.5, l: 4.95, minLevel: 10 },
+  { key: "locker-bench", room: "locker", kind: "bench", w: 9.5, l: 4.2, minLevel: 12, flip: true },
   // トロフィールーム：トロフィーケース＋観葉植物
   { key: "trophy-case", room: "trophy", kind: "trophyCase", w: 12.4, l: 4.95, minLevel: 0 },
   { key: "trophy-plant", room: "trophy", kind: "pottedPlant", w: 13.5, l: 4.3, minLevel: 0 },
+  // 第22弾: トロフィールームはタイトル獲得数(trophy Lv)で育つ。2回でケース2本目、
+  // 3回で優勝写真・記事の掲示板。
+  { key: "trophy-case2", room: "trophy", kind: "trophyCase", w: 13.3, l: 4.95, minLevel: 2 },
+  { key: "trophy-board", room: "trophy", kind: "corkboardStand", w: 11.5, l: 4.2, minLevel: 3 },
 ];
 
 // Wave F-3c：常駐スタッフ（動かない人）。対応するスタッフを雇っていれば
