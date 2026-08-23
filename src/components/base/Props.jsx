@@ -18,17 +18,22 @@ function treeNode(w, l, proj, palette, key) {
 
 
 // 第19弾: ベンチ・外灯・駐輪ラックも参考画像から抽出したドット絵へ差し替え。
-// 第23弾: flipはベンチの什器スプライトと座る選手を同じ値で一緒に鏡像反転させるための
-// 共通フィールド（BASE_VIEW_OUTDOOR_SPOTS参照）。什器だけが常に無反転で人物側だけ逆符号で
-// 反転していた旧実装が「ベンチと座る向きの不整合」の原因だった（2026-08ユーザー指摘）。
+// 第23弾: flipはベンチと座る選手を一緒に鏡像反転させるための共通フィールド
+// （BASE_VIEW_OUTDOOR_SPOTS参照）。ただしベンチ什器と人物SITのスプライトは素の向きが
+// 互いに逆手性のため、什器側は`!flip`＝人物と逆符号で描いて初めて噛み合う
+// （2026-08ユーザー指示「屋外にあるベンチを全て反転させなさい」で確定）。
 function benchNode(w, l, proj, key, flip) {
   const p = isoProject(w, l, 0, proj);
-  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.bench, key, cacheKey: "obj-bench", flip: !!flip });
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.bench, key, cacheKey: "obj-bench", flip: !flip });
 }
 
+// 街灯の影：スプライトのanchorはbboxの中央下(col13)だが、支柱の接地部は右寄り
+// （最下段の実測でcol18〜23、中心≈20.5）にあり、さらに自動配置は影を奥(-y)へ寄せる。
+// shadowDx/Dyで支柱の真下へ戻す（2026-08ユーザー指摘「街灯の影がずれている」）。
 function lampNode(w, l, proj, key) {
   const p = isoProject(w, l, 0, proj);
-  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.lamp, key, cacheKey: "obj-lamp", shadowW: 0.13, shadowL: 0.13 });
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.lamp, key, cacheKey: "obj-lamp",
+    shadowW: 0.13, shadowL: 0.13, shadowDx: 3.8, shadowDy: 3.4 });
 }
 
 function bikeRackNode(w, l, proj, key) {
