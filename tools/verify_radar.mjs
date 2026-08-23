@@ -137,9 +137,16 @@ try {
           ? ok("点線が苦手軸で内側へ凹む", `最小 ${dashedMin}`)
           : ng("点線が苦手軸で内側へ凹む", "全軸が同じ＝能力別上限が反映されていない");
       }
-      // 実線の各頂点が、表示されている数値と同じ順位に並んでいること（＝分母が共通）
-      const vals = ability.texts.filter(t => /^\d+$/.test(t.s.trim()) && t.ax !== -1).map(t => Number(t.s));
-      if (vals.length === ability.solid.length) {
+      // 実線の各頂点が、表示されている数値と同じ順位に並んでいること（＝分母が共通）。
+      // ax は軸ごとの<g>のインデックス。corner（「上限」の数字）も<g>を使うため、
+      // 軸の本数（ability.axes）以上のax値は軸のラベル/数値ではない＝除外する
+      // （これを除外しないとcornerの数字が混入してvals.lengthが1つ多くなり判定が動かない）。
+      const vals = ability.texts
+        .filter(t => /^\d+$/.test(t.s.trim()) && t.ax !== -1 && t.ax < ability.axes)
+        .map(t => Number(t.s));
+      if (vals.length !== ability.solid.length) {
+        ng("図の形が能力の形と一致", `能力値の個数(${vals.length})と頂点の個数(${ability.solid.length})が一致しない`);
+      } else {
         const byVal = vals.map((v, i) => i).sort((a, b) => vals[b] - vals[a]);
         const byDraw = ability.solid.map((v, i) => i).sort((a, b) => ability.solid[b] - ability.solid[a]);
         byVal.join() === byDraw.join()

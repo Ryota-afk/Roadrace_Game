@@ -9,9 +9,11 @@ import { FONT_DOT, T } from "../data/theme.js";
 
 // axes: [{ label, value, max, color? }]。maxは軸ごとに指定でき、基礎能力のように
 // 「外周＝成長上限」としたい場合は全軸に同じcapを渡す（＝外周に張り付く＝限界突破）。
-// corner: { label, value } を渡すと図の右下隅に控えめな注記を出す（上限値などを、
-// 見出しや説明文を増やさずに図の中で示すため。v46）。
-export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpacity = 0.22, showValues = false, atMaxColor = T.color.accent, corner = null }) {
+// corner: { label, value } を渡すと図の左下隅に控えめな注記を出す（上限値などを、
+// 見出しや説明文を増やさずに図の中で示すため。v46。第30弾で右下→左下へ移動）。
+// capRing: 各軸のfrac（0..1、axesと同じ順序）を渡すと、データ多角形の下に点線の
+// 「上限シルエット」を重ねる（第30弾・判断③のオフセットを図の形として見せる案B）。
+export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpacity = 0.22, showValues = false, atMaxColor = T.color.accent, corner = null, capRing = null }) {
   if (!axes || axes.length < 3) return null;
   const n = axes.length;
   const cx = size / 2, cy = size / 2;
@@ -24,6 +26,7 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
   const fracFor = (ax) => Math.max(0, Math.min(1, (ax.value ?? 0) / (ax.max ?? 100)));
   const dataPoints = axes.map((ax, i) => pointFor(i, fracFor(ax)));
   const dataPath = dataPoints.map(p => p.join(",")).join(" ");
+  const ringPath = capRing ? axes.map((_, i) => pointFor(i, capRing[i]).join(",")).join(" ") : null;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: "visible", display: "block" }}>
       {[0.25, 0.5, 0.75, 1].map((lv, i) => (
@@ -34,20 +37,31 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
         const [x, y] = pointFor(i, 1);
         return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={T.color.rule} strokeWidth={1} opacity={0.5} />;
       })}
+      {ringPath && (
+        <polygon points={ringPath} fill="none" stroke={color} strokeWidth={1.2} strokeDasharray="3 3" opacity={0.55} />
+      )}
       <polygon points={dataPath} fill={color} fillOpacity={fillOpacity} stroke={color} strokeWidth={2} strokeLinejoin="round" />
       {dataPoints.map(([x, y], i) => (
         <circle key={i} cx={x} cy={y} r={2.5} fill={axes[i].color || color} />
       ))}
       {axes.map((ax, i) => {
-        const [lx, ly] = pointFor(i, 1.3);
-        // 上下の軸はラベルと数値が中心寄りに来て潰れやすいので、数値を出す側へ少し逃がす
+        // 第30弾(甲改): 真上・真下に近い軸は中央揃え、それ以外は左右へ寄せて揃える
+        // （軸数によらず中央付近でラベルが突き合わないようにする）。下側の軸だけ
+        // 外周1.5倍の位置へ逃がす（他は1.3倍）。
+        const angle = angleFor(i);
+        const ux = Math.cos(angle), uy = Math.sin(angle);
+        const nearVert = Math.abs(ux) < 0.25;
+        const bottom = uy > 0.3;
+        const [lx, ly] = pointFor(i, bottom ? 1.5 : 1.3);
+        const anchor = nearVert ? "middle" : (ux > 0 ? "start" : "end");
+        const dx = nearVert ? 0 : (ux > 0 ? -8 : 8);
         const atMax = fracFor(ax) >= 1;
         return (
           <g key={i}>
-            <text x={lx} y={showValues ? ly - 6 : ly} textAnchor="middle" dominantBaseline="middle"
+            <text x={lx + dx} y={showValues ? ly - 6 : ly} textAnchor={anchor} dominantBaseline="middle"
               fontSize={T.size.caption} fontFamily={FONT_DOT} fill={T.color.sub}>{ax.label}</text>
             {showValues && (
-              <text x={lx} y={ly + 7} textAnchor="middle" dominantBaseline="middle"
+              <text x={lx + dx} y={ly + 7} textAnchor={anchor} dominantBaseline="middle"
                 fontSize={T.size.body} fontFamily={FONT_DOT} fill={atMax ? atMaxColor : T.color.text}>
                 {Math.round(ax.value ?? 0)}
               </text>
@@ -56,10 +70,10 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
         );
       })}
       {corner && (
-        // 右下隅。軸ラベルは外周の1.3倍位置に出るので、そこと干渉しない角に置く。
+        // 第30弾: 右下から左下へ移動（下側の軸のラベルとの接触を避けるため）。
         <g>
-          <text x={size} y={size - 9} textAnchor="end" fontSize={T.size.caption} fontFamily={FONT_DOT} fill={T.color.sub}>{corner.label}</text>
-          <text x={size} y={size + 4} textAnchor="end" fontSize={T.size.body} fontFamily={FONT_DOT} fill={T.color.sub}>{corner.value}</text>
+          <text x={-6} y={size + 16} textAnchor="start" fontSize={T.size.caption} fontFamily={FONT_DOT} fill={T.color.sub}>{corner.label}</text>
+          <text x={28} y={size + 16} textAnchor="start" fontSize={T.size.body} fontFamily={FONT_DOT} fill={T.color.sub}>{corner.value}</text>
         </g>
       )}
     </svg>
@@ -72,15 +86,23 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
 // v46(UI): 見出しに「（外周=88）」と書いていたのをやめ、上限の数字を図の右下隅へ控えめに
 // 置いた（CLAUDE.md §7：説明文を足すのではなく、図そのもので伝える／「外周」は実装側の
 // 語彙でユーザーには通じない）。capLabel=falseで数字なしにもできる。
-// 第29弾(判断③): capFor（能力キー→その能力の上限）を渡すと外周が軸ごとの上限になる
-// （脚質の得意能力は外周が遠く、苦手は近い）。省略時は従来どおり全軸共通のcap。
-// 右下隅の「上限」数字は基準値（cap）のまま（ユーザー合意済みの表示設計）。
+// 第29弾(判断③): capFor（能力キー→その能力の上限）を渡すと能力別の上限が使われる。
+// 第30弾(案B): 外周の正規化を「値÷その能力の上限」から「値÷全軸中の最大上限」へ変更した。
+// 前者は得意能力ほど分母も大きくなるため、判断③で作った主武器の突出が図の上で圧縮・
+// 逆転する問題があった（実測：突出が63〜77%に圧縮、5.8%のケースで最強能力と図の最外が
+// 食い違う。devlog/wave30.md参照）。全軸で分母を揃えることで図の形が能力の実際の
+// 大小関係と一致するようにし、各能力の上限は点線シルエット（capRing）として重ねる
+// ——実線と点線の隙間がそのまま伸びしろ、点線の形が脚質の個性になる。
+// capForを渡さない（シーズン側）場合はmaxCap===cap・capRing===nullとなり従来どおり。
 export function AbilityRadarChart({ r, cap = 88, size = 168, color = T.color.accent, capLabel = true, capFor = null }) {
   if (!r) return null;
-  const axes = AB_KEYS.map(k => ({ label: AB_LABEL[k], value: r[k] ?? 0, max: capFor ? capFor(k) : cap }));
+  const caps = capFor ? AB_KEYS.map(k => capFor(k)) : null;
+  const maxCap = caps ? Math.max(...caps) : cap;
+  const axes = AB_KEYS.map(k => ({ label: AB_LABEL[k], value: r[k] ?? 0, max: maxCap }));
+  const capRing = caps ? caps.map(c => c / maxCap) : null;
   return (
-    <RadarChart axes={axes} size={size} color={color} showValues
-      corner={capLabel ? { label: "上限", value: Math.round(cap) } : null} />
+    <RadarChart axes={axes} size={size} color={color} showValues capRing={capRing}
+      corner={capLabel ? { label: "上限", value: Math.round(maxCap) } : null} />
   );
 }
 
