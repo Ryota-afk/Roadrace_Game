@@ -9,7 +9,7 @@ import {
   BASE_VIEW_CLUBHOUSE, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_STATIONS,
   BASE_VIEW_FIXTURES, BASE_VIEW_STAFF, BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_LOOP,
   BASE_VIEW_PROPS, BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_STREAM,
-  BASE_VIEW_OUTDOOR_SPOTS,
+  BASE_VIEW_OUTDOOR_SPOTS, BASE_VIEW_RACK_MOUNT,
 } from "../src/data/baseViewBuildings.js";
 import { routeToStation, workSpotFor, buildOutdoorRoutes } from "../src/domain/season/riderActivity.js";
 import { loopPointAt, loopNearestT, loopDistanceTo, streamCenterlinePts, loopContains } from "../src/domain/season/baseViewLayout.js";
@@ -52,7 +52,7 @@ function segInt(p1, p2, p3, p4) {
     && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9));
 }
 const ctx = {
-  rack: BASE_VIEW_PROPS.bikeRack, clubhouse: CH,
+  rack: BASE_VIEW_RACK_MOUNT, clubhouse: CH,
   corridor: BASE_VIEW_ROOMS.find(r => r.key === "corridor"),
   rooms: BASE_VIEW_ROOMS, partitions: BASE_VIEW_PARTITIONS,
   stations: BASE_VIEW_STATIONS, clutter: BASE_VIEW_FIXTURES,
@@ -100,7 +100,7 @@ for (const s of BASE_VIEW_STATIONS) {
 }
 
 // 屋外: コース最寄り点→ラック（乗り入れ）と ラック→玄関前→敷居（徒歩）
-const rack = BASE_VIEW_PROPS.bikeRack;
+const rack = BASE_VIEW_RACK_MOUNT;
 const nearT = loopNearestT(BASE_VIEW_LOOP, rack);
 const nearPt = loopPointAt(BASE_VIEW_LOOP, nearT);
 const frontL = CH.l - CH.hl;
@@ -197,34 +197,60 @@ function crossingCount(route, samplesPerSeg = 40) {
   }
   return count;
 }
+// 第23弾: 屋外ルートがクラブハウスの敷地矩形の内側を通っていないこと。前庭ベンチの
+// 旧中継点(5.1,0.2)が建物footprint（w:5〜14,l:-4.5〜5.5）の内側を通っており、選手が
+// 壁を貫通して見える不具合の直接原因だった（2026-08ユーザー指摘）。以後の再発を防ぐ
+// 恒久チェック。
+function segEntersRect(a, b, rect, samples = 40) {
+  for (let k = 0; k <= samples; k++) {
+    const t = k / samples;
+    const w = a.w + (b.w - a.w) * t, l = a.l + (b.l - a.l) * t;
+    if (w >= rect.wMin && w <= rect.wMax && l >= rect.lMin && l <= rect.lMax) return { w, l };
+  }
+  return null;
+}
+const CH_RECT = { wMin: CH.w - CH.hw, wMax: CH.w + CH.hw, lMin: CH.l - CH.hl, lMax: CH.l + CH.hl };
+// 湖のほとり(stroll-pond)はインフィールドへの縦横断で1回コースを跨ぐ。ジムも同様に1回。
+// それ以外（ベンチ・西外周散歩・小川のほとり）はコース非横断が期待値。
+const EXPECTED_CROSSINGS = { gym: 1, "stroll-pond": 1 };
 const outdoorRoutes = buildOutdoorRoutes(rack, BASE_VIEW_OUTDOOR_SPOTS, 5).routes;
 for (const [destKey, route] of Object.entries(outdoorRoutes)) {
   const endSpot = route[route.length - 1];
-  const spotDef = BASE_VIEW_OUTDOOR_SPOTS.find(s => destKey === s.key || destKey.startsWith(s.key));
-  // 敷地内に収まっていること
+  // 完全一致を優先し、フォールバックのprefix一致はgym（gym0〜2）専用に限定する。
+  // "stroll".startsWith分の誤爆で"stroll-pond"/"stroll-stream"が"stroll"に化けるのを防ぐ
+  // （第23弾でstroll-*キーを追加した際に発覚）。
+  const spotDef = BASE_VIEW_OUTDOOR_SPOTS.find(s => s.key === destKey)
+    || BASE_VIEW_OUTDOOR_SPOTS.find(s => s.kind === "gym" && destKey.startsWith(s.key));
+  // 敷地内に収まっていること／クラブハウスの敷地矩形の内側を通らないこと
   for (const p of route) {
     if (p.w < BASE_VIEW_GROUND.wMin || p.w > BASE_VIEW_GROUND.wMax
       || p.l < BASE_VIEW_GROUND.lMin || p.l > BASE_VIEW_GROUND.lMax) {
       errs.push(`屋外ルート${destKey}: 中継点(${p.w},${p.l})が敷地の外`);
     }
   }
+  for (let i = 0; i + 1 < route.length; i++) {
+    const hit = segEntersRect(route[i], route[i + 1], CH_RECT);
+    if (hit) errs.push(`屋外ルート${destKey}: 区間${i}がクラブハウスの敷地内(${hit.w.toFixed(2)},${hit.l.toFixed(2)})を通過`);
+  }
   // 小物とのクリアランス（rack・自分自身の行き先は除外）
   for (let i = 0; i + 1 < route.length; i++) {
     for (const o of outdoorObs) {
       const d = distToSeg(o, route[i], route[i + 1]);
-      // ジムの立ち位置スロットは、目的地であるgym装飾そのものの脇に立つのが意図した絵
-      // なので、gym decorだけは自分の行き先(gym0〜2)に限り除外する。
+      // ジムの立ち位置スロットは目的地であるgym装飾そのものの脇に立つのが意図した絵、
+      // 湖のほとりはpond装飾のすぐそばに立つのが意図した絵なので、それぞれ自分の
+      // 行き先に限り対応する装飾だけを除外する。
       const isOwn = Math.hypot(o.w - endSpot.w, o.l - endSpot.l) < 1e-6
         || Math.hypot(o.w - rack.w, o.l - rack.l) < 1e-6
-        || (spotDef && spotDef.kind === "gym" && o.key === "gym");
+        || (spotDef && spotDef.kind === "gym" && o.key === "gym")
+        || (spotDef && spotDef.key === "stroll-pond" && o.key === "pond");
       if (d < CLEAR_OUT && !isOwn) {
         errs.push(`屋外ルート${destKey}: 区間${i}が ${o.key || o.kind}(${o.w},${o.l}) と近接 d=${d.toFixed(2)}`);
       }
     }
   }
-  // コース帯の横断回数（ベンチ・散歩=0、ジム=1）
+  // コース帯の横断回数
   const crosses = crossingCount(route);
-  const expected = spotDef && spotDef.kind === "gym" ? 1 : 0;
+  const expected = (spotDef && EXPECTED_CROSSINGS[spotDef.kind === "gym" ? "gym" : spotDef.key]) || 0;
   if (crosses !== expected) {
     errs.push(`屋外ルート${destKey}: コース横断回数${crosses} (期待値${expected})`);
   }

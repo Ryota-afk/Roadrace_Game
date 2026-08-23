@@ -25,10 +25,14 @@ export function chatterSituation(act) {
   if (act.mode === "work") {
     const key = act.roomKey;
     if (!key) return null;
-    // 第21弾: 屋外の行き先。散歩は終始歩いているため喋らせない（移動中は喋らない方針の
-    // 踏襲）。ベンチ・ジムは個々の席／スロットkeyではなく共通の状況キーにまとめる
-    // （bench-plaza0〜home1・gym0〜2はどれも同じ「ひと休み／筋トレ中」のセリフでよい）。
+    // 第21弾: 屋外の行き先。西側外周の散歩(stroll)は終始歩いているため喋らせない
+    // （移動中は喋らない方針の踏襲）。ベンチ・ジムは個々の席／スロットkeyではなく
+    // 共通の状況キーにまとめる（bench-plaza0〜home1・gym0〜2はどれも同じ
+    // 「ひと休み／筋トレ中」のセリフでよい）。第23弾: 湖・小川のほとりの散歩は
+    // 立ち止まって眺めているため喋らせる（専用の状況キー）。
     if (key === "stroll") return null;
+    if (key === "stroll-pond") return "pond";
+    if (key === "stroll-stream") return "stream";
     if (key.startsWith("bench-")) return "bench";
     if (key.startsWith("gym")) return "gym";
     return key;

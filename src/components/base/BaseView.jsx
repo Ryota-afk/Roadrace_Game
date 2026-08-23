@@ -20,10 +20,11 @@ import {
   BASE_VIEW_PLAZA, BASE_VIEW_GROUND, BASE_VIEW_SEASON_PALETTE, BASE_VIEW_PROPS, BASE_VIEW_STREAM,
   BASE_VIEW_GROUNDS_DECOR, BASE_VIEW_ROOMS, BASE_VIEW_PARTITIONS, BASE_VIEW_PARTITION_HEIGHT,
   BASE_VIEW_LOCKED_ROOMS, BASE_VIEW_FIXTURES, BASE_VIEW_STAFF, BASE_VIEW_OUTDOOR_SPOTS,
+  BASE_VIEW_RACK_MOUNT,
 } from "../../data/baseViewBuildings.js";
 import {
   isoProject, buildingLevels, roomGrade, roomUnlocks, seasonOf,
-  pointInQuad, roomFloorQuad, stationQuad,
+  pointInQuad, roomFloorQuad, stationQuad, partitionSlices,
 } from "../../domain/season/baseViewLayout.js";
 import {
   riderActivityAt, activityFacesLeft, activityDir, activityWobble, isIndoors, routeToStation, workSpotFor,
@@ -35,12 +36,12 @@ import { useIsoCamera } from "../../hooks/useIsoCamera.js";
 import { CAP_COLORS } from "../sprites/IsoRider.jsx";
 import { PixelBike } from "../sprites/pixelBike.jsx";
 import { riderHash01 } from "../../sim/race.js";
-import { Room } from "./Room.jsx";
+import { Room, partitionSliceNode } from "./Room.jsx";
 import { Station } from "./Station.jsx";
 import { Track } from "./Track.jsx";
 import { Ground } from "./Ground.jsx";
 import { Stream } from "./Stream.jsx";
-import { propItems } from "./Props.jsx";
+import { propItems, decorNode } from "./Props.jsx";
 import { fixtureItems } from "./Fixtures.jsx";
 import { PixelPerson } from "../sprites/pixelPerson.jsx";
 import { SpeechBubble } from "./SpeechBubble.jsx";
@@ -117,6 +118,10 @@ function useElementSize() {
 // タップ当たり判定用の四角形。持ち場（小さい・優先）→部屋全体の床（大きい・フォールバック）の順。
 const STATION_QUADS = BASE_VIEW_STATIONS.map(s => ({ key: s.key, quad: stationQuad(s, STATION_HIT_SIZE, BASE_VIEW_PROJ) }));
 const CLUBHOUSE_QUAD = roomFloorQuad(BASE_VIEW_CLUBHOUSE, BASE_VIEW_PROJ);
+// 第23弾: 間仕切り壁を什器・人物と同じ奥行きソート列に混ぜるための短冊分割（静的データ
+// から一度だけ求まるためモジュール読み込み時に計算する。詳細はpartitionSlicesの定義参照）。
+const PARTITION_SLICES = BASE_VIEW_PARTITIONS.flatMap((seg, i) =>
+  partitionSlices(seg, BASE_VIEW_PARTITION_HEIGHT, BASE_VIEW_PROJ).map((sl, j) => ({ ...sl, key: `part${i}_${j}` })));
 // Wave F-2 redo: 空き部屋はSTATION_QUADSに含めない＝タップ判定は従来通り床全体(clubhouse)
 // へフォールバックする（機能が無い部屋なので専用の遷移先を持たない）。
 
@@ -127,7 +132,9 @@ const CLUBHOUSE_QUAD = roomFloorQuad(BASE_VIEW_CLUBHOUSE, BASE_VIEW_PROJ);
 function buildActivityCtx(groundsLv) {
   const base = {
     loop: BASE_VIEW_LOOP,
-    rack: BASE_VIEW_PROPS.bikeRack,
+    // 第23弾: 選手の徒歩導線が目指す点はラックの見た目アンカーではなくBASE_VIEW_RACK_MOUNT
+    // （少し手前にずらした乗降点）。理由はdata/baseViewBuildings.jsのコメント参照。
+    rack: BASE_VIEW_RACK_MOUNT,
     speed: RIDER_SPEED,
     clubhouse: BASE_VIEW_CLUBHOUSE,
     corridor: BASE_VIEW_ROOMS.find(r => r.key === "corridor"),
@@ -148,11 +155,20 @@ function buildActivityCtx(groundsLv) {
   const hasGym = BASE_VIEW_OUTDOOR_SPOTS.some(s => s.kind === "gym" && (groundsLv || 0) >= s.minLevel);
   return { ...base, roomKeys, routes, poses, hasGym };
 }
-// 第20〜21弾: 座る選手の向き（flip）を、部屋の椅子／ベンチの向きに揃えるための静的表。
-const SIT_FLIP = Object.fromEntries([
-  ...BASE_VIEW_FIXTURES.filter(f => f.kind === "chair").map(f => [f.room, !!f.flip]),
-  ...BASE_VIEW_OUTDOOR_SPOTS.filter(s => s.kind === "bench").map(s => [s.key, !!s.flip]),
-]);
+// 第20弾: 座る選手の向き（flip）を、部屋の椅子の向きに揃えるための静的表（据え置き）。
+// 椅子は什器スプライト自体の向き(data.flip)と人物の向きが逆符号の関係にある設計のため
+// このままにする（第23弾で調べたのはベンチのみ・椅子側にバグ報告は無い）。
+const CHAIR_FLIP = Object.fromEntries(
+  BASE_VIEW_FIXTURES.filter(f => f.kind === "chair").map(f => [f.room, !!f.flip]));
+// 第23弾: 屋外ベンチは什器スプライトと人物を「同じ値で」一緒に鏡像反転させる設計に修正した
+// （Props.jsxのbenchNode・data/baseViewBuildings.jsのコメント参照）。旧来の椅子ロジック
+// （符号反転）とは別表にして混同を防ぐ。
+const BENCH_FLIP = Object.fromEntries(
+  BASE_VIEW_OUTDOOR_SPOTS.filter(s => s.kind === "bench").map(s => [s.key, !!s.flip]));
+function sitFlipFor(roomKey) {
+  if (BENCH_FLIP[roomKey] !== undefined) return BENCH_FLIP[roomKey];
+  return !CHAIR_FLIP[roomKey];
+}
 
 export function BaseView({ g, paused, onRoomTap }) {
   const elapsed = useElapsedSeconds(!!paused);
@@ -196,11 +212,10 @@ export function BaseView({ g, paused, onRoomTap }) {
     //  - roller: st_rollerの台の長軸は+l（画面右上がり）＝NE向き・非反転
     //  - sit: 椅子・ベンチの向き（素=SW/左向き、flip=SE/右向き）に人も揃える
     const still = act.pose === "roller" || act.pose === "sit";
-    const chairFlip = act.pose === "sit" && SIT_FLIP[act.roomKey];
     return {
       kind: "rider", r, act, x: p.x, y: p.y, sortY: p.y,
       indoors: isIndoors(act.w, act.l, BASE_VIEW_CLUBHOUSE),
-      flip: still ? (act.pose === "sit" ? !chairFlip : false)
+      flip: still ? (act.pose === "sit" ? sitFlipFor(act.roomKey) : false)
         : activityFacesLeft(r, elapsed, activityCtx, PROJ, riderIndex),
       dir: act.pose === "roller" ? "NE" : activityDir(r, elapsed, activityCtx, PROJ, riderIndex),
       cap: CAP_COLORS[Math.floor(riderHash01(r.id, 17) * CAP_COLORS.length) % CAP_COLORS.length],
@@ -243,8 +258,26 @@ export function BaseView({ g, paused, onRoomTap }) {
   const pondKind = groundsLv >= 5 ? "pond3" : groundsLv >= 3 ? "pond2" : "pond";
   const unlockedDecor = BASE_VIEW_GROUNDS_DECOR.filter(d => groundsLv >= d.minLevel)
     .map(d => (d.kind === "pond" ? { ...d, kind: pondKind } : d));
-  const propRows = propItems(PROJ, { ...BASE_VIEW_PROPS, groundsDecor: unlockedDecor }, palette).map(item => ({ kind: "prop", ...item }));
-  const drawOrder = [clubhouseRow, ...propRows, ...outdoorRiders].sort((a, b) => a.sortY - b.sortY);
+  // 第23弾: ジムは選手が乗る「地面」として扱う（Trackと同じ常設の下地レイヤー）。通常の
+  // painter's sort（什器1点のアンカーyと人物1点のyの比較）だと、マット手前半分に立つ選手の
+  // sortYがアンカーより小さくなり得て「選手がジムの下敷きに見える」原因になっていた
+  // （2026-08ユーザー指摘）。sortY比較の対象から外し、常に選手より先（下）に描く。
+  const gymDecor = unlockedDecor.find(d => d.kind === "gym");
+  const otherDecor = unlockedDecor.filter(d => d.kind !== "gym");
+  const propRows = propItems(PROJ, { ...BASE_VIEW_PROPS, groundsDecor: otherDecor }, palette).map(item => ({ kind: "prop", ...item }));
+  // 第23弾: 前面帯ルール。クラブハウスの敷地矩形より南（l<frontL）または東（w>frontWMax）に
+  // ある要素は、建物全体の1点sortY（footprintの最も手前の角）との単純比較では正しい前後関係に
+  // ならないことがある（実際にはその角より奥にいても、建物の外側＝手前にいるのは確定している
+  // のに埋もれてしまう）。チームカー・入館直前の選手・玄関前の床などで発生していた不具合
+  // （2026-08ユーザー指摘の複数症状）の根本原因。この帯に入る要素は必ずclubhouseRowより
+  // 手前へ描く（帯の中での相対順序は元のsortYを保つ）。
+  const FRONT_L = BASE_VIEW_CLUBHOUSE.l - BASE_VIEW_CLUBHOUSE.hl;
+  const FRONT_W_MAX = BASE_VIEW_CLUBHOUSE.w + BASE_VIEW_CLUBHOUSE.hw;
+  const inFrontBand = (w, l) => l < FRONT_L || w > FRONT_W_MAX;
+  const frontBandSortY = (w, l, rawY) => (inFrontBand(w, l) ? clubhouseRow.sortY + 1 + rawY * 1e-4 : rawY);
+  const propRowsAdj = propRows.map(item => ({ ...item, sortY: frontBandSortY(item.w, item.l, item.sortY) }));
+  const outdoorRidersAdj = outdoorRiders.map(item => ({ ...item, sortY: frontBandSortY(item.act.w, item.act.l, item.sortY) }));
+  const drawOrder = [clubhouseRow, ...propRowsAdj, ...outdoorRidersAdj].sort((a, b) => a.sortY - b.sortY);
   const landQuad = LAND_QUAD_WORLD.map(p => isoProject(p.w, p.l, 0, PROJ));
 
   return (
@@ -277,6 +310,8 @@ export function BaseView({ g, paused, onRoomTap }) {
                 <Stream proj={PROJ} stream={BASE_VIEW_STREAM} palette={palette} />
               </g>
               <Track proj={PROJ} loop={BASE_VIEW_LOOP} rack={BASE_VIEW_PROPS.bikeRack} />
+              {/* 第23弾: ジムは選手より必ず奥（下）に描く常設の地面レイヤー（詳細は上のコメント）。 */}
+              {gymDecor && decorNode(gymDecor.kind, gymDecor.w, gymDecor.l, PROJ, gymDecor.key)}
               {drawOrder.map((item, i) => {
                 if (item.kind === "clubhouse") {
                   // 第20弾: 屋内の持ち場・納戸・什器・人物は1本のリストにまとめ、接地点の
@@ -287,6 +322,11 @@ export function BaseView({ g, paused, onRoomTap }) {
                   const py = (w, l) => isoProject(w, l, 0, PROJ).y;
                   const trainingSt = BASE_VIEW_STATIONS.find(s => s.key === "training");
                   const indoorItems = [
+                    // 第23弾: 間仕切り壁の短冊。什器・人物と同じyで比較することで、壁のどの
+                    // 区間が手前/奥かを近似し「什器が壁の前に出て見える」不具合を解消する
+                    // （詳細はPARTITION_SLICESの定義コメント参照）。
+                    ...PARTITION_SLICES.map(sl => ({ y: sl.y,
+                      node: partitionSliceNode(sl, BASE_VIEW_CLUBHOUSE.wallLight, BASE_VIEW_CLUBHOUSE.wallDark, sl.key) })),
                     ...BASE_VIEW_STATIONS.map(s => ({ y: py(s.w, s.l),
                       node: <Station key={s.key} s={s} proj={PROJ} selected={tappedKey === s.key} grade={roomGrades[s.room]} /> })),
                     // 条件解禁の奥3部屋。未解禁は納戸（st_empty）を描き、解禁済みは什器を描く。
@@ -318,7 +358,7 @@ export function BaseView({ g, paused, onRoomTap }) {
                   return (
                     <g key="clubhouse">
                       <Room b={BASE_VIEW_CLUBHOUSE} snow={snow} proj={PROJ} selected={tappedKey === "clubhouse"}
-                        rooms={BASE_VIEW_ROOMS} partitions={BASE_VIEW_PARTITIONS} partitionHeight={BASE_VIEW_PARTITION_HEIGHT} grades={roomGrades} />
+                        rooms={BASE_VIEW_ROOMS} grades={roomGrades} />
                       {indoorItems.map((it, k) => <React.Fragment key={`ii${k}`}>{it.node}</React.Fragment>)}
                     </g>
                   );

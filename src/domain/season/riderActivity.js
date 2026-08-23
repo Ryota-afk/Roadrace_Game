@@ -141,6 +141,9 @@ const OUTDOOR_CATEGORY_WEIGHT = {
   stroll: () => 1.0,
 };
 const BENCH_KEYS = ["bench-plaza0", "bench-plaza1", "bench-home0", "bench-home1"];
+// 第23弾: 散歩は3種類（西側外周・湖のほとり・小川のほとり）をベンチと同じ方式で
+// riderIndex+cycleIndexのローテーションで振り分ける。
+const STROLL_KEYS = ["stroll", "stroll-pond", "stroll-stream"];
 
 // 行き先の決定（ユーザー選択：屋外の行き先も含めゲーム状態に連動させる）。gは読み取りのみ
 // （状態を変更しない）。riderIndex（ロースター内の並び順）はベンチ・ジムの席割り当てに使う
@@ -159,7 +162,8 @@ export function destinationFor(rider, riderIndex, cycleIndex, ctx) {
   }
   if (category === "bench") return BENCH_KEYS[(riderIndex + cycleIndex) % BENCH_KEYS.length];
   if (category === "gym") return `gym${(riderIndex + cycleIndex) % 3}`;
-  return category; // room key（training/mechanic/medical/scout）またはstroll
+  if (category === "stroll") return STROLL_KEYS[(riderIndex + cycleIndex) % STROLL_KEYS.length];
+  return category; // room key（training/mechanic/medical/scout）
 }
 
 // 第21弾: BASE_VIEW_OUTDOOR_SPOTS（ベンチ・ジム・散歩）から、ラックを起点とする

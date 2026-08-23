@@ -52,9 +52,14 @@ export function treeSpriteNode({ x, y, palette, key }) {
     V: shade(palette.treeLeaf, 1.18),
     S: palette.snow || "#ffffff",
   };
+  // 第23弾: pixelObjectNodeの影の自動配置は「アンカー=箱の手前角」を前提に中心へ寄せる式
+  // （scy=-13*(hw+hl)）だが、木のアンカーは幹の根元（接地点そのもの）なので、この式のままだと
+  // 影が根元からさらに約10px奥（画面上でより上）へずれて浮いて見えていた（2026-08ユーザー
+  // 指摘「木の影の位置がおかしい。もう少し下にするべき」）。shadowDyで打ち消し、影を
+  // アンカー（根元）の真下に戻す。
   return pixelObjectNode({
     x, y, data, legend, key,
     cacheKey: `objtree-${palette.treeLeaf}-${palette.snow ? "s" : "n"}`,
-    shadowW: 0.38, shadowL: 0.38,
+    shadowW: 0.38, shadowL: 0.38, shadowDy: 10,
   });
 }

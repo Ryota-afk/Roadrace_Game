@@ -77,3 +77,77 @@ sortY = inFront(item.w, item.l) ? CLUBHOUSE_SORT_Y + 1 + rawY * 1e-3 : rawY;
    Playwright（入館の瞬間・ジム・ラック・ベンチ4脚・チームカー・池・小川の各シーン目視＋
    pageerrorゼロ）／ビルド
 9. DEVLOG §54＋本ファイルへ実施記録→commit/push
+
+## 9. 実施記録（2026-08）
+
+設計どおり§2〜§4を実装。実装中に発覚した設計との差分・追加のバグ修正は以下。
+
+### 前面帯ルール（§2）
+設計どおり実装。`BASE_VIEW_CLUBHOUSE`のfootprint境界(l<frontL または w>frontWMax)に入る
+`propRows`・`outdoorRiders`のsortYを`clubhouseRow.sortY+1+rawY*1e-4`へ置き換える。
+実機確認：チームカー・玄関前の選手が常にクラブハウスの床より手前に描かれることを確認
+（前後関係の逆転なし）。
+
+### ジムの地面レイヤー化＋スロット再配置（§1項4・6・7）
+什器データ（`sprites/pixelObjectData.js`のgym.rows、80×65セル）を実測し、接地マット
+（手前の菱形・row38〜64が開放領域）の内側に3スロットを再配置：
+`{-4.35,-2.35} {-4.9,-2.6} {-4.85,-2.1}`（初期案の3点目`{-4.7,-2.1}`はgym0との間隔が
+0.43しかなく検証器の0.5規則に抵触したため西へ寄せて0.56まで拡大）。ジムの什器自体は
+`unlockedDecor`から分離し`<Track>`直後に常設の地面レイヤーとして描画、選手との
+sortY比較から完全に除外した。
+
+### 前庭ベンチのルート引き直し（§1項1、新設の建物footprint交差チェック）
+旧中継点(5.1,0.2)は建物footprint内を通っていた（実測確認）。bench-plaza0は東寄り
+コリドー(w=4.7)、bench-plaza1はbench0との間隔を確保するため西寄りコリドー(w=2.9)を
+別に通す設計へ変更（当初は東側だけで両方処理する案を検討したが、bench0自体が
+壁からわずか0.7しか離れておらず東側での回り込みクリアランスが物理的に取れないと
+判明したため）。検証器に「屋外ルート×クラブハウスfootprint交差=0」を恒久チェックとして追加。
+
+### ベンチのflip（§1項5）
+什器スプライト（bench, 40×38セル）を実測し、素の向き（flip無し）は「背もたれ=画面上左、
+座面の開口=画面下右」と確定。旧実装は什器側を常に無反転で描画しつつ人物側だけ
+`!chairFlip`（bench-plaza0/1のflip:falseに対して実際の描画flipはtrue）で反転しており、
+什器と人物の向きが食い違っていた。什器と人物を**同じ値**で一緒に反転させる設計へ
+修正（`Props.jsx`のbenchNode・`data/baseViewBuildings.js`のbenches配列にflipを追加）。
+椅子（屋内）は别の実装のままで据え置き（バグ報告なし・混同を避けるため別テーブル化）。
+
+### 間仕切り壁のソート統合（§1項8、道具箱の実例）
+`domain/season/baseViewLayout.js`に`partitionSlices()`を新設（1本の壁を約1ユニットの
+短冊に分割し、短冊ごとの中点screen yを返す純関数）。`Room.jsx`から壁の描画を撤去し
+（`partitionSliceNode()`を新設してBaseView側へ委譲）、`BaseView.jsx`の`indoorItems`
+ソート列に混ぜた。什器のみ後に描く旧実装（mechanic室のtoolbox(5.6,-0.3)が
+training/mechanic間の壁(l=-0.9、扉なし）より手前にあるのに壁が常に後に描かれ隠せない
+実例）を解消。
+
+### ラックの乗降点（§1項2・3・4の一部）
+`BASE_VIEW_RACK_MOUNT={w:5.2,l:-5.65}`を新設し、選手の徒歩導線（walkIn/walkOut・
+approach/depart）が目指す点をラックの見た目アンカーから0.25分離した。ラック自体の
+アンカー(5.2,-5.4)と選手の乗降点が同一座標だとsortYが同値になり奥行き比較が不定に
+なる（ラックの層が選手より前に来る不具合）ため。`tools/verify_baseview.mjs`も
+同じ定数を参照するよう更新。
+
+### 木の影（§1項10）
+`sprites/pixelObjectData.js`のtree.rows（46×55セル）を実測し、アンカー(23,54)は
+幹の根元（接地点そのもの）と確定。`pixelObjectNode`の影自動配置式
+（`scy=-13*(hw+hl)`、アンカー=箱の手前角前提）はこの前提と食い違い、影が根元から
+約9.9px奥へずれていた。`shadowDy=10`で打ち消し、影を根元の真下へ戻した。
+
+### 散歩3変種・セリフ追加（§3・§4）
+設計どおり実装。stroll-pondは湖沿いの装飾(pond)自身とのクリアランスを湖のほとり限定で
+除外する検証器の例外を追加（ジムと同じ手法）。stroll-streamのスポット座標は
+当初案(-8.4,4.2)が小川の中心線から0.23しか離れておらず水面に立って見えるおそれが
+あったため(-8.3,4.2)（中心線から0.67）へ微調整。
+
+### 検証結果
+- `node tools/verify_baseview.mjs`：ゼロ違反（新設の建物footprint交差チェック・
+  横断回数の期待値テーブル拡張を含む）。
+- Node：`data/baseViewChatter.js`の全`when`（ride/training/mechanic/medical/scout/
+  bench/gym/pond/stream）でpersona:null&&state:nullのフォールバック行が存在することを確認。
+- Playwright：16人ロースター・敷地整備Lv5で160秒間DOM実座標を監視し、
+  bench-home1・bench-plaza0・gym0〜2・stroll-pondの6行き先を実座標で確認
+  （残るbench-plaza1・bench-home0・stroll・stroll-streamは低頻度の抽選のため
+  今回のサンプル時間内には非出現。ルート自体はverify_baseview.mjsで別途機械検証済み）。
+  全シナリオでpageerrorゼロ。
+- 目視：チームカー（前庭）・ジム（マット上に選手が立つ）・木の影（根元の真下）・
+  ベンチの着席（bench-home1で背もたれとの向き関係が正しいことを確認）をスクリーンショットで確認。
+- `npm run build`成功。

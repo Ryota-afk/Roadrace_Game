@@ -9,7 +9,7 @@
 // 一致）。これはWave D2で修正した可視面選択(front=Y最大)の鏡像であり、
 // `domain/season/baseViewLayout.js`の`backFacePair()`が同じ頂点集合から求める。
 import React from "react";
-import { isoBoxFaces, backFacePair, visibleFacePair, wallPoint, wallPanel, isoProject } from "../../domain/season/baseViewLayout.js";
+import { isoBoxFaces, backFacePair, visibleFacePair, wallPoint, isoProject } from "../../domain/season/baseViewLayout.js";
 import { ROOM_GRADE_RUG_COLOR, ROOM_GRADE_SHOWS_GROUT, ROOM_GRADE_SHOWS_RUG, ROOM_GRADE_SHOWS_LIGHT } from "../../data/baseViewRoomGrade.js";
 
 const poly = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
@@ -57,10 +57,10 @@ function RoomGradeOverlay({ r, proj, grade }) {
 }
 
 // Wave F-2 redo: roomsを渡すと床を（玄関→廊下→各部屋という現実的な間取りの）部屋ごとに
-// 色分けし、partitionsで間仕切り壁（廊下側は扉の隙間を開けてある区間だけ描く＝隙間には
-// 何も描かない）を描く。渡さない呼び出し元（テスト・将来の別用途）は従来通り単色の床
-// 1枚にフォールバックする。
-export function Room({ b, proj, snow, selected, rooms, partitions, partitionHeight, grades }) {
+// 色分けする。渡さない呼び出し元（テスト・将来の別用途）は従来通り単色の床1枚に
+// フォールバックする。間仕切り壁は第23弾でBaseView.jsx側（什器・人物と同じ奥行き
+// ソート列）へ移した（PartitionSliceNode参照）ためここでは描かない。
+export function Room({ b, proj, snow, selected, rooms, grades }) {
   const f = isoBoxFaces(b.w, b.l, b.hw, b.hl, b.wallHeight, proj);
   const { corners, top } = f;
   const { back, left, right } = backFacePair(corners);
@@ -112,18 +112,22 @@ export function Room({ b, proj, snow, selected, rooms, partitions, partitionHeig
       <polygon points={poly([botLeft, botBack, { x: botBack.x, y: botBack.y - 3 }, { x: botLeft.x, y: botLeft.y - 3 }])} fill="#00000022" />
       <polygon points={poly([botBack, botRight, { x: botRight.x, y: botRight.y - 3 }, { x: botBack.x, y: botBack.y - 3 }])} fill="#00000022" />
 
-      {/* Wave F-2 redo: 部屋を隔てる間仕切り壁（外壁より低い＝上から中が見渡せる高さに留める）。
-          廊下側の壁は扉の隙間の区間だけpartitionsから抜けているため、そこには何も描かれず
-          開口部になる。 */}
-      {partitions && partitions.map((seg, i) => {
-        const wp = wallPanel(seg.w1, seg.l1, seg.w2, seg.l2, partitionHeight, proj);
-        const vertical = Math.abs(seg.w1 - seg.w2) < 1e-6; // w一定＝l方向に伸びる縦の壁
-        const shade = vertical ? b.wallDark : b.wallLight;
-        return <polygon key={`part${i}`} points={poly([wp.botA, wp.botB, wp.topB, wp.topA])} fill={shade} opacity="0.85" stroke="#00000030" strokeWidth="0.5" />;
-      })}
+      {/* 第23弾: 間仕切り壁はここでは描かない。BaseView.jsx側で什器・人物と同じ奥行き
+          ソート列（短冊分割・partitionSlices）に混ぜて描く（下記の「間仕切り壁の短冊描画」
+          コメント・PartitionSliceNode参照）。什器より必ず後に描く旧実装は、壁が実際には
+          手前にあるケースで什器を覆い隠せず「什器が壁の前に出て見える」原因だった
+          （2026-08ユーザー指摘）。 */}
 
       {/* タップ領域を視覚的に示す枠線（選択中のみ） */}
       {selected && <polygon points={poly([corners.N, corners.E, corners.S, corners.W])} fill="none" stroke="#ffffff" strokeWidth="1.4" opacity="0.5" />}
     </g>
   );
+}
+
+// 第23弾: 間仕切り壁1短冊分の描画（domain/season/baseViewLayout.jsのpartitionSlicesが
+// 求めた1切片をBaseView.jsxの奥行きソート列にそのまま混ぜられる形で返す）。
+export function partitionSliceNode(slice, wallLight, wallDark, key) {
+  const shade = slice.vertical ? wallDark : wallLight;
+  const { botA, botB, topA, topB } = slice.wp;
+  return <polygon key={key} points={poly([botA, botB, topB, topA])} fill={shade} opacity="0.85" stroke="#00000030" strokeWidth="0.5" />;
 }

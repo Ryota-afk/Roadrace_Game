@@ -86,6 +86,29 @@ export function wallPanel(w1, l1, w2, l2, height, proj) {
   return { botA, botB, topA, topB };
 }
 
+// 第23弾: 間仕切り壁を什器・人物と同じ奥行きソート列に混ぜるため、1本の壁線分を概ね
+// unitLenユニットずつの短冊に分割する。壁を「什器と同じく1点のアンカーyで比較する」
+// 近似のまま1本の長い線分として扱うと、壁のどちらか一方の端でしか正しい前後関係に
+// ならない（例：手前の什器と奥の什器の間を貫く壁は、区間全体を1つのyで代表させると
+// 必ずどちらかの什器との前後関係を間違える）。短冊単位に分けることで、区間ごとの
+// 奥行き比較がその区間の実際の位置に近似し、この種の食い違いが解消する
+// （2026-08ユーザー指摘「道具箱のレイヤーが手前にあるはずの壁よりも前に来ている」）。
+export function partitionSlices(seg, height, proj, unitLen = 1) {
+  const vertical = Math.abs(seg.w1 - seg.w2) < 1e-6; // w一定＝l方向に伸びる壁
+  const len = vertical ? Math.abs(seg.l2 - seg.l1) : Math.abs(seg.w2 - seg.w1);
+  const n = Math.max(1, Math.round(len / unitLen));
+  const slices = [];
+  for (let i = 0; i < n; i++) {
+    const u0 = i / n, u1 = (i + 1) / n;
+    const w1 = seg.w1 + (seg.w2 - seg.w1) * u0, l1 = seg.l1 + (seg.l2 - seg.l1) * u0;
+    const w2 = seg.w1 + (seg.w2 - seg.w1) * u1, l2 = seg.l1 + (seg.l2 - seg.l1) * u1;
+    const wp = wallPanel(w1, l1, w2, l2, height, proj);
+    const y = isoProject((w1 + w2) / 2, (l1 + l2) / 2, 0, proj).y;
+    slices.push({ y, vertical, wp });
+  }
+  return slices;
+}
+
 // 立方体（world座標のダイヤ形footprint＋高さ）の可視2面＋天面の頂点をまとめて返す共通関数。
 // 建物・チームカー・ベンチ・自転車ラックなど「箱状のもの」は全てこれを使って描くことで、
 // 必ずアイソメ格子に乗る（Wave Dでは小物をスクリーン座標の矩形で描いており、斜めの角度が

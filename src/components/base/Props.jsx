@@ -18,9 +18,12 @@ function treeNode(w, l, proj, palette, key) {
 
 
 // 第19弾: ベンチ・外灯・駐輪ラックも参考画像から抽出したドット絵へ差し替え。
-function benchNode(w, l, proj, key) {
+// 第23弾: flipはベンチの什器スプライトと座る選手を同じ値で一緒に鏡像反転させるための
+// 共通フィールド（BASE_VIEW_OUTDOOR_SPOTS参照）。什器だけが常に無反転で人物側だけ逆符号で
+// 反転していた旧実装が「ベンチと座る向きの不整合」の原因だった（2026-08ユーザー指摘）。
+function benchNode(w, l, proj, key, flip) {
   const p = isoProject(w, l, 0, proj);
-  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.bench, key, cacheKey: "obj-bench" });
+  return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES.bench, key, cacheKey: "obj-bench", flip: !!flip });
 }
 
 function lampNode(w, l, proj, key) {
@@ -50,17 +53,17 @@ function teamCarNode(w, l, proj, key) {
 // 屋外装飾。第19弾でreference/F.pngから抽出したドット絵へ全面差し替え（手続きSVG全廃）。
 // 池・生け垣・ジム・アーチ・噴水はいずれも接地面いっぱいの造形なので足元の影楕円は敷かない
 // （noShadow。敷くと水面・土台の下に黒い縁が覗いて汚れて見える）。
-function decorNode(kind, w, l, proj, key) {
+export function decorNode(kind, w, l, proj, key) {
   const p = isoProject(w, l, 0, proj);
   return pixelObjectNode({ x: p.x, y: p.y, data: OBJ_SPRITES[kind], key, cacheKey: `obj-${kind}`, noShadow: true });
 }
 
 export function propItems(proj, props, palette) {
   const items = [];
-  const push = (w, l, render) => { items.push({ sortY: isoProject(w, l, 0, proj).y, node: render() }); };
+  const push = (w, l, render) => { items.push({ sortY: isoProject(w, l, 0, proj).y, w, l, node: render() }); };
   (props.backTrees || []).forEach((t, i) => push(t.w, t.l, () => treeNode(t.w, t.l, proj, palette, `btree${i}`)));
   (props.trees || []).forEach((t, i) => push(t.w, t.l, () => treeNode(t.w, t.l, proj, palette, `tree${i}`)));
-  (props.benches || []).forEach((b, i) => push(b.w, b.l, () => benchNode(b.w, b.l, proj, `bench${i}`)));
+  (props.benches || []).forEach((b, i) => push(b.w, b.l, () => benchNode(b.w, b.l, proj, `bench${i}`, b.flip)));
   (props.lamps || []).forEach((l, i) => push(l.w, l.l, () => lampNode(l.w, l.l, proj, `lamp${i}`)));
   if (props.bikeRack) push(props.bikeRack.w, props.bikeRack.l, () => bikeRackNode(props.bikeRack.w, props.bikeRack.l, proj, "rack"));
   if (props.teamCar) push(props.teamCar.w, props.teamCar.l, () => teamCarNode(props.teamCar.w, props.teamCar.l, proj, "car"));
