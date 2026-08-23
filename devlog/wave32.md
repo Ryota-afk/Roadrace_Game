@@ -714,3 +714,154 @@ Artifact「引退画面の作り直し」で現状／案A／案Bを実データ�
   破綻し、弟子は2行に折り返している）。
 
 **状態**：ユーザーの選択待ち。合意後に実装（Sonnetへ切り替え）。
+
+## B-4 第2バッチ 合意・実装仕様（2026-08確定・Sonnet向け）
+
+**合意**：画面1＝案A／画面2＝案B／画面3＝案A（ユーザー選択）。モックの正本は
+`scratchpad/b4b2_mock.html`（git外・実フォントCheckpointPeriod-jis埋め込み済み）。
+以下が実装の正本。対象ファイルは`src/screens/mylife/career.jsx`＋`src/domain/mylife/career.js`。
+
+### 0. 先に直す不具合2件（両画面共通）
+
+- **`career.jsx:42`「全盛期」**：`info.joinOvr`はデビュー時の総合力。ラベルごと廃止し、
+  案Aの「ピーク」へ置換する（下記1-2）。`joinOvr`自体はコントローラ側の判定で使い続ける
+  ため削除しない。
+- **`career.jsx:213`「+-41」**：`+{p.cp}` を `{p.cp >= 0 ? "+" : ""}{p.cp}` にする。
+
+### 1. 画面1 引退勧告（mylife_retire_advice）＝案A
+
+現行の`career.jsx:21〜54`を差し替える。上から順に：
+
+1. **見出し（1行のみ）**：`{info.age}歳・進退を決める` を`T.size.title`（20）。
+   marginBottom `T.space.md`。
+   - **削除**：caption「契約更改／チームからの引退勧告」（`:28`）と
+     caption「まだやれる脚だ／全盛期の力に陰りが見える」（`:30`）。どちらも監督のセリフが
+     同じ内容を言っている。declining の別は**セリフの分岐だけ**が担う（見出しは共通文言）。
+2. **判断材料3列**（`display:flex; gap:T.space.sm`・各列 `flex:1`・`background:T.color.surface`・
+   `padding:10px 8px`・`textAlign:center`）。上段＝ラベル`T.size.micro`(8) sub、
+   下段＝値`T.size.title`(20)。marginBottom `T.space.md`。
+   | 列 | ラベル | 値 | 取得元 | 色 |
+   |---|---|---|---|---|
+   | 1 | 総合力 | `info.ovr` | `adviceInfo.ovr` | `T.color.accent` |
+   | 2 | ピーク | `peakOvr` | `Math.max(...(ml.careerHistory||[]).map(h => h.ovr || 0), info.ovr)` | `T.color.text` |
+   | 3 | 最高世界ランク | `ml.worldRankBest`＋小さく「位」 | `ml.worldRankBest` | `T.color.text` |
+   - **empty state**：`ml.worldRankBest == null` のとき値は `—`（「位」は出さない）。
+     `careerHistory`が空でも`info.ovr`が入るのでピークは必ず出る。
+3. **監督パネル**：現行`:32〜39`をそのまま（`surface`／caption sub「監督」／`T.size.body`・
+   `lineHeight:1.8`のセリフ／declining分岐も現行の2文のまま）。marginBottom `T.space.md`。
+4. **選択肢3枚**。`career.jsx`内にローカル部品`ChoiceCard`を定義して使う
+   （現状ここでしか使わないため`kit.jsx`へは出さない。2箇所目が出たら昇格を検討）。
+   - `ChoiceCard({ title, note, onClick, primary, danger })`：`<button>`・`width:100%`・
+     `textAlign:left`・`border:none`・`padding:T.space.md`・`marginBottom:T.space.sm`・
+     `fontFamily:FONT_DOT`・`cursor:pointer`。
+     背景＝`primary ? T.color.action : T.color.surfaceUp`。
+     1行目 title＝`T.size.head`(16)、色は `primary ? T.color.bg : (danger ? T.color.bad : T.color.text)`。
+     2行目 note＝`T.size.caption`(10)、色は `primary ? T.color.bg : T.color.sub`、`marginTop:2`、`opacity: primary ? 0.75 : 1`。
+   - 並び（上から）：
+
+     | title | note | onClick | 条件 |
+     |---|---|---|---|
+     | 現役を続ける | 来季も同じように走ります | `mlRetireAdviceContinue` | 常時（`primary`） |
+     | 役割を縮小して続ける | レースでの負担が減り、長く走れます | `mlRetireAdviceReduceRole` | `!info.reducedRole` のときのみ |
+     | 今季限りで引退する | キャリアを振り返る画面へ進みます | `askConfirm(...)` 現行`:51`のまま | 常時（`danger`） |
+   - **削除**：`:48`の浮いた注釈「レースの負荷が15%下がり、選手寿命が延びます」
+     （カード内のnoteへ移し、開発語彙の「レースの負荷」「選手寿命」を平易化した）。
+   - **削除**：`Section`「いまの力」と`Item`2行（`:40〜43`）。上の3列に置き換わる。
+
+### 2. 画面2 引退セレモニー（mylife_retired）＝案B
+
+現行`career.jsx:57〜226`を部分改修する。**セクションの数と並びは現行のまま**で、
+以下の6点だけを変える。
+
+1. **ヒーロー**（`:73〜81`）：内側の区切り（`marginTop:lg; paddingTop:md; borderTop`のdiv）を
+   やめ、1つの面に流す。caption「この選手の生き様」（`:77`）を**削除**（直下に称号が来るので自明）。
+   並びは 引退の年・年齢 caption sub ／ `r.name` title(20) ／ `arch.title` head(16) accent ／
+   `arch.desc` caption sub（`lineHeight:1.7`）。各行の間隔は`T.space.sm`。
+2. **生涯成績3列**をヒーロー直下に**新設**（画面1と同じ3列の作り。ラベル`micro`(8) sub／
+   値`T.size.title`(20)）。marginBottom `T.space.md`。
+   | 列 | ラベル | 値 | 取得元 | 色 |
+   |---|---|---|---|---|
+   | 1 | 出走 | `races.length` | `r.raceLog`（既存の`races`） | `T.color.text` |
+   | 2 | 優勝 | `wins` | 既存の`wins` | `T.color.accent` |
+   | 3 | 表彰台 | `podiums` | 既存の`podiums` | `T.color.text` |
+   - **empty state**：0でも同じ形で「0」を出す（セクションごと消さない）。
+3. **「歩んだ道のり」を3行に縮小**（`:97〜104`）：`出走`・`優勝`・`表彰台`の3つの`Item`を
+   **削除**（上の3列へ移動）。残すのは`到達クラス`（`first`になる）・`最高総合力`・
+   `最高世界ランク`の3行で、条件と`detail`は現行のまま。
+4. **「成し遂げたこと」を2列化**（`:106〜109`）：`Item`の縦積みをやめ、
+   `display:grid; gridTemplateColumns:1fr 1fr; gap:2px ${T.space.md}px` の中に
+   1件＝`fontSize:T.size.label`(11)・`padding:5px 0`・`borderTop:1px solid T.color.rule` の
+   セルを並べる。`Section`の`right`は現行どおり `${achieved.length} / ${ML_ACHIEVEMENTS.length}`。
+   - **empty state**：`achieved.length === 0` は現行の1行（`:108`のItem／
+     「心に残る一勝は無かったが、走り続けた日々そのものが記録だ。」）をそのまま使う（2列にしない）。
+   - `ml.retiredMissedOpen`の折りたたみ（`:110〜121`）は現行のまま。中身のItem縦積みも現行のまま。
+5. **ラストレースのレース名から自分の名前を外す**（`:88`）：レース名は
+   `${player.name} 引退記念ラストレース`（`controllers/mylife/raceStart.js:26`）で生成され、
+   すぐ上のヒーローに同じ名前が出ているため重複している。表示時に**既知の接頭辞だけ**を外す：
+   `(ml.lastRaceResult.name || "").startsWith(r.name + " ") ? ml.lastRaceResult.name.slice(r.name.length + 1) : ml.lastRaceResult.name`。
+   （生成側は他でも使うため変更しない。）
+6. **キャリアの名場面の年の重複を断つ**（`domain/mylife/career.js`の`mlCareerTimeline`）：
+   重複の出所は`career.jsx`ではなく**レース名そのもの**。モニュメントのレース名は
+   `domain/mylife/race.js:22`で `` `${year}年目 ${mon.name}` `` と年を焼き込んで作られており、
+   一覧の左に出る「11年目10月」と本文の「11年目 山岳の古典《秋の女王》」で二重になる。
+   `raceLog`は`name`しか保存していない（`controllers/mylife/result.js:76`。`monumentName`は
+   入っていない＝既存セーブも直せる形にする必要がある）ため、`mlCareerTimeline`内で
+   表示名を作るときに先頭の年を落とす：
+   ```js
+   const shortName = (n) => String(n || "").replace(/^\d+年目\s*/, "");
+   ```
+   を定義し、`log.forEach`内で`e.name`を参照している**5箇所すべて**（`monument`優勝／
+   `isBig`優勝／通常優勝（初勝利含む）／`monument`表彰台／`isBig`表彰台／初表彰台／
+   `isBig`の11位以下）を`shortName(e.name)`へ置換する。
+   - **置換しない**：「`${prev}年目から${wy - prev}年間、勝利から遠ざかった`」の2箇所
+     （こちらの「N年目」は本文として正しい）。
+   - 通常のレース名に年は付かないため、この置換で壊れるものは無い。
+
+**今回やらないもの（ユーザー未承認・次の機会に候補提示する）**：`:197〜198`の自伝の
+説明文2行と`:219`「これから」／`:221`の説明文。案Bの提示範囲外だったため触らない。
+
+### 3. 画面3 殿堂（mylife_legends）＝案A
+
+現行`career.jsx:447〜`を改修する。
+
+1. **見出し行**：`殿堂` title(20) を左、右端に `{legends.length}名` を caption sub。
+   （`display:flex; justifyContent:space-between; alignItems:baseline`）
+2. **説明を1行に**（`:455〜457`）：3行の長文を
+   **「引退した選手は、次のキャリアで師匠や親に選べます。」** の1行に置換
+   （`T.size.caption`・sub・marginBottom `T.space.md`）。件数は見出し右へ移したので文から外す。
+3. **ボタンを3つ並べる**（`:460〜463`）：`系譜ツリー`／`因子図鑑`に加えて
+   **`配合の相性表`を3つ目のボタン**にする（`flex:1`ずつの`QuietBtn`）。
+   - `配合の相性表`は遷移ではなく**その場で開閉**（`ml.showNicks`のトグル。現行の挙動を維持）。
+     開いているあいだはボタンの文字色を`T.color.action`にして選択中を示す。
+   - **削除**：`:465〜468`の開閉トグル行（`配合の相性表` ＋ `開く ▾`）と、
+     `:470`の`Section title="配合の相性表"`の**見出し**。開いた時に見出しが二重に出ていた原因。
+     中身の表（`:471〜477`）は`surface`面の箱に入れてそのまま出す。
+4. **カード**（`:490〜501`）：
+   - 行1：`{leg.name}` を`T.size.head`(16)＋直後に **`<TypeChip type={leg.type} />`**
+     （現行はsubのテキストラベル）｜右端 `{leg.endYear}年目引退・{leg.age}歳` caption sub。
+   - 行2：`{leg.careerTitle}` caption accent ｜右端
+     `{leg.races}戦{leg.wins}勝・表彰台{leg.podiums}回` caption sub ＋ 非展開時のみ `▾`（accent）。
+   - 面・padding・タップで開閉する挙動は現行のまま。
+5. **展開部のItem破綻を直す**（`:511〜518`）。現行は`value`に文章を入れており、
+   `Item`の`value`は右揃えのhead(16)なので弟子は2行に折り返している。**名前＝value／
+   説明＝detail** に分ける：
+   | 項目 | value | detail | 条件 |
+   |---|---|---|---|
+   | 好敵手 | `leg.rivalName` | `${ht.label}・${leg.rivalRecord?.wins || 0}勝${leg.rivalRecord?.losses || 0}敗` | `leg.rivalName` |
+   | 弟子 | `leg.protege.name` | `${TYPES[leg.protege.type]?.label}・総合力${pr.ovr}まで育てた` | `leg.protege` |
+   - `チーム`・`実績`・`特殊配合`・`系統`の各Itemは現行のまま（`系統`の`detail`も現行の条件式のまま）。
+   - 父母（`:524〜533`）・`epilogue`・`autobiography`・削除リンクは現行のまま。
+6. **empty state**：`legends.length === 0` のとき`:481`の
+   「まだ引退した選手はいません。」を現行どおり出す（見出し右の件数は「0名」、
+   説明1行とボタン3つは出したまま）。
+
+### 4. 検証（B-4第2バッチの完了条件）
+
+1. `npm run build` 通過。
+2. `scratchpad/harvest_retire2.mjs` を再実行し、引退勧告→ラストレース→引退セレモニー→
+   殿堂（展開込み）を実データで通す。**`pageerror` ゼロ**、3画面のスクリーンショットを提示。
+3. 「+-41」が `-41` になっていること、「全盛期」が画面から消えていることを実データで確認。
+4. 名場面の本文から「N年目」の重複が消え、「N年目から〜勝利から遠ざかった」の行は
+   残っていることを確認（後者は同一セーブに出ないことがあるので、出なければNodeで
+   `mlCareerTimeline`に合成logを与えて確認する）。
+5. 縦線grep（`borderLeft`）と絵文字grepで新たな違反ゼロ。
