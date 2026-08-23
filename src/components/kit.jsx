@@ -9,12 +9,18 @@ import { FONT_DOT, T } from "../data/theme.js";
 
 // 第32弾（第2次UI改革）: 脚質の意味色チップ。塗り＝TYPES[type].color、文字は背景に対して
 // 常に暗色（#0E0E10）固定でよい（脚質色はいずれも明るい原色系のため）。
-export const TypeChip = ({ type, label }) => (
-  <span style={{
-    display: "inline-block", background: TYPES[type].color, color: "#0E0E10",
-    fontSize: T.size.caption, padding: "2px 7px 1px", fontFamily: FONT_DOT,
-  }}>{label || TYPES[type].label}</span>
-);
+// 第32弾Phase B: 殿堂・系譜など旧セーブ由来の選手データはtypeが未設定/不正な場合があるため
+// （旧コードは`TYPES[m.type]?.label`のように任意参照していた）、未知のtypeなら何も描かない。
+export const TypeChip = ({ type, label }) => {
+  const t = TYPES[type];
+  if (!t) return null;
+  return (
+    <span style={{
+      display: "inline-block", background: t.color, color: "#0E0E10",
+      fontSize: T.size.caption, padding: "2px 7px 1px", fontFamily: FONT_DOT,
+    }}>{label || t.label}</span>
+  );
+};
 
 // 状態タグ（成長フェーズ・全盛期など）。押せない・意味色でもない、控えめな添え字。
 export const Tag = ({ children, color }) => (

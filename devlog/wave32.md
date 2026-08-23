@@ -412,3 +412,39 @@ scratchpadの`b4_mock.html`（git外）。以下が正本。
   （`py = height-5 - (e/maxEle)*(height-7)`）。稜線と塗りが常に同じ`py()`を共有して
   完全一致し、平坦区間の5px色帯も保たれる。教訓：「最低帯の保証」は描画時のクランプ
   ではなく座標変換（ベースライン側）で行う。
+
+## Phase B-1 実装結果（2026-08・Sonnet・共有部品）
+
+`panels.jsx`／`riderCard.jsx`／`dynasty.jsx`／`kit.jsx`を実装。1回の修正が複数画面に
+効く共有部品から着手した（devlog記載の進行順どおり）。
+
+- **`kit.jsx`**：`TypeChip`を防御的に修正——殿堂・系譜データは旧セーブ由来でtypeが
+  未設定/不正な場合があり（旧コードは`TYPES[m.type]?.label`のように任意参照していた）、
+  `TYPES[type]`が無ければ何も描かない（`null`を返す）ようにした。呼び出し側での
+  ガード漏れによるクラッシュを構造的に防ぐ。
+- **`riderCard.jsx`**（R1）：脚質のプレーンテキスト表示を`TypeChip`へ。season/hub の
+  選手一覧・スカウト・移籍市場・引き抜き通知・出走選択の計6箇所（5ファイル）が
+  この1部品を共有しているため、1箇所の修正で全て反映される。
+- **`panels.jsx`**：
+  - `StartListPanel`の**チーム色の左罫線(`borderLeft:3px solid`)を撤去**（R5・縦線禁止）。
+    未使用になった`color`フィールドの受け渡しも削除。
+  - `AbilityGrid`／`BlurGrid`／`DisciplineGrid`（R2）：5列の密な並びのラベルをmicro(8px)、
+    能力数値をlabel(11px)へ。DisciplineGridの適性グレード文字（S〜G）は主役の判定記号
+    なのでhead(16px)のまま維持。
+- **`dynasty.jsx`**（R1）：系譜ツリーの世代行にある脚質テキストを`TypeChip`へ。
+  横並びのレイアウトを名前(ellipsis付き)→チップ→加点→総合力の順に再構成。
+
+**R5縦線スイープで発見・修正した既存の違反3件**（B-1の対象外ファイルだが、恒久ルール
+[CLAUDE.md §8]が「あらゆる画面・部品」を対象にしているため合わせて修正）：
+- `mylife/race.jsx`：好敵手シーンの状況文が左罫線の引用スタイルだった → `surface`面に変更。
+- `mylife/create.jsx`：特殊配合・血脈レシピ・デビュー恩恵の強調ボックス計4箇所が
+  `borderLeft:3px solid`だった → 撤去し、`surfaceUp`の面差だけで区切る形に統一。
+
+### 検証
+
+`npm run build`通過・全画面（マイライフ作成→デビュー→ホーム、シーズン新規作成→
+選手一覧→市場のスカウト/FA市場画面）を実プレイし`pageerror`ゼロ。縦線grep（`borderLeft`・
+`width:1`系）を全コードベースへ再実行し、残存する`borderLeft`は撤去済みを記す
+コメントのみと確認。`tools/verify_radar.mjs`（レーダー非対象だが回帰確認として）全項目OK。
+市場画面のスクリーンショットでTypeChip・AbilityGrid・BlurGridの新フォントサイズが
+実機で判読可能なことを確認——micro(8px)の初出使用にあたる。

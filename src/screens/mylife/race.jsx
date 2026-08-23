@@ -263,7 +263,8 @@ export function renderMyLifeRaceScreens(ctx) {
           )}
         </div>
         {sc.situation && (
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.8, marginBottom: T.space.md, paddingLeft: T.space.md, borderLeft: `2px solid ${T.color.rule}` }}>{sc.situation}</div>
+          // 第32弾Phase B: 左罫線の引用スタイルを廃止（縦線禁止・CLAUDE.md §8）。面(surface)で区切る。
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.8, marginBottom: T.space.md, background: T.color.surface, padding: T.space.sm }}>{sc.situation}</div>
         )}
         <Bubble name={sc.opening.name} text={sc.opening.text} />
         {reply && <Bubble mine name={ml.player.name} text={reply.playerLine} />}

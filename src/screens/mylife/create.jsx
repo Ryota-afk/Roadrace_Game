@@ -1,6 +1,8 @@
 // mylife.jsx より分割（Step8）：キャラクター作成・スカウト（mylife_create/mylife_scout）
 // 第13弾Phase3-D-2: 新トークン(T/FONT_DOT)へ全面移行。AbilityGrid/TraitLine（panels.jsx）は
 // season側と共有のため中身は据え置き（Phase3-D-3担当）。
+// 第32弾Phase B: 強調ボックスの左罫線(borderLeft)を撤去（縦線禁止・CLAUDE.md §8）。
+// surfaceUpの面差だけで区切る。
 import React from "react";
 import { loadBloodlines, loadMlLegends, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { bestBloodRecipeProgress, bloodRecipeProgress, deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
@@ -116,7 +118,7 @@ export function renderMyLifeCreateScreens(ctx) {
                       {breed && (
                         <Section title="配合の相性">
                           {breed.special && (
-                            <div style={{ background: T.color.surfaceUp, borderLeft: `3px solid ${T.color.accent}`, padding: T.space.sm, marginBottom: T.space.sm }}>
+                            <div style={{ background: T.color.surfaceUp, padding: T.space.sm, marginBottom: T.space.sm }}>
                               <div style={{ fontSize: T.size.body, color: T.color.accent }}>特殊配合『{breed.special.title}』</div>
                               <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{breed.special.note}</div>
                             </div>
@@ -159,7 +161,7 @@ export function renderMyLifeCreateScreens(ctx) {
                         return (
                           <Section title="血脈レシピ">
                             {recipe ? (
-                              <div style={{ background: T.color.surfaceUp, borderLeft: `3px solid ${T.color.accent}`, padding: T.space.sm }}>
+                              <div style={{ background: T.color.surfaceUp, padding: T.space.sm }}>
                                 <div style={{ fontSize: T.size.body, color: T.color.accent }}>血脈レシピ『{recipe.title}』成立！</div>
                                 <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{recipe.note}</div>
                                 <div style={{ fontSize: T.size.caption, color: T.color.text, marginTop: T.space.xs }}>
@@ -168,7 +170,7 @@ export function renderMyLifeCreateScreens(ctx) {
                               </div>
                             ) : best ? (
                               <>
-                                <div style={{ background: T.color.surfaceUp, borderLeft: `3px solid ${T.color.sub}`, padding: T.space.sm }}>
+                                <div style={{ background: T.color.surfaceUp, padding: T.space.sm }}>
                                   <div style={{ fontSize: T.size.body, color: T.color.text }}>{best.recipe.title}</div>
                                   <div style={{ fontSize: T.size.body, color: T.color.accent, letterSpacing: 2, marginTop: 2 }}>
                                     {"●".repeat(best.matchedCount)}{"○".repeat(best.total - best.matchedCount)}
@@ -241,7 +243,7 @@ export function renderMyLifeCreateScreens(ctx) {
           </div>
 
           {r.debutBoon && (
-            <div style={{ background: T.color.surfaceUp, borderLeft: `3px solid ${T.color.accent}`, padding: T.space.sm, marginBottom: T.space.md }}>
+            <div style={{ background: T.color.surfaceUp, padding: T.space.sm, marginBottom: T.space.md }}>
               <div style={{ fontSize: T.size.body, color: T.color.accent }}>{r.debutBoon.label}</div>
               <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{r.debutBoon.note}</div>
             </div>

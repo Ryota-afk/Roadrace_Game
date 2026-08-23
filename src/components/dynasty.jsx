@@ -9,8 +9,7 @@
 // （見出し自体はkit.jsxのScreenが担うため、呼び出し側でのheadingAsH2切替が不要になった）。
 import React from "react";
 import { T } from "../data/theme.js";
-import { TYPES } from "../data/abilities.js";
-import { Screen } from "./kit.jsx";
+import { Screen, TypeChip } from "./kit.jsx";
 
 const EMPTY_TEXT = {
   lineage: {
@@ -44,13 +43,13 @@ export function LineageForestView({ forest, totalLeg, variant, footer }) {
             </div>
             {g.members.map((m, i) => (
               <div key={i} style={{ padding: `${T.space.sm}px ${T.space.sm}px`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-                <div style={{ display: "flex", alignItems: "baseline", fontSize: T.size.body }}>
+                {/* 第32弾Phase B R1: 脚質のプレーンテキストをTypeChipへ（devlog/wave32.md）。 */}
+                <div style={{ display: "flex", alignItems: "center", gap: T.space.xs, fontSize: T.size.body }}>
                   <span style={{ width: 48, flex: "none", fontSize: T.size.caption, color: T.color.sub }}>{m.generation > 0 ? `${m.generation}代目` : "元祖"}</span>
-                  <span style={{ flex: 1, color: T.color.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {m.name}<span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: T.space.xs }}>{TYPES[m.type]?.label}</span>
-                    {m.plusValue > 0 && <span style={{ fontSize: T.size.caption, color: T.color.accent, marginLeft: T.space.xs }}>+{m.plusValue}</span>}
-                  </span>
-                  <span style={{ width: 60, flex: "none", textAlign: "right", color: T.color.sub }}>{m.overall}</span>
+                  <span style={{ flex: "none", color: T.color.text, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
+                  <TypeChip type={m.type} />
+                  {m.plusValue > 0 && <span style={{ fontSize: T.size.caption, color: T.color.accent }}>+{m.plusValue}</span>}
+                  <span style={{ flex: 1, textAlign: "right", color: T.color.sub }}>{m.overall}</span>
                 </div>
                 {m.nickname && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2, paddingLeft: 48 }}>「{m.nickname}」</div>}
                 {m.parents.length > 0 && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, paddingLeft: 48 }}>系統：{m.parents.join(" × ")}</div>}

@@ -61,7 +61,7 @@ export function SubStatLine({ r }) {
 
 export function StartListPanel({ entrants, favors }) {
   const teams = {};
-  entrants.forEach(e => { (teams[e.teamName] = teams[e.teamName] || { color: e.color, list: [] }).list.push(e); });
+  entrants.forEach(e => { (teams[e.teamName] = teams[e.teamName] || { list: [] }).list.push(e); });
   const rows = Object.entries(teams).sort((a, b) => {
     const ap = a[1].list.some(e => e.team === "PLAYER") ? 0 : 1;
     const bp = b[1].list.some(e => e.team === "PLAYER") ? 0 : 1;
@@ -86,7 +86,9 @@ export function StartListPanel({ entrants, favors }) {
       {rows.map(([tn, t], i) => {
         const isPlayerTeam = t.list.some(e => e.team === "PLAYER");
         return (
-          <div key={tn} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`, borderLeft: `3px solid ${t.color}`, paddingLeft: T.space.sm, marginLeft: -T.space.sm }}>
+          // 第32弾Phase B: チーム色の左罫線(borderLeft)を撤去（縦線禁止・CLAUDE.md §8）。
+          // チーム識別は自チームのaccent色（下のチーム名色分け）で十分伝わる。
+          <div key={tn} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
             <div style={{ fontSize: T.size.body, color: isPlayerTeam ? T.color.accent : T.color.text }}>{tn}</div>
             <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.8 }}>
               {t.list.map((e, j) => {
@@ -245,11 +247,12 @@ export function AbilityGrid({ r, cap = 88 }) {
         const capPct = Math.min(100, cap);
         const room = Math.max(0, Math.round(cap - r[k]));
         return (
+          // 第32弾Phase B R2: 5列の密な並びなのでラベルはmicro(8)、能力数値はlabel(11)へ。
           <div key={k}>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{AB_LABEL[k]}</div>
-            <div style={{ fontSize: T.size.body, color: broke ? T.color.accent : T.color.text }}>
-              {Math.round(r[k])}{partBonus > 0 && <span style={{ color: T.color.accent, fontSize: T.size.caption }}>+{partBonus}</span>}
-              {!broke && room > 0 && <span style={{ color: T.color.sub, fontSize: T.size.caption }}> +{room}</span>}
+            <div style={{ fontSize: T.size.micro, color: T.color.sub }}>{AB_LABEL[k]}</div>
+            <div style={{ fontSize: T.size.label, color: broke ? T.color.accent : T.color.text }}>
+              {Math.round(r[k])}{partBonus > 0 && <span style={{ color: T.color.accent, fontSize: T.size.micro }}>+{partBonus}</span>}
+              {!broke && room > 0 && <span style={{ color: T.color.sub, fontSize: T.size.micro }}> +{room}</span>}
             </div>
             <div style={{ position: "relative", height: 4, background: T.color.rule, marginTop: 3 }} title={broke ? "限界突破" : `伸びしろ +${room}（上限${Math.round(cap)}）`}>
               {!broke && capPct > valPct && <div style={{ position: "absolute", left: `${valPct}%`, width: `${capPct - valPct}%`, height: 4, background: AB_COLOR[k], opacity: 0.3 }} />}
@@ -265,6 +268,8 @@ export function AbilityGrid({ r, cap = 88 }) {
 
 export function DisciplineGrid({ r, highlightKey }) {
   return (
+    // 第32弾Phase B R2: AbilityGrid/BlurGridと同じ密な5列。ラベルmicro(8)・数値label(11)。
+    // グレード文字（S〜G）は主役の判定記号なのでhead(16)のまま。
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: T.space.sm, marginTop: T.space.xs }}>
       {DISCIPLINE_KEYS.map(k => {
         const score = disciplineScore(r, k);
@@ -274,10 +279,10 @@ export function DisciplineGrid({ r, highlightKey }) {
         const gc = APT_GRADE_COLOR[grade] || T.color.sub;
         return (
           <div key={k}>
-            <div style={{ fontSize: T.size.caption, color: hi ? T.color.accent : T.color.sub }}>{DISCIPLINES[k].label}{hi ? " ★" : ""}</div>
+            <div style={{ fontSize: T.size.micro, color: hi ? T.color.accent : T.color.sub }}>{DISCIPLINES[k].label}{hi ? " ★" : ""}</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: T.space.xs }}>
               <span style={{ fontSize: T.size.head, fontWeight: 700, color: gc, lineHeight: 1 }}>{grade}</span>
-              <span style={{ fontSize: T.size.caption, color: hi ? T.color.accent : T.color.sub }}>{score}</span>
+              <span style={{ fontSize: T.size.label, color: hi ? T.color.accent : T.color.sub }}>{score}</span>
             </div>
             <div style={{ height: 3, background: T.color.rule, marginTop: 3 }}>
               <div style={{ height: 3, width: `${Math.min(100, score)}%`, background: gc }} />
@@ -323,11 +328,12 @@ export function ScoutBadge({ scout, compact }) {
 
 export function BlurGrid({ blur }) {
   return (
+    // 第32弾Phase B R2: AbilityGridと同じ密な5列。ラベルmicro(8)・数値label(11)。
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: T.space.sm, marginTop: T.space.sm }}>
       {AB_KEYS.map(k => (
         <div key={k}>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{AB_LABEL[k]}</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{blur[k].min}〜{blur[k].max}</div>
+          <div style={{ fontSize: T.size.micro, color: T.color.sub }}>{AB_LABEL[k]}</div>
+          <div style={{ fontSize: T.size.label, color: T.color.sub }}>{blur[k].min}〜{blur[k].max}</div>
           <div style={{ height: 4, background: T.color.rule, position: "relative", marginTop: 2 }}>
             <div style={{
               position: "absolute", left: `${blur[k].min}%`, width: `${blur[k].max - blur[k].min}%`,
