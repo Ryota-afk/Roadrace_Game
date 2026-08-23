@@ -11,6 +11,11 @@
 import React from "react";
 import { isoBoxFaces, backFacePair, visibleFacePair, wallPoint, isoProject } from "../../domain/season/baseViewLayout.js";
 import { ROOM_GRADE_RUG_COLOR, ROOM_GRADE_SHOWS_GROUT, ROOM_GRADE_SHOWS_RUG, ROOM_GRADE_SHOWS_LIGHT } from "../../data/baseViewRoomGrade.js";
+import { floorPatternId } from "./groundTextures.jsx";
+
+// 第25弾フェーズ2（案C・ユーザー合意）: 床は板張りの継ぎ目だけを薄く敷いたパターンで
+// 塗る（各部屋のfloorTintは保たれる）。壁はフラットのまま（対象外）。
+const texFloor = (tint) => `url(#${floorPatternId(tint)})`;
 
 const poly = (pts) => pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 
@@ -85,12 +90,12 @@ export function Room({ b, proj, snow, selected, rooms, grades }) {
             const rf = isoBoxFaces(r.w, r.l, r.hw, r.hl, 0, proj).corners;
             return (
               <React.Fragment key={`room-${r.key}`}>
-                <polygon points={poly([rf.N, rf.E, rf.S, rf.W])} fill={r.floorTint} stroke="#00000018" strokeWidth="0.5" />
+                <polygon points={poly([rf.N, rf.E, rf.S, rf.W])} fill={texFloor(r.floorTint)} stroke="#00000018" strokeWidth="0.5" />
                 <RoomGradeOverlay r={r} proj={proj} grade={(grades && grades[r.key]) || 0} />
               </React.Fragment>
             );
           })
-        : <polygon points={poly([corners.N, corners.E, corners.S, corners.W])} fill={b.floor} stroke="#00000022" strokeWidth="0.6" />}
+        : <polygon points={poly([corners.N, corners.E, corners.S, corners.W])} fill={texFloor(b.floor)} stroke="#00000022" strokeWidth="0.6" />}
 
       {/* 第20弾: 開放2辺（手前）の床の縁に低い段差を描き、床と前庭舗装（同系色）の境界を
           はっきりさせる。これが無いと車や噴水が「屋内にある」ように見える（ユーザー指摘の

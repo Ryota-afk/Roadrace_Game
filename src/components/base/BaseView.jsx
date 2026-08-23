@@ -44,7 +44,7 @@ import { Stream } from "./Stream.jsx";
 import { propItems, decorNode } from "./Props.jsx";
 import { fixtureItems } from "./Fixtures.jsx";
 import { PixelPerson } from "../sprites/pixelPerson.jsx";
-import { GroundTextureDefs } from "./groundTextures.jsx";
+import { GroundTextureDefs, InteriorTextureDefs } from "./groundTextures.jsx";
 import { SpeechBubble } from "./SpeechBubble.jsx";
 import { TYPES } from "../../data/abilities.js";
 
@@ -296,6 +296,7 @@ export function BaseView({ g, paused, onRoomTap }) {
           <rect x="0" y="0" width={view.w} height={view.h} fill={palette.sky} />
           {/* 第25弾: 地面・路面・プラザのピクセルテクスチャ（groundTextures.jsx参照） */}
           <GroundTextureDefs palette={palette} />
+          <InteriorTextureDefs />
           {camera.ready && (
             <g transform={camera.transform}>
               <polygon points={landQuad.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill="url(#texGrass)" stroke={palette.plazaEdge} strokeWidth="1.5" opacity="0.9" />

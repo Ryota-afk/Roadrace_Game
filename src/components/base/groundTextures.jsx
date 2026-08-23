@@ -1,15 +1,19 @@
-// 第25弾：地面・路面・プラザのピクセルテクスチャ（F分類ドット絵化・屋外の面）。
-// ユーザー合意（2026-08・AskUserQuestion）：案B「刈り込みバンド」を採用。
+// 第25弾：拠点画面の「面」のピクセルテクスチャ（F分類ドット絵化）。
+// フェーズ1（屋外）＝ユーザー合意で案B「刈り込みバンド」：
 //   - 芝：細かい明暗の粒＋(+w方向のアイソメ対角に沿った)淡い刈り込みバンド。
 //     冬（palette.snow）は雪面に刈り込み跡は不自然なため粒のみに落とす。
 //   - 路面：アスファルトの骨材粒。
 //   - プラザ：2world単位ごとのアイソメ目地＋石ごとの微妙なトーン差の石畳。
+// フェーズ2（屋内）＝ユーザー合意で案C「目地のみ薄く」：
+//   - 床：+w方向に走る板張りの継ぎ目の線だけを薄く（トーン差・粒なし）。
+//     各部屋のfloorTintはそのまま保つ。壁はフラットのまま（変更なし）。
 // 仕組み：canvasで小さなタイルを1回焼き、SVG <pattern>（userSpaceOnUse）で面に敷く。
 // パターンはカメラ変換の内側なのでズームと一緒に拡縮する＝ズームインするとドットが
-// 大きく見える（スプライトと同じピクセルアートの振る舞い）。色は季節パレット由来
-// （キャッシュキーに色を含むため季節が変わると自動で別タイルが焼かれる）。
+// 大きく見える（スプライトと同じピクセルアートの振る舞い）。色は季節パレット／
+// 各部屋のfloorTint由来（キャッシュキーに色を含むため色替わりで自動再生成）。
 // 乱数はMath.random不使用の既存方針に合わせ決定論ハッシュ。
 import React from "react";
+import { BASE_VIEW_ROOMS, BASE_VIEW_CLUBHOUSE } from "../../data/baseViewBuildings.js";
 
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
@@ -95,6 +99,24 @@ function paversUrl(base, edge) {
   });
 }
 
+// 床（屋内・案C）：+w方向に走る板張りの「継ぎ目の線だけ」。板幅1world単位（v=13px）、
+// 板の端(継ぎ目)は2world単位で互い違い。線は床色をわずかに沈めた色（×0.94）で薄く、
+// 板の面自体はfloorTintのまま（トーン差・粒なし）。
+function floorJointsUrl(tint) {
+  return tileUrl(`floorJoints-${tint}`, 104, 52, (ctx, w, h) => {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const vRaw = x / 2 - y, sRaw = x / 2 + y;
+      const v = ((vRaw % 13) + 13) % 13;
+      const pu = Math.floor(((vRaw / 13) % 4 + 4) % 4);
+      const s = ((sRaw % 52) + 52) % 52;
+      const send = ((s + (pu % 2) * 26) % 52 + 52) % 52;
+      const onJoint = v < 0.9 || send < 1.2;
+      ctx.fillStyle = onJoint ? shade(tint, 0.94) : tint;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  });
+}
+
 // Track.jsxの路面色（#54565f）と揃える。路面はパレット非依存（季節で変わらない）。
 export const TRACK_ASPHALT = "#54565f";
 
@@ -112,6 +134,25 @@ export function GroundTextureDefs({ palette }) {
       <pattern id="texPavers" patternUnits="userSpaceOnUse" width="104" height="52">
         <image href={paversUrl(palette.plaza, palette.plazaEdge)} width="104" height="52" style={{ imageRendering: "pixelated" }} />
       </pattern>
+    </defs>
+  );
+}
+
+// 床パターンのid。Room.jsxがfloorTintごとに参照する。
+export function floorPatternId(tint) { return `texFloor${tint.replace("#", "")}`; }
+
+// 屋内の床パターン定義（部屋のfloorTint全種＋クラブハウス既定床）。壁は対象外（案C）。
+export function InteriorTextureDefs() {
+  const tints = [...new Set([
+    ...BASE_VIEW_ROOMS.map(r => r.floorTint), BASE_VIEW_CLUBHOUSE.floor,
+  ])];
+  return (
+    <defs>
+      {tints.map(t => (
+        <pattern key={t} id={floorPatternId(t)} patternUnits="userSpaceOnUse" width="104" height="52">
+          <image href={floorJointsUrl(t)} width="104" height="52" style={{ imageRendering: "pixelated" }} />
+        </pattern>
+      ))}
     </defs>
   );
 }
