@@ -176,7 +176,9 @@ const gain = 0.8 * ph.gain * POW[n.growthPow].mul * envBonus
   - GF優勝率（主力平均OVR87.8・機材Lv0→Lv5）：0%→17%（devlog設計時の想定18-20%と一致）
 - `verify_radar.mjs`・`verify_baseview.mjs` 全項目OK（回帰確認・レーダー/拠点画面は今回の
   変更対象外だが数値変更の影響が無いことを確認）。
-- 実プレイ（Playwright・シーズン24ヶ月＋マイライフ12ヶ月の練習進行）は検証中（別途追記）。
+- 実プレイ（Playwright・時間予算つきで月送りを繰り返す方式。scratchpad/verify_balance_light2.mjs）：
+  シーズン12ヶ月分（1年目終了→2年目のスポンサー契約画面まで到達）・マイライフ102ヶ月分
+  （9年目まで練習を繰り返し、成長タイプ「衰え期」の表示も確認）、いずれも`pageerror`ゼロ。
 
 ## スタッフ専用スプライト（#1・実装記録）
 
