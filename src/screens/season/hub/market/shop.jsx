@@ -40,10 +40,11 @@ export function renderMarketShopSection(ctx) {
             buyLabel={`${it.price}万`} buyDisabled={g.budget < it.price}
             onBuy={() => buyItem(k)} />
         ))}
+        {/* 第32弾Phase B R3: 枠線ボタンを面(surfaceUp)＋アフォーダンス規約へ統一 */}
         {g.inv.camp > 0 && !g.camp && (
           <div style={{ marginTop: T.space.sm }}>
             <button onClick={() => askConfirm("キャンプを実施しますか？今月の練習効果が×2になりますが、選手全員の疲労が+25されます（連発すると故障リスクが高まります）。", useCamp)}
-              style={{ width: "100%", background: "none", border: `1px solid ${T.color.accent}`, color: T.color.accent, fontFamily: "inherit", fontSize: T.size.caption, padding: T.space.sm, cursor: "pointer" }}>
+              style={{ width: "100%", background: T.color.surfaceUp, border: "none", color: T.color.accent, fontFamily: "inherit", fontSize: T.size.caption, padding: T.space.sm, cursor: "pointer" }}>
               キャンプ券を使う（今月の練習効果×2・全員疲労+25）
             </button>
           </div>

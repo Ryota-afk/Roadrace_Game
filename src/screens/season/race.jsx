@@ -6,7 +6,7 @@
 import React from "react";
 import { RaceErrorBoundary, RaceView } from "../../components/RaceView.jsx";
 import { AbilityGrid, ElevationChart, MultiStageCourseView, StartListPanel, TraitLine } from "../../components/panels.jsx";
-import { ChipRow, Item, PrimaryBtn, QuietBtn, Section, SelectRow } from "../../components/kit.jsx";
+import { ChipRow, Item, PrimaryBtn, QuietBtn, Section, SelectRow, TypeChip } from "../../components/kit.jsx";
 import { RiderCard } from "../../components/riderCard.jsx";
 import { fmtGap, fmtTime, overall } from "../../core/core.js";
 import { AB_LABEL, TYPES, TYPE_ROLE_FIT } from "../../data/abilities.js";
@@ -76,7 +76,10 @@ export function renderSeasonRaceScreens(ctx) {
               {race.tmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 5, background: SEG_COLOR[s[0]] }} />)}
             </div>
           )}
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{race.stageRace && race.stageTmpls ? "日替わりコース" : race.tmpl.kind}・<span style={{ color: T.color.accent }}>出走{N}名</span>・{TYPES[race.tmpl.favors].label}有利</div>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: T.space.xs }}>
+            <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{race.stageRace && race.stageTmpls ? "日替わりコース" : race.tmpl.kind}・<span style={{ color: T.color.accent }}>出走{N}名</span></span>
+            <TypeChip type={race.tmpl.favors} label={`${TYPES[race.tmpl.favors].label}有利`} />
+          </div>
           {squadChoices.length > 1 && (
             <div style={{ marginTop: T.space.sm }}>
               <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>出走人数（少ないほど疲労を温存でき、多いほど作戦の幅が広がる）</div>
@@ -216,15 +219,14 @@ export function renderSeasonRaceScreens(ctx) {
           {om && <Item label={`中期目標「${om.label}」`} value={g.prizeInfo.objectiveDone ? "達成" : `進捗 ${om.tail}`} valueColor={g.prizeInfo.objectiveDone ? T.color.good : undefined} />}
         </Section>
         <Section title="チーム順位" right={`出走${totalTeams}チーム`}>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと、チームの連携が効きます。</div>
           {teamTT.map((t, i) => (
             <div key={t.team} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
               <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
-                <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{t.rank}</span>
+                <span style={{ fontSize: T.size.label, color: t.isPlayer ? T.color.accent : T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{t.rank}</span>
                 <span style={{ width: 10, height: 10, background: t.color, flex: "none" }} />
-                <span style={{ fontSize: T.size.body, color: t.isPlayer ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.teamName}{t.isPlayer ? "（自チーム）" : ""}</span>
+                <span style={{ fontSize: T.size.head, color: t.isPlayer ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.teamName}{t.isPlayer ? "（自チーム）" : ""}</span>
               </span>
-              <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{t.rank === 1 ? fmtTime(t.time) : fmtGap(t.time - winner.time)}</span>
+              <span style={{ fontFamily: FONT_DOT, fontSize: T.size.label, color: t.isPlayer ? T.color.accent : T.color.sub, flex: "none" }}>{t.rank === 1 ? fmtTime(t.time) : fmtGap(t.time - winner.time)}</span>
             </div>
           ))}
         </Section>
@@ -272,13 +274,13 @@ export function renderSeasonRaceScreens(ctx) {
           {res.ranked.map((e, i) => (
             <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
               <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
-                <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{e.rank}</span>
-                <span style={{ fontSize: T.size.body, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: T.size.label, color: e.team === "PLAYER" ? T.color.accent : T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{e.rank}</span>
+                <span style={{ fontSize: T.size.head, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}
                 </span>
-                <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{e.teamName}</span>
+                <span style={{ fontSize: T.size.micro, color: T.color.sub, flex: "none" }}>{e.teamName}</span>
               </span>
-              <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{e.rank === 1 ? fmtTime(e.finishTime) : fmtGap(e.finishTime - res.ranked[0].finishTime)}</span>
+              <span style={{ fontFamily: FONT_DOT, fontSize: T.size.label, color: e.team === "PLAYER" ? T.color.accent : T.color.sub, flex: "none" }}>{e.rank === 1 ? fmtTime(e.finishTime) : fmtGap(e.finishTime - res.ranked[0].finishTime)}</span>
             </div>
           ))}
         </Section>
@@ -319,10 +321,10 @@ export function renderSeasonRaceScreens(ctx) {
             return (
               <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
                 <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
-                  <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
-                  <span style={{ fontSize: T.size.body, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}</span>
+                  <span style={{ fontSize: T.size.label, color: e.team === "PLAYER" ? T.color.accent : T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
+                  <span style={{ fontSize: T.size.head, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}</span>
                 </span>
-                <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrderSoFar[0][1])}</span>
+                <span style={{ fontFamily: FONT_DOT, fontSize: T.size.label, color: e.team === "PLAYER" ? T.color.accent : T.color.sub, flex: "none" }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrderSoFar[0][1])}</span>
               </div>
             );
           })}
@@ -360,7 +362,10 @@ export function renderSeasonRaceScreens(ctx) {
           <div style={{ display: "flex", gap: 3, margin: `0 0 ${T.space.xs}px` }}>
             {dayTmpl.segs.map((s, i) => <div key={i} style={{ flex: s[2], height: 5, background: SEG_COLOR[s[0]] }} />)}
           </div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>{nextStageNo}日目・{dayTmpl.kind}・{TYPES[dayTmpl.favors].label}有利</div>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: T.space.xs }}>
+            <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{nextStageNo}日目・{dayTmpl.kind}</span>
+            <TypeChip type={dayTmpl.favors} label={`${TYPES[dayTmpl.favors].label}有利`} />
+          </div>
           <div style={{ marginTop: T.space.sm }}><ElevationChart course={dayCourse} /></div>
         </Section>
         {/* v14.14: 作戦変更画面でも選手の能力を見た上でエース・役割を決められるよう、
@@ -451,10 +456,10 @@ export function renderSeasonRaceScreens(ctx) {
             return (
               <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
                 <span style={{ display: "flex", alignItems: "baseline", gap: T.space.sm, minWidth: 0 }}>
-                  <span style={{ fontSize: T.size.caption, color: T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
-                  <span style={{ fontSize: T.size.body, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}</span>
+                  <span style={{ fontSize: T.size.label, color: e.team === "PLAYER" ? T.color.accent : T.color.sub, width: 22, textAlign: "right", flex: "none", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
+                  <span style={{ fontSize: T.size.head, color: e.team === "PLAYER" ? T.color.accent : T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}{e.isAce ? "・エース" : ""}{e.isAlumnus ? "・OB" : ""}</span>
                 </span>
-                <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrder[0][1])}</span>
+                <span style={{ fontFamily: FONT_DOT, fontSize: T.size.label, color: e.team === "PLAYER" ? T.color.accent : T.color.sub, flex: "none" }}>{i === 0 ? fmtTime(t) : fmtGap(t - gcOrder[0][1])}</span>
               </div>
             );
           })}

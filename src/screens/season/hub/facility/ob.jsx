@@ -1,8 +1,8 @@
 // hub/facility.jsxより分割（Step13第7弾）：OBコーチ登用セクション。
 // 第13弾Phase3-D-4-b：ShopRowへ移行し絵文字を撤去（詳細はdevlog/wave13.md）。
 import React from "react";
-import { Section, ShopRow } from "../../../../components/kit.jsx";
-import { AB_LABEL, TYPES } from "../../../../data/abilities.js";
+import { Section, ShopRow, TypeChip } from "../../../../components/kit.jsx";
+import { AB_LABEL } from "../../../../data/abilities.js";
 import { T } from "../../../../data/theme.js";
 import { OB_COACH_SALARY, TYPE_COACH_ABILITY } from "../../../../logic/support.js";
 
@@ -12,7 +12,7 @@ export function renderFacilityObSection(ctx) {
   return (
     <Section title="OBコーチ" right={`月給${OB_COACH_SALARY}万・練習効果+25%`}>
       {g.obCoach && (
-        <ShopRow first label={`${g.obCoach.name}コーチ`} badge={TYPES[g.obCoach.type].label}
+        <ShopRow first label={`${g.obCoach.name}コーチ`} badge={<TypeChip type={g.obCoach.type} />}
           detail={`${AB_LABEL[g.obCoach.ab]}の練習効果+25%（全選手）`}
           secondaryLabel="契約解消" onSecondary={dismissObCoach} />
       )}
@@ -21,7 +21,7 @@ export function renderFacilityObSection(ctx) {
       )}
       {!g.obCoach && candidates.map((h, i) => (
         <ShopRow key={`ob-${h.id}-${i}`} first={i === 0}
-          label={h.name} badge={TYPES[h.type].label}
+          label={h.name} badge={<TypeChip type={h.type} />}
           detail={`${AB_LABEL[TYPE_COACH_ABILITY[h.type] || "flat"]}の練習効果+25%`}
           buyLabel="迎える" onBuy={() => hireObCoach(h)} />
       ))}

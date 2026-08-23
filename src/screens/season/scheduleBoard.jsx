@@ -3,8 +3,7 @@
 // 順位表はR2固定幅列、trophyはD-4-a2の生涯評価と同型に。詳細はdevlog/wave13.md参照。
 import React from "react";
 import { ScoutBadge, TitlesPanel } from "../../components/panels.jsx";
-import { Item, QuietBtn, Section } from "../../components/kit.jsx";
-import { TYPES } from "../../data/abilities.js";
+import { Item, QuietBtn, Section, TypeChip } from "../../components/kit.jsx";
 import { MONTHS } from "../../data/course.js";
 import { T } from "../../data/theme.js";
 import { WEATHER, computeStandings, seasonRivalDex, standingsRankReward } from "../../logic/support.js";
@@ -108,8 +107,11 @@ export function renderSeasonScheduleBoardScreens(ctx) {
                 const nick = riderNickname(r);
                 return (
                   <div key={i} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
-                      <span style={{ fontSize: T.size.head, color: T.color.text }}>{r.name}<span style={{ fontSize: T.size.caption, color: TYPES[r.type].color, marginLeft: T.space.xs }}>{TYPES[r.type].label}</span></span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: T.space.xs, minWidth: 0 }}>
+                        <span style={{ fontSize: T.size.head, color: T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+                        <TypeChip type={r.type} />
+                      </span>
                       <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{r.farewellYear}年目に{r.farewellReason === "released" ? "退団" : "引退"}</span>
                     </div>
                     {nick && <div style={{ fontSize: T.size.caption, color: T.color.sub, fontStyle: "italic", marginTop: 1 }}>「{nick}」</div>}
@@ -138,7 +140,10 @@ export function renderSeasonScheduleBoardScreens(ctx) {
           <Section key={t.teamName} title={t.teamName} right={t.trait}>
             {t.riders.map((r, i) => (
               <div key={r.id} style={{ display: "flex", alignItems: "center", gap: T.space.sm, padding: `${T.space.xs}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-                <span style={{ flex: 1, minWidth: 0, fontSize: T.size.body, color: T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}<span style={{ fontSize: T.size.caption, color: TYPES[r.type]?.color, marginLeft: T.space.xs }}>{TYPES[r.type]?.label}</span></span>
+                <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: T.space.xs }}>
+                  <span style={{ fontSize: T.size.body, color: T.color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+                  <TypeChip type={r.type} />
+                </span>
                 <ScoutBadge scout={r.scout} />
               </div>
             ))}

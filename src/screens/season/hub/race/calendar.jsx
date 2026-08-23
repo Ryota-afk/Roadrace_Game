@@ -4,7 +4,7 @@
 // セグメントバーと★グレードは、地形の起伏・レースの格を一目で示す記号として機能して
 // いるため例外的に残す（詳細はdevlog/wave13.md）。
 import React from "react";
-import { Item, PrimaryBtn, QuietBtn, Section } from "../../../../components/kit.jsx";
+import { Item, PrimaryBtn, QuietBtn, Section, TypeChip } from "../../../../components/kit.jsx";
 import { TYPES } from "../../../../data/abilities.js";
 import { HOME_ABILITY_BONUS, SEG_COLOR } from "../../../../data/course.js";
 import { CLASSES } from "../../../../data/progression.js";
@@ -36,9 +36,13 @@ export function renderRaceCalendarSection(ctx) {
             <div style={{ display: "flex", gap: 3, margin: `${T.space.xs}px 0` }}>
               {r.tmpl.segs.map((s, j) => <div key={j} style={{ flex: s[2], height: 5, background: SEG_COLOR[s[0]] }} />)}
             </div>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub }}>
-              {r.tmpl.kind}・出走{squadLabel}・{TYPES[r.tmpl.favors].label}有利／優勝 約{Math.round(PRIZES[0] * mul)}万・{Math.round(PTS[0] * GRADE_MUL[r.grade])}pt
-              {r.stageRace && <>／{r.stageCount || 2}日間ステージレース(総合)</>}
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: T.space.xs }}>
+              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{r.tmpl.kind}・出走{squadLabel}</span>
+              <TypeChip type={r.tmpl.favors} label={`${TYPES[r.tmpl.favors].label}有利`} />
+              <span style={{ fontSize: T.size.caption, color: T.color.sub }}>
+                優勝 約{Math.round(PRIZES[0] * mul)}万・{Math.round(PTS[0] * GRADE_MUL[r.grade])}pt
+                {r.stageRace && <>／{r.stageCount || 2}日間ステージレース(総合)</>}
+              </span>
             </div>
             {teams && (
               <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>
