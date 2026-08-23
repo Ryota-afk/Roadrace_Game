@@ -212,7 +212,13 @@ export function newRider(power, rng, opts = {}) {
   const type = opts.type || keys[Math.floor(rng() * keys.length)];
   // v35(バランス): 能力上限を可変に（既定94）。難易度の高いAIは opts.cap で94超の地力を持てる。
   const cap = opts.cap ?? 94;
-  const clamp = (v) => Math.max(22, Math.min(cap, Math.round(v)));
+  // 第31弾: opts.capOffsetにML_TYPE_CAP_OFFSET相当の表（type→abKey→オフセット）を渡すと、
+  // 上限が能力ごとに変わる。typeがここで確定した後でないと引けないため、呼び出し側が
+  // 個別に上限を計算するcapForコールバック方式ではなく表そのものを渡す形にしている
+  // （newRider内部でtypeをランダム決定する呼び出しがあるため。詳細はdevlog/wave31.md）。
+  // 未指定なら従来どおり全能力へcapを一律適用（シーズン側は無変更）。
+  const capOf = (k) => cap + (opts.capOffset ? ((opts.capOffset[type] || {})[k] || 0) : 0);
+  const clamp = (v, k) => Math.max(22, Math.min(capOf(k), Math.round(v)));
   const b = () => power + (rng() - 0.5) * 22;
   const r = { flat: b(), climb: b(), sprint: b(), stamina: b(), solo: b() };
   const bo = 14;
@@ -223,7 +229,7 @@ export function newRider(power, rng, opts = {}) {
   if (type === "TT")  { r.solo += bo; r.flat += 6; }
   if (opts.abBonus) Object.entries(opts.abBonus).forEach(([k, v]) => { r[k] += v; });
   if (opts.forceProdigy) AB_KEYS.forEach(k => { r[k] += 12; }); // v8: 逸材はベース能力を底上げ
-  AB_KEYS.forEach(k => r[k] = clamp(r[k]));
+  AB_KEYS.forEach(k => r[k] = clamp(r[k], k));
   const age = opts.age ?? (22 + Math.floor(rng() * 12));
   const gKeys = Object.keys(GROWTH);
   // v14: マイライフの経歴選択（高卒/大卒/実業団卒）で成長タイプを明示指定できるように。

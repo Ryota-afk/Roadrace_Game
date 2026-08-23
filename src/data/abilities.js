@@ -19,6 +19,19 @@ export const AB_LABEL = { flat: "平坦", climb: "登坂", sprint: "スプリン
 
 export const AB_COLOR = { flat: "#4f8fe8", climb: "#e8544f", sprint: "#35c07e", stamina: "#c9a13c", solo: "#c98bf0" };
 
+// 第29弾（判断③・ユーザー合意「強」）: 脚質ごとの能力別成長上限差。得意+10／準得意+5
+// （パンチャーは双得意+7）／苦手−12。マイライフの選手上限（domain/mylife/growthCap.js）と
+// 第31弾でAIの上限（core.js newRider・domain/shared/scouting.js）の両方が参照するため、
+// data/abilities.js（TYPES・AB_KEYSの定義元）へ置く（sim層・shared層のどちらからも
+// 依存の向きを崩さず参照できる場所。CLAUDE.md §5「写経して増やさない」）。
+export const ML_TYPE_CAP_OFFSET = {
+  SPR: { flat: 5, climb: -12, sprint: 10, stamina: 0, solo: 0 },
+  CLM: { flat: 0, climb: 10, sprint: -12, stamina: 5, solo: 0 },
+  RUL: { flat: 10, climb: -12, sprint: 0, stamina: 5, solo: 0 },
+  PUN: { flat: 0, climb: 7, sprint: 7, stamina: 0, solo: -12 },
+  TT: { flat: 5, climb: 0, sprint: -12, stamina: 0, solo: 10 },
+};
+
 // v43(マイライフ難易度調整Phase 1・柱0): gainMulはlogic/support.jsのgrowthPhase()が
 // 返すgain（練習・出走経験の伸び倍率）に掛かるタイプ別係数。従来は成長期・全盛期・
 // 衰え期の長さ（peak）だけが違い、伸び速度は全タイプ共通1.0だったため、ピークが遅い

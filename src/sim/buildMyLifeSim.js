@@ -1,7 +1,7 @@
 // マイライフのレース1本分のシミュレーション構築（自分＋チームメイト＋対戦AIの生成・ティック実行）。
 // state/state.js から分離（第15弾F）。シーズン側の対になる関数はsim/buildSim.jsにあり、
 // 同じ役割の関数が別レイヤーに分かれていた非対称を解消する（第14弾37番のバグの遠因だった）。
-import { AB_KEYS } from "../data/abilities.js";
+import { AB_KEYS, ML_TYPE_CAP_OFFSET } from "../data/abilities.js";
 import { DIFFICULTIES, ML_TACTICS } from "../data/progression.js";
 import { MYLIFE_TEAMS, teamsForClass } from "../data/teams.js";
 import { T } from "../data/theme.js";
@@ -31,6 +31,11 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // 実質同強度になり、能力を極めた終盤（100超）に対して hard でも相手が頭打ちで無双できた。
   // hard=102/oni=112 まで許容し、極まった選手にも歯応えが残るようにする（season側のDIFFICULTIESは不変）。
   const aiCap = mlAiCapFor(difficultyId, diffDef.abilCap);
+  // 第31弾: newRider内部で脚質ごとの能力の形が付くのに上限が全能力へ一律にかかっていたため、
+  // 上限が効く場面（高クラス・高グレード）で得意能力だけ切り落とされ苦手はそのまま残る
+  // ＝AIが万能型に見える不具合があった。プレイヤー用のML_TYPE_CAP_OFFSET（第29弾）を
+  // そのまま共有し、cap がかかる全ての生成に一律で適用する（伝説選手はfinalAbilitiesで
+  // 上書きされるため対象外。詳細はdevlog/wave31.md）。
   const course = generateCourse(raceMeta, dayTag);
   const rng = mulberry(Date.now() % 999983);
   // v47(第7弾C): yearBonus（経過年数だけでAIの地力を底上げする一律ボーナス、最大+24）を廃止した。
@@ -101,7 +106,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       // 使うことでAIチーム（worldRostersのelseブランチ）と同じ式に揃え、自チームにも
       // 成長・衰えが実際に効くようにする。
       teammates.slice(0, tmSlots).forEach((tm) => {
-        const st = newRider(power + (tm.baseline || 0), idYearSeed(tm.id, year), { type: tm.type, banned: nameBanned });
+        const st = newRider(power + (tm.baseline || 0), idYearSeed(tm.id, year), { type: tm.type, banned: nameBanned, capOffset: ML_TYPE_CAP_OFFSET });
         st.id = tm.id; st.name = tm.name; st.type = tm.type; st.personality = tm.personality || st.personality;
         if (tm.abilities) st.abilities = tm.abilities;
         members.push(st);
@@ -109,14 +114,14 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       if (protegeSlot) {
         const pOvr = protege.curOvr || protege.ovr0 || 55;
         const prng = idYearSeed(protege.id, year);
-        const st = newRider(pOvr, prng, { type: protege.type, cap: aiCap, banned: nameBanned });
+        const st = newRider(pOvr, prng, { type: protege.type, cap: aiCap, capOffset: ML_TYPE_CAP_OFFSET, banned: nameBanned });
         st.id = protege.id; st.name = protege.name; st.type = protege.type;
         st.personality = protege.personality || st.personality;
         if (protege.abilities) st.abilities = protege.abilities;
         st.isProtege = true;
         members.push(st);
       }
-      for (let i = members.length; i < memberTarget; i++) members.push(newRider(power, rng, { banned: nameBanned }));
+      for (let i = members.length; i < memberTarget; i++) members.push(newRider(power, rng, { banned: nameBanned, capOffset: ML_TYPE_CAP_OFFSET }));
     } else if (worldRosters && worldRosters[d.name] && worldRosters[d.name].length) {
       // v37: 永続ワールドロースターから同じ顔ぶれを出走させる（identityは固定・stats は文脈スケール）。
       // 各選手の stats は id＋year でシードして年内は安定、年が進むと power の上昇で強くなる。
@@ -126,7 +131,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       const roster = worldRosters[d.name];
       aiSquadN = Math.min(aiSquadNRaw, roster.length);
       roster.slice(0, aiSquadN).forEach(wr => {
-        const st = newRider(power + (wr.baseline || 0), idYearSeed(wr.id, year), { type: wr.type, cap: aiCap, banned: nameBanned });
+        const st = newRider(power + (wr.baseline || 0), idYearSeed(wr.id, year), { type: wr.type, cap: aiCap, capOffset: ML_TYPE_CAP_OFFSET, banned: nameBanned });
         st.id = wr.id; st.name = wr.name; st.type = wr.type; st.personality = wr.personality || st.personality;
         if (wr.abilities) st.abilities = wr.abilities;
         st.goldAbilities = wr.goldAbilities || [];
@@ -134,7 +139,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
         members.push(st);
       });
     } else {
-      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap }));
+      for (let i = 0; i < aiSquadN; i++) members.push(newRider(power + (i === 0 ? 6 : 0), rng, { banned: nameBanned, cap: aiCap, capOffset: ML_TYPE_CAP_OFFSET }));
     }
     const aiRoles = assignAIRoles(members, aiSquadN);
     const aiStyle = AI_STYLES[Math.floor(rng() * AI_STYLES.length)];
@@ -158,7 +163,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       };
     });
     if (rival && raceMeta.rivalPresent && d.name === rival.team && d.name !== myTeamName) {
-      const rivalStats = newRider(power + rivalPowerBonus(rival), idYearSeed(rival.id, year), { type: rival.type, banned: nameBanned, cap: aiCap });
+      const rivalStats = newRider(power + rivalPowerBonus(rival), idYearSeed(rival.id, year), { type: rival.type, banned: nameBanned, cap: aiCap, capOffset: ML_TYPE_CAP_OFFSET });
       rivalStats.abilities = rival.abilities; rivalStats.goldAbilities = rival.goldAbilities;
       rivalStats.form = aiFormRoll(rng);
       const re = effAbilities(rivalStats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);
@@ -170,7 +175,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     }
     // v26: 複数ライバル制。2人目のライバル（好敵手）は別チームの出走枠を差し替える
     if (rival2 && raceMeta.rival2Present && d.name === rival2.team && d.name !== myTeamName) {
-      const rival2Stats = newRider(power + rivalPowerBonus(rival2), idYearSeed(rival2.id, year), { type: rival2.type, banned: nameBanned, cap: aiCap });
+      const rival2Stats = newRider(power + rivalPowerBonus(rival2), idYearSeed(rival2.id, year), { type: rival2.type, banned: nameBanned, cap: aiCap, capOffset: ML_TYPE_CAP_OFFSET });
       rival2Stats.abilities = rival2.abilities; rival2Stats.goldAbilities = rival2.goldAbilities;
       rival2Stats.form = aiFormRoll(rng);
       const r2e = effAbilities(rival2Stats, { frame: 0, wheels: 0, facility: 0 }, {}, raceMeta.grade, raceMeta.weather, raceMeta.monument);

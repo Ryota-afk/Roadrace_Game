@@ -1,6 +1,7 @@
 // 世界ランキング・選手成績台帳・メディア記事。第13弾Phase0でlogic/support.jsから分離。
 import { overall, strHash, mulberry } from "../../core/core.js";
 import { DIFFICULTIES, DISCIPLINE_KEYS } from "../../data/progression.js";
+import { ML_TYPE_CAP_OFFSET } from "../../data/abilities.js";
 import { MYLIFE_TEAMS, teamsForClass } from "../../state/state.js";
 import { aiPowerFor, mlAiCapFor, ovrBandLabel, scoutedAbilities, scoutStageFromRaces } from "../shared/scouting.js";
 import { aptGrade, disciplineScore } from "../shared/growth.js";
@@ -154,7 +155,9 @@ export function mlWorldTeamStats(ml) {
   const scoutInfoFor = (rider, classIdx, stage, cap) => {
     if (stage < 1) return null;
     const power = aiPowerFor(50, classIdx, 2, diffDef.aiMul);
-    const ab = scoutedAbilities(rider, power, year, cap);
+    // 第31弾: 査定値は実際のレース生成（buildMyLifeSim）と同じcapOffsetを渡す。
+    // 揃えないと「スカウトで見た能力」と「実際に走る能力」が食い違う。
+    const ab = scoutedAbilities(rider, power, year, cap, ML_TYPE_CAP_OFFSET);
     if (stage === 1) return { stage, ovrBand: ovrBandLabel(ab.ovr) };
     if (stage === 2) return { stage, grades: DISCIPLINE_KEYS.reduce((acc, k) => { acc[k] = aptGrade(disciplineScore(ab, k)); return acc; }, {}) };
     return { stage, ...ab };

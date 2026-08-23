@@ -22,8 +22,11 @@ export function mlAiCapFor(difficultyId, fallbackAbilCap) {
 
 // rider: worldRosters/rivalRostersに入っている永続選手（id, type, baselineを持つ）。
 // power: aiPowerForで計算した値。year: idYearSeedに渡す年。cap: 能力上限。
-export function scoutedAbilities(rider, power, year, cap) {
-  const st = newRider(power + (rider.baseline || 0), idYearSeed(rider.id, year), { type: rider.type, cap, banned: new Set() });
+// 第31弾: capOffset（ML_TYPE_CAP_OFFSET相当の表）を渡すと能力別上限になる。査定値は
+// 実際のレース生成（buildMyLifeSim）と同じ式である契約なので、呼び出し側が実際に
+// 使うcapOffsetと必ず揃えること（省略時はシーズン側と同じ従来どおり）。
+export function scoutedAbilities(rider, power, year, cap, capOffset) {
+  const st = newRider(power + (rider.baseline || 0), idYearSeed(rider.id, year), { type: rider.type, cap, capOffset, banned: new Set() });
   return { flat: st.flat, climb: st.climb, sprint: st.sprint, stamina: st.stamina, solo: st.solo, ovr: overall(st) };
 }
 

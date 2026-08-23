@@ -1,4 +1,4 @@
-# 第31弾: AIの成長上限を能力別にする（設計合意済み・実装待ち）
+# 第31弾: AIの成長上限を能力別にする（完了）
 
 2026-08。DEVLOG §62の詳細記録。第29弾で「140の頭」を超えるようになった件について、ユーザーの
 「周りの選手もついてくるなら問題ない」という条件提示から調査を開始した。
@@ -173,3 +173,29 @@ AB_KEYS.forEach(k => r[k] = Math.max(22, Math.min(capOf(k), Math.round(r[k]))));
 5. **一致確認**：`scoutedAbilities`の出力と`buildMyLifeSim`で生成される選手の能力が、
    同じrider・power・year・capで一致すること（査定値と実挙動の食い違いが無いこと）。
 6. Playwrightでマイライフを実プレイし、pageerrorゼロ。
+
+## 実装結果（2026-08・Sonnetで実施）
+
+仕様書どおりに実装。変更ファイルは`data/abilities.js`（`ML_TYPE_CAP_OFFSET`の実体を移設）・
+`domain/mylife/growthCap.js`（定義を削除しimport＋再エクスポートへ）・`core/core.js`
+（`newRider`に`opts.capOffset`対応、`clamp`を`type`確定後に能力別で引く形へ）・
+`domain/shared/scouting.js`（`scoutedAbilities`に`capOffset`引数を追加）・
+`sim/buildMyLifeSim.js`（伝説選手を除く7箇所の`newRider`呼び出しに`capOffset: ML_TYPE_CAP_OFFSET`
+を追加）・`domain/mylife/worldRank.js`（`scoutInfoFor`に同じ表を渡す）の6ファイル。
+
+**検証（全て合格）**：
+- Node回帰確認：`capOffset`未指定は5脚質＋未指定typeの全パターンで変更前と完全一致
+  （シーズン側の`buildSim.js`は`capOffset`を渡していないことも確認済み＝無影響）。
+- Node効果測定：クラス0（G1）・クラス1（G3）は総合が完全に無変化（diff 0.0）、
+  クラス4（G3）で総合+4.1（設計時の実測+4.1と一致）。
+- Node形状確認：CLM選手の`climb`平均が`aiCap+10`（96→106.00）、`sprint`平均が
+  `aiCap-12`（96→84.00）に一致。
+- 査定値一致確認：`scoutedAbilities(rider, power, year, cap, ML_TYPE_CAP_OFFSET)`と
+  `buildMyLifeSim`内の実際の生成式（同一rider・power・year・cap）が全能力・OVRで完全一致。
+- Playwright実プレイ：マイライフでクライマーとしてデビューし、出走表（チームメイト・
+  ワールドロースター由来のAI選手を含む）→レース開始→中継画面（先頭集団・俯瞰マップ・
+  順位表）まで到達。pageerrorゼロ。`buildMyLifeSim`の主要経路（チームメイト・自チーム補充・
+  ワールドロースター）が実際にcapOffset付きで生成され、シミュレーションが正常に完走することを確認。
+- `npm run build`成功。
+
+DEVLOG §62を完了に更新。

@@ -1,6 +1,12 @@
 // マイライフの育成上限・私生活イベント抽選・生活費。第13弾Phase0でlogic/support.jsから分離。
 import { ML_EVENTS, ML_PERSONALITY_EVENTS } from "../../data/events.js";
+import { ML_TYPE_CAP_OFFSET } from "../../data/abilities.js";
 import { mlFirstUnmetRung } from "../../state/state.js";
+
+// 第31弾: ML_TYPE_CAP_OFFSETの定義はdata/abilities.jsへ移した（AIの上限にも同じ表を
+// 使うため、sim層・shared層のどちらからも参照できる場所が必要だった）。呼び出し側
+// （logic/support.jsの再エクスポート経由）を壊さないよう、ここでも再エクスポートする。
+export { ML_TYPE_CAP_OFFSET };
 
 // v43(マイライフ難易度調整Phase 1・柱1): 経過年数だけで誰でも同じペースでカンストしていた
 // （難易度を問わず年9〜10でキャップに到達、実測はDEVLOG該当ウェーブ参照）ことへの対処。
@@ -37,18 +43,12 @@ export function mlGrowthCap(year, player, ml) {
 // 第29弾（判断③・ユーザー合意「強」）: 脚質ごとの能力別成長上限差。
 // mlGrowthCap（共通の基準値）に脚質×能力のオフセットを足し、育て切ったときの
 // 能力シルエットを脚質が規定する（「極めると全員同じ万能型になる」の是正・v46の
-// 突破力感度と別軸のレバー）。得意+10／準得意+5（パンチャーは双得意+7）／苦手−12。
+// 突破力感度と別軸のレバー）。得意+10／準得意+5（パンチャーは双得意+7）／苦手−12
+// （表の実体はdata/abilities.jsのML_TYPE_CAP_OFFSET）。
 // - 上限を下げても既存キャラの能力値は下がらない（addAbは超過分の伸びが急減衰する
 //   だけでクランプはしないため。既存セーブへの影響は「苦手の今後の伸びが鈍る」のみ）。
 // - 配合の才能キャップ・血脈レシピ・突破力は基準値側にそのまま効く（オフセットは最後に加算）。
 // - マイライフ専用（シーズンの上限は難易度別固定値の別系統・対象外）。
-export const ML_TYPE_CAP_OFFSET = {
-  SPR: { flat: 5, climb: -12, sprint: 10, stamina: 0, solo: 0 },
-  CLM: { flat: 0, climb: 10, sprint: -12, stamina: 5, solo: 0 },
-  RUL: { flat: 10, climb: -12, sprint: 0, stamina: 5, solo: 0 },
-  PUN: { flat: 0, climb: 7, sprint: 7, stamina: 0, solo: -12 },
-  TT: { flat: 5, climb: 0, sprint: -12, stamina: 0, solo: 10 },
-};
 export function mlGrowthCapFor(year, player, ml, abKey) {
   const off = (ML_TYPE_CAP_OFFSET[player && player.type] || {})[abKey] || 0;
   return Math.max(70, mlGrowthCap(year, player, ml) + off);
