@@ -117,14 +117,12 @@
   遷移先）。監督からのdesc文は削除し指示ラベル＋評価語のみ。
 - モード選択：リード文（「6名のロースターを率い〜」等）を削除。生涯評価/CPは押せる面＋›へ。
 
-## Phase A 合意状況（2026-08・進行中）
+## Phase A 合意（2026-08・確定）
 
-- **画面1（モード選択）＝案A で確定**。
-- **画面3（シーズン選手一覧）＝案A・左レールなし で確定**（色は脚質チップのみに絞る）。
-- **画面2（ホーム）＝選定中**。指摘「勾配チャートが粗過ぎて勾配に見えない」→モックを実際の
-  CourseProfileアルゴリズム（累積標高シルエット）＋区間の意味色フィル（最低5pxの帯を保証・
-  平坦でも路面色が見える）で再提示。途中で有利が変わるコース例（グラベル実区間：
-  平坦22→丘陵16→登坂10→スプリント4km）も追加提示。
+- **画面1（モード選択）＝案A**。
+- **画面2（マイライフホーム）＝案A**（勾配チャートは実CourseProfileアルゴリズム＋区間意味色で
+  再提示のうえ合意。途中で有利が変わるコース例＝グラベル実区間でも確認済み）。
+- **画面3（シーズン選手一覧）＝案A・左レールなし**（色は脚質チップのみに絞る）。
 - **恒久ルール（ユーザー明示・CLAUDE.md §8へ明記済み）：縦線（垂直の線）は使用禁止**。
   左端の色レール・縦の仕切り・区間境界の縦罫線など装飾/区切り目的の縦線を全画面で禁止。
   区切りは余白・面の明暗・横罫線で作る。図形そのものの縦成分（シルエット輪郭・レーダー軸・
@@ -137,5 +135,110 @@
 
 **Phase A実測中に発見した不具合**：第30弾でレーダー左下へ移した「上限」の数字が、
 シーズン選手一覧では直下の「練習」セレクトと重なって表示される（cur_list.png）。
-新レイアウトではレーダー自体が詳細画面へ移るため自然解消するが、詳細画面側の実装時に
+新レイアウトではレーダー自体が展開領域へ移るため自然解消するが、展開領域の実装時に
 下余白を必ず確認する。
+
+## Phase A 実装仕様（確定・Sonnet向け）
+
+モックは `scratchpad` の `uiv2.html`（git外）。以下が正本。モックとの±1px程度の丸めは許容
+（ユーザーが承認したのは階層と形。最終微調整は実機確認で）。
+
+### 1. トークン改訂（`src/data/theme.js`）
+
+`T.size` を9段へ改訂（第13弾の「5段のみ・12px床」ルールは失効済み・ユーザー判定に基づく）：
+
+```js
+size: {
+  hero: 38,     // 1画面に1つの主役数字（ホームの総合力）
+  display: 28,  // 画面レベルの主数字・タイトルロゴ
+  title: 20,    // 画面名・ヒーローの選手名・一覧のOVR数字
+  head: 16,     // 行の主役（一覧の選手名・レース名）
+  body: 13,     // 本文・ボタン文字（14→13）
+  label: 11,    // 値付きラベル・チップ文字の大
+  caption: 10,  // チップ・タグ・補足（12→10）
+  micro: 9,     // 最小の漢字かなラベル
+  digit: 8,     // 数字専用最小（表の能力値ラベル等）
+}
+```
+- 既存コードの `T.size.caption` 参照399箇所は当面そのまま10pxへ縮む（互換キー維持）。
+  Phase Bで画面ごとに micro/digit へ振り直す。文字が潰れる等の問題が出た画面は都度実機確認。
+- `theme.js` の「5段のみ・12px床」のコメントを本弾の経緯（ユーザー判定・§63）へ書き換える。
+
+### 2. 新部品（`src/components/kit.jsx` へ追加）
+
+- **`TypeChip({ type })`**：脚質チップ。`background: TYPES[type].color`・文字 `#0E0E10`・
+  10px・padding `2px 7px 1px`・角丸0。ラベルは `TYPES[type].label`（「独走屋（TT）」は
+  一覧では「独走屋」に短縮可）。
+- **`Tag({ children })`**：状態タグ（成長期等）。`background: surfaceUp`・sub色・10px・
+  padding `1px 6px`。
+- **`PressRow({ label, value, onClick })`**：押せる行。`surfaceUp` 面＋右端「›」（sub色14px）。
+- **アフォーダンス規約**：押せる＝`surfaceUp`面 or accent塗り＋「›/▸」。静的＝`surface`面。
+  `QuietBtn`/`PrimaryBtn` は新規約へ寄せる（枠線ではなく面）。
+
+### 3. `CourseProfile` 改良（`src/components/CourseProfile.jsx`）
+
+- 区間ごとに `SEG_COLOR[type]` の面（opacity 0.5）で塗る。**塗りの上端は最低5px帯を保証**
+  （`fy(e)=min(py(e), height-5)`）＝平坦（標高0）でも路面色が見える。稜線は実標高のまま。
+- 稜線の色を `T.color.sub` → `T.color.text` へ（視認性・モック準拠）。
+- **区間境界の縦線は削除**（縦線禁止ルール）。ゴールマーカー（accentの矩形）は維持。
+
+### 4. 画面1: モード選択（`src/screens/meta.jsx`）
+
+- タイトルロゴ display(28px)・accent・中央。サブコピー「チームを率い、世界の頂点へ」削除。
+- モードカード2枚：`surfaceUp`面・padding 18px 16px。左＝モード名 title(20px)＋下に
+  種別ラベル caption(10px) sub（「シーズンモード」「マイライフモード」）。右＝
+  「はじめる ›」head(16px)、シーズン=accent色・マイライフ=action色。カード全体がbutton。
+  リード文（「6名のロースターを率い〜」「選手1人のキャリアを〜」）は削除。
+- 生涯評価/CPカード（showAux時）：横並び2枚・`surfaceUp`面・上にラベル caption sub、
+  下に数値 18px accent（生涯評価= `p.score.toLocaleString()`、CP= `bal`+小さく"pt"）・右端「›」。
+- empty state：数値0でも同じ形で出す（現状の showAux 条件は変えない）。
+
+### 5. 画面2: マイライフホーム（`src/screens/mylife/hub.jsx` mylife_main）
+
+上から：
+1. **ヒーロー**（surface）：ドット絵64px／名前 title(20px)＋改名「変更」は名前タップ長押しでは
+   なく現状のまま小ボタン（caption）／`TypeChip(r.type)`＋`Tag(ph.tag)`／
+   caption(10px) subで「{ml.team}・{r.age}歳」／右に総合力 hero(38px) accent＋caption sub。
+2. **状態3カラム**（surface）：疲労・フォーム・活力。各カラム＝数値17px（色は現行の
+   閾値色ロジックを踏襲）＋micro(9px)ラベル＋4pxバー。データ源は現行と同じ
+   （r.fatigue / r.form??50 / r.vitality??100）。
+3. **今月のレース**（surface）：レース名 head(16px)＋右に「{km}km・{★×grade}」caption sub／
+   改良CourseProfile（高さ34）／`TypeChip(favors)`で「{脚質}有利」＋悪天候時のみ
+   bad塗りチップ（雨/雪）。ミルストーン（世界選手権等）は accent caption で1行維持。
+   kind（「ヒルクライム」等の種別語）は削除（色と形が伝えるため）。
+4. **主ボタン**：`ACTION_LABEL[nextAction.key]` を accent塗り・文字16px・padding 15px・
+   右に「▸」。nextAction.reason の説明文は削除。
+5. **代替アクション чипы**：主ボタン以外の行動（race/rest/train のうち残り＋ピーキング）を
+   `surfaceUp` チップ横並び（padding 10px・11px文字）。スポンサーの仕事（popularity>=20時）も
+   同列のチップ。
+6. **作戦・練習の圧縮行**（PressRow×2）：「作戦 {ML_TACTICS[tactic].label}」「練習
+   {AB_LABEL[focus]}強化 {現在値}+{roomOf}」。タップで選択UIへ——**新設のサブ画面ではなく、
+   その場で開閉する既存リスト**（現行の作戦/練習リストをアコーディオンとして開く。
+   選択肢自体・専門トレーニングの導線は現状維持、descの常時表示は選択中のみ）。
+7. **監督から**（surface・1行）：「監督から　{directive.label}　評価{managerEvalTier.label}」。
+   desc文は削除。
+8. 以降（機材・先月の成長・その他リンク）は現状維持（Phase Bで点検）。
+
+### 6. 画面3: シーズン選手一覧（`src/screens/season/hub/riders/list.jsx`＋`riderCard.jsx`）
+
+- ヘッダ：「選手 {n}<small>/{rosterMax}名</small>」head＋4月のみ `Tag("4月は解雇できます")`。
+  成長上限の注記（「成長上限88（難易度〜）」）は削除（能力別上限になった今、単一数字は
+  誤解を招くため。詳細は展開内のレーダーが伝える）。
+- 1人＝3行のコンパクト行（行全体がbutton・タップで展開）：
+  1. 名前 head(16px)＋主将/伝説バッジ（accent caption）｜右：OVR title(20px) accent＋「›」
+  2. `TypeChip`＋`Tag(ph.tag)`＋調子矢印（COND_COLOR/ARROW 11px）｜右：疲労 micro sub＋44px幅ミニバー
+  3. 5能力の数値11px（70以上はaccent）＋下にdigit(8px) subラベル（平坦/登坂/スプ/スタ/独走）
+     ｜右：`Tag("練習 {AB_LABEL[focus]}")`
+- **レーダー2枚・練習セレクト・サプリ/調律ボタン・故障表示は展開領域へ移動**（既存
+  expandedContentの先頭に配置）。故障中は行2の調子位置に bad色で「故障{n}ヶ月」を出す。
+- 左レールは付けない（合意）。縦線禁止に伴い `AbilitySoshitsuRadarPair` の中央仕切り線も削除。
+
+### 7. 検証（Phase A完了条件）
+
+1. `npm run build` 通過・pageerrorゼロ（3画面の実プレイ）。
+2. **文字数ゲート**：実画面のinnerText文字数が モード≤85・ホーム≤170・選手一覧≤400
+   （ベースライン131/363/895・モック実測73/126/281に余裕を持たせた上限）。
+3. **縦線スイープ**：変更した部品・画面に `borderLeft`・縦`<line>`・width:1の縦div が
+   残っていないこと（grep）。
+4. `tools/verify_radar.mjs` 通過（レーダー部品に触るため）。
+5. スクリーンショットをユーザーへ提示し**実機確認**（フォント下限9px/8pxの最終判定を含む）。
