@@ -44,6 +44,7 @@ import { Stream } from "./Stream.jsx";
 import { propItems, decorNode } from "./Props.jsx";
 import { fixtureItems } from "./Fixtures.jsx";
 import { PixelPerson } from "../sprites/pixelPerson.jsx";
+import { StaffPerson } from "../sprites/staffPerson.jsx";
 import { GroundTextureDefs, InteriorTextureDefs } from "./groundTextures.jsx";
 import { SpeechBubble } from "./SpeechBubble.jsx";
 import { TYPES } from "../../data/abilities.js";
@@ -358,9 +359,13 @@ export function BaseView({ g, paused, onRoomTap }) {
                         ? <PixelBike key={`ir${pn.r.id}`} x={pn.x} y={pn.y} color={pn.color}
                             posture={pn.dancing ? "dancing" : "normal"} dir={pn.dir} flip={pn.flip}
                             t={elapsed} phase={pn.phase || 0} />
-                        : <PixelPerson key={pn.r ? `ir${pn.r.id}` : `st${pn.key}`} x={pn.x} y={pn.y}
-                            pose={pn.r ? pn.act.pose : "stand"} t={elapsed}
-                            color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />,
+                        : pn.r
+                          ? <PixelPerson key={`ir${pn.r.id}`} x={pn.x} y={pn.y}
+                              pose={pn.act.pose} t={elapsed}
+                              color={pn.color} cap={pn.cap} flip={pn.flip} phase={pn.phase || 0} />
+                          // 第33弾: スタッフは選手の色替えではなく職業ごとの専用スプライトで描く
+                          //（reference/Staff.png抽出・詳細はdevlog/wave33.md）
+                          : <StaffPerson key={`st${pn.key}`} x={pn.x} y={pn.y} kind={pn.staffKey} flip={pn.flip} />,
                     })),
                   ].sort((a, b) => a.y - b.y);
                   return (

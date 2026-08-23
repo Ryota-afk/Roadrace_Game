@@ -29,4 +29,20 @@
 
 ## スタッフ専用スプライト（#1・実装記録）
 
-（実装後に追記）
+- **抽出**：`reference/Staff.png`（832×1291・4体）をscratchpadのPillowスクリプトで機械抽出。
+  4象限それぞれで非背景のバウンディングボックス→**高さ36マス**（選手STANDと同じ全高）へ
+  最近傍量子化（各セルは中央25%領域9点の多数決色・過半が背景なら透明）→頻度順に
+  距離<48の色を統合して体ごとの固定パレット（9〜11色）に。結果は監督16×36・
+  トレーナー16×36・ドクター18×36・スカウト17×36。
+- **部品**：`sprites/staffSprites.js`（rows+legendのデータ）＋`sprites/staffPerson.jsx`
+  （`StaffPerson`・描画方式はPixelPersonと同じspriteImageUrl→`<image>`1ノード。スタッフは
+  持ち場に常駐する動かない人なのでstand1種のみ）。選手のpersonLegendと違い**チーム色の
+  動的recolorが不要**なため固定パレット方式にした。
+- **配線**：`BaseView.jsx`のindoorPeople描画で、選手はPixelPerson・スタッフは
+  `<StaffPerson kind={staffKey}/>`に分岐。`BASE_VIEW_STAFF`のkeyがそのままスプライト名
+  （trainer/doctor/scout/manager）。
+- **検証**：ビルド通過・`verify_baseview.mjs`全項目OK。セーブ注入（`roadrace_v12_save`の
+  `staff`を4種Lv1に書き換え）で拠点画面を撮影し、4体とも参考画像どおりの見た目
+  （トレーナー=グレーシャツ／監督=青キャップ＋青ジャケット／ドクター=白衣／スカウト=
+  紺ジャケット＋カーキ）で持ち場に立つことを目視確認。選手（全身チーム色ジャージ）との
+  混同は解消。`pageerror`ゼロ。
