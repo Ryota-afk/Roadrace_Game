@@ -5,7 +5,7 @@ import { FONT_B, FONT_DOT, T } from "../data/theme.js";
 import { CLASSES, seasonNeed } from "../data/progression.js";
 import { MONTHS } from "../data/course.js";
 import { BottomTabs } from "./BottomTabs.jsx";
-import { seasonRank, mlLivingCost } from "../logic/support.js";
+import { seasonRank } from "../logic/support.js";
 import { findUnsupportedChars } from "../domain/shared/textInput.js";
 
 // 第13弾Phase3-D-4-a: 資金／昇格まで／順位の3値を同じ形で並べる列。
@@ -143,24 +143,23 @@ export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, set
   return (children) => (
     <div style={{ minHeight: "100vh", background: T.color.bg, fontFamily: FONT_B }}>
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "6px 14px 40px" }}>
-        {ml.player && (
-          <div style={{ fontFamily: FONT_DOT, padding: `${T.space.sm}px 0 ${T.space.md}px`, borderBottom: `1px solid ${T.color.rule}`, marginBottom: T.space.md }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub }}>
-              <span>{CLASSES[ml.classIdx].label}</span>
-              <span>{ml.year}年目 {MONTHS[ml.month]}</span>
+        {ml.player && (() => {
+          const need = CLASSES[ml.classIdx].need;
+          return (
+            <div style={{ fontFamily: FONT_DOT, padding: `${T.space.sm}px 0 ${T.space.md}px`, borderBottom: `1px solid ${T.color.rule}`, marginBottom: T.space.md }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub }}>
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ml.team}・{CLASSES[ml.classIdx].label}</span>
+                <span style={{ flex: "none", marginLeft: T.space.sm, color: ml.points >= need ? T.color.accent : T.color.sub }}>昇格まで {ml.points} / {need}pt</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.xs }}>
+                <span style={{ fontSize: T.size.head, color: T.color.text }}>{ml.year}年目 {MONTHS[ml.month]}</span>
+                <span style={{ fontSize: T.size.head, color: T.color.accent, flex: "none", marginLeft: T.space.sm }}>
+                  {ml.money}<span style={{ fontSize: T.size.caption, color: T.color.sub }}>万円</span>
+                </span>
+              </div>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.xs }}>
-              <span style={{ fontSize: T.size.head, color: T.color.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ml.team}</span>
-              <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>
-                <span style={{ color: T.color.text, fontSize: T.size.body }}>{ml.money}</span>万円
-              </span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>
-              <span>昇格まで {ml.points} / {CLASSES[ml.classIdx].need}pt</span>
-              <span>年俸{ml.salary}万・生活費-{mlLivingCost(ml)}万</span>
-            </div>
-          </div>
-        )}
+          );
+        })()}
         {children}
         {ml.player && setMl && !TAB_HIDDEN_SCREENS.has(ml.screen) && (
           <BottomTabs screen={ml.screen} onSelect={(key) => setMl(s => ({ ...s, screen: key }))} />

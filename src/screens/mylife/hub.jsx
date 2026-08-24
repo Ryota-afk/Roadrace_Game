@@ -104,7 +104,7 @@ export function renderMyLifeHubScreen(ctx) {
                 <TypeChip type={r.type} />
                 <Tag>{ph.tag}</Tag>
               </div>
-              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>{ml.team}・{r.age}歳</div>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>{r.age}歳</div>
             </div>
             <div style={{ textAlign: "right", flex: "none" }}>
               <div style={{ fontSize: T.size.hero, lineHeight: 1, color: T.color.accent }}>{overall(r)}</div>
@@ -122,14 +122,23 @@ export function renderMyLifeHubScreen(ctx) {
                 ["フォーム", form, form >= 62 ? T.color.good : form >= 40 ? T.color.accent : T.color.bad],
                 ["活力", vit, vit >= 70 ? T.color.good : vit >= 40 ? T.color.accent : T.color.bad],
               ];
-              return rows.map(([label, val, color], i) => (
-                <div key={label} style={{ marginBottom: i === rows.length - 1 ? 0 : T.space.sm }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.xs }}>
-                    <span style={{ color: T.color.sub }}>{label}</span><span style={{ color, fontSize: T.size.label, fontVariantNumeric: "tabular-nums" }}>{val}</span>
+              return (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    {rows.map(([label, val, color]) => (
+                      <span key={label} style={{ fontSize: T.size.caption }}>
+                        <span style={{ color: T.color.sub }}>{label} </span>
+                        <span style={{ color, fontSize: T.size.head, fontVariantNumeric: "tabular-nums" }}>{val}</span>
+                      </span>
+                    ))}
                   </div>
-                  <div style={{ height: 4, background: T.color.surfaceUp }}><div style={{ height: 4, width: `${val}%`, background: color }} /></div>
-                </div>
-              ));
+                  <div style={{ display: "flex", gap: 5, marginTop: T.space.xs }}>
+                    {rows.map(([label, val, color]) => (
+                      <div key={label} style={{ flex: 1, height: 4, background: T.color.surfaceUp }}><div style={{ height: 4, width: `${val}%`, background: color }} /></div>
+                    ))}
+                  </div>
+                </>
+              );
             })()}
           </div>
 
@@ -170,28 +179,31 @@ export function renderMyLifeHubScreen(ctx) {
           })()}
 
           {/* 第32弾（第2次UI改革）: 今月の行動。推奨理由の説明文は削除し、大きな主ボタン＋色形
-              （accent塗り＋▸）で「これが推奨」を示す。他の選択肢はチップの横並びに圧縮した
-              （旧デザインの縦積み枠は行数が嵩み、かつ縦罫線ぶんの視覚的な重みが強すぎた）。 */}
+              （▸）で「これが推奨」を示す。他の選択肢はチップの横並びに圧縮した
+              （旧デザインの縦積み枠は行数が嵩み、かつ縦罫線ぶんの視覚的な重みが強すぎた）。
+              第35弾: 主ボタンの塗りをaccent→actionへ是正（CLAUDE.md §9：accentはデータ強調
+              専用・actionは操作専用で兼任させない。副ボタンはcaption→bodyへ上げ、毎月かならず
+              選ぶ行動が最小の文字段に置かれていた階層の逆転を解消した）。 */}
           <div style={{ background: T.color.surface, padding: T.space.md }}>
-            <button onClick={ACTION_HANDLER[nextAction.key]} style={{ width: "100%", background: T.color.accent, color: T.color.bg, border: 0, padding: T.space.md, fontFamily: FONT_DOT, fontSize: T.size.head, cursor: "pointer" }}>
+            <button onClick={ACTION_HANDLER[nextAction.key]} style={{ width: "100%", background: T.color.action, color: T.color.bg, border: 0, padding: T.space.md, fontFamily: FONT_DOT, fontSize: T.size.head, cursor: "pointer" }}>
               {ACTION_LABEL[nextAction.key]} ▸
             </button>
             <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginTop: T.space.sm }}>
               {nextAction.key !== "race" && (
-                <button onClick={mlStartRace} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.race} ›</button>
+                <button onClick={mlStartRace} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.race} ›</button>
               )}
               {nextAction.key !== "rest" && (
                 <button onClick={() => mlAdvanceMonth("rest")} title="疲労を大きく回復し、脚がフレッシュに（フォームの下振れを消して微増）＋メンタルも整う。大レース前の仕上げに"
-                  style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.rest} ›</button>
+                  style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.rest} ›</button>
               )}
               {nextAction.key !== "train" && (
-                <button onClick={() => mlAdvanceMonth("train")} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.train} ›</button>
+                <button onClick={() => mlAdvanceMonth("train")} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>{ACTION_LABEL.train} ›</button>
               )}
-              <button onClick={() => mlAdvanceMonth("peak")} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>ピーキング調整 ›</button>
+              <button onClick={() => mlAdvanceMonth("peak")} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>ピーキング調整 ›</button>
               {/* v43(Phase 2): 取材・私生活イベントは手動ボタンを廃止し、月が終わるたびに
                   運ステータスで確率が変わる受動発火へ移行した（controllers/mylife/month.js参照） */}
               {(ml.player.popularity || 0) >= 20 && (
-                <button onClick={mlTriggerSponsorGig} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>スポンサーの仕事 ›</button>
+                <button onClick={mlTriggerSponsorGig} style={{ flex: "none", background: T.color.surfaceUp, border: 0, color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: "pointer" }}>スポンサーの仕事 ›</button>
               )}
             </div>
           </div>

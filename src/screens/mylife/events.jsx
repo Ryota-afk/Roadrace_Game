@@ -8,7 +8,7 @@ import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
+import { ML_AB_COACH_KEY, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
 import { PARTS, PART_SLOTS, partEffectParts } from "../../data/parts.js";
 
 // mlEventResultText等は複数行の生成テキスト（\n区切り）を含むため、Proseではなく
@@ -162,12 +162,51 @@ export function renderMyLifeEventScreens(ctx) {
           {shopCat === "perm" && (
             <>
               <Section title="永続トレーニング用品" right="買い切り">
-                {Object.entries(ML_GEAR).map(([k, it], i) => (
-                  <ShopRow key={k} first={i === 0} label={it.label} detail={it.desc}
-                    locked={ml.gear[k] ? "購入済み" : null}
-                    buyLabel={ml.gear[k] ? null : `${it.price}万`} buyDisabled={ml.money < it.price} onBuy={() => mlBuyGear(k)} />
-                ))}
+                {["roller", "monitor", "chef"].map((k, i) => {
+                  const it = ML_GEAR[k];
+                  return (
+                    <ShopRow key={k} first={i === 0} label={it.label} detail={it.desc}
+                      locked={ml.gear[k] ? "購入済み" : null}
+                      buyLabel={ml.gear[k] ? null : `${it.price}万`} buyDisabled={ml.money < it.price} onBuy={() => mlBuyGear(k)} />
+                  );
+                })}
               </Section>
+
+              {/* 第35弾E: 種目別コーチ5点は価格100万・効果「+25%（恒常）」まで完全に同型で、
+                  対象能力だけが違う（ML_AB_COACH_KEY参照）。5行を並べず、1枚のパネル＋能力チップへ
+                  集約した（devlog/wave35.md）。コーチの段階化・月給化は第36弾で扱う。 */}
+              {(() => {
+                const coachPrice = ML_GEAR[ML_AB_COACH_KEY.flat].price;
+                const hiredKeys = Object.entries(ML_AB_COACH_KEY).filter(([, coachKey]) => ml.gear[coachKey]).map(([abKey]) => abKey);
+                const statusText = hiredKeys.length === 0 ? "まだ雇っていない"
+                  : hiredKeys.length === Object.keys(ML_AB_COACH_KEY).length ? "すべての能力にコーチがいる"
+                  : `${hiredKeys.map(k => AB_LABEL[k]).join("・")}を雇用済み`;
+                return (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>
+                      <span>専門コーチ</span><span>1人{coachPrice}万・買い切り</span>
+                    </div>
+                    <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub }}>選んだ能力の練習効果+25%（恒常）</div>
+                      <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginTop: T.space.sm }}>
+                        {Object.entries(ML_AB_COACH_KEY).map(([abKey, coachKey]) => {
+                          const hired = !!ml.gear[coachKey];
+                          const affordable = ml.money >= coachPrice;
+                          return (
+                            <button key={abKey} disabled={hired || !affordable} onClick={() => mlBuyGear(coachKey)} style={{
+                              border: "none", cursor: hired || !affordable ? "default" : "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
+                              padding: "6px 9px",
+                              background: hired ? T.color.action : T.color.surfaceUp,
+                              color: hired ? T.color.bg : affordable ? T.color.text : T.color.sub,
+                            }}>{AB_LABEL[abKey]}{hired ? " ✓" : ""}</button>
+                          );
+                        })}
+                      </div>
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>{statusText}</div>
+                    </div>
+                  </>
+                );
+              })()}
 
               <TierPanel title="車" note="レースの疲労蓄積を軽減" items={ML_CARS} lv={ml.carLv} money={ml.money} onBuy={mlBuyCar} />
 
