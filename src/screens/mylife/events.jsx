@@ -3,7 +3,7 @@
 // season側と共有のため中身は据え置き（Phase3-D-3担当）。
 import React from "react";
 import { FatigueBar } from "../../components/panels.jsx";
-import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopRow, TypeChip } from "../../components/kit.jsx";
+import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopBtn, ShopRow, TypeChip } from "../../components/kit.jsx";
 import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
@@ -16,6 +16,30 @@ import { PARTS, PART_SLOTS, partEffectParts } from "../../data/parts.js";
 const ResultText = ({ children }) => (
   <div style={{ fontSize: T.size.body, color: T.color.text, lineHeight: 1.9, padding: T.space.md, background: T.color.surface, marginBottom: T.space.md, whiteSpace: "pre-wrap" }}>{children}</div>
 );
+
+// 第34弾: 車・家は階段式（買えるのは常に次の1段だけ）なので、全段を並べず
+// 「今の段階＋次の1段」だけの1枚パネルに畳む（devlog/wave34.md）。
+const TierPanel = ({ title, note, items, lv, money, onBuy }) => {
+  const cur = lv >= 0 ? items[lv] : null;
+  const next = lv < items.length - 1 ? items[lv + 1] : null;
+  return (
+    <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.sm }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <span style={{ fontSize: T.size.head }}>{title}</span>
+        <span style={{ fontSize: T.size.body, color: cur ? T.color.accent : T.color.sub }}>{cur ? cur.label : "未所有"}</span>
+      </div>
+      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{note}</div>
+      {next ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.sm, gap: T.space.sm }}>
+          <span style={{ fontSize: T.size.caption, color: T.color.text }}>{next.label}　{next.desc}</span>
+          <ShopBtn onClick={onBuy} disabled={money < next.price} minWidth={64}>{next.price}万</ShopBtn>
+        </div>
+      ) : (
+        <div style={{ textAlign: "right", fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.sm }}>最上位</div>
+      )}
+    </div>
+  );
+};
 
 export function renderMyLifeEventScreens(ctx) {
   const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyGrowthPowUp, mlBuyGrowthShift, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUpgradePart, mlUseStockConfirm, mlWrap, setMl } = ctx;
@@ -47,54 +71,74 @@ export function renderMyLifeEventScreens(ctx) {
             ))}
           </div>
 
-          {shopCat === "parts" && (
-            <>
-              <Section title="マシンパーツ" right="クラス昇格で上位解禁">
-                {Object.entries(PARTS).map(([pid, p], i) => {
-                  const lockedByClass = p.tier > ml.classIdx + 1;
-                  return (
-                    <ShopRow key={pid} first={i === 0}
-                      label={p.label} countLabel="未装着" count={Math.max(0, availPartsMl(pid))}
-                      detail={`${SLOT_LABEL[p.slot]}・${partEffectParts(p, 1, AB_LABEL).join(" / ")}`}
-                      locked={lockedByClass ? `${CLASSES[p.tier - 1].id}で解禁` : null}
-                      buyLabel={lockedByClass ? null : `${p.price}万`} buyDisabled={ml.money < p.price} onBuy={() => mlBuyPart(pid)} />
-                  );
-                })}
-              </Section>
-
-              <div style={{ display: "flex", gap: T.space.sm, marginTop: `-${T.space.sm}px`, marginBottom: T.space.md, flexWrap: "wrap" }}>
-                {PART_SLOTS.map(slot => (
-                  <span key={slot} style={{ display: "inline-flex", alignItems: "center", gap: T.space.xs, fontSize: T.size.caption }}>
-                    <span style={{ color: T.color.sub }}>{SLOT_LABEL[slot]}:</span>
-                    <select value={r.parts[slot] || ""} onChange={e => mlSetPart(slot, e.target.value)}
-                      style={{ background: T.color.surfaceUp, color: T.color.text, border: `1px solid ${T.color.rule}`, fontFamily: FONT_DOT, fontSize: T.size.caption, padding: "3px 5px", maxWidth: 140 }}>
-                      <option value="">— なし —</option>
-                      {Object.entries(PARTS).filter(([pid, p]) => p.slot === slot && (availPartsMl(pid) > 0 || r.parts[slot] === pid))
-                        .map(([pid, p]) => <option key={pid} value={pid}>{p.label}</option>)}
-                    </select>
-                  </span>
-                ))}
-              </div>
-
-              <Section title="装着中パーツの強化" right={`買い切り・Lv${maxLv}まで`}>
-                {PART_SLOTS.filter(slot => r.parts[slot]).map((slot, i) => {
+          {shopCat === "parts" && (() => {
+            const tier2Count = Object.values(PARTS).filter(p => p.tier === 2).length;
+            const tier3Count = Object.values(PARTS).filter(p => p.tier === 3).length;
+            const lockedTierMsgs = [];
+            if (ml.classIdx < 1) lockedTierMsgs.push(`${CLASSES[1].id}クラスで${tier2Count}点`);
+            if (ml.classIdx < 2) lockedTierMsgs.push(`${CLASSES[2].id}クラスで${tier3Count}点`);
+            return (
+              <>
+                {PART_SLOTS.map(slot => {
                   const pid = r.parts[slot];
-                  const p = PARTS[pid];
+                  const p = pid ? PARTS[pid] : null;
                   const lv = (r.partLv && r.partLv[slot]) || 0;
-                  const maxed = lv >= maxLv;
-                  const cost = maxed ? null : ML_PART_UPGRADE_COST[lv];
+                  const isOpen = ml.shopSlot === slot;
+                  const avail = Object.entries(PARTS).filter(([, pp]) => pp.slot === slot && pp.tier <= ml.classIdx + 1);
+                  const minPrice = avail.length ? Math.min(...avail.map(([, pp]) => pp.price)) : null;
                   return (
-                    <ShopRow key={slot} first={i === 0}
-                      label={p.label} countLabel="Lv" count={`${lv}/${maxLv}`}
-                      detail={partEffectParts(p, 1 + ML_PART_LV_MUL * lv, AB_LABEL).join(" / ")}
-                      locked={maxed ? "最大強化" : null}
-                      buyLabel={maxed ? null : `${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
+                    <div key={slot} style={{ marginBottom: T.space.sm }}>
+                      <button onClick={() => setMl(x => ({ ...x, shopSlot: isOpen ? null : slot }))} style={{
+                        display: "block", width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT_DOT,
+                        padding: "10px 12px", background: isOpen ? "#2A2438" : T.color.surface,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                          <span style={{ fontSize: T.size.head, color: T.color.text }}>{SLOT_LABEL[slot]}</span>
+                          <span style={{ fontSize: T.size.body }}>
+                            {p ? <span style={{ color: T.color.accent }}>{p.label}　Lv{lv}　›</span> : <span style={{ color: T.color.sub }}>未装着　›</span>}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
+                          {p
+                            ? partEffectParts(p, 1 + ML_PART_LV_MUL * lv, AB_LABEL).join(" / ")
+                            : (minPrice != null ? `買える${avail.length}点　${minPrice}万〜` : "解禁されているパーツがありません")}
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div style={{ marginTop: T.space.xs }}>
+                          {avail.map(([apid, ap], i) => {
+                            if (apid === pid) {
+                              const maxed = lv >= maxLv;
+                              const cost = maxed ? null : ML_PART_UPGRADE_COST[lv];
+                              return (
+                                <ShopRow key={apid} first={i === 0} label={ap.label} badge={`装着中 Lv${lv}`}
+                                  detail={partEffectParts(ap, 1 + ML_PART_LV_MUL * lv, AB_LABEL).join(" / ")}
+                                  locked={maxed ? `Lv${maxLv} 最大` : null}
+                                  buyLabel={maxed ? null : `強化 ${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
+                              );
+                            }
+                            const owned = availPartsMl(apid) > 0;
+                            return (
+                              <ShopRow key={apid} first={i === 0} label={ap.label}
+                                detail={partEffectParts(ap, 1, AB_LABEL).join(" / ")}
+                                buyLabel={owned ? "装着する" : `${ap.price}万`}
+                                buyDisabled={owned ? false : ml.money < ap.price}
+                                onBuy={() => owned ? mlSetPart(slot, apid) : mlBuyPart(apid)} />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
-                {PART_SLOTS.every(slot => !r.parts[slot]) && <Item first label="—" value="" detail="パーツを装着すると、ここで強化できます" />}
-              </Section>
-            </>
-          )}
+                {lockedTierMsgs.length > 0 && (
+                  <div style={{ fontSize: T.size.caption, color: T.color.sub, textAlign: "center", marginBottom: T.space.md }}>
+                    上位パーツは{lockedTierMsgs.join("・")}が解禁されます
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {shopCat === "items" && (
             <>
@@ -125,21 +169,9 @@ export function renderMyLifeEventScreens(ctx) {
                 ))}
               </Section>
 
-              <Section title="車" right="レースの疲労蓄積を軽減">
-                {ML_CARS.map((c, i) => (
-                  <ShopRow key={i} first={i === 0} label={c.label} detail={c.desc}
-                    badge={ml.carLv === i ? "所有中" : null}
-                    buyLabel={ml.carLv >= i ? null : `${c.price}万`} buyDisabled={ml.money < c.price || ml.carLv !== i - 1} onBuy={mlBuyCar} />
-                ))}
-              </Section>
+              <TierPanel title="車" note="レースの疲労蓄積を軽減" items={ML_CARS} lv={ml.carLv} money={ml.money} onBuy={mlBuyCar} />
 
-              <Section title="家" right="毎月の疲労回復を底上げ">
-                {ML_HOUSES.map((h, i) => (
-                  <ShopRow key={i} first={i === 0} label={h.label} detail={h.desc}
-                    badge={ml.houseLv === i ? "所有中" : null}
-                    buyLabel={ml.houseLv >= i ? null : `${h.price}万`} buyDisabled={ml.money < h.price || ml.houseLv !== i - 1} onBuy={mlBuyHouse} />
-                ))}
-              </Section>
+              <TierPanel title="家" note="毎月の疲労回復を底上げ" items={ML_HOUSES} lv={ml.houseLv} money={ml.money} onBuy={mlBuyHouse} />
 
               <Section title="才能開花プログラム" right="成長力を1段階アップ">
                 {mlGrowthPowRevealed(ml) ? (

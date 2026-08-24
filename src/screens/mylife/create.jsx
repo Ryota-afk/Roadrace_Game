@@ -4,28 +4,50 @@
 // 第32弾Phase B: 強調ボックスの左罫線(borderLeft)を撤去（縦線禁止・CLAUDE.md §8）。
 // surfaceUpの面差だけで区切る。
 import React from "react";
-import { loadBloodlines, loadMlLegends, mlBloodlineFactor, mlBloodlineTier, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
+import { loadMlLegends, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { bestBloodRecipeProgress, bloodRecipeProgress, deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
 import { AbilityGrid, TraitLine } from "../../components/panels.jsx";
-import { Item, PrimaryBtn, QuietBtn, Screen, Section, SelectRow, TypeChip } from "../../components/kit.jsx";
+import { PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
 import { fmtRelTime, overall } from "../../core/core.js";
 import { ABILITIES, AB_LABEL, TYPES } from "../../data/abilities.js";
+import { SEG_LABEL } from "../../data/course.js";
 import { DIFFICULTIES } from "../../data/progression.js";
-import { T } from "../../data/theme.js";
+import { FONT_DOT, T } from "../../data/theme.js";
 import { MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGrowthPowRevealed, mlTalentRank } from "../../logic/support.js";
 import { loadMyLifeGame, myLifeSaveInfo } from "../../state/state.js";
+
+// 第34弾: 選択肢は名前だけを横に並べ、説明は選んでいる1件だけを下の面に出す。
+// 「3件分の説明を読み比べる人はいない」という実態に合わせた形（devlog/wave34.md）。
+const PickHead = ({ children }) => (
+  <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>{children}</div>
+);
+const PickRow = ({ items, value, onPick }) => (
+  <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginBottom: T.space.sm }}>
+    {items.map(it => (
+      <button key={it.key} onClick={() => onPick(it.key)} style={{
+        border: "none", cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
+        padding: `${T.space.sm}px ${T.space.md}px`,
+        background: value === it.key ? T.color.action : T.color.surfaceUp,
+        color: value === it.key ? T.color.bg : T.color.sub,
+      }}>{it.label}{it.sub && <span style={{ fontSize: T.size.caption, marginLeft: 4 }}>{it.sub}</span>}</button>
+    ))}
+  </div>
+);
+const PickNote = ({ children }) => (
+  <div style={{ background: T.color.surface, padding: `10px ${T.space.md}px`, marginBottom: T.space.md }}>{children}</div>
+);
 
 export function renderMyLifeCreateScreens(ctx) {
   const { askConfirm, ml, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlWrap, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
+      const curType = TYPES[ml.typeChoice];
+      const curBg = ML_BACKGROUNDS[ml.bgChoice];
+      const curDiff = DIFFICULTIES.find(d => d.id === (ml.mlDiffChoice || "easy")) || DIFFICULTIES[0];
       return mlWrap(
         <Screen>
-          <div style={{ fontSize: T.size.title, marginBottom: T.space.xs }}>キャラクター作成</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md, lineHeight: 1.7 }}>
-            一人の選手としてB1からデビューし、引退までのキャリアを歩みます。まずは脚質と経歴を選んでください。
-          </div>
+          <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>選手をつくる</div>
 
           {hasMyLifeSave() && (() => {
             const info = myLifeSaveInfo();
@@ -37,31 +59,44 @@ export function renderMyLifeCreateScreens(ctx) {
             );
           })()}
 
-          <Section title="脚質">
-            {typeOpts.map(([k, t], i) => (
-              <SelectRow key={k} first={i === 0} label={t.label} selected={ml.typeChoice === k} onClick={() => setMl(s => ({ ...s, typeChoice: k }))} />
-            ))}
-          </Section>
+          <PickHead>脚質</PickHead>
+          <PickRow items={typeOpts.map(([k, t]) => ({ key: k, label: t.label }))} value={ml.typeChoice} onPick={k => setMl(s => ({ ...s, typeChoice: k }))} />
+          {curType && (
+            <PickNote>
+              <div style={{ fontSize: T.size.body, color: T.color.text }}>
+                {Object.entries(curType.affinity).map(([seg, v]) => `${SEG_LABEL[seg]} +${v}`).join("／")}
+              </div>
+            </PickNote>
+          )}
 
-          <Section title="経歴" right="年齢・能力・伸びしろに影響">
-            {bgOpts.map(([k, b], i) => (
-              <SelectRow key={k} first={i === 0} selected={ml.bgChoice === k} onClick={() => setMl(s => ({ ...s, bgChoice: k }))}
-                label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><span>{b.label}</span><span style={{ fontSize: T.size.caption, color: T.color.sub }}>{b.age}歳スタート</span></div>}
-                detail={<>{b.desc}{b.merit && <div style={{ color: T.color.accent, marginTop: 2 }}>{b.meritLabel} {b.merit}</div>}</>} />
-            ))}
-          </Section>
+          <PickHead>経歴</PickHead>
+          <PickRow items={bgOpts.map(([k, b]) => ({ key: k, label: b.label, sub: `${b.age}歳` }))} value={ml.bgChoice} onPick={k => setMl(s => ({ ...s, bgChoice: k }))} />
+          {curBg && (
+            <PickNote>
+              <div style={{ fontSize: T.size.body, color: T.color.text }}>{curBg.desc}</div>
+              {curBg.merit && (
+                <>
+                  <div style={{ fontSize: T.size.label, color: T.color.accent, marginTop: T.space.xs }}>{curBg.meritLabel}</div>
+                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{curBg.merit}</div>
+                </>
+              )}
+            </PickNote>
+          )}
 
-          <Section title="難易度" right="相手の強さ・成長上限・クリアポイント倍率">
-            {DIFFICULTIES.map((d, i) => {
-              const cpMul = MLCP_DIFF_MUL[d.id] ?? 1;
-              const sel = (ml.mlDiffChoice || "easy") === d.id;
-              return (
-                <SelectRow key={d.id} first={i === 0} selected={sel} onClick={() => setMl(s => ({ ...s, mlDiffChoice: d.id }))}
-                  label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><span>{d.label}</span><span style={{ fontSize: T.size.caption, color: cpMul > 1 ? T.color.good : T.color.sub }}>クリアポイント ×{cpMul}</span></div>}
-                  detail={d.desc} />
-              );
-            })}
-          </Section>
+          <PickHead>難易度</PickHead>
+          <PickRow items={DIFFICULTIES.map(d => ({ key: d.id, label: d.label }))} value={ml.mlDiffChoice || "easy"} onPick={k => setMl(s => ({ ...s, mlDiffChoice: k }))} />
+          {curDiff && (() => {
+            const cpMul = MLCP_DIFF_MUL[curDiff.id] ?? 1;
+            return (
+              <PickNote>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: T.size.body, color: T.color.text }}>{curDiff.desc}</span>
+                  <span style={{ fontSize: T.size.head, color: cpMul > 1 ? T.color.good : T.color.sub, flex: "none", marginLeft: T.space.sm }}>×{cpMul}</span>
+                </div>
+                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>クリアポイント倍率</div>
+              </PickNote>
+            );
+          })()}
 
           {(() => {
             const legends = loadMlLegends();
@@ -71,33 +106,26 @@ export function renderMyLifeCreateScreens(ctx) {
             const inh = master ? protegeInherit(master) : null;
             return (
               <>
-                <Section title="師匠" right="歴代の名選手に師事・任意">
-                  <SelectRow first label="師事しない（通常のデビュー）" selected={idx === -1} onClick={() => setMl(s => ({ ...s, masterIdx: -1 }))} />
-                  {legends.map((leg, i) => (
-                    <SelectRow key={i} selected={idx === i} onClick={() => setMl(s => ({ ...s, masterIdx: i }))}
-                      label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.xs }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: T.space.xs, minWidth: 0 }}>
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{leg.name}</span>
-                          <TypeChip type={leg.type} />
-                        </span>
-                        <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{leg.wins || 0}勝/{leg.podiums || 0}表彰台</span>
-                      </div>}
-                      detail={leg.nickname ? `「${leg.nickname}」` : null} />
-                  ))}
-                </Section>
+                <PickHead>師匠</PickHead>
+                <PickRow
+                  items={[{ key: -1, label: "師事しない" }, ...legends.map((leg, i) => ({ key: i, label: leg.name, sub: `${leg.wins || 0}勝` }))]}
+                  value={idx} onPick={k => setMl(s => ({ ...s, masterIdx: k }))} />
 
                 {inh && (
-                  <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md, fontSize: T.size.caption, color: T.color.text, lineHeight: 1.8 }}>
-                    <div><span style={{ color: T.color.accent }}>師の教え：</span>{inh.teaching.label}<span style={{ color: T.color.sub }}>（{inh.teaching.desc}）</span></div>
-                    <div>
-                      <span style={{ color: T.color.accent }}>継承：</span>
-                      {Object.entries(inh.abBonus).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join(" / ")}
+                  <PickNote>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: T.space.sm }}>
+                      <span style={{ fontSize: T.size.body, color: T.color.accent }}>{inh.teaching.label}</span>
+                      <TypeChip type={master.type} />
+                    </div>
+                    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{inh.teaching.desc}</div>
+                    <div style={{ fontSize: T.size.caption, color: T.color.text, marginTop: T.space.xs }}>
+                      {Object.entries(inh.abBonus).map(([k, v]) => `${AB_LABEL[k]}+${v}`).join("・")}
                       {inh.subBonus && Object.entries(inh.subBonus).map(([k, v]) => `・${SUB_STAT_LABEL[k]}${v >= 0 ? "+" : ""}${v}`).join("")}
                       {inh.growthPowBump && "・成長力+1段階"}
-                      <span style={{ color: T.color.accent }}>・継承特性「{ABILITIES[inh.lineageTrait].label}」</span>
+                      {`・継承特性「${ABILITIES[inh.lineageTrait].label}」`}
                       {inh.inheritAbility && `・特殊能力「${ABILITIES[inh.inheritAbility].label}」`}
                     </div>
-                  </div>
+                  </PickNote>
                 )}
 
                 {master && legends.length >= 2 && (() => {
@@ -106,53 +134,34 @@ export function renderMyLifeCreateScreens(ctx) {
                   const breed = partner ? mlBreedBonus(master, partner) : null;
                   return (
                     <>
-                      <Section title="配合相手" right="もう一人の親・任意">
-                        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>2人目の親を選ぶと「配合」になり、両方の血を引く逸材が生まれます。</div>
-                        <SelectRow first label="配合しない（師事のみ）" selected={pIdx === -1} onClick={() => setMl(s => ({ ...s, partnerIdx: -1 }))} />
-                        {legends.map((leg, i) => i === idx ? null : (
-                          <SelectRow key={i} selected={pIdx === i} onClick={() => setMl(s => ({ ...s, partnerIdx: i }))}
-                            label={<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.xs }}>
-                              <span style={{ display: "flex", alignItems: "center", gap: T.space.xs, minWidth: 0 }}>
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{leg.name}</span>
-                                <TypeChip type={leg.type} />
-                              </span>
-                              <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{(leg.generation || 0) > 0 ? `${leg.generation}代目・` : ""}+{leg.plusValue || 0}</span>
-                            </div>} />
-                        ))}
-                      </Section>
+                      <PickHead>配合相手</PickHead>
+                      <PickRow
+                        items={[{ key: -1, label: "配合しない" }, ...legends.map((leg, i) => i === idx ? null : { key: i, label: leg.name, sub: `+${leg.plusValue || 0}` }).filter(Boolean)]}
+                        value={pIdx} onPick={k => setMl(s => ({ ...s, partnerIdx: k }))} />
 
-                      {breed && (
-                        <Section title="配合の相性">
-                          {breed.special && (
-                            <div style={{ background: T.color.surfaceUp, padding: T.space.sm, marginBottom: T.space.sm }}>
-                              <div style={{ fontSize: T.size.body, color: T.color.accent }}>特殊配合『{breed.special.title}』</div>
-                              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{breed.special.note}</div>
-                            </div>
-                          )}
-                          <Item first label="配合評価" value={breed.matingGrade} valueColor={T.color.accent} detail={`爆発力 ${breed.bakuhatsu}`} />
-                          <Item label="素質の見込み"
-                            value={breed.growthSteps > 0 || breed.talentCap > 0 ? "化ける可能性あり" : "平凡"}
-                            detail={[breed.growthSteps > 0 ? `成長力+${breed.growthSteps}段` : null, breed.talentCap > 0 ? `才能キャップ+${breed.talentCap}` : null].filter(Boolean).join("・") || "配合の質を上げると化ける"} />
-                          {breed.danger > 0 && (
-                            <Item label="危険度" value={breed.dangerLabel} valueColor={breed.danger >= 38 ? T.color.bad : T.color.accent}
-                              detail={`約${breed.danger}%：稀に「ガラスの体」を持って生まれる${breed.healthMit > 0 ? "／健康な血で軽減済" : "。頑丈・鉄人の血を持つ親で軽減できる"}`} />
-                          )}
-                          <Item label="配合相性" value={`${breed.nick.rank} ${breed.nick.label}`} valueColor={breed.nick.rank === "◎" ? T.color.accent : T.color.text} />
-                          <Item label="血統ボーナス" value={`累代+${breed.plusPer}`}
-                            detail={[breed.inbreed.count > 0 ? `インブリード×${breed.inbreed.count}（血が濃い！）` : null, breed.generation > 1 ? `${breed.generation}代目` : null].filter(Boolean).join("・") || null} />
-                          <Item label="受け継ぐ特能" value={breed.extraAbilities.length > 0 ? breed.extraAbilities.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・") : "—"} />
-                          {breed.goldInherit && breed.goldInherit.length > 0 && (
-                            <Item label="金の特殊能力" value={breed.goldInherit.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")} valueColor={T.color.accent} detail="最初から金です" />
-                          )}
-                          {breed.exclusive && breed.exclusive.length > 0 && (
-                            <Item label="配合限定特能" value={breed.exclusive.map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・")} valueColor={T.color.accent} />
-                          )}
-                          <Item label="継承する系統" value={master.lineageName || `${master.name}系`}
-                            detail={(() => { const rec = loadBloodlines()[master.lineageName || `${master.name}系`]; const t = rec ? mlBloodlineTier(rec) : null; if (!t || t.tier <= 0) return null; const fac = mlBloodlineFactor(rec); return `${t.label}系統（因子：伸びしろ+${t.tier}${fac ? `・${ABILITIES[fac]?.label || fac}` : ""}${t.tier >= 3 ? "・金" : ""}）`; })()} />
-                          {breed.archNotes && breed.archNotes.length > 0 && (
-                            <Item label="血の格" value={breed.archNotes.join("・")} />
-                          )}
-                        </Section>
+                      {breed && (() => {
+                        const lines = [];
+                        lines.push([breed.growthSteps > 0 ? `成長力+${breed.growthSteps}段` : null, breed.talentCap > 0 ? `才能キャップ+${breed.talentCap}` : null, `累代+${breed.plusPer}`, breed.inbreed.count > 0 ? `インブリード×${breed.inbreed.count}` : null].filter(Boolean).join("・"));
+                        const abIds = [...breed.extraAbilities, ...(breed.goldInherit || []), ...(breed.exclusive || [])];
+                        const abText = [...new Set(abIds)].map(id => ABILITIES[id] ? ABILITIES[id].label : id).join("・");
+                        return (
+                          <PickNote>
+                            {breed.special && (
+                              <div style={{ marginBottom: T.space.xs }}>
+                                <div style={{ fontSize: T.size.body, color: T.color.accent }}>『{breed.special.title}』</div>
+                                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{breed.special.note}</div>
+                              </div>
+                            )}
+                            <div style={{ fontSize: T.size.body, color: T.color.accent }}>配合評価 {breed.matingGrade}　相性 {breed.nick.rank} {breed.nick.label}</div>
+                            {lines[0] && <div style={{ fontSize: T.size.caption, color: T.color.text, marginTop: T.space.xs }}>{lines[0]}</div>}
+                            {abText && <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: 2 }}>{abText}</div>}
+                          </PickNote>
+                        );
+                      })()}
+                      {breed && breed.danger > 0 && (
+                        <div style={{ fontSize: T.size.caption, color: breed.danger >= 38 ? T.color.bad : T.color.accent, marginBottom: T.space.md }}>
+                          {breed.dangerLabel}　約{breed.danger}%で「ガラスの体」
+                        </div>
                       )}
 
                       {breed && (() => {
@@ -165,35 +174,38 @@ export function renderMyLifeCreateScreens(ctx) {
                         const best = bestBloodRecipeProgress(progress);
                         const otherCount = best ? progress.length - 1 : 0;
                         return (
-                          <Section title="血脈レシピ">
-                            {recipe ? (
-                              <div style={{ background: T.color.surfaceUp, padding: T.space.sm }}>
-                                <div style={{ fontSize: T.size.body, color: T.color.accent }}>血脈レシピ『{recipe.title}』成立！</div>
-                                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{recipe.note}</div>
-                                <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.xs }}>
-                                  伝説の特殊能力「{ABILITIES[recipe.abilityId]?.label}」を宿して生まれる
-                                </div>
-                              </div>
-                            ) : best ? (
-                              <>
+                          <>
+                            <PickHead>血脈レシピ</PickHead>
+                            <PickNote>
+                              {recipe ? (
                                 <div style={{ background: T.color.surfaceUp, padding: T.space.sm }}>
-                                  <div style={{ fontSize: T.size.body, color: T.color.text }}>{best.recipe.title}</div>
-                                  <div style={{ fontSize: T.size.body, color: T.color.accent, letterSpacing: 2, marginTop: 2 }}>
-                                    {"●".repeat(best.matchedCount)}{"○".repeat(best.total - best.matchedCount)}
-                                  </div>
-                                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
-                                    {best.recipe.steps.slice(0, best.matchedCount).join(" → ")}
-                                    {best.matchedCount < best.total && `　／　次の代に「${best.recipe.steps[best.matchedCount]}」が揃うと成立`}
+                                  <div style={{ fontSize: T.size.body, color: T.color.accent }}>血脈レシピ『{recipe.title}』成立！</div>
+                                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{recipe.note}</div>
+                                  <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.xs }}>
+                                    伝説の特殊能力「{ABILITIES[recipe.abilityId]?.label}」を宿して生まれる
                                   </div>
                                 </div>
-                                {otherCount > 0 && (
-                                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>他に{otherCount}件の隠しレシピが進行中</div>
-                                )}
-                              </>
-                            ) : (
-                              <div style={{ color: T.color.sub, fontSize: T.size.caption }}>配合を重ねると、隠されたレシピの手がかりが見えてくる</div>
-                            )}
-                          </Section>
+                              ) : best ? (
+                                <>
+                                  <div style={{ background: T.color.surfaceUp, padding: T.space.sm }}>
+                                    <div style={{ fontSize: T.size.body, color: T.color.text }}>{best.recipe.title}</div>
+                                    <div style={{ fontSize: T.size.body, color: T.color.accent, letterSpacing: 2, marginTop: 2 }}>
+                                      {"●".repeat(best.matchedCount)}{"○".repeat(best.total - best.matchedCount)}
+                                    </div>
+                                    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
+                                      {best.recipe.steps.slice(0, best.matchedCount).join(" → ")}
+                                      {best.matchedCount < best.total && `　／　次の代に「${best.recipe.steps[best.matchedCount]}」が揃うと成立`}
+                                    </div>
+                                  </div>
+                                  {otherCount > 0 && (
+                                    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>他に{otherCount}件の隠しレシピが進行中</div>
+                                  )}
+                                </>
+                              ) : (
+                                <div style={{ color: T.color.sub, fontSize: T.size.caption }}>配合を重ねると、隠されたレシピの手がかりが見えてくる</div>
+                              )}
+                            </PickNote>
+                          </>
                         );
                       })()}
                     </>
