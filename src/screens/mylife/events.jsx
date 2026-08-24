@@ -172,9 +172,10 @@ export function renderMyLifeEventScreens(ctx) {
                 })}
               </Section>
 
-              {/* 第36弾: コーチの段階化＋月給制。5チップは「未雇用/雇用中(Lv表示)/上限到達」の
-                  3状態を持つ。旧セーブのgear[coachKey]（買い切り済み）はLv1相当として表示・
-                  操作両方に反映する（coachLvはmonth.js/shop.jsと同じ実効Lvの式）。 */}
+              {/* 第37弾: 第36弾のコーチ節を圧縮（案2・devlog/wave37.md）。雇用中リストを廃止し、
+                  チップを押すと直下に操作行が1行だけ開く（ホームのレース作戦・練習メニューと
+                  同じ「押すと開く」の型）。coachLvはmonth.js/shop.jsと同じ実効Lvの式
+                  （旧セーブのgear[coachKey]買い切りはLv1相当として扱う）。 */}
               {(() => {
                 const abKeys = Object.keys(ML_AB_COACH_KEY);
                 const coachLv = (k) => Math.max(ml.gear[ML_AB_COACH_KEY[k]] ? 1 : 0, (ml.coaches && ml.coaches[k]) || 0);
@@ -184,53 +185,73 @@ export function renderMyLifeEventScreens(ctx) {
                 const hired = hiredKeys.length;
                 const slotsFull = hired >= slots;
                 const totalSalary = hiredKeys.reduce((a, k) => a + (ML_COACH_SALARY[coachLv(k)] || 0), 0);
+                const sel = ml.uiCoachSel && abKeys.includes(ml.uiCoachSel) ? ml.uiCoachSel : null;
+                const selLv = sel ? coachLv(sel) : 0;
+                const selectCoach = (k) => setMl(s => ({ ...s, uiCoachSel: s.uiCoachSel === k ? null : k }));
+                const dismissCoach = (k) => { mlDismissCoach(k); setMl(s => ({ ...s, uiCoachSel: null })); };
                 return (
                   <>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>
-                      <span>専門コーチ</span><span>雇用枠 {hired} / {slots}人</span>
+                      <span>専門コーチ</span>
+                      <span>{hired} / {slots}人{totalSalary > 0 ? `・月${totalSalary}万` : ""}</span>
                     </div>
                     <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
-                      <div style={{ fontSize: T.size.caption, color: T.color.sub }}>能力ごとに専属コーチを雇うと練習効果が上がる。昇格させるほど効果が高まる（月給制）</div>
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub }}>昇格させるほど練習効果が高まる（月給制・契約金{ML_COACH_SIGNING}万）</div>
                       <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginTop: T.space.sm }}>
                         {abKeys.map(k => {
                           const lv = coachLv(k);
                           const capped = lv >= maxLv;
                           const hiredHere = lv > 0;
-                          const canAct = hiredHere ? !capped : (!slotsFull && ml.money >= ML_COACH_SIGNING);
+                          const isSel = sel === k;
                           return (
-                            <button key={k} disabled={!canAct} onClick={() => mlHireCoach(k)} style={{
-                              border: "none", cursor: canAct ? "pointer" : "default", fontFamily: FONT_DOT, fontSize: T.size.body,
+                            <button key={k} onClick={() => selectCoach(k)} style={{
+                              border: "none", cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
                               padding: "6px 9px",
-                              background: hiredHere ? T.color.action : T.color.surfaceUp,
-                              color: hiredHere ? T.color.bg : canAct ? T.color.text : T.color.sub,
+                              background: isSel ? T.color.action : T.color.surfaceUp,
+                              color: isSel ? T.color.bg : hiredHere ? T.color.text : T.color.sub,
                             }}>
-                              {AB_LABEL[k]}{hiredHere && ` Lv${lv}`}{capped && <span style={{ color: T.color.accent }}>（上限）</span>}
+                              {AB_LABEL[k]}{hiredHere && ` Lv${lv}`}{capped && <span style={{ color: isSel ? T.color.bg : T.color.accent }}>（上限）</span>}
                             </button>
                           );
                         })}
                       </div>
-                      {slotsFull && (
-                        <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.sm }}>
-                          雇用枠が満員です{ml.classIdx !== 2 ? "（上位クラスへ昇格すると枠が増えます）" : ""}
-                        </div>
-                      )}
-                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>
-                        月給の目安　Lv1 {ML_COACH_SALARY[1]}万 → Lv2 {ML_COACH_SALARY[2]}万 → Lv3 {ML_COACH_SALARY[3]}万（契約金は雇用時のみ{ML_COACH_SIGNING}万）
-                      </div>
-                    </div>
-                    {hired === 0 ? (
-                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>まだ雇っていない</div>
-                    ) : (
-                      <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
-                        {hiredKeys.map((k, i) => (
-                          <ShopRow key={k} first={i === 0} label={`${AB_LABEL[k]}コーチ`} badge={`Lv${coachLv(k)}`}
-                            detail={`月給 ${ML_COACH_SALARY[coachLv(k)]}万/月`}
-                            secondaryLabel="解雇" onSecondary={() => mlDismissCoach(k)} />
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ fontSize: T.size.caption, color: T.color.sub, textAlign: "right", marginBottom: T.space.md }}>
-                      コーチ月給 合計 -{totalSalary}万/月
+                      {sel && (() => {
+                        const capped = selLv >= maxLv;
+                        const hiredHere = selLv > 0;
+                        let label, note = null, buttons = null;
+                        if (hiredHere && !capped) {
+                          label = `${AB_LABEL[sel]}コーチ Lv${selLv}`;
+                          note = `月給${ML_COACH_SALARY[selLv]}万`;
+                          buttons = (
+                            <>
+                              <ShopBtn onClick={() => mlHireCoach(sel)}>{`Lv${selLv + 1}へ 月給${ML_COACH_SALARY[selLv + 1]}万`}</ShopBtn>
+                              <ShopBtn onClick={() => dismissCoach(sel)} outline>解雇</ShopBtn>
+                            </>
+                          );
+                        } else if (hiredHere && capped) {
+                          label = `${AB_LABEL[sel]}コーチ Lv${selLv}`;
+                          note = <>月給{ML_COACH_SALARY[selLv]}万　<span style={{ color: T.color.accent }}>クラス上限</span></>;
+                          buttons = <ShopBtn onClick={() => dismissCoach(sel)} outline>解雇</ShopBtn>;
+                        } else if (slotsFull) {
+                          label = "雇用枠が満員です";
+                          note = ml.classIdx !== 2 ? "上位クラスへ昇格すると枠が増えます" : null;
+                        } else if (ml.money < ML_COACH_SIGNING) {
+                          label = `契約金${ML_COACH_SIGNING}万が足りません`;
+                        } else {
+                          label = `${AB_LABEL[sel]}コーチを雇う`;
+                          note = `契約金${ML_COACH_SIGNING}万・月給${ML_COACH_SALARY[1]}万`;
+                          buttons = <ShopBtn onClick={() => mlHireCoach(sel)}>雇う</ShopBtn>;
+                        }
+                        return (
+                          <div style={{ background: T.color.surfaceUp, padding: "8px 10px", marginTop: T.space.sm, display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
+                            <span>
+                              <span style={{ fontSize: T.size.body }}>{label}</span>
+                              {note && <span style={{ fontSize: T.size.caption, color: T.color.sub, marginLeft: 6 }}>{note}</span>}
+                            </span>
+                            {buttons && <span style={{ display: "flex", gap: T.space.xs, flex: "none" }}>{buttons}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </>
                 );
