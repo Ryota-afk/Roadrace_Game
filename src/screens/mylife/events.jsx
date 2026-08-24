@@ -6,7 +6,7 @@ import { FatigueBar } from "../../components/panels.jsx";
 import { Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopBtn, ShopRow, TypeChip } from "../../components/kit.jsx";
 import { AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
-import { ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
+import { ML_COACH_MAX_BY_CLASS, ML_COACH_SALARY, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_PART_LV_MUL } from "../../data/gear.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_CROSSROADS, ML_GEAR, ML_HOUSES, ML_OFFSEASON_CHOICES, ML_STOCK_ITEMS, SLOT_LABEL, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost } from "../../logic/support.js";
 import { PARTS, PART_SLOTS, partEffectParts } from "../../data/parts.js";
@@ -42,7 +42,7 @@ const TierPanel = ({ title, note, items, lv, money, onBuy }) => {
 };
 
 export function renderMyLifeEventScreens(ctx) {
-  const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyGrowthPowUp, mlBuyGrowthShift, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUpgradePart, mlUseStockConfirm, mlWrap, setMl } = ctx;
+  const { ml, mlAdvanceMonth, mlBuyCar, mlBuyGear, mlBuyGrowthPowUp, mlBuyGrowthShift, mlBuyHouse, mlBuyPart, mlBuyStock, mlChooseTeam, mlContinueAfterCrossroads, mlContinueAfterOffseason, mlDismissCoach, mlHireCoach, mlPrivateCamp, mlResolveCrossroads, mlResolveEvent, mlResolveProtegeEvent, mlResolveOffseason, mlSetPart, mlUpgradePart, mlUseStockConfirm, mlWrap, setMl } = ctx;
     if (ml.screen === "mylife_shop" && ml.player) {
       const r = ml.player;
       const availPartsMl = (pid) => (ml.partsInv[pid] || 0) - (Object.values(r.parts || {}).includes(pid) ? 1 : 0);
@@ -172,37 +172,65 @@ export function renderMyLifeEventScreens(ctx) {
                 })}
               </Section>
 
-              {/* 第35弾E: 種目別コーチ5点は価格100万・効果「+25%（恒常）」まで完全に同型で、
-                  対象能力だけが違う（ML_AB_COACH_KEY参照）。5行を並べず、1枚のパネル＋能力チップへ
-                  集約した（devlog/wave35.md）。コーチの段階化・月給化は第36弾で扱う。 */}
+              {/* 第36弾: コーチの段階化＋月給制。5チップは「未雇用/雇用中(Lv表示)/上限到達」の
+                  3状態を持つ。旧セーブのgear[coachKey]（買い切り済み）はLv1相当として表示・
+                  操作両方に反映する（coachLvはmonth.js/shop.jsと同じ実効Lvの式）。 */}
               {(() => {
-                const coachPrice = ML_GEAR[ML_AB_COACH_KEY.flat].price;
-                const hiredKeys = Object.entries(ML_AB_COACH_KEY).filter(([, coachKey]) => ml.gear[coachKey]).map(([abKey]) => abKey);
-                const statusText = hiredKeys.length === 0 ? "まだ雇っていない"
-                  : hiredKeys.length === Object.keys(ML_AB_COACH_KEY).length ? "すべての能力にコーチがいる"
-                  : `${hiredKeys.map(k => AB_LABEL[k]).join("・")}を雇用済み`;
+                const abKeys = Object.keys(ML_AB_COACH_KEY);
+                const coachLv = (k) => Math.max(ml.gear[ML_AB_COACH_KEY[k]] ? 1 : 0, (ml.coaches && ml.coaches[k]) || 0);
+                const maxLv = ML_COACH_MAX_BY_CLASS[ml.classIdx] ?? 0;
+                const slots = ML_COACH_SLOTS_BY_CLASS[ml.classIdx] ?? 0;
+                const hiredKeys = abKeys.filter(k => coachLv(k) > 0);
+                const hired = hiredKeys.length;
+                const slotsFull = hired >= slots;
+                const totalSalary = hiredKeys.reduce((a, k) => a + (ML_COACH_SALARY[coachLv(k)] || 0), 0);
                 return (
                   <>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>
-                      <span>専門コーチ</span><span>1人{coachPrice}万・買い切り</span>
+                      <span>専門コーチ</span><span>雇用枠 {hired} / {slots}人</span>
                     </div>
                     <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
-                      <div style={{ fontSize: T.size.caption, color: T.color.sub }}>選んだ能力の練習効果+25%（恒常）</div>
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub }}>能力ごとに専属コーチを雇うと練習効果が上がる。昇格させるほど効果が高まる（月給制）</div>
                       <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginTop: T.space.sm }}>
-                        {Object.entries(ML_AB_COACH_KEY).map(([abKey, coachKey]) => {
-                          const hired = !!ml.gear[coachKey];
-                          const affordable = ml.money >= coachPrice;
+                        {abKeys.map(k => {
+                          const lv = coachLv(k);
+                          const capped = lv >= maxLv;
+                          const hiredHere = lv > 0;
+                          const canAct = hiredHere ? !capped : (!slotsFull && ml.money >= ML_COACH_SIGNING);
                           return (
-                            <button key={abKey} disabled={hired || !affordable} onClick={() => mlBuyGear(coachKey)} style={{
-                              border: "none", cursor: hired || !affordable ? "default" : "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
+                            <button key={k} disabled={!canAct} onClick={() => mlHireCoach(k)} style={{
+                              border: "none", cursor: canAct ? "pointer" : "default", fontFamily: FONT_DOT, fontSize: T.size.body,
                               padding: "6px 9px",
-                              background: hired ? T.color.action : T.color.surfaceUp,
-                              color: hired ? T.color.bg : affordable ? T.color.text : T.color.sub,
-                            }}>{AB_LABEL[abKey]}{hired ? " ✓" : ""}</button>
+                              background: hiredHere ? T.color.action : T.color.surfaceUp,
+                              color: hiredHere ? T.color.bg : canAct ? T.color.text : T.color.sub,
+                            }}>
+                              {AB_LABEL[k]}{hiredHere && ` Lv${lv}`}{capped && <span style={{ color: T.color.accent }}>（上限）</span>}
+                            </button>
                           );
                         })}
                       </div>
-                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>{statusText}</div>
+                      {slotsFull && (
+                        <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.sm }}>
+                          雇用枠が満員です{ml.classIdx !== 2 ? "（上位クラスへ昇格すると枠が増えます）" : ""}
+                        </div>
+                      )}
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>
+                        月給の目安　Lv1 {ML_COACH_SALARY[1]}万 → Lv2 {ML_COACH_SALARY[2]}万 → Lv3 {ML_COACH_SALARY[3]}万（契約金は雇用時のみ{ML_COACH_SIGNING}万）
+                      </div>
+                    </div>
+                    {hired === 0 ? (
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>まだ雇っていない</div>
+                    ) : (
+                      <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
+                        {hiredKeys.map((k, i) => (
+                          <ShopRow key={k} first={i === 0} label={`${AB_LABEL[k]}コーチ`} badge={`Lv${coachLv(k)}`}
+                            detail={`月給 ${ML_COACH_SALARY[coachLv(k)]}万/月`}
+                            secondaryLabel="解雇" onSecondary={() => mlDismissCoach(k)} />
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize: T.size.caption, color: T.color.sub, textAlign: "right", marginBottom: T.space.md }}>
+                      コーチ月給 合計 -{totalSalary}万/月
                     </div>
                   </>
                 );

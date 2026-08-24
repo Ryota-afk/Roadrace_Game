@@ -153,7 +153,7 @@ export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, set
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.xs }}>
                 <span style={{ fontSize: T.size.head, color: T.color.text }}>{ml.year}年目 {MONTHS[ml.month]}</span>
-                <span style={{ fontSize: T.size.head, color: T.color.accent, flex: "none", marginLeft: T.space.sm }}>
+                <span style={{ fontSize: T.size.head, color: ml.money < 0 ? T.color.bad : T.color.accent, flex: "none", marginLeft: T.space.sm }}>
                   {ml.money}<span style={{ fontSize: T.size.caption, color: T.color.sub }}>万円</span>
                 </span>
               </div>

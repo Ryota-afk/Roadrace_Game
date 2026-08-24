@@ -28,6 +28,18 @@ export const ML_GEAR = {
   soloCoach:    { label: "独走専門コーチ", price: 100, desc: "独走の練習効果+25%（恒常）" },
 };
 
+// 第36弾: 専門コーチの段階制。シーズンのスタッフ（STAFF_MAX_BY_CLASS/STAFF_SALARY_PER_LV）を
+// 手本にしているが、マイライフの家計スケールはチーム予算と桁が違うため、値は意図的に別で持つ
+// （economy.js側を触るとシーズンのバランスまで動いてしまうため共有しない）。
+// 倍率は実測で較正済み：1.50以上にすると現実的プレイのカンストが11年目→7年目へ跳ぶ崖があり、
+// またfocus以外の能力は上限のはるか下で倍率が丸ごと効くため、上げすぎると全能力が一様に
+// 伸びて「極めると全員同じ万能型」が再来する（詳細はdevlog/wave36.md）。
+export const ML_COACH_MAX_BY_CLASS   = [1, 2, 3];        // Lv上限：B1 / A / PRO
+export const ML_COACH_SLOTS_BY_CLASS = [1, 2, 3];        // 同時に雇える人数：B1 / A / PRO
+export const ML_COACH_MUL    = [1, 1.25, 1.33, 1.40];    // Lv0..3 の練習効果倍率
+export const ML_COACH_SALARY = [0, 6, 10, 15];           // Lv0..3 の月給（万円/月）
+export const ML_COACH_SIGNING = 100;                      // 契約金（Lv0→Lv1のときのみ）
+
 export const ML_STOCK_ITEMS = {
   drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
   supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },

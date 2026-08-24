@@ -112,6 +112,16 @@ export function renderMyLifeHubScreen(ctx) {
             </div>
           </div>
 
+          {/* 第36弾: 赤字ペナルティの警告行。シーズンの status.jsx:64（借金状態）に倣い、
+              マイライフ用に言い換えた。段階が進むほど文面も進める（迷ったら消す＝§7だが、
+              ここは実際に進行中のペナルティを伝える必要のある情報なので残す）。 */}
+          {ml.money < 0 && (
+            <div style={{ fontSize: T.size.caption, color: T.color.bad }}>
+              所持金がマイナスです。黒字に戻るまで買い物ができません。
+              {(ml.debtMonths || 0) >= 4 ? "維持費の高いものから手放されています。" : (ml.debtMonths || 0) >= 2 ? "生活が荒れています（フォーム・監督評価が低下中）。" : ""}
+            </div>
+          )}
+
           <div style={{ background: T.color.surface, padding: T.space.md }}>
             {(() => {
               const fatigue = Math.round(r.fatigue);

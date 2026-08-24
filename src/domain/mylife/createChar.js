@@ -257,6 +257,7 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
     gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
     houseLv: -1, carLv: -1,
+    coaches: {}, debtMonths: 0, // 第36弾: 前キャリアの状態を持ち越さない
     rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
     rival2, rivalRecord2: { meetings: 0, wins: 0, losses: 0 },
     flags: { ...s.flags, mentorName, mentorActive: true, master: master ? master.name : null },

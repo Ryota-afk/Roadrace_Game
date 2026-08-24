@@ -9,7 +9,7 @@ import { PARTS } from "../../data/parts.js";
 import { mulberry, overall, hasAbility } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
-  GRADE_MUL, ML_AB_COACH_KEY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, ageRival, computeWorldRank,
+  GRADE_MUL, ML_AB_COACH_KEY, ML_COACH_MUL, ML_COACH_SALARY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, ageRival, computeWorldRank,
   decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCapFor, mlLivingCost, mlTeamTier,
   mlUpdateRiderStats, mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
@@ -38,9 +38,14 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
   // （詳細はDEVLOG §38参照）
   const fatMul = Math.max(0.4, 1 - Math.max(0, (player.fatigue || 0) - 50) * 0.012);
   const gear = (ctx && ctx.gear) || {};
+  const coaches = (ctx && ctx.coaches) || {};
   const carLv = ctx ? ctx.carLv : -1;
   const houseLv = ctx ? ctx.houseLv : -1;
   const flags = (ctx && ctx.flags) || {};
+  // 第36弾: 専門コーチの段階制。旧セーブのgear[coachKey]（買い切り済み）はLv1相当として
+  // 引き継ぐ（100万を払い済みのため遡って課金しない）。効果は倍率テーブルから引く。
+  const coachLv = (k) => Math.max(gear[ML_AB_COACH_KEY[k]] ? 1 : 0, coaches[k] || 0);
+  const coachMul = (k) => ML_COACH_MUL[coachLv(k)];
   // v43(マイライフ難易度調整Phase 1・柱1): 難易度による成長上限の調整は、mlGrowthCap内部の
   // 実績ボーナス×難易度倍率（easy1.3〜oni0.5）に一本化した（旧diffCapAdjの一律加減算は廃止）。
   // ctx.mlStateはmlAdvanceMonth側で渡す実績連動計算用のml状態スナップショット。
@@ -109,8 +114,6 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
       * fatMul; // v47(第7弾B): 疲労が高いと練習効果も鈍る
     const gain = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul;
     const focusMul = gear.monitor ? 1.10 : 1;
-    // v15フェーズ2: 種目別専門コーチは、狙っている能力かどうかに関わらずそのアビリティの伸びを底上げする
-    const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
     addAb(player, player.focus, gain * 0.9 * persMul(player, player.focus) * focusMul * coachMul(player.focus), capFor(player.focus));
     AB_KEYS.filter(k => k !== player.focus).forEach(k => addAb(player, k, gain * 0.14 * persMul(player, k) * coachMul(k), capFor(k)));
     // v29: 通常練習でも加速力・メンタルがわずかに伸びる（focusがsprint/flatなら加速に厚め）
@@ -146,7 +149,6 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
       * (flags.mentorActive ? 1.15 : 1);
     // v47(第7弾B): 疲労が高いと専門トレの伸びも鈍る（合宿ローテを回し続ける戦略への機会費用）
     const base = 1.5 * ph.gain * POW[player.growthPow].mul * (gear.roller ? 1.15 : 1) * abMul * spec.gainMul * fatMul;
-    const coachMul = (k) => (gear[ML_AB_COACH_KEY[k]] ? 1.25 : 1);
     if (spec.keys.length > 0) {
       spec.keys.forEach(k => addAb(player, k, base * 0.65 * persMul(player, k) * coachMul(k), capFor(k)));
       AB_KEYS.filter(k => !spec.keys.includes(k)).forEach(k => addAb(player, k, base * 0.08 * persMul(player, k) * coachMul(k), capFor(k)));
@@ -219,7 +221,7 @@ export function mlAdvanceMonth(s, mode) {
     ? [...new Set(s.result.course.segs.map(seg => SEG_AB[seg.type]))] : [];
   const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
   const raceWeather = (mode === "race" && s.resultInfo) ? s.resultInfo.race.weather : null;
-  const ctx = { gear: s.gear, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather, mlState: s };
+  const ctx = { gear: s.gear, coaches: s.coaches, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather, mlState: s };
   // v38(改善:育成の手応え): 月次アクション前の能力・OVR・活力を控えておき、後で「今月の成長」を可視化する
   const _preAb = {}; AB_KEYS.forEach(k => { _preAb[k] = s.player[k] || 0; });
   const _preSub = { accel: s.player.accel || 0, mental: s.player.mental || 0 };
@@ -249,14 +251,53 @@ export function mlAdvanceMonth(s, mode) {
   // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
   // 年俸は毎月1/12ずつ資金として振り込まれる
   const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0) + (s.houseLv >= 3 ? 0.2 : 0) + (s.flags?.mentor ? 0.3 : 0);
-  const managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
+  let managerEval = Math.max(0, Math.min(100, s.managerEval + passiveEvalDelta));
   // v25: 個人スポンサー収入。人気度10ごとに月+2万円の継続収入が入る（チーム年俸とは別枠）
   const popIncome = Math.floor((s.player.popularity || 0) / 10) * 2;
   // v27: 生活費・税負担。年俸が上がるほど生活水準・税負担も増し、手元に残る額は
   // 頭打ちになる。高級車・住居のグレードにも維持費がかかる。これによりキャリア後半に
   // 資金がダブついて緊張感が失われる（＝ヌルゲー化）のを抑える
+  // 第36弾: 従来はMath.max(0,...)でクランプしており不足分が黙って帳消しになっていた
+  // （v27の狙いを打ち消していた）。クランプを外し、赤字は段階的なペナルティで扱う。
   const livingCost = mlLivingCost(s);
-  const money = Math.max(0, s.money + Math.round(s.salary / 12) + popIncome - livingCost);
+  let money = s.money + Math.round(s.salary / 12) + popIncome - livingCost;
+  const debtMonths = money < 0 ? (s.debtMonths || 0) + 1 : 0;
+  let carLv = s.carLv, houseLv = s.houseLv, coaches = s.coaches || {};
+  if (debtMonths >= 2) {
+    player.form = Math.max(0, (player.form ?? 50) - 6);
+  }
+  if (debtMonths >= 4) {
+    // 段階3: 維持費が最も高いものを毎月1つ手放す（同額なら車→コーチ→家の優先順）。
+    // 赤字の原因そのものを削るため、放置しても自動的に維持費が下がりデススパイラルにならない。
+    const candidates = [];
+    if (carLv >= 0) candidates.push({ type: "car", cost: (carLv + 1) * 4, order: 0 });
+    if (houseLv >= 0) candidates.push({ type: "house", cost: (houseLv + 1) * 4, order: 2 });
+    Object.entries(coaches).forEach(([k, lv]) => { if (lv > 0) candidates.push({ type: "coach", key: k, cost: ML_COACH_SALARY[lv] || 0, order: 1 }); });
+    candidates.sort((a, b) => b.cost - a.cost || a.order - b.order);
+    if (candidates.length) {
+      const pick = candidates[0];
+      if (pick.type === "car") {
+        const refund = Math.round(ML_CARS[carLv].price * 0.5);
+        log.push(`【${s.year}年目 ${MONTHS[s.month]}】維持できなくなり${ML_CARS[carLv].label}を手放した（+${refund}万円）`);
+        carLv -= 1; money += refund;
+      } else if (pick.type === "house") {
+        const refund = Math.round(ML_HOUSES[houseLv].price * 0.5);
+        log.push(`【${s.year}年目 ${MONTHS[s.month]}】維持できなくなり${ML_HOUSES[houseLv].label}を手放した（+${refund}万円）`);
+        houseLv -= 1; money += refund;
+      } else {
+        log.push(`【${s.year}年目 ${MONTHS[s.month]}】維持できなくなり${AB_LABEL[pick.key]}コーチを手放した`);
+        coaches = { ...coaches, [pick.key]: coaches[pick.key] - 1 };
+      }
+    } else {
+      log.push(`【${s.year}年目 ${MONTHS[s.month]}】赤字が続いているが、これ以上手放せるものが無い`);
+    }
+  }
+  if (debtMonths >= 2) {
+    managerEval = Math.max(0, Math.min(100, managerEval - 1.5));
+    log.push(`【${s.year}年目 ${MONTHS[s.month]}】赤字が${debtMonths}か月続き、生活が荒れている（フォーム-6・監督評価-1.5）`);
+  } else if (debtMonths === 1) {
+    log.push(`【${s.year}年目 ${MONTHS[s.month]}】今月は支出が収入を上回った。所持金がマイナスの間は買い物ができない`);
+  }
   if (s.month === 11) {
     player.age += 1;
     // v38(#9 B-2): オフシーズンで活力が回復（走り込んだ体もひと冬でリフレッシュ）。若いほど戻りが良い。
@@ -366,9 +407,9 @@ export function mlAdvanceMonth(s, mode) {
         worldLeaderId: leaderEntry ? leaderEntry.id : null,
         careerHistory: [...(s.careerHistory || []), histEntry],
       };
-      const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState };
+      const offseasonState = { ...s, screen: "mylife_offseason", pendingOffseason: nextState, carLv, houseLv, coaches, debtMonths };
       if (retireChoice) {
-        return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval,
+        return { ...s, screen: "mylife_retire_advice", pendingAdvice: offseasonState, player, money, managerEval, carLv, houseLv, coaches, debtMonths,
           adviceInfo: { age: player.age, ovr: overall(player), joinOvr: player.joinOvr, declining, reducedRole: !!s.flags?.reducedRole }, log };
       }
       return offseasonState;
@@ -420,7 +461,7 @@ export function mlAdvanceMonth(s, mode) {
         races: [mlGenRace(s.year + 1, 0, classIdx)],
         directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
         contractOffers: [stayOffer, ...offerTeams], biddingWar,
-        salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
+        salary, money, managerEval, carLv, houseLv, coaches, debtMonths, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
         rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
         retiredRivals: nextRetiredRivals,
         screen: "mylife_contract", log,
@@ -430,7 +471,7 @@ export function mlAdvanceMonth(s, mode) {
       ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
       races: [mlGenRace(s.year + 1, 0, classIdx)],
       directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
-      salary, money, managerEval, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
+      salary, money, managerEval, carLv, houseLv, coaches, debtMonths, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
       rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
       retiredRivals: nextRetiredRivals,
       screen: "mylife_main", log,
@@ -484,7 +525,7 @@ export function mlAdvanceMonth(s, mode) {
   const base = {
     ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)],
     directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
-    money, managerEval, riderStats, growthReport, worldTicker,
+    money, managerEval, carLv, houseLv, coaches, debtMonths, riderStats, growthReport, worldTicker,
     screen: "mylife_main", log,
   };
   // v36(弟子深化): 弟子がいる間は、毎月ごく稀に指導イベントが発生する。関わり方で

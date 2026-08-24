@@ -2,7 +2,7 @@
 // controllers/season/shop.js の対（マイライフ側は setMl への薄い接続）。
 import { MONTHS } from "../../data/course.js";
 import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
-import { ML_CARS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX } from "../../data/gear.js";
+import { ML_AB_COACH_KEY, ML_CARS, ML_COACH_MAX_BY_CLASS, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX } from "../../data/gear.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PARTS } from "../../sim/race.js";
 import { addAb, mlGrowthCapFor, mlPrivateCampCost } from "../../logic/support.js";
@@ -110,4 +110,38 @@ export function mlBuyHouse(s) {
 
 export function mlSetFocus(s, key) {
   return { ...s, player: { ...s.player, focus: key } };
+}
+
+// 第36弾: 専門コーチの段階制。Lv0→1は契約金＋雇用枠の空きが要る。Lv→Lv+1（昇格）は
+// 契約金なし・クラスのLv上限内なら無条件（月給は次回のmlLivingCostから自動的に上がる）。
+// 旧セーブのgear[coachKey]（買い切り済み）はLv1相当として扱う（二重課金しない）。
+export function mlHireCoach(s, key) {
+  const coaches = s.coaches || {};
+  const legacyLv = (s.gear && s.gear[ML_AB_COACH_KEY[key]]) ? 1 : 0;
+  const lv = Math.max(legacyLv, coaches[key] || 0);
+  const maxLv = ML_COACH_MAX_BY_CLASS[s.classIdx] ?? 0;
+  if (lv >= maxLv) return s;
+  if (lv === 0) {
+    const hired = Object.keys(ML_AB_COACH_KEY)
+      .filter(k => Math.max((s.gear && s.gear[ML_AB_COACH_KEY[k]]) ? 1 : 0, coaches[k] || 0) > 0)
+      .length;
+    const slots = ML_COACH_SLOTS_BY_CLASS[s.classIdx] ?? 0;
+    if (hired >= slots || s.money < ML_COACH_SIGNING) return s;
+    return { ...s, money: s.money - ML_COACH_SIGNING, coaches: { ...coaches, [key]: 1 } };
+  }
+  return { ...s, coaches: { ...coaches, [key]: lv + 1 } };
+}
+
+// クラス降格で雇用中の人数・Lvが上限を超えていても、ここでは強制解雇しない
+// （プレイヤーの資産を勝手に奪わない。超過分は雇用・昇格ができなくなるだけ）。
+// 旧セーブのgear[coachKey]がtrueのまま残っていると効果的な解雇にならないため、
+// 解雇時はgear側のフラグも一緒に落とす。
+export function mlDismissCoach(s, key) {
+  const coaches = s.coaches || {};
+  const coachKey = ML_AB_COACH_KEY[key];
+  const hadLegacy = !!(s.gear && s.gear[coachKey]);
+  const lv = Math.max(hadLegacy ? 1 : 0, coaches[key] || 0);
+  if (lv <= 0) return s;
+  const nextGear = hadLegacy ? { ...s.gear, [coachKey]: false } : s.gear;
+  return { ...s, gear: nextGear, coaches: { ...coaches, [key]: 0 } };
 }

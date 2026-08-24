@@ -1,6 +1,7 @@
 // マイライフの育成上限・私生活イベント抽選・生活費。第13弾Phase0でlogic/support.jsから分離。
 import { ML_EVENTS, ML_PERSONALITY_EVENTS } from "../../data/events.js";
 import { ML_TYPE_CAP_OFFSET } from "../../data/abilities.js";
+import { ML_COACH_SALARY } from "../../data/gear.js";
 import { mlFirstUnmetRung } from "../../state/state.js";
 
 // 第31弾: ML_TYPE_CAP_OFFSETの定義はdata/abilities.jsへ移した（AIの上限にも同じ表を
@@ -92,7 +93,9 @@ export function mlLivingCost(s) {
   const salaryTax = Math.round((s.salary || 0) / 12 * 0.5);
   const carUpkeep = Math.max(0, (s.carLv ?? -1) + 1) * 4;
   const houseUpkeep = Math.max(0, (s.houseLv ?? -1) + 1) * 4;
-  return salaryTax + carUpkeep + houseUpkeep;
+  // 第36弾: 専門コーチの月給。ml.coachesは能力キーごとのLv（0=未雇用）
+  const coachSalary = Object.values(s.coaches || {}).reduce((a, lv) => a + (ML_COACH_SALARY[lv] || 0), 0);
+  return salaryTax + carUpkeep + houseUpkeep + coachSalary;
 }
 
 export function mlPrivateCampCost(s) {
