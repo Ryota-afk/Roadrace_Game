@@ -1,0 +1,223 @@
+# 第34弾: キャラ作成とショップの作り直し
+
+2026-08。DEVLOG §65の詳細記録。第32弾Phase Cで「一度も作り直さないまま最密として残った」
+2画面を対象にする。
+
+## 実測（作り直し前・Playwrightで描画結果を走査）
+
+| 画面 | 断片 | 文字 | 縦 | 最小級(≤10px) | 16px以上 | ボタン | select |
+|---|---|---|---|---|---|---|---|
+| キャラ作成（殿堂0名） | 36 | 543 | 1000px | 84% | **1%** | 15 | 0 |
+| ショップ／パーツ | 123 | **1044** | **1730px** | 77% | 21% | 9 | 4 |
+| ショップ／恒久投資 | 87 | 757 | 1497px | 76% | 21% | 9 | 0 |
+| ショップ／消耗品・合宿 | 43 | 297 | 1000px | 79% | 13% | 9 | 0 |
+
+## 診断
+
+### キャラ作成：画面に主役が存在しない
+
+16px以上が**1%**（画面タイトルだけ）。脚質5・経歴3・難易度4の12個の選択肢がすべて同じ重さで
+並び、経歴と難易度の全項目に小さな説明文が付く。**経歴3件の`desc`＋`meritLabel`＋`merit`だけで
+約240文字＝画面全体の44%**を占めるが、選ぶ瞬間に3件分を読み比べる人はいない。
+
+### ショップ：行動できない項目が半分を占める
+
+パーツは**23点を1つの平坦なリスト**に並べており、そこに**4スロット（frame/tire/wheels/nutrition）
+と3段階のクラス解禁が混在**する。
+
+| スロット | B1で買える | Aで解禁 | PROで解禁 | 計 |
+|---|---|---|---|---|
+| フレーム | 3 | 3 | 1 | 7 |
+| タイヤ | 4 | 2 | 1 | 7 |
+| ホイール | 2 | 1 | 1 | 4 |
+| 補給食 | 3 | 1 | 1 | 5 |
+| **計** | **12** | 7 | 4 | **23** |
+
+**B1の時点で23点中11点は買えない**（`lockedByClass = p.tier > ml.classIdx + 1`）のに、買える項目と
+同じ大きさで並ぶ。さらに「買う」（上のリスト）と「装着する」（画面下のネイティブ`<select>`×4）が
+分断され、`<select>`はゲーム内の他のUIと見た目が揃っていない。
+
+**恒久投資も同じ病気**：`車`4段階・`家`4段階はいずれも階段式で
+（`buyDisabled={... || ml.carLv !== i - 1}`）、**4行並ぶうち買えるのは常に1行だけ**。
+
+## 合意（2026-08・ユーザー選択）
+
+- **キャラ作成＝案A**（1画面のまま・選択肢は名前だけの横並び・説明は選択中の1件だけ）
+- **ショップ＝案A**（スロットを4行に畳んで開く・買う/付ける/強化を1か所に統合）
+- **師匠・配合相手・配合の相性・血脈レシピの4ブロックも同じ案Aで作り直す**（周回プレイでは
+  常に見る画面であり、ここを残すと画面の半分以上が旧デザインのまま残るため）
+- **恒久投資タブも対象に含める**（消耗品・合宿タブ297文字は軽いので現状維持）
+
+モックの正本は`scratchpad/w34_mock.html`（git外・実フォント埋め込み済み）。
+
+### モックの訂正（重要）
+
+モックの脚質欄に出していた説明文（「平坦もこなす万能型。どのレースでも計算が立つ」等）は
+**実データに存在せず、モック作成時に創作したもの**だった。`TYPES`は`label`/`color`/`affinity`
+しか持たない（CLAUDE.md §8「モックアップは実データ・実文言をそのまま使う」に反していた）。
+**実装では創作文を使わず、`affinity`を`SEG_LABEL`で文字にした実データを出す**。
+
+| 脚質 | 表示する実データ |
+|---|---|
+| スプリンター | ゴールスプリント +5 |
+| クライマー | 山岳 +5 ／ 山頂フィニッシュ +5 |
+| ルーラー | 平坦 +4 |
+| パンチャー | 丘陵 +5 |
+| 独走屋（TT） | TT区間 +6 |
+
+（`TYPES[k].affinity`の各キーを`SEG_LABEL[key]`で引き、`+値`を添えて`／`で連結する。
+現状の画面は脚質に何も説明を出していないため、これは情報の追加にあたる。）
+
+## 実装仕様 — キャラ作成（`src/screens/mylife/create.jsx` mylife_create）
+
+### 共通の作り
+
+**選択肢は「チップの横並び」＋「選択中の1件だけを説明する面」**の2段構成に統一する。
+新しい共通ローカル部品を`create.jsx`内に1つ定義して全ブロックで使う。
+
+```jsx
+// 第34弾: 選択肢は名前だけを横に並べ、説明は選んでいる1件だけを下の面に出す。
+// 「3件分の説明を読み比べる人はいない」という実態に合わせた形（devlog/wave34.md）。
+const PickRow = ({ items, value, onPick }) => (
+  <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginBottom: T.space.sm }}>
+    {items.map(it => (
+      <button key={it.key} onClick={() => onPick(it.key)} style={{
+        border: "none", cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
+        padding: `${T.space.sm}px ${T.space.md}px`,
+        background: value === it.key ? T.color.action : T.color.surfaceUp,
+        color: value === it.key ? T.color.bg : T.color.sub,
+      }}>{it.label}{it.sub && <span style={{ fontSize: T.size.caption, marginLeft: 4 }}>{it.sub}</span>}</button>
+    ))}
+  </div>
+);
+const PickNote = ({ children }) => (
+  <div style={{ background: T.color.surface, padding: `10px ${T.space.md}px`, marginBottom: T.space.md }}>{children}</div>
+);
+```
+
+### 画面の並び（上から）
+
+1. **画面名**：`選手をつくる`（`T.size.title`）。marginBottom `T.space.md`。
+   - **削除**：現行`:25`の`キャラクター作成`と`:26-28`のリード文
+     （「一人の選手としてB1からデビューし、引退までのキャリアを歩みます。まずは脚質と経歴を
+     選んでください。」）。画面名で足りる。
+2. **続きから**（`hasMyLifeSave()`の時のみ）：現行`:30-38`のまま無改修。
+3. **脚質**：見出し`脚質`（caption/accent）＋`PickRow`（`TYPES`の5件・`label`のみ）＋
+   `PickNote`に**選択中の脚質の`affinity`を`SEG_LABEL`で文字化**（上の訂正表のとおり・
+   `T.size.body`）。
+4. **経歴**：見出し`経歴`＋`PickRow`（`ML_BACKGROUNDS`3件。`label`＋`sub`に`${b.age}歳`）＋
+   `PickNote`に3行：
+   - `b.desc`（`T.size.body`）
+   - `b.meritLabel`（`T.size.label`・accent・marginTop `T.space.xs`）
+   - `b.merit`（`T.size.caption`・sub・marginTop 2）
+   - **見出し右の`年齢・能力・伸びしろに影響`は削除**（チップに歳が出ており、`merit`が効果を
+     具体的に書いているため重複）。
+5. **難易度**：見出し`難易度`＋`PickRow`（`DIFFICULTIES`4件・`label`のみ）＋`PickNote`：
+   - 左に`d.desc`（`T.size.body`）／右に`×{MLCP_DIFF_MUL[d.id] ?? 1}`（`T.size.head`。
+     1より大きければ`T.color.good`、それ以外は`T.color.sub`）を`justify-content:space-between`で。
+   - その下に`クリアポイント倍率`（`T.size.caption`・sub）。
+   - **見出し右の`相手の強さ・成長上限・クリアポイント倍率`は削除**（`d.desc`と右の倍率で足りる）。
+6. **師匠**（`loadMlLegends().length > 0`の時のみ）：見出し`師匠`＋`PickRow`。
+   - チップは`師事しない`＋各殿堂選手の`leg.name`（`sub`に`${leg.wins||0}勝`）。
+   - `PickNote`は**師匠を選んでいる時だけ**出し、現行`:89-101`の`inh`（`protegeInherit`）の
+     内容を次の3行に整理する：
+     - 1行目：`{inh.teaching.label}`（`T.size.body`・accent）
+     - 2行目：`{inh.teaching.desc}`（`T.size.caption`・sub）
+     - 3行目：継承内容を`・`連結（`T.size.caption`）。現行`:93-98`の組み立て（`abBonus`／
+       `subBonus`／`growthPowBump`／`lineageTrait`／`inheritAbility`）をそのまま使う。
+   - **削除**：見出し右の`歴代の名選手に師事・任意`（`師事しない`チップが選択肢として存在
+     することで任意だと分かる）。
+   - `TypeChip`はチップ内には入れない（チップが二重になるため）。`PickNote`の1行目の右端に置く。
+7. **配合相手**（師匠選択済み＋`legends.length >= 2`の時のみ）：見出し`配合相手`＋`PickRow`
+   （`配合しない`＋師匠以外の殿堂選手。`sub`に`+{leg.plusValue||0}`）。
+   - **削除**：現行`:110`の説明文「2人目の親を選ぶと「配合」になり、両方の血を引く逸材が
+     生まれます。」と見出し右の`もう一人の親・任意`。
+8. **配合の相性**（配合相手を選んでいる時のみ）：現行`:124-156`は最大10行の`Item`が並ぶ。
+   **`PickNote`1枚に畳み、以下の優先度で最大4行だけ出す**（`T.size.caption`、値はaccent）：
+   1. `breed.special`があれば『{breed.special.title}』（`T.size.body`・accent）＋`breed.special.note`
+   2. `配合評価 {breed.matingGrade}　相性 {breed.nick.rank} {breed.nick.label}`
+   3. 素質に効くものだけを連結：`成長力+{breed.growthSteps}段`／`才能キャップ+{breed.talentCap}`／
+      `累代+{breed.plusPer}`／`インブリード×{breed.inbreed.count}`（0のものは出さない）
+   4. 得られる特能を連結：`extraAbilities`／`goldInherit`（accent）／`exclusive`（accent）を
+      `ABILITIES[id].label`で。無ければこの行ごと出さない
+   - **`危険度`だけは別扱い**：`breed.danger > 0`のとき`PickNote`の下に独立した1行で出す
+     （`T.size.caption`・`breed.danger >= 38 ? T.color.bad : T.color.accent`）。
+     文言は`{breed.dangerLabel}　約{breed.danger}%で「ガラスの体」`。
+     **理由**：唯一の不利益情報であり、他の良い情報に埋もれさせない。
+   - **削除**：`継承する系統`・`血の格`の2行（系統名は殿堂で確認でき、`血の格`は
+     `archNotes`の羅列で読み手に判断材料を与えていない）。
+9. **血脈レシピ**（配合相手を選んでいる時のみ）：現行`:158-198`の3分岐（成立／進行中／
+   手がかり無し）を**そのまま維持**。`Section`を`PickNote`に置き換えるだけ。
+   **理由**：既に第15弾で「段階的ヒント」として設計・合意された表示で、情報量も適正。
+10. **デビューボタン**：現行`:206-215`のまま（`PrimaryBtn`・`この内容でデビュー →`）。
+11. `歴代選手の殿堂を見る`／`モード選択に戻る`：現行のまま。
+
+### 目標値
+
+殿堂0名の初回状態で**300文字以下・16px以上15%以上**（現状543文字・1%）。
+
+## 実装仕様 — ショップ（`src/screens/mylife/events.jsx` mylife_shop）
+
+### パーツタブ
+
+**23点の平坦リストを廃止し、4スロットの行に畳む。**新しいstate `ml.shopSlot`（開いている
+スロット名／未選択は`null`）を追加する（`ML_SAVE_FIELDS`への追加は不要＝UI状態のため）。
+
+**閉じた状態**：`PART_SLOTS`の4件をそれぞれ1枚の面（`T.color.surface`・padding `10px 12px`・
+marginBottom `T.space.sm`）で出す。開いているスロットは面を`#2A2438`相当（`action`の暗い面）に。
+
+| 位置 | 内容 | データ |
+|---|---|---|
+| 左上 | スロット名（`T.size.head`） | `SLOT_LABEL[slot]` |
+| 右上 | 装着中なら`{パーツ名}　Lv{n}　›`（accent）／未装着なら`未装着　›`（sub） | `r.parts[slot]`・`r.partLv?.[slot]` |
+| 下段 | 装着中ならその効果／未装着なら`買える{n}点　{最安}万〜` | `partEffectParts(p,lv,AB_LABEL)`／`availPartsMl`と`p.price` |
+
+**開いた状態**：そのスロットの**解禁済みパーツだけ**を`Section`無しの面リストで出す。1行＝
+- 装着中の1点：名前（`T.size.head`・accent）＋右に`装着中 Lv{n}`、下段左に効果、
+  **下段右に`強化 {cost}万 ›`**（`ML_PART_UPGRADE_COST`。Lv上限`ML_PART_LV_MAX + (ml.partLvMaxBonus||0)`
+  に達していたら`Lv{max} 最大`とだけ出す）
+- 未装着で所持済み：名前＋右に`装着する ›`（`mlSetPart(slot, pid)`）
+- 未所持：名前＋右に`{p.price}万`（`mlBuyPart(pid)`・`ml.money < p.price`で`buyDisabled`）
+- **未解禁パーツは1点も出さない**
+
+**未解禁の集約**：4行の下に1行だけ
+`上位パーツはAクラスで{n}点・PROクラスで{m}点が解禁されます`（`T.size.caption`・sub・中央）。
+`n`/`m`は`PARTS`から`p.tier === 2`／`p.tier === 3`の件数を数える（現在は7点／4点）。
+**クラスが上がって解禁済みになったtierはこの文から除く**（全部解禁済みなら行ごと出さない）。
+
+**削除するもの**：
+- 現行`:66-80`の`<select>`4つ（装着はスロット行の中で行うため不要）
+- 現行の`装着中パーツの強化`セクション（同上。空状態の「パーツを装着すると、ここで強化できます」も消える）
+- `ShopRow`の`countLabel="未装着"`／`count`（所持数はスロット行の`装着する`有無で表現される）
+
+**目標**：閉じた状態で**縦600px以下**（現状1730px）。
+
+### 恒久投資タブ
+
+**`車`と`家`を「今の段階＋次に買える1つ」の1行に畳む。**現行は4段階すべてを並べているが、
+階段式のため買えるのは常に1つだけ。
+
+| 節 | 変更 |
+|---|---|
+| 永続トレーニング用品（`ML_GEAR`8点） | **現状維持**。8点とも独立した買い切りで、すべて購入対象になり得るため畳む理由がない |
+| 車（`ML_CARS`4段階） | 1枚の面へ。左に`車`、右に現在の段階（`ml.carLv >= 0 ? ML_CARS[ml.carLv].label : "未所有"`）。下段に**次の1段だけ**を`{label}　{price}万　{desc}`で出し購入ボタンを置く。最終段まで買っていたら下段は出さず右端に`最上位`と出す |
+| 家（`ML_HOUSES`4段階） | 車と同じ形（`ml.houseLv`） |
+| 才能開花プログラム | **現状維持**（1行しかない） |
+| 成長タイプ変更 | **現状維持**（1行しかない） |
+
+**目標**：**縦900px以下**（現状1497px）。
+
+### 消耗品・合宿タブ
+
+**今回は無改修**（297文字・1000pxで軽いため）。
+
+## 検証（第34弾の完了条件）
+
+1. `npm run build`通過。
+2. 実プレイで両画面を通し、`pageerror`ゼロ。キャラ作成は**殿堂0名と殿堂1名以上（師匠選択・
+   配合相手選択・配合の相性・血脈レシピが出る状態）の両方**を確認する。
+3. 実測を取り直し、目標値（キャラ作成300文字以下／16px以上15%以上、パーツ縦600px以下、
+   恒久投資縦900px以下）に対する達成／未達を**正直に記録**する。
+4. `<select>`が`events.jsx`から消えたことをgrepで確認（パーツの4つ）。
+5. 縦線grep（`borderLeft`/`borderRight`）で新たな違反ゼロ。
+6. 脚質欄に出るのが`affinity`由来の実データであり、創作文が入っていないことを確認。
