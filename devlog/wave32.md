@@ -138,117 +138,19 @@
 新レイアウトではレーダー自体が展開領域へ移るため自然解消するが、展開領域の実装時に
 下余白を必ず確認する。
 
-## Phase A 実装仕様（確定・Sonnet向け）
+## Phase A 実装仕様 — 実装済み（索引）
 
-モックは `scratchpad` の `uiv2.html`（git外）。以下が正本。モックとの±1px程度の丸めは許容
-（ユーザーが承認したのは階層と形。最終微調整は実機確認で）。
+**実装は`git show 0003565`（本体）`ab84e16`（サイズスケール確定）`7a3ba4b`（勾配チャート修正）が正本。**
+現行のトークン・部品はコード（`data/theme.js`／`components/kit.jsx`）とDEVLOG §3が正。
+仕様策定時に決めた要点だけ残す：
 
-### 1. トークン改訂（`src/data/theme.js`）——最終確定（2026-08・ユーザー合意）
-
-サイズスケールはユーザーと見本ベースで確定した：**上位＝案①モック準拠、下限＝漢字かな6px・
-数字5px**（下限見本を高精細/低DPI両条件で提示のうえユーザー判定）。承認済みモックの見え方を
-変えないため、モックに登場するトークン（label/caption/micro）はモックの値のまま、下限は
-最密画面（Phase Bの表・順位表等）用の追加トークンとして持つ。計10段：
-
-```js
-size: {
-  hero: 38,     // 1画面に1つの主役数字（ホームの総合力）
-  display: 28,  // 画面レベルの主数字・タイトルロゴ
-  title: 20,    // 画面名・ヒーローの選手名・一覧のOVR数字
-  head: 16,     // 行の主役（一覧の選手名・レース名）
-  body: 13,     // 本文・ボタン文字（14→13）
-  label: 11,    // 値付きラベル・能力数値
-  caption: 10,  // チップ・タグ・補足（12→10）
-  micro: 8,     // 高密度の補足漢字かな（一覧の能力ラベル等・モック実測値）
-  nano: 6,      // 漢字かなの下限（最密画面専用・ユーザー判定の床）
-  digit: 5,     // 数字専用の下限（最密の表・ユーザー判定の床）
-}
-```
-- 第13弾の「5段のみ・12px床」ルールは失効（ユーザー判定）。`theme.js` のコメントを
-  本弾の経緯（§63）へ書き換える。
-- 既存コードの `T.size.caption` 参照399箇所は当面そのまま10pxへ縮む（互換キー維持）。
-  Phase Bで画面ごとに micro/nano/digit へ振り直す。
-- nano/digit はPhase Aの3画面では未使用（Phase Bの高密度画面で使い、使用の初出時に
-  必ず実機確認を挟む）。Phase Aのモック内9px表記はmicro(8px)へ丸める。
-
-### 2. 新部品（`src/components/kit.jsx` へ追加）
-
-- **`TypeChip({ type })`**：脚質チップ。`background: TYPES[type].color`・文字 `#0E0E10`・
-  10px・padding `2px 7px 1px`・角丸0。ラベルは `TYPES[type].label`（「独走屋（TT）」は
-  一覧では「独走屋」に短縮可）。
-- **`Tag({ children })`**：状態タグ（成長期等）。`background: surfaceUp`・sub色・10px・
-  padding `1px 6px`。
-- **`PressRow({ label, value, onClick })`**：押せる行。`surfaceUp` 面＋右端「›」（sub色14px）。
-- **アフォーダンス規約**：押せる＝`surfaceUp`面 or accent塗り＋「›/▸」。静的＝`surface`面。
-  `QuietBtn`/`PrimaryBtn` は新規約へ寄せる（枠線ではなく面）。
-
-### 3. `CourseProfile` 改良（`src/components/CourseProfile.jsx`）
-
-- 区間ごとに `SEG_COLOR[type]` の面（opacity 0.5）で塗る。**塗りの上端は最低5px帯を保証**
-  （`fy(e)=min(py(e), height-5)`）＝平坦（標高0）でも路面色が見える。稜線は実標高のまま。
-- 稜線の色を `T.color.sub` → `T.color.text` へ（視認性・モック準拠）。
-- **区間境界の縦線は削除**（縦線禁止ルール）。ゴールマーカー（accentの矩形）は維持。
-
-### 4. 画面1: モード選択（`src/screens/meta.jsx`）
-
-- タイトルロゴ display(28px)・accent・中央。サブコピー「チームを率い、世界の頂点へ」削除。
-- モードカード2枚：`surfaceUp`面・padding 18px 16px。左＝モード名 title(20px)＋下に
-  種別ラベル caption(10px) sub（「シーズンモード」「マイライフモード」）。右＝
-  「はじめる ›」head(16px)、シーズン=accent色・マイライフ=action色。カード全体がbutton。
-  リード文（「6名のロースターを率い〜」「選手1人のキャリアを〜」）は削除。
-- 生涯評価/CPカード（showAux時）：横並び2枚・`surfaceUp`面・上にラベル caption sub、
-  下に数値 18px accent（生涯評価= `p.score.toLocaleString()`、CP= `bal`+小さく"pt"）・右端「›」。
-- empty state：数値0でも同じ形で出す（現状の showAux 条件は変えない）。
-
-### 5. 画面2: マイライフホーム（`src/screens/mylife/hub.jsx` mylife_main）
-
-上から：
-1. **ヒーロー**（surface）：ドット絵64px／名前 title(20px)＋改名「変更」は名前タップ長押しでは
-   なく現状のまま小ボタン（caption）／`TypeChip(r.type)`＋`Tag(ph.tag)`／
-   caption(10px) subで「{ml.team}・{r.age}歳」／右に総合力 hero(38px) accent＋caption sub。
-2. **状態3カラム**（surface）：疲労・フォーム・活力。各カラム＝数値17px（色は現行の
-   閾値色ロジックを踏襲）＋micro(9px)ラベル＋4pxバー。データ源は現行と同じ
-   （r.fatigue / r.form??50 / r.vitality??100）。
-3. **今月のレース**（surface）：レース名 head(16px)＋右に「{km}km・{★×grade}」caption sub／
-   改良CourseProfile（高さ34）／`TypeChip(favors)`で「{脚質}有利」＋悪天候時のみ
-   bad塗りチップ（雨/雪）。ミルストーン（世界選手権等）は accent caption で1行維持。
-   kind（「ヒルクライム」等の種別語）は削除（色と形が伝えるため）。
-4. **主ボタン**：`ACTION_LABEL[nextAction.key]` を accent塗り・文字16px・padding 15px・
-   右に「▸」。nextAction.reason の説明文は削除。
-5. **代替アクション чипы**：主ボタン以外の行動（race/rest/train のうち残り＋ピーキング）を
-   `surfaceUp` チップ横並び（padding 10px・11px文字）。スポンサーの仕事（popularity>=20時）も
-   同列のチップ。
-6. **作戦・練習の圧縮行**（PressRow×2）：「作戦 {ML_TACTICS[tactic].label}」「練習
-   {AB_LABEL[focus]}強化 {現在値}+{roomOf}」。タップで選択UIへ——**新設のサブ画面ではなく、
-   その場で開閉する既存リスト**（現行の作戦/練習リストをアコーディオンとして開く。
-   選択肢自体・専門トレーニングの導線は現状維持、descの常時表示は選択中のみ）。
-7. **監督から**（surface・1行）：「監督から　{directive.label}　評価{managerEvalTier.label}」。
-   desc文は削除。
-8. 以降（機材・先月の成長・その他リンク）は現状維持（Phase Bで点検）。
-
-### 6. 画面3: シーズン選手一覧（`src/screens/season/hub/riders/list.jsx`＋`riderCard.jsx`）
-
-- ヘッダ：「選手 {n}<small>/{rosterMax}名</small>」head＋4月のみ `Tag("4月は解雇できます")`。
-  成長上限の注記（「成長上限88（難易度〜）」）は削除（能力別上限になった今、単一数字は
-  誤解を招くため。詳細は展開内のレーダーが伝える）。
-- 1人＝3行のコンパクト行（行全体がbutton・タップで展開）：
-  1. 名前 head(16px)＋主将/伝説バッジ（accent caption）｜右：OVR title(20px) accent＋「›」
-  2. `TypeChip`＋`Tag(ph.tag)`＋調子矢印（COND_COLOR/ARROW 11px）｜右：疲労 micro sub＋44px幅ミニバー
-  3. 5能力の数値11px（70以上はaccent）＋下にdigit(8px) subラベル（平坦/登坂/スプ/スタ/独走）
-     ｜右：`Tag("練習 {AB_LABEL[focus]}")`
-- **レーダー2枚・練習セレクト・サプリ/調律ボタン・故障表示は展開領域へ移動**（既存
-  expandedContentの先頭に配置）。故障中は行2の調子位置に bad色で「故障{n}ヶ月」を出す。
-- 左レールは付けない（合意）。縦線禁止に伴い `AbilitySoshitsuRadarPair` の中央仕切り線も削除。
-
-### 7. 検証（Phase A完了条件）
-
-1. `npm run build` 通過・pageerrorゼロ（3画面の実プレイ）。
-2. **文字数ゲート**：実画面のinnerText文字数が モード≤85・ホーム≤170・選手一覧≤400
-   （ベースライン131/363/895・モック実測73/126/281に余裕を持たせた上限）。
-3. **縦線スイープ**：変更した部品・画面に `borderLeft`・縦`<line>`・width:1の縦div が
-   残っていないこと（grep）。
-4. `tools/verify_radar.mjs` 通過（レーダー部品に触るため）。
-5. スクリーンショットをユーザーへ提示し**実機確認**（フォント下限9px/8pxの最終判定を含む）。
+- **サイズは10段**（hero38／display28／title20／head16／body13／label11／caption10／micro8／nano6／digit5）。
+  下限は実サイズ見本を高精細・低DPIの2条件で見せた上でのユーザー判定（漢字かな6px・数字5px）。
+  第13弾の「5段のみ・12px床」は失効。nano/digitは最密画面専用で、使用の初出時に必ず実機確認を挟む。
+- **新部品**：`TypeChip`（脚質＝`TYPES[type].color`塗り・文字`#0E0E10`）／`Tag`（状態＝`surfaceUp`・sub色）／
+  `PressRow`（押せる行＝`surfaceUp`面＋右端「›」）。
+- **`CourseProfile`改良**：区間ごとに`SEG_COLOR[type]`で塗り、**塗りの上端は最低5px帯を保証**
+  （平坦でも路面色が見える）。区間境界の縦線は削除（縦線禁止）。
 
 ## Phase A 実装結果（2026-08・Sonnet）
 
@@ -342,101 +244,16 @@ youth/transfer/race）。`riderCard.jsx`は5画面（hall/scout/transfer/transfe
 各バッチの完了条件はPhase Aと同じ（ビルド・pageerrorゼロ・該当画面の文字数計測・実機
 スクリーンショット確認）。実装はすべてSonnetで行う（B-4の候補作成・合意のみ設計側）。
 
-## B-4 第1バッチ（現役中3画面）合意・実装仕様（2026-08確定・Sonnet向け）
+## B-4 第1バッチ 合意・実装仕様 — 実装済み（索引）
 
-実プレイ4年目のセーブ（クライマー青木駿介・ウィンドミル北海道・世界291位）から採取した
-実データで現状＋案A/案Bを提示し、**3画面すべて案Aで合意**。モックは
-scratchpadの`b4_mock.html`（git外）。以下が正本。
+**合意＝3画面とも案A。実装は`git show c3f42be`が正本**（`cc1f886`で事前に`news.js`の絵文字8件を明示）。
+設計判断の要点：
 
-### 1. チーム名鑑（`career.jsx` mylife_teamroster）＝案A・2行圧縮
-
-- ヘッダ行：チーム名 title(20)＋右に`Tag`「結束 {bondTier(avgBondFor(...))}」。
-  説明文「移籍すると顔ぶれが変わります」は削除。「あなた」セクション見出しも削除
-  （面とタグで分かる）。
-- あなたカード（surface・padding 12px）：行1＝名前 head(16)＋`Tag`「あなた」｜右＝
-  `overall(ml.player)` title(20) accent＋caption sub「総合力」。行2＝`TypeChip(player.type)`。
-- チームメイト見出し：`Section`見出し形式「チームメイト {n}名」（rightは無し——結束は
-  ヘッダのタグへ移動済み）。
-- チームメイト行（1人=2行・borderTop区切り）：
-  - 行1＝名前 head(16)＋特能があれば caption accent で特能ラベルを名前の直後に
-    （`(tm.abilities||[]).map(id=>ABILITIES[id]?.label)`。金特相当の色分けは現状どおり
-    ABILITIESの定義に従う）｜右端＝`TypeChip(tm.type)`。
-  - 行2＝caption subで「性格 {per.label}（{per.desc}）」（現行文言のまま）。
-  - **絆行は初期tier（bondTier最下位）のときは出さない**。tierが上がっている選手のみ
-    行2の右端に`Tag`「絆 {bond}」。`winsForMe>0`のgood行は現状維持。
-- 弟子セクション：現行構成のまま`TypeChip`化（行1右端）。
-- empty state：チームメイト0名時の「チームメイトの記録がありません。」は現状維持。
-
-### 2. キャリアの推移（`career.jsx` mylife_graph）＝案A・チャート主役化＋固定軸
-
-- 見出し title「キャリアの推移」のみ。説明キャプション（「年ごとの総合力と〜」・
-  「年度を進めるとグラフが〜」）は削除。
-- チャート：H=170→220・padL/padR/padT/padB=30/34/18/26。総合力線はaccent 2px＋
-  端点/最高点の値ラベル10px（現行のlabelIdxs方式のまま）。年ラベルはmicro(8)。
-- **世界ランクの軸をmin-max正規化から固定軸へ変更**：`yRank(v) = padT +
-  (v-1)/299 * (H-padT-padB)`（1位=上端・300位=下端。300=世界ロースター定数。
-  現行のrMin/rMax正規化は291位が最上端に張り付き好成績に見える誤解を生んでいた）。
-  rank点が1つも無い年はスキップ（現行どおりworldRank!=nullの点のみ）。
-- 凡例：「— 総合力」「┈ 世界ランク」のみ。「（上ほど上位）」は削除（固定軸化により
-  端点の「{n}位」ラベルだけで読める）。
-- キャリアの軌跡セクション：現行構成のまま（年label caption幅80・本文body）。
-  empty flavor「まだ語るべき一戦はない。〜」は維持。
-
-### 3. 世界ランキング（`career.jsx` mylife_ranking）＝案A・名前主役の行
-
-- ヒーロー（surface・中央揃え）：現行構成のまま（caption「{year}年目の世界ランキング」／
-  display(28) accent順位＋body sub「位」／head tier.label／caption sub「{pt}pt・自己最高」）。
-- 今年の世界の動き：行はbody・現行のまま。**ニュース文字列の絵文字（👑🔄等）は
-  `view/news.js`側で撤去**（データ層の修正としてB-4に含める。CLAUDE.md §8絵文字原則）。
-- トップ10/周辺の行（1行構成）：rank番号 label(11) sub 右揃え幅22（あなたはaccent）／
-  名前 head(16)（あなたはaccent）／「あなた」「ライバル」「好敵手」は括弧書きをやめ
-  `Tag`化して名前の直後／通算n勝は micro(8) sub（0勝は非表示）／右端 pts label(11)
-  tabular（あなたはaccent）。
-- 血統注記「{star.bloodOf}の血を継ぐ」caption行は現状維持。
-- ライバル圏外注記2行（「ライバル {name}：世界{n}位」）は現状維持。
-
-### 実装対象ファイル（B-4第1バッチ）
-
-`src/screens/mylife/career.jsx`（3サブ画面のJSX）＋`src/view/news.js`（絵文字撤去）。
-検証：ビルド・pageerrorゼロ・3画面のスクリーンショット提示・縦線grep。
-残り3画面（引退勧告・引退セレモニー・殿堂）は第2バッチとして別途候補提示
-（引退到達セーブの採取が必要）。
-
-#### `view/news.js` の撤去対象（2026-08確定・全8件を明示列挙）
-
-当初「👑🔄等」と省略していたため実装前に全数を確定した（CLAUDE.md §8「〜などで
-済ませず全て列挙する」）。**接頭の絵文字と直後の半角スペースを削る**だけで、文面は変えない。
-
-| 行 | 絵文字 | 文脈 |
-|---|---|---|
-| 64 | 👑 | 世界の勢力図が動いた（首位交代） |
-| 66 | 👑 | 世界ランキング首位（通算N勝） |
-| 72 | 🏁 | 好敵手が現役を退いた |
-| 79 | 🏁 | 著名選手が現役を退いた |
-| 88 | 🔄 | チームのエース交代 |
-| 101 | 🏆 | 通算M勝の金字塔 |
-| 109 | 🌟 | 新星が台頭（bloodOf付き） |
-| 110 | 🌟 | 新星が台頭（フォールバック） |
-
-**153行目の`★`は撤去しない**——レースの格を示す機能的記号で、カレンダー等と同じ扱い
-（CLAUDE.md §8で維持と明記済みの例外）。
-
-#### 実装前の依存確認（2026-08・実施済み）
-
-`career.jsx`は`bondTier`/`avgBondFor`（`domain/mylife/bonds.js`）を**既にimport済み**。
-`Tag`・`TypeChip`は`components/kit.jsx`にexportがあるが`career.jsx`は未import——
-import行（現状は`Item, PrimaryBtn, Prose, QuietBtn, Screen, Section`）への追加が必要。
-
-### 実機確認での指摘と修正（2026-08）
-
-- **「勾配で、線と赤い図形がズレてるよね？」**（ユーザー指摘）——そのとおりズレていた。
-  原因は仕様§3の「塗りの上端だけ`min(py(e), height-5)`でクランプする」実装方式そのもの。
-  稜線は実標高の`py(e)`、塗りの上端はクランプ後の値と、**2つの座標系が混在**するため、
-  標高が低い区間で塗りが稜線から浮いて見えた（左端で最大3px・高DPIでは倍加）。
-  修正：クランプを廃止し、**標高0の写像先を`height-2`→`height-5`へ持ち上げる**
-  （`py = height-5 - (e/maxEle)*(height-7)`）。稜線と塗りが常に同じ`py()`を共有して
-  完全一致し、平坦区間の5px色帯も保たれる。教訓：「最低帯の保証」は描画時のクランプ
-  ではなく座標変換（ベースライン側）で行う。
+- **チーム名鑑**：結束はヘッダ右のTagへ。絆タグは`bondTier(v) !== bondTier(0)`＝初期tierを超えた時だけ出す。
+- **キャリアの推移**：世界ランク軸を**min-max正規化から固定軸（1〜300位）へ**。正規化では本人の最高順位が
+  常に上端へ張り付き、291位でも「グラフの上＝好成績」に見える誤解を生んでいた（実測で確認）。
+- **世界ランキング**：行を「名前が主役」に。順位番号は右揃え固定幅22pxの脇役、「あなた／ライバル／好敵手」は
+  括弧書きの文章からTagへ、通算勝利数は0勝なら非表示。
 
 ## Phase B-1 実装結果（2026-08・Sonnet・共有部品）
 
@@ -498,86 +315,11 @@ import行（現状は`Item, PrimaryBtn, Prose, QuietBtn, Screen, Section`）へ�
 再実行で残存ゼロ（コメントのみ）。`verify_radar.mjs`全項目OK（レーダー非対象だが回帰確認）。
 選手タブのスクリーンショットでTypeChip・新アフォーダンスボタンの実機表示を確認。
 
-## Phase B-3 実装仕様（2026-08・Opusで全対象を洗い出し／実装はSonnet）
+## Phase B-3 実装仕様 — 実装済み（索引）
 
-シーズン側24ファイル（2,283行）をルールR1〜R5で全数調査した。**結論：B-3はB-1/B-2より
-小さい。** 機械変換の対象は実質13箇所で、うち大半が2ファイル（`race.jsx`・`scheduleBoard.jsx`）
-に集中している。以下が確定仕様。
-
-### 調査結果（実測）
-
-| ルール | 該当 | 備考 |
-|---|---|---|
-| R1 脚質のテキスト表示 | 10箇所 | うち**チップ化5・badge経由2・対象外3** |
-| R2 密グリッド | **0箇所** | `gridTemplateColumns`はseason側に無し（AbilityGrid等は共有部品でB-1済み） |
-| R3 アフォーダンス | **1箇所** | `shop.jsx:46`の枠線ボタンのみ |
-| R4 説明文 | 個別判断 | `race.jsx`に集中（後述） |
-| R5 縦線 | **0箇所** | B-1のスイープで撤去済み |
-| 絵文字 | **0箇所** | ヒット15件はすべて★（機能記号・§8で維持と明記）かコメント |
-
-### 1. R1：TypeChip化する5箇所
-
-- `scheduleBoard.jsx:112`（殿堂リスト）、`:141`（全チーム名鑑）——現状は
-  `TYPES[r.type].color`で色付けした**文字**。チップに置き換える。
-- `race.jsx:79`（出走準備の見出し行）、`:363`（ステージ日別の見出し行）——
-  「{kind}・出走{N}名・{脚質}有利」の並び。脚質部分だけを`TypeChip`にし、
-  ラベルは`${TYPES[favors].label}有利`（Phase Aのホーム画面と同じ書式）。
-- `calendar.jsx:40`（カレンダー行の詳細）——同上。
-
-### 2. R1：ShopRowのbadge経由（`ob.jsx:15,24`）
-
-`ShopRow`の`badge`は**すでにReactNodeを受け付ける**（`mylife/hub.jsx:398`が
-`<ScoutBadge/>`を渡している実績あり）。よって**共有部品の改修は不要**で、
-`badge={<TypeChip type={h.type} />}`に差し替えるだけでよい。他4画面のbadge呼び出し
-（文字列）はそのまま動く。
-
-### 3. R1：対象外とする3箇所（チップ化しない）
-
-- `youth.jsx:39`——`<option>`の中身。HTML仕様上、要素を入れられないため**文字のまま維持**。
-- `transfer.jsx:44`／`transferEvents.jsx:41,61`——いずれも**文章の途中の括弧書き**
-  （「〜{name}（クライマー・OVR72）が、真剣な面持ちで…」）。R1の規定
-  「文章中の括弧書きは文章のまま維持」に該当。**維持**。
-
-### 4. R3：`shop.jsx:46`のキャンプ券ボタン
-
-`background:"none"` + `border:1px solid accent`の枠線ボタン。アフォーダンス規約に
-従い`surfaceUp`面へ。1画面に1つの主操作ではない（在庫がある時だけ出る補助操作）ため
-`PrimaryBtn`ではなく`QuietBtn`相当の面＋文言そのまま。
-
-**対象外**：`misc.jsx:23`の「変更」——`background:none`だがこれは**インラインの
-小リンク**で、`mylife/hub.jsx`の選手名の隣にある同型の「変更」と対になっている。
-action色の文字リンクとして両モードで揃っているので**現状維持**（面にすると
-チーム名の行が二重の面になり、かえって重くなる）。
-
-### 5. R2相当：`race.jsx`の順位表（実質の主対象）
-
-`race.jsx`のcaption 35箇所のうち、**9箇所が順位表の行**（`:223,227`チームTT／
-`:275,279,281`個人／`:322,325`ステージ総合／`:454,457`最終総合）。現状は
-順位番号・チーム名・タイムがすべてcaption(10px)で**フラット**＝Phase Aで潰した
-「12px一色の敷き詰め」と同じ構造が残っている。
-
-**B-4第1バッチで合意済みの「世界ランキング案A」の行の形をそのまま適用する**
-（新規のデザイン判断ではなく、合意済みパターンの横展開）：
-- 順位番号：`label`(11) sub・右揃え幅22・tabular（自チーム/自分は`accent`）
-- 名前／チーム名：`head`(16)（自チーム/自分は`accent`）
-- 補足（チーム名が名前と別に出る個人順位表の`:279`）：`micro`(8) sub
-- 右端のタイム／ギャップ：`label`(11) tabular（現状の`FONT_DOT`指定は維持）
-
-残りのcaptionは説明文・状態表示で、**R4の判断対象**：
-- 削除候補：`:219`「チームTTは合算タイム勝負。独走力・平坦・スタミナの層の厚さと、
-  チームの連携が効きます。」——結果画面に出る解説文。順位表を見れば足りるため削除。
-- 維持：`:101`故障中／`:102`連闘／`:127,397`役割ミスマッチ警告——いずれも
-  **判断に直結する状態表示**なので残す（badは意味色として正しい用途）。
-- 維持：`:82`出走人数の補足／`:315`ステージ間の案内——操作の直前に必要な説明。
-
-### 6. 検証（B-3完了条件）
-
-1. `npm run build`通過。
-2. 実プレイでシーズン側の該当画面をすべて通す（カレンダー→出走編成→結果→
-   ステージレース2日目→年度末→殿堂→全チーム名鑑→市場→OBコーチ）。`pageerror`ゼロ。
-3. 縦線grep・絵文字grepを再実行し、新たな違反が入っていないこと。
-4. 順位表を含む画面のスクリーンショットで、B-4案Aの行の形と**見た目が揃っている**
-   ことを確認（マイライフ側の世界ランキングと並べて比較）。
+**実装は`git show 1988a9e`が正本**（対象の全数調査は`79fd916`）。シーズン側24ファイルを調査し、
+`race.jsx`の順位表4本（チームTT結果／個人結果／GC区間中間／GC最終）をB-4「世界ランキング案A」と
+同じ行の形へ横展開したのが主対象。R1（TypeChip化7箇所）・R3（枠線ボタン→面）・R4（説明文削除）も併せて適用。
 
 ## Phase B-3 実装結果（2026-08・Sonnet）
 
@@ -656,7 +398,7 @@ action色の文字リンクとして両モードで揃っているので**現状
 （検証時点では全員`顔見知り`のため非表示、ロジック自体は`bondTier`の比較で
 正しく分岐）。
 
-## B-4 第2バッチ（引退関連3画面）設計（2026-08・Opus・候補提示済み／合意待ち）
+## B-4 第2バッチ（引退関連3画面）設計（2026-08・Opus）
 
 対象は`career.jsx`の残り3画面：引退勧告（mylife_retire_advice）・引退セレモニー
 （mylife_retired）・殿堂（mylife_legends）。第1バッチ時に「引退到達セーブの採取が必要」
@@ -713,160 +455,38 @@ Artifact「引退画面の作り直し」で現状／案A／案Bを実データ�
   「弟子」を**名前＝値／説明＝detail行**に分ける（現状は値の欄に文章が入って右揃えが
   破綻し、弟子は2行に折り返している）。
 
-**状態**：ユーザーの選択待ち。合意後に実装（Sonnetへ切り替え）。
+**状態**：合意・実装とも完了（実装結果は本ファイル末尾）。
 
-## B-4 第2バッチ 合意・実装仕様（2026-08確定・Sonnet向け）
+## B-4 第2バッチ 合意・実装仕様 — 実装済み（索引）
 
-**合意**：画面1＝案A／画面2＝案B／画面3＝案A（ユーザー選択）。モックの正本は
-`scratchpad/b4b2_mock.html`（git外・実フォントCheckpointPeriod-jis埋め込み済み）。
-以下が実装の正本。対象ファイルは`src/screens/mylife/career.jsx`＋`src/domain/mylife/career.js`。
+**合意＝画面1:案A／画面2:案B／画面3:案A。実装は`git show 6a6bcbd`が正本**（仕様確定は`7321932`）。
+コードで読める指示（どのdivにどの値を置くか）は残さず、**コードからは読み取れない判断だけ**を残す：
 
-### 0. 先に直す不具合2件（両画面共通）
+**実データで見つけて直した不具合2件**
+1. **引退勧告の「全盛期」が嘘だった**。`info.joinOvr`は`createChar.js:83`で選手生成直後に代入される
+   **デビュー時**の総合力で、全盛期ではない。実測では「総合力119／全盛期62」と並び、いま全盛期の
+   倍近く強いという表示になっていた。実際のピーク（`careerHistory`の最大値と現在値の大きい方）へ差し替え。
+   - **今回は触っていない関連論点**：引退勧告のトーン判定
+     `declining = phase === "衰え期" && overall(player) < player.joinOvr`（`controllers/mylife/month.js:335`）も
+     同じ`joinOvr`を使っており、「デビュー時を下回るまで衰える」＝実質発火しない条件になっている。
+2. **生涯クリアポイント内訳の「+-41」**。`+{p.cp}`とプラス記号を決め打ちしていたが、難易度補正は
+   負値を取り得る（`cp.js:177`の`cp: total - rawTotal`）。符号は値から出す形へ。
 
-- **`career.jsx:42`「全盛期」**：`info.joinOvr`はデビュー時の総合力。ラベルごと廃止し、
-  案Aの「ピーク」へ置換する（下記1-2）。`joinOvr`自体はコントローラ側の判定で使い続ける
-  ため削除しない。
-- **`career.jsx:213`「+-41」**：`+{p.cp}` を `{p.cp >= 0 ? "+" : ""}{p.cp}` にする。
+**設計判断**
+- 画面1は見出しを1行に。「契約更改」「まだやれる脚だ」は監督のセリフが同じ内容を言っているため削除し、
+  declining の別は**セリフの分岐だけ**が担う。浮いていた注釈は選択肢カードのnoteへ収めた。
+- 画面2の**ラストレース名から自分の名前を外す**。レース名は`${player.name} 引退記念ラストレース`
+  （`controllers/mylife/raceStart.js:26`）で生成され、直上のヒーローと重複するため、表示時に
+  既知の接頭辞だけを外す（生成側は他でも使うため無改修）。
+- **キャリアの名場面の年の重複**の出所は`career.jsx`ではなく**レース名そのもの**。モニュメントは
+  `domain/mylife/race.js:22`が`` `${year}年目 ${mon.name}` ``と年を焼き込んでおり、左の「11年目10月」と
+  二重になる。`raceLog`は`name`しか保存しない（`monumentName`は入っていない）ため、既存セーブも
+  直るよう`mlCareerTimeline`側で先頭の年を落とす方式にした。「N年目から〜勝利から遠ざかった」の
+  「N年目」は本文として正しいので置換対象外。
+- 画面3の展開部で`Item`の`value`に文章を詰めていたため右揃えが破綻していた（弟子は2行に折り返し）。
+  **名前＝value／説明＝detail**へ分割。
 
-### 1. 画面1 引退勧告（mylife_retire_advice）＝案A
-
-現行の`career.jsx:21〜54`を差し替える。上から順に：
-
-1. **見出し（1行のみ）**：`{info.age}歳・進退を決める` を`T.size.title`（20）。
-   marginBottom `T.space.md`。
-   - **削除**：caption「契約更改／チームからの引退勧告」（`:28`）と
-     caption「まだやれる脚だ／全盛期の力に陰りが見える」（`:30`）。どちらも監督のセリフが
-     同じ内容を言っている。declining の別は**セリフの分岐だけ**が担う（見出しは共通文言）。
-2. **判断材料3列**（`display:flex; gap:T.space.sm`・各列 `flex:1`・`background:T.color.surface`・
-   `padding:10px 8px`・`textAlign:center`）。上段＝ラベル`T.size.micro`(8) sub、
-   下段＝値`T.size.title`(20)。marginBottom `T.space.md`。
-   | 列 | ラベル | 値 | 取得元 | 色 |
-   |---|---|---|---|---|
-   | 1 | 総合力 | `info.ovr` | `adviceInfo.ovr` | `T.color.accent` |
-   | 2 | ピーク | `peakOvr` | `Math.max(...(ml.careerHistory||[]).map(h => h.ovr || 0), info.ovr)` | `T.color.text` |
-   | 3 | 最高世界ランク | `ml.worldRankBest`＋小さく「位」 | `ml.worldRankBest` | `T.color.text` |
-   - **empty state**：`ml.worldRankBest == null` のとき値は `—`（「位」は出さない）。
-     `careerHistory`が空でも`info.ovr`が入るのでピークは必ず出る。
-3. **監督パネル**：現行`:32〜39`をそのまま（`surface`／caption sub「監督」／`T.size.body`・
-   `lineHeight:1.8`のセリフ／declining分岐も現行の2文のまま）。marginBottom `T.space.md`。
-4. **選択肢3枚**。`career.jsx`内にローカル部品`ChoiceCard`を定義して使う
-   （現状ここでしか使わないため`kit.jsx`へは出さない。2箇所目が出たら昇格を検討）。
-   - `ChoiceCard({ title, note, onClick, primary, danger })`：`<button>`・`width:100%`・
-     `textAlign:left`・`border:none`・`padding:T.space.md`・`marginBottom:T.space.sm`・
-     `fontFamily:FONT_DOT`・`cursor:pointer`。
-     背景＝`primary ? T.color.action : T.color.surfaceUp`。
-     1行目 title＝`T.size.head`(16)、色は `primary ? T.color.bg : (danger ? T.color.bad : T.color.text)`。
-     2行目 note＝`T.size.caption`(10)、色は `primary ? T.color.bg : T.color.sub`、`marginTop:2`、`opacity: primary ? 0.75 : 1`。
-   - 並び（上から）：
-
-     | title | note | onClick | 条件 |
-     |---|---|---|---|
-     | 現役を続ける | 来季も同じように走ります | `mlRetireAdviceContinue` | 常時（`primary`） |
-     | 役割を縮小して続ける | レースでの負担が減り、長く走れます | `mlRetireAdviceReduceRole` | `!info.reducedRole` のときのみ |
-     | 今季限りで引退する | キャリアを振り返る画面へ進みます | `askConfirm(...)` 現行`:51`のまま | 常時（`danger`） |
-   - **削除**：`:48`の浮いた注釈「レースの負荷が15%下がり、選手寿命が延びます」
-     （カード内のnoteへ移し、開発語彙の「レースの負荷」「選手寿命」を平易化した）。
-   - **削除**：`Section`「いまの力」と`Item`2行（`:40〜43`）。上の3列に置き換わる。
-
-### 2. 画面2 引退セレモニー（mylife_retired）＝案B
-
-現行`career.jsx:57〜226`を部分改修する。**セクションの数と並びは現行のまま**で、
-以下の6点だけを変える。
-
-1. **ヒーロー**（`:73〜81`）：内側の区切り（`marginTop:lg; paddingTop:md; borderTop`のdiv）を
-   やめ、1つの面に流す。caption「この選手の生き様」（`:77`）を**削除**（直下に称号が来るので自明）。
-   並びは 引退の年・年齢 caption sub ／ `r.name` title(20) ／ `arch.title` head(16) accent ／
-   `arch.desc` caption sub（`lineHeight:1.7`）。各行の間隔は`T.space.sm`。
-2. **生涯成績3列**をヒーロー直下に**新設**（画面1と同じ3列の作り。ラベル`micro`(8) sub／
-   値`T.size.title`(20)）。marginBottom `T.space.md`。
-   | 列 | ラベル | 値 | 取得元 | 色 |
-   |---|---|---|---|---|
-   | 1 | 出走 | `races.length` | `r.raceLog`（既存の`races`） | `T.color.text` |
-   | 2 | 優勝 | `wins` | 既存の`wins` | `T.color.accent` |
-   | 3 | 表彰台 | `podiums` | 既存の`podiums` | `T.color.text` |
-   - **empty state**：0でも同じ形で「0」を出す（セクションごと消さない）。
-3. **「歩んだ道のり」を3行に縮小**（`:97〜104`）：`出走`・`優勝`・`表彰台`の3つの`Item`を
-   **削除**（上の3列へ移動）。残すのは`到達クラス`（`first`になる）・`最高総合力`・
-   `最高世界ランク`の3行で、条件と`detail`は現行のまま。
-4. **「成し遂げたこと」を2列化**（`:106〜109`）：`Item`の縦積みをやめ、
-   `display:grid; gridTemplateColumns:1fr 1fr; gap:2px ${T.space.md}px` の中に
-   1件＝`fontSize:T.size.label`(11)・`padding:5px 0`・`borderTop:1px solid T.color.rule` の
-   セルを並べる。`Section`の`right`は現行どおり `${achieved.length} / ${ML_ACHIEVEMENTS.length}`。
-   - **empty state**：`achieved.length === 0` は現行の1行（`:108`のItem／
-     「心に残る一勝は無かったが、走り続けた日々そのものが記録だ。」）をそのまま使う（2列にしない）。
-   - `ml.retiredMissedOpen`の折りたたみ（`:110〜121`）は現行のまま。中身のItem縦積みも現行のまま。
-5. **ラストレースのレース名から自分の名前を外す**（`:88`）：レース名は
-   `${player.name} 引退記念ラストレース`（`controllers/mylife/raceStart.js:26`）で生成され、
-   すぐ上のヒーローに同じ名前が出ているため重複している。表示時に**既知の接頭辞だけ**を外す：
-   `(ml.lastRaceResult.name || "").startsWith(r.name + " ") ? ml.lastRaceResult.name.slice(r.name.length + 1) : ml.lastRaceResult.name`。
-   （生成側は他でも使うため変更しない。）
-6. **キャリアの名場面の年の重複を断つ**（`domain/mylife/career.js`の`mlCareerTimeline`）：
-   重複の出所は`career.jsx`ではなく**レース名そのもの**。モニュメントのレース名は
-   `domain/mylife/race.js:22`で `` `${year}年目 ${mon.name}` `` と年を焼き込んで作られており、
-   一覧の左に出る「11年目10月」と本文の「11年目 山岳の古典《秋の女王》」で二重になる。
-   `raceLog`は`name`しか保存していない（`controllers/mylife/result.js:76`。`monumentName`は
-   入っていない＝既存セーブも直せる形にする必要がある）ため、`mlCareerTimeline`内で
-   表示名を作るときに先頭の年を落とす：
-   ```js
-   const shortName = (n) => String(n || "").replace(/^\d+年目\s*/, "");
-   ```
-   を定義し、`log.forEach`内で`e.name`を参照している**5箇所すべて**（`monument`優勝／
-   `isBig`優勝／通常優勝（初勝利含む）／`monument`表彰台／`isBig`表彰台／初表彰台／
-   `isBig`の11位以下）を`shortName(e.name)`へ置換する。
-   - **置換しない**：「`${prev}年目から${wy - prev}年間、勝利から遠ざかった`」の2箇所
-     （こちらの「N年目」は本文として正しい）。
-   - 通常のレース名に年は付かないため、この置換で壊れるものは無い。
-
-**今回やらないもの（ユーザー未承認・次の機会に候補提示する）**：`:197〜198`の自伝の
-説明文2行と`:219`「これから」／`:221`の説明文。案Bの提示範囲外だったため触らない。
-
-### 3. 画面3 殿堂（mylife_legends）＝案A
-
-現行`career.jsx:447〜`を改修する。
-
-1. **見出し行**：`殿堂` title(20) を左、右端に `{legends.length}名` を caption sub。
-   （`display:flex; justifyContent:space-between; alignItems:baseline`）
-2. **説明を1行に**（`:455〜457`）：3行の長文を
-   **「引退した選手は、次のキャリアで師匠や親に選べます。」** の1行に置換
-   （`T.size.caption`・sub・marginBottom `T.space.md`）。件数は見出し右へ移したので文から外す。
-3. **ボタンを3つ並べる**（`:460〜463`）：`系譜ツリー`／`因子図鑑`に加えて
-   **`配合の相性表`を3つ目のボタン**にする（`flex:1`ずつの`QuietBtn`）。
-   - `配合の相性表`は遷移ではなく**その場で開閉**（`ml.showNicks`のトグル。現行の挙動を維持）。
-     開いているあいだはボタンの文字色を`T.color.action`にして選択中を示す。
-   - **削除**：`:465〜468`の開閉トグル行（`配合の相性表` ＋ `開く ▾`）と、
-     `:470`の`Section title="配合の相性表"`の**見出し**。開いた時に見出しが二重に出ていた原因。
-     中身の表（`:471〜477`）は`surface`面の箱に入れてそのまま出す。
-4. **カード**（`:490〜501`）：
-   - 行1：`{leg.name}` を`T.size.head`(16)＋直後に **`<TypeChip type={leg.type} />`**
-     （現行はsubのテキストラベル）｜右端 `{leg.endYear}年目引退・{leg.age}歳` caption sub。
-   - 行2：`{leg.careerTitle}` caption accent ｜右端
-     `{leg.races}戦{leg.wins}勝・表彰台{leg.podiums}回` caption sub ＋ 非展開時のみ `▾`（accent）。
-   - 面・padding・タップで開閉する挙動は現行のまま。
-5. **展開部のItem破綻を直す**（`:511〜518`）。現行は`value`に文章を入れており、
-   `Item`の`value`は右揃えのhead(16)なので弟子は2行に折り返している。**名前＝value／
-   説明＝detail** に分ける：
-   | 項目 | value | detail | 条件 |
-   |---|---|---|---|
-   | 好敵手 | `leg.rivalName` | `${ht.label}・${leg.rivalRecord?.wins || 0}勝${leg.rivalRecord?.losses || 0}敗` | `leg.rivalName` |
-   | 弟子 | `leg.protege.name` | `${TYPES[leg.protege.type]?.label}・総合力${pr.ovr}まで育てた` | `leg.protege` |
-   - `チーム`・`実績`・`特殊配合`・`系統`の各Itemは現行のまま（`系統`の`detail`も現行の条件式のまま）。
-   - 父母（`:524〜533`）・`epilogue`・`autobiography`・削除リンクは現行のまま。
-6. **empty state**：`legends.length === 0` のとき`:481`の
-   「まだ引退した選手はいません。」を現行どおり出す（見出し右の件数は「0名」、
-   説明1行とボタン3つは出したまま）。
-
-### 4. 検証（B-4第2バッチの完了条件）
-
-1. `npm run build` 通過。
-2. `scratchpad/harvest_retire2.mjs` を再実行し、引退勧告→ラストレース→引退セレモニー→
-   殿堂（展開込み）を実データで通す。**`pageerror` ゼロ**、3画面のスクリーンショットを提示。
-3. 「+-41」が `-41` になっていること、「全盛期」が画面から消えていることを実データで確認。
-4. 名場面の本文から「N年目」の重複が消え、「N年目から〜勝利から遠ざかった」の行は
-   残っていることを確認（後者は同一セーブに出ないことがあるので、出なければNodeで
-   `mlCareerTimeline`に合成logを与えて確認する）。
-5. 縦線grep（`borderLeft`）と絵文字grepで新たな違反ゼロ。
-
-## B-4 第2バッチ 追補：自伝と「これから」（2026-08確定・Sonnet向け）
+## B-4 第2バッチ 追補：自伝と「これから」（2026-08確定）
 
 **合意**：自伝＝**案A**（書名を捨て、殿堂に刻まれる言葉そのものを並べる）。言葉は**5個→48個**へ拡張。
 選び方は「最高位1つだけ残す」から「**当てはまった全部を候補にし、最高位の1段下まで同格**」へ変更。
@@ -902,146 +522,17 @@ Artifact「引退画面の作り直し」で現状／案A／案Bを実データ�
 以下は試作で実測済みのコードそのもの。**`c`（キャリアの事実）を作る`careerFacts(ml)`を新設**し、
 `POOL`の条件はすべて`c`だけを見る純関数にする。
 
-```js
-// 呼び出し側が渡すのは ml（マイライフstate）。事実の抽出はここに閉じる。
-export function careerFacts(ml) {
-  const p = ml.player || {}, log = p.raceLog || [], rr = ml.rivalRecord || {}, f = ml.flags || {};
-  return {
-    name: p.name, year: ml.year || 0, races: log.length,
-    wins: log.filter(e => e.rank === 1).length,
-    podiums: log.filter(e => e.rank <= 3).length,
-    monumentWins: log.filter(e => e.monument && e.rank === 1).length,
-    worldRankBest: ml.worldRankBest, classIdx: ml.classIdx || 0, classMax: CLASSES.length - 1,
-    rival: (ml.rival || {}).name, rm: rr.meetings || 0, rw: rr.wins || 0, rl: rr.losses || 0,
-    protege: (ml.protege || {}).name, master: p.master || null,
-    hasParents: !!(p.parentBloodIds || []).length,
-    mentor: !!f.mentor, married: !!f.married, reducedRole: !!f.reducedRole,
-  };
-}
+`src/domain/mylife/career.js` に実装済み。**コードが正本**（48個の言葉・条件・選び方は
+そちらを見ること。ここに写しは置かない＝二重管理を避ける）。構成は次の5つ：
 
-const POOL = [
-  // ---- 戦績 ----
-  { grp: "戦績", r: 5, cond: "最高世界ランクが1位", ok: c => c.worldRankBest === 1, vs: [
-    "世界の頂に立った日の風は、今も忘れられない。",
-    "頂点から見た景色を知っている。それだけで一生分だ。",
-    "世界の一番上に、確かに名前が刻まれた。"] },
-  { grp: "戦績", r: 4, cond: "古典レースを制覇", ok: c => c.monumentWins >= 1, vs: [
-    "古典と呼ばれるレースを制した。あの一日は生涯色褪せない。",
-    "百年続く道で先頭を走った。歴史に一行だけ書き足せた。"] },
-  { grp: "戦績", r: 4, cond: "通算20勝以上", ok: c => c.wins >= 20, vs: [
-    "勝ち続けることでしか見えない景色があった。悔いはない。",
-    "数えきれないほど手を挙げた。どの一回も同じではなかった。",
-    "勝つことに慣れてしまう日は、ついに来なかった。"] },
-  { grp: "戦績", r: 3, cond: "通算8勝以上", ok: c => c.wins >= 8, vs: [
-    "あの一勝があったから、次の一勝を追いかけられた。",
-    "勝てる日が来ると信じて続けた。その通りになった。"] },
-  { grp: "戦績", r: 3, cond: "表彰台10回以上・勝利2回以下", ok: c => c.podiums >= 10 && c.wins <= 2, vs: [
-    "あと一歩が、これほど遠いとは思わなかった。",
-    "二番手の景色ばかり見てきた。それでも走る理由はあった。"] },
-  { grp: "戦績", r: 2, cond: "表彰台10回以上", ok: c => c.podiums >= 10, vs: [
-    "何度あの台に立っても、頂点への渇きは消えなかった。",
-    "表彰台の高さに慣れるほど、上の段が遠く見えた。"] },
-  { grp: "戦績", r: 2, cond: "出走あり・勝利0", ok: c => c.wins === 0 && c.races > 0, vs: [
-    "一度も勝てなかった。それでも毎朝、自転車に跨った。",
-    "記録には残らない走りばかりだった。悔いは、少しある。"] },
-  { grp: "戦績", r: 0, cond: "受け皿", ok: () => true, vs: [
-    "勝てない日も、腐らずペダルを回し続けた。それが誇りだ。"] },
+- `ML_AUTOBIO_POOL` … 23条件×2〜3通りの言い回し＝48個。`grp`（戦績／好敵手／受け継ぎ／歩み）・
+  `r`（めずらしさ。0はどれにも当てはまらなかった時の受け皿）・`ok(c)`（条件）・`vs`（言い回し）。
+- `careerFacts(ml)` … キャリアの事実を抽出（`ok`はこの`c`だけを見る純関数）。
+- `mlAutobioSeed(c)` / `mlAutobioMix(seed, salt)` … キャリア固有の種とsplitmix系の撹拌。
+- `mlAutobioPick(c, n, tol)` … 当てはまった全部を候補にし、グループごとに最高位から`tol`段下まで
+  同格として種で1つ選び、めずらしさ順に上位n個。
+- `mlAutobiographyOptions(ml)` … 唯一のexport。`[{ text }, ...]`を3件返す（`tol=1`）。
 
-  // ---- 好敵手 ----
-  { grp: "好敵手", r: 4, cond: "10戦以上・勝ち越し", ok: c => c.rival && c.rm >= 10 && c.rw > c.rl, vs: [
-    "{rival}と競り合った日々こそが、全盛期だった。",
-    "{rival}を退けた数だけ、強くなれた気がする。",
-    "{rival}がいなければ、ここまで踏めなかった。"] },
-  { grp: "好敵手", r: 4, cond: "10戦以上・負け越し", ok: c => c.rival && c.rm >= 10 && c.rl >= c.rw, vs: [
-    "{rival}の背中は、最後まで追いつけなかった。",
-    "{rival}に届かなかった。その悔しさが脚を作った。",
-    "生涯をかけて{rival}を追った。悪くない一生だった。"] },
-  { grp: "好敵手", r: 3, cond: "1戦以上", ok: c => c.rival && c.rm >= 1, vs: [
-    "{rival}という存在が、走り続ける理由をくれた。",
-    "{rival}と同じ時代を走れたのは、幸運だった。"] },
-  { grp: "好敵手", r: 0, cond: "受け皿", ok: () => true, vs: [
-    "ライバルとは、鏡に映したもう一人の自分だった。"] },
-
-  // ---- 受け継ぎ ----
-  { grp: "受け継ぎ", r: 4, cond: "弟子がいる", ok: c => !!c.protege, vs: [
-    "{protege}の走りの中に、確かに何かが残っている。",
-    "{protege}に渡せるものは渡した。あとは託すだけだ。",
-    "{protege}が勝つ日を、誰より楽しみにしている。"] },
-  { grp: "受け継ぎ", r: 3, cond: "メンターになった", ok: c => c.mentor, vs: [
-    "若い者に伝えられることは、全部伝えたつもりだ。",
-    "教えることで、自分の走りをもう一度覚え直した。"] },
-  { grp: "受け継ぎ", r: 3, cond: "師匠から教わって始めた", ok: c => !!c.master, vs: [
-    "{master}に教わった一言を、今日まで胸に置いてきた。",
-    "{master}の走りを真似ることから、全部が始まった。"] },
-  { grp: "受け継ぎ", r: 2, cond: "配合で生まれた", ok: c => c.hasParents, vs: [
-    "受け継いだものを、少しは太くできただろうか。",
-    "血の中に走り方が入っていた。抗う気はなかった。"] },
-  { grp: "受け継ぎ", r: 0, cond: "受け皿", ok: () => true, vs: [
-    "この道は、後に続く者たちへ託したい。走る歓びよ、続け。"] },
-
-  // ---- 歩み ----
-  { grp: "歩み", r: 4, cond: "100戦以上に出走", ok: c => c.races >= 100, vs: [
-    "百を超えるレースを走った。同じ一日は一度もなかった。",
-    "数えるのをやめるほど走った。脚が覚えている。",
-    "走った道を全部つなげたら、どこまで行けただろう。"] },
-  { grp: "歩み", r: 3, cond: "現役12年以上", ok: c => c.year >= 12, vs: [
-    "長く走り続けられたこと、それ自体が勲章だ。",
-    "辞めどきを何度も考えた。そのたびにもう一年走った。"] },
-  { grp: "歩み", r: 3, cond: "家庭を持った", ok: c => c.married, vs: [
-    "帰る家があったから、最後まで踏み続けられた。",
-    "待っている人がいる。それが一番のペースメーカーだった。"] },
-  { grp: "歩み", r: 2, cond: "役割を縮小して続けた", ok: c => c.reducedRole, vs: [
-    "エースの座を降りてからの数年に、一番多くを学んだ。",
-    "誰かのために踏む走りにも、確かな誇りがあった。"] },
-  { grp: "歩み", r: 2, cond: "最上位クラスに到達", ok: c => c.classIdx >= c.classMax, vs: [
-    "一番上の舞台で戦えた。それで十分だ。",
-    "上がれるところまで上がった。景色は思った通りだった。"] },
-  { grp: "歩み", r: 0, cond: "受け皿", ok: () => true, vs: [
-    "うまくいかない日のほうが多かった。それでも走り続けた。"] },
-];
-
-const GROUPS = ["戦績", "好敵手", "受け継ぎ", "歩み"];
-
-// キャリア固有の種。同じキャリアなら毎回同じ言葉（再描画で入れ替わらない）。
-const seedOf = (c) => {
-  const s = `${c.name}|${c.year}|${c.races}|${c.wins}|${c.podiums}`;
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
-};
-// 種から派生させた値がよく散るように毎回撹拌する（単に seed+i*13 を足すだけだと
-// 同じ言葉に偏る。実測で10人中6通り→撹拌後を再測定する）。
-const mix = (seed, salt) => {
-  let h = (seed ^ Math.imul(salt + 1, 0x9E3779B1)) >>> 0;
-  h = Math.imul(h ^ (h >>> 16), 0x85EBCA6B) >>> 0;
-  h = Math.imul(h ^ (h >>> 13), 0xC2B2AE35) >>> 0;
-  return (h ^ (h >>> 16)) >>> 0;
-};
-const fill = (t, c) => t.replace("{rival}", c.rival || "").replace("{protege}", c.protege || "").replace("{master}", c.master || "");
-
-function pickQuotes(c, n = 3, tol = 0) {
-  const seed = seedOf(c);
-  // 1) 当てはまった言葉を全部候補にする（捨てない）
-  const hits = POOL.filter(q => q.ok(c));
-  // 2) グループごとに、当てはまった中から種で1つ選ぶ（同率でも言い回しが変わる）
-  const perGroup = GROUPS.map((g, gi) => {
-    const gh = hits.filter(q => q.grp === g);
-    const top = Math.max(...gh.map(q => q.r));
-    const best = gh.filter(q => q.r >= top - tol);
-    const q = best[mix(seed, gi * 3 + 1) % best.length];
-    const text = q.vs[mix(seed, gi * 3 + 2) % q.vs.length];
-    return { grp: g, r: q.r, cond: q.cond, text: fill(text, c), pool: gh.length, variants: gh.reduce((a, x) => a + x.vs.length, 0) };
-  });
-  // 3) めずらしさの高いグループから3つ（同率は種で順を入れ替える）
-  const order = [...perGroup].sort((a, b) =>
-    (b.r - a.r) || (mix(seed, 100 + GROUPS.indexOf(a.grp)) % 997) - (mix(seed, 100 + GROUPS.indexOf(b.grp)) % 997));
-  return { picked: order.slice(0, n), all: perGroup, hits: hits.length,
-    totalVariants: hits.reduce((a, q) => a + q.vs.length, 0) };
-}
-export function mlAutobiographyOptions(ml) {
-  return pickQuotes(careerFacts(ml), 3, 1).picked.map(q => ({ text: q.text }));
-}
-```
 
 - `CLASSES`は`data/progression.js`からimportする（`career.js`に未importなら追加）。
 - `pickQuotes`の`tol`既定は**1**（上記の実測に基づく）。`POOL`/`GROUPS`/`seedOf`/`mix`/`fill`/
@@ -1121,3 +612,43 @@ devlogに記録したコードそのものが動くことを確認：自伝3件�
 通し）で3画面＋派生状態をスクリーンショット確認、`pageerror`ゼロ。「難易度補正 ×0.7」が
 `-24`と正しい符号（二重符号なし）で表示されることを実データで確認。縦線grep
 （`borderLeft`）を`career.jsx`・`domain/mylife/career.js`両方で再実行し残存ゼロ。
+
+## スリム化（2026-08・第5回・Opus）
+
+B-4第2バッチ完了時点で`devlog/wave32.md`が84,336B（約32,900トークン）に達し、Readの上限
+25,000トークンを超えて**ファイル末尾から読めなくなる**状態だった。あわせて`DEVLOG.md`本体も
+70,403B（約27,500トークン）で同じく上限超過——**末尾の「次のアクション」が真っ先に切り捨てられる**
+位置にあった（CLAUDE.md §4が警告している通りの状態）。
+
+| ファイル | 前 | 後 |
+|---|---|---|
+| `DEVLOG.md` | 70,403B（約27,500トークン） | 60,700B（約23,700トークン） |
+| `devlog/wave32.md` | 84,336B（約32,900トークン） | 48,223B（約18,800トークン） |
+
+**`DEVLOG.md`側でやったこと**
+- 弾セクション§38〜§64を§4の規定どおり「1〜3行の索引＋`devlog/waveNN.md`へのリンク」へ圧縮
+  （§38〜49は1つの索引セクションへ統合）。相互参照（§39・§41等）は各項目に**§NN**を残したため解決可能。
+- **圧縮で失われるところだった生きたルールを§3へ救出**：`tools/verify_radar.mjs`（§61）と
+  `tools/verify_baseview.mjs`（§51）の**機械検証ゲート**は「触ったら通すのが完了条件」という
+  現役のルールなのに、圧縮対象の弾セクションにしか書かれていなかった。§3へ新節として集約。
+  `ML_TYPE_CAP_OFFSET`をプレイヤーとAIで共有する事実（§60/§62）も§3「成長キャップ」へ転記。
+- **§3の陳腐化を2件修正**（生きた参照が嘘をついていた）：
+  1. 「Btnのrole（primary/month/menu/danger）に従う」——`Btn`は第13弾3-Eで**削除済み**。現行の
+     `kit.jsx`部品＋アフォーダンス規約＋CLAUDE.md §9の色の役割分担へ差し替え。
+  2. `AbilitySoshitsuRadarPair`が「シーズン選手一覧でも常時表示」——第32弾Phase Aで
+     **「くわしく見る」の展開領域へ移動済み**。実態に合わせて修正。
+  - なお§3が参照する識別子124個を`src/`へ全数照合し、他に実体を失ったものが無いことは確認済み。
+- CLAUDE.md §5/§6の本文をDEVLOG側で繰り返していた箇所をポインタへ。
+
+**`devlog/wave32.md`側でやったこと**
+- **実装済みフェーズの「実装仕様（Sonnet向け）」4節を索引化**（Phase A／B-3／B-4第1・第2バッチ）。
+  コードで読める指示（どのdivにどの値を置くか）は捨て、**コードからは読み取れない判断**——不具合の
+  診断・却下案・「なぜその形にしたか」——だけを残し、正本は`git show <hash>`とソースへ委ねた。
+- 自伝の48個の言葉プールと選択ロジックの**JSソース全文（9,141B）を削除**。
+  `src/domain/mylife/career.js`に実装済みで、二重管理そのものだった（構成の5点だけ残す）。
+- 「合意待ち」等の実態と合わない状態表記を現状へ更新。
+
+**教訓**：`devlog/waveNN.md`は「読みたい時だけ読む詳細」だが、**Readの上限（25,000トークン
+＝約64,000バイト）を超えると読みたい時に読めない**。§4の閾値運用は`DEVLOG.md`向けの規定だが、
+実務上は`waveNN.md`にも同じ上限が効く。**実装が終わった仕様は、コードが正本になった時点で
+索引へ落とす**（弾が動いている間に詳しく書くのは正しいが、終わったら畳む）。
