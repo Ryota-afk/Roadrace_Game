@@ -66,7 +66,7 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
               fontSize={T.size.caption} fontFamily={FONT_DOT} fill={T.color.sub}>{ax.label}</text>
             {showValues && (
               <text x={lx + dx} y={ly + 7} textAnchor={anchor} dominantBaseline="middle"
-                fontSize={T.size.body} fontFamily={FONT_DOT} fill={atMax ? atMaxColor : T.color.text}>
+                fontSize={T.size.head} fontFamily={FONT_DOT} fill={atMax ? atMaxColor : T.color.text}>
                 {Math.round(ax.value ?? 0)}
               </text>
             )}
@@ -77,7 +77,7 @@ export function RadarChart({ axes, size = 168, color = T.color.accent, fillOpaci
         // 第30弾: 右下から左下へ移動（下側の軸のラベルとの接触を避けるため）。
         <g>
           <text x={-6} y={size + 16} textAnchor="start" fontSize={T.size.caption} fontFamily={FONT_DOT} fill={T.color.sub}>{corner.label}</text>
-          <text x={28} y={size + 16} textAnchor="start" fontSize={T.size.body} fontFamily={FONT_DOT} fill={T.color.sub}>{corner.value}</text>
+          <text x={28} y={size + 16} textAnchor="start" fontSize={T.size.head} fontFamily={FONT_DOT} fill={T.color.sub}>{corner.value}</text>
         </g>
       )}
     </svg>

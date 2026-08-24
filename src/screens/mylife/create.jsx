@@ -76,7 +76,7 @@ export function renderMyLifeCreateScreens(ctx) {
               <div style={{ fontSize: T.size.body, color: T.color.text }}>{curBg.desc}</div>
               {curBg.merit && (
                 <>
-                  <div style={{ fontSize: T.size.label, color: T.color.accent, marginTop: T.space.xs }}>{curBg.meritLabel}</div>
+                  <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.xs }}>{curBg.meritLabel}</div>
                   <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{curBg.merit}</div>
                 </>
               )}

@@ -11,18 +11,7 @@ import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
-import { Screen, Section, TypeChip } from "../../components/kit.jsx";
-
-const Row = ({ k, v, first }) => (
-  <div style={{
-    display: "flex", justifyContent: "space-between", alignItems: "baseline",
-    fontSize: T.size.body, padding: `${T.space.sm}px 0`,
-    borderTop: first ? "none" : `1px solid ${T.color.rule}`,
-  }}>
-    <span style={{ color: T.color.sub }}>{k}</span>
-    <span style={{ textAlign: "right", marginLeft: T.space.sm }}>{v}</span>
-  </div>
-);
+import { Item, Screen, Section, TypeChip } from "../../components/kit.jsx";
 
 export function renderMyLifeRiderScreen(ctx) {
   const { ml, mlWrap, setMl } = ctx;
@@ -66,13 +55,13 @@ export function renderMyLifeRiderScreen(ctx) {
       </Section>
 
       <Section title="性格と成長" padded>
-        <Row first k="性格" v={PERSONALITIES[r.personality]?.label || "普通"} />
-        <Row k="成長型" v={GROWTH[r.growth]?.label} />
-        <Row k="いまの時期" v={ph.tag} />
-        <Row k="成長力" v={powRevealed ? r.growthPow : "3年目に判明"} />
+        <Item first label="性格" value={PERSONALITIES[r.personality]?.label || "普通"} />
+        <Item label="成長型" value={GROWTH[r.growth]?.label} />
+        <Item label="いまの時期" value={ph.tag} />
+        <Item label="成長力" value={powRevealed ? r.growthPow : "3年目に判明"} />
         {/* pot.labelは「伸びしろ中」のように項目名を含むため、行の見出しと重複しないよう剥がす */}
-        <Row k="伸びしろ" v={pot.label.replace(/^伸びしろ/, "")} />
-        {r.talentCap ? <Row k="才能による上限" v={`+${r.talentCap}`} /> : null}
+        <Item label="伸びしろ" value={pot.label.replace(/^伸びしろ/, "")} />
+        {r.talentCap ? <Item label="才能による上限" value={`+${r.talentCap}`} /> : null}
       </Section>
 
       {abils.length > 0 && (
@@ -94,10 +83,10 @@ export function renderMyLifeRiderScreen(ctx) {
       )}
 
       <Section title="経歴" padded>
-        {r.lineageName && <Row first k="系統" v={r.lineageName} />}
-        {r.master && <Row k="師" v={r.master} />}
-        {r.partner && <Row k="配合" v={`${r.master}×${r.partner}`} />}
-        {ml.flags?.married && <Row k="家庭" v={ml.flags.hasChild ? "既婚・子あり" : "既婚"} />}
+        {r.lineageName && <Item first label="系統" value={r.lineageName} />}
+        {r.master && <Item label="師" value={r.master} />}
+        {r.partner && <Item label="配合" value={`${r.master}×${r.partner}`} />}
+        {ml.flags?.married && <Item label="家庭" value={ml.flags.hasChild ? "既婚・子あり" : "既婚"} />}
         <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm, paddingTop: T.space.sm, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.7 }}>
           {riderFlavorText(r)}
         </div>

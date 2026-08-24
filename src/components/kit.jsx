@@ -75,10 +75,12 @@ export const Item = ({ label, value, valueColor, detail, detailColor, first }) =
 
 // 第13弾Phase3-D-5: 黄(accent)はデータ強調専用、押せるものはaction（バイオレット）に
 // 役割を分ける（CLAUDE.md §9）。PrimaryBtnは1画面に1つを想定する主ボタンなのでaction。
+// 第35弾: 主ボタンはheadへ（型「主ボタン＝head(16px)」。旧bodyは13pxで、ホーム画面だけ
+// hub.jsx側の直書きでheadになっていたため他画面が置き去りになっていた）。
 export const PrimaryBtn = ({ children, onClick, disabled }) => (
   <button onClick={onClick} disabled={disabled} style={{
     width: "100%", background: disabled ? T.color.surfaceUp : T.color.action, color: disabled ? T.color.sub : T.color.bg,
-    border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: disabled ? "default" : "pointer", marginBottom: T.space.sm,
+    border: "none", fontFamily: FONT_DOT, fontSize: T.size.head, padding: T.space.md, cursor: disabled ? "default" : "pointer", marginBottom: T.space.sm,
   }}>{children}</button>
 );
 

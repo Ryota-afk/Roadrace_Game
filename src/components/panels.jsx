@@ -282,7 +282,7 @@ export function DisciplineGrid({ r, highlightKey }) {
             <div style={{ fontSize: T.size.micro, color: hi ? T.color.accent : T.color.sub }}>{DISCIPLINES[k].label}{hi ? " ★" : ""}</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: T.space.xs }}>
               <span style={{ fontSize: T.size.head, fontWeight: 700, color: gc, lineHeight: 1 }}>{grade}</span>
-              <span style={{ fontSize: T.size.label, color: hi ? T.color.accent : T.color.sub }}>{score}</span>
+              <span style={{ fontSize: T.size.caption, color: hi ? T.color.accent : T.color.sub }}>{score}</span>
             </div>
             <div style={{ height: 3, background: T.color.rule, marginTop: 3 }}>
               <div style={{ height: 3, width: `${Math.min(100, score)}%`, background: gc }} />

@@ -2,6 +2,7 @@
 // 実績・コースレコード・殿堂・系譜・因子図鑑・特殊能力図鑑への入口をまとめた索引。
 // 各画面の中身自体はまだ旧デザインのまま（Phase3-B以降で作り直す）。
 import React from "react";
+import { Item } from "../../components/kit.jsx";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { ML_ACHIEVEMENTS, computeAchievements } from "../../state/state.js";
 
@@ -29,12 +30,9 @@ export function renderMyLifeArchiveScreen(ctx) {
       <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>記録</div>
 
       <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>これまでの戦績</div>
-      <div style={{ background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+      <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
         {[["出走", log.length], ["優勝", wins], ["表彰台", podiums], ["最高着順", best == null ? "—" : `${best}位`]].map(([k, v], i) => (
-          <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.body, padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-            <span style={{ color: T.color.sub }}>{k}</span>
-            <span style={{ color: i === 1 && wins > 0 ? T.color.accent : T.color.text }}>{v}</span>
-          </div>
+          <Item key={k} first={i === 0} label={k} value={v} valueColor={k === "優勝" && wins > 0 ? T.color.accent : undefined} />
         ))}
       </div>
 
