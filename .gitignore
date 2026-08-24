@@ -2,6 +2,12 @@
 # Only the roadrace prototype files are meant to be tracked in this repo.
 *
 !.gitignore
+# --- GitHub Pagesの配信設定。空ファイルだがJekyll処理を丸ごと止める役割がある。
+#     このリポジトリはビルド済みindex.html 1枚を配信するだけでJekyllサイトではない。
+#     置かないとJekyllが全ての.mdをHTML化しようとし、devlog内のJSXコード（style={{...}}）を
+#     Liquidのテンプレート変数と誤読してPagesのデプロイが丸ごと失敗する（実際に9回連続で
+#     失敗し、公開ページが第32弾で止まっていた）---
+!.nojekyll
 !roadrace_*
 !index.html
 !DEVLOG.md

@@ -41,6 +41,11 @@
   - `src/logic/support.js` … 表示ヘルパー＋残存ロジック（画面イベント効果適用・監督評価・配合表示・実績判定等）
   - `src/screens/season/` `src/screens/mylife/` … 用途クラスタ単位で分割済み。各`hub/`配下はさらに小分類ディレクトリに分割（§9末尾・Step13第7弾参照）
 - **`index.html`（リポジトリ直下）** … `npm run build` が生成する**自己完結の単一HTML成果物**（デプロイ用）。React/JSXはビルド時に変換・バンドル済みで**CDNもBabelも不要**。手で編集しない
+- **`.nojekyll`（リポジトリ直下・空ファイル・消さないこと）** … GitHub PagesのJekyll処理を止める。
+  ⚠️ **これが無いとPagesが全ての`.md`をHTML化しようとし、`devlog/`内のJSXコード（`style={{…}}`）を
+  Liquidのテンプレート変数と誤読してデプロイが丸ごと失敗する**（実際に第34弾で発生し、
+  9回連続で失敗して公開ページが第32弾で止まっていた）。このリポジトリはJekyllサイトではなく
+  ビルド済み`index.html`を1枚配信するだけなので、Jekyllを走らせる必要がそもそも無い。
 - `package.json` / `vite.config.js` / `package-lock.json` … ビルド定義
 - `dist/`, `node_modules/` … gitignore（追跡しない）
 - `archive/` … 過去バージョンのアーカイブ（`roadrace_v5〜v11.*`＝分割前の単一ファイル版、`archive/design/`＝旧設計メモ）。src/から未参照・触らない
