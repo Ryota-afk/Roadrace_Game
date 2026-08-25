@@ -11,7 +11,7 @@ import { deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
 import { GROWTHPOW_ORDER } from "../../data/progression.js";
 import { MYLIFE_TEAMS, mlTeammatesFromRoster, sharedWorldRosters, cpShopMylifePerks } from "../../state/state.js";
 import { bumpGrowthPow, mlCpPerks, mlCreateRival, mlGenDirective } from "../../logic/support.js";
-import { mlGenRace } from "./race.js";
+import { mlGenRaceCandidates } from "./race.js";
 
 export function mlCreateChar(s, type, background, master, partner, cpMeta) {
   const rng = mulberry(Date.now() % 999983);
@@ -249,7 +249,7 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
   return {
     ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
     difficulty: s.mlDiffChoice || "easy", // v38(#6): マイライフの難易度（相手強さ・CP倍率）
-    races: [mlGenRace(1, 0, 0)],
+    races: mlGenRaceCandidates(1, 0, 0), sel: { raceId: null },
     directive: mlGenDirective(1, 0, 0, 30),
     managerEval: 30 + (perk.evalBonus || 0) + cpPerks.eval, salary: initialSalary, money: (perk.moneyBonus || 0) + cpPerks.money + cpShop.money,
     // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」
@@ -258,6 +258,7 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
     houseLv: -1, carLv: -1,
     coaches: {}, debtMonths: 0, // 第36弾: 前キャリアの状態を持ち越さない
+    badgeGoals: [], // 第41弾: 前キャリアの目標を持ち越さない
     rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
     rival2, rivalRecord2: { meetings: 0, wins: 0, losses: 0 },
     flags: { ...s.flags, mentorName, mentorActive: true, master: master ? master.name : null },

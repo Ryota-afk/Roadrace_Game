@@ -13,7 +13,7 @@ import {
   decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCapFor, mlLivingCost, mlTeamTier,
   mlUpdateRiderStats, mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
-import { mlGenRace } from "../../domain/mylife/race.js";
+import { mlGenRace, mlGenRaceCandidates } from "../../domain/mylife/race.js";
 import { loadMlLegends } from "../../breeding/breeding.js";
 import { pruneBonds } from "../../domain/mylife/bonds.js";
 
@@ -454,7 +454,7 @@ export function mlAdvanceMonth(s, mode) {
       const stayOffer = { team: s.team, tier: mlTeamTier(s.team), salaryMul: biddingWar ? 1.1 : 1, bonus: biddingWar ? 40 : 0, aceGuarantee: false };
       return finalizeYearEnd({
         ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
-        races: [mlGenRace(s.year + 1, 0, classIdx)],
+        races: mlGenRaceCandidates(s.year + 1, 0, classIdx), sel: { ...s.sel, raceId: null },
         directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
         contractOffers: [stayOffer, ...offerTeams], biddingWar,
         salary, money, managerEval, carLv, houseLv, coaches, debtMonths, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
@@ -465,7 +465,7 @@ export function mlAdvanceMonth(s, mode) {
     }
     return finalizeYearEnd({
       ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
-      races: [mlGenRace(s.year + 1, 0, classIdx)],
+      races: mlGenRaceCandidates(s.year + 1, 0, classIdx), sel: { ...s.sel, raceId: null },
       directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
       salary, money, managerEval, carLv, houseLv, coaches, debtMonths, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
       rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
@@ -519,7 +519,7 @@ export function mlAdvanceMonth(s, mode) {
     month: s.month, year: s.year,
   };
   const base = {
-    ...s, player, month, races: [mlGenRace(s.year, month, s.classIdx)],
+    ...s, player, month, races: mlGenRaceCandidates(s.year, month, s.classIdx), sel: { ...s.sel, raceId: null },
     directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
     money, managerEval, carLv, houseLv, coaches, debtMonths, riderStats, growthReport, worldTicker,
     screen: "mylife_main", log,

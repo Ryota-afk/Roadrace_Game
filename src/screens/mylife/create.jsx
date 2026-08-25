@@ -13,7 +13,7 @@ import { ABILITIES, AB_LABEL, TYPES } from "../../data/abilities.js";
 import { SEG_LABEL } from "../../data/course.js";
 import { DIFFICULTIES } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGrowthPowRevealed, mlTalentRank } from "../../logic/support.js";
+import { ACQUIRE_REQS, MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGrowthPowRevealed, mlTalentRank } from "../../logic/support.js";
 import { loadMyLifeGame, myLifeSaveInfo } from "../../state/state.js";
 
 // 第34弾: 選択肢は名前だけを横に並べ、説明は選んでいる1件だけを下の面に出す。
@@ -38,7 +38,7 @@ const PickNote = ({ children }) => (
 );
 
 export function renderMyLifeCreateScreens(ctx) {
-  const { askConfirm, ml, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlWrap, setMl, setSuperMode } = ctx;
+  const { askConfirm, ml, mlConfirmBadgeGoals, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlToggleBadgeGoal, mlWrap, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
@@ -286,5 +286,54 @@ export function renderMyLifeCreateScreens(ctx) {
       );
     }
 
+    // 第41弾: 目標バッジ宣言。強制力・ボーナスは一切ない純粋な「しおり」（あとから選手画面で
+    // 変更できる）。母集団はACQUIRE_REQSを持つ15種のうち、脚質のgateを通り体質(iron)を除いたもの
+    // （devlog/wave41.md B-1）。D案：全候補の条件を常時表示する（2Kの「全バッジと要件が
+    // 最初から見える」に最も近い形）。
+    if (ml.screen === "mylife_badge_goals" && ml.player) {
+      const r = ml.player;
+      const goalPool = Object.keys(ACQUIRE_REQS).filter(id => id !== "iron" && ABILITIES[id] && (!ACQUIRE_REQS[id].gate || ACQUIRE_REQS[id].gate(r)));
+      const goals = ml.badgeGoals || [];
+      const condText = (id, q) => {
+        if (id === "big") return "世界選手権かオリンピックで表彰台";
+        if (id === "pave_sp") return "石畳の古典《春の地獄》で表彰台";
+        if (id === "ardennes_sp") return "丘陵の古典《アルデンヌ》で表彰台";
+        if (id === "autumn_sp") return "山岳の古典《秋の女王》で表彰台";
+        return `${q.need}${q.unit}で解放`;
+      };
+      return mlWrap(
+        <Screen>
+          <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>目指す選手像</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
+            <span style={{ color: T.color.accent }}>目指す選手像</span>
+            <span style={{ color: goals.length >= 3 ? T.color.accent : T.color.sub }}>{goals.length} / 3 選択</span>
+          </div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>
+            {TYPES[r.type]?.label}が目指せるバッジから3つ選ぶ。あとから変えられる
+          </div>
+          <div style={{ background: T.color.surface, marginBottom: T.space.md }}>
+            {goalPool.map((id, i) => {
+              const q = ACQUIRE_REQS[id];
+              const a = ABILITIES[id];
+              const selected = goals.includes(id);
+              return (
+                <button key={id} onClick={() => mlToggleBadgeGoal(id)} style={{
+                  display: "block", width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT_DOT,
+                  padding: `${T.space.sm}px ${T.space.md}px`, background: selected ? T.color.surfaceUp : "transparent",
+                  borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span style={{ fontSize: T.size.head, color: selected ? T.color.text : T.color.sub }}>{a.label}</span>
+                    <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>{condText(id, q)}</span>
+                  </div>
+                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{a.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+          <PrimaryBtn onClick={mlConfirmBadgeGoals}>この内容でキャリアを始める →</PrimaryBtn>
+        </Screen>
+      );
+    }
 
 }

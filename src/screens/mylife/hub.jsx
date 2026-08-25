@@ -10,11 +10,12 @@ import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { CourseProfile } from "../../components/CourseProfile.jsx";
 import { RiderPortrait } from "../../components/RiderPortrait.jsx";
 import { overall } from "../../core/core.js";
-import { AB_KEYS, AB_LABEL, POW, TYPES } from "../../data/abilities.js";
+import { mlSelectedRace } from "../../domain/mylife/race.js";
+import { AB_KEYS, AB_LABEL, ABILITIES, POW, TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { Item, Prose, PressRow, QuietBtn, Screen, Section, Tag, TypeChip } from "../../components/kit.jsx";
-import { FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
+import { ACQUIRE_REQS, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, disciplineScore, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { PART_SLOTS, PARTS } from "../../data/parts.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 
@@ -54,10 +55,11 @@ const StatRow = ({ name, nameColor, sub, badge, yrWins, wins, podiums, bestRank,
 };
 
 export function renderMyLifeHubScreen(ctx) {
-  const { askConfirm, ml, mlAdvanceMonth, mlBecomeMentor, mlGenRace, mlSetFocus, mlStartLastRace, mlStartRace, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode } = ctx;
+  const { askConfirm, ml, mlAdvanceMonth, mlBecomeMentor, mlGenRace, mlSelectRace, mlSetFocus, mlStartLastRace, mlStartRace, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_main" && ml.player) {
       const r = ml.player;
-      const race = ml.races[0];
+      const race = mlSelectedRace(ml);
+      const raceCandidates = ml.races || [];
       const ph = growthPhase(r);
       const powRevealed = mlGrowthPowRevealed(ml);
       // v46(UI): 次のアクション#15。「今月の練習メニューの推奨」と「今月の行動の推奨」の両方が
@@ -83,6 +85,31 @@ export function renderMyLifeHubScreen(ctx) {
       const ACTION_LABEL = { race: "このレースに出場する", rest: "完全休養", train: plannedSp ? `練習（${plannedSp.label}）` : `練習（${AB_LABEL[r.focus] || "バランス"}中心）` };
       const ACTION_HANDLER = { race: mlStartRace, rest: () => mlAdvanceMonth("rest"), train: () => mlAdvanceMonth("train") };
       const raceTotalKm = (race.tmpl.segs || []).reduce((a, s) => a + s[2], 0);
+      // 第41弾: 「得意/ふつう/苦手」は選手自身の5種目profile内での相対比較（±5で三分）。
+      // 一律の絶対値ではなく本人の得手不得手を表すのが「得意/苦手」の意味に合う（devlog/wave41.md）。
+      const affinityOf = (r0, tmpl) => {
+        const key = FAVORS_TO_DISCIPLINE[tmpl?.favors] || "flat";
+        const mine = disciplineScore(r0, key);
+        const avg = DISCIPLINE_KEYS.reduce((a, k) => a + disciplineScore(r0, k), 0) / DISCIPLINE_KEYS.length;
+        if (mine >= avg + 5) return { label: "得意な地形", color: T.color.good };
+        if (mine <= avg - 5) return { label: "苦手な地形", color: T.color.bad };
+        return { label: "ふつう", color: T.color.sub };
+      };
+      // 第41弾: 目標バッジのうち最も進んでいるもの1件だけ（3件並べると選択の邪魔になるため）。
+      // 「このレースで進みます」のような因果は書かない（ACQUIRE_REQSの多くは地形非依存のため・B-3）。
+      const topGoal = (() => {
+        const goals = (ml.badgeGoals || []).filter(id => ACQUIRE_REQS[id] && ABILITIES[id]);
+        if (goals.length === 0) return null;
+        let best = null;
+        goals.forEach(id => {
+          const q = ACQUIRE_REQS[id];
+          const cur = q.cur(r);
+          const ratio = cur / q.need;
+          if (!best || ratio > best.ratio) best = { id, cur, need: q.need, unit: q.unit, ratio };
+        });
+        if (best.ratio >= 1) return null; // 既に条件達成済みなら出さない（バッジ画面で習得を促す）
+        return best;
+      })();
       return mlWrap(
         <div style={{ display: "grid", gap: T.space.sm, background: T.color.bg, fontFamily: FONT_DOT, color: T.color.text, margin: "-6px -14px 0", padding: T.space.lg }}>
           {/* 第32弾（第2次UI改革）: ヒーロー領域。脚質・成長フェーズはTypeChip/Tagで示し、
@@ -152,23 +179,68 @@ export function renderMyLifeHubScreen(ctx) {
             })()}
           </div>
 
-          <div style={{ fontSize: T.size.caption, color: T.color.sub }}>今月のレース</div>
-          <div style={{ background: T.color.surface, padding: T.space.md }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: T.space.sm }}>
-              <span style={{ fontSize: T.size.head, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{race.name}</span>
-              <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>{raceTotalKm}km</span>
-            </div>
-            <div style={{ marginBottom: T.space.sm }}><CourseProfile segs={race.tmpl.segs} height={40} /></div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: T.space.xs }}>
-              <TypeChip type={race.tmpl.favors} label={`${TYPES[race.tmpl.favors].label}有利`} />
-              {race.weather && race.weather !== "clear" && <Tag color={T.color.bad}>{WEATHER[race.weather].label}</Tag>}
-            </div>
-            {(race.milestone || race.monument) && (
-              <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.sm }}>
-                {race.milestone === "worlds" ? "世界選手権" : race.milestone === "olympics" ? "オリンピック" : "モニュメント（クラシック）"}
+          {/* 第41弾: 通常月（候補3本）はB案の選択リストへ。看板レース月（候補1本）は
+              現行どおりの単一カード表示のまま（devlog/wave41.md）。区間内訳の図は候補間で
+              重複表示になるため多候補時は出さない（同じ情報を2箇所に出さない・第37弾）。 */}
+          {raceCandidates.length > 1 ? (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: T.size.caption, color: T.color.accent }}>今月のレース</span>
+                <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{raceCandidates.length}件から選ぶ</span>
               </div>
-            )}
-          </div>
+              <div style={{ background: T.color.surface }}>
+                {raceCandidates.map((c, i) => {
+                  const selected = c.id === race.id;
+                  const aff = affinityOf(r, c.tmpl);
+                  const hasRival = c.rivalPresent || c.rival2Present;
+                  return (
+                    <button key={c.id} onClick={() => mlSelectRace(c.id)} style={{
+                      display: "block", width: "100%",
+                      textAlign: "left", border: "none", cursor: "pointer", fontFamily: FONT_DOT,
+                      padding: `${T.space.sm}px ${T.space.md}px`, background: selected ? T.color.surfaceUp : "transparent",
+                      borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontSize: T.size.head, color: selected ? T.color.text : T.color.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                        <span style={{ fontSize: T.size.caption, color: T.color.accent, flex: "none", marginLeft: T.space.sm }}>{"★".repeat(c.grade)}</span>
+                      </div>
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
+                        <span style={{ color: aff.color }}>{aff.label}</span>
+                        {c.weather && c.weather !== "clear" && <span>　{WEATHER[c.weather].label}</span>}
+                        {hasRival && <span>　ライバル出走</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {topGoal && (
+                <div style={{ background: T.color.surface, padding: `${T.space.sm}px ${T.space.md}px`, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: T.size.body, color: T.color.text }}>{ABILITIES[topGoal.id].label}</span>
+                  <span style={{ fontSize: T.size.caption, color: T.color.sub }}>あと{topGoal.need - topGoal.cur}{topGoal.unit}</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub }}>今月のレース</div>
+              <div style={{ background: T.color.surface, padding: T.space.md }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: T.space.sm }}>
+                  <span style={{ fontSize: T.size.head, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{race.name}</span>
+                  <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>{raceTotalKm}km</span>
+                </div>
+                <div style={{ marginBottom: T.space.sm }}><CourseProfile segs={race.tmpl.segs} height={40} /></div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: T.space.xs }}>
+                  <TypeChip type={race.tmpl.favors} label={`${TYPES[race.tmpl.favors].label}有利`} />
+                  {race.weather && race.weather !== "clear" && <Tag color={T.color.bad}>{WEATHER[race.weather].label}</Tag>}
+                </div>
+                {(race.milestone || race.monument) && (
+                  <div style={{ fontSize: T.size.caption, color: T.color.accent, marginTop: T.space.sm }}>
+                    {race.milestone === "worlds" ? "世界選手権" : race.milestone === "olympics" ? "オリンピック" : "モニュメント（クラシック）"}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* 第17弾B: 機材付け替え（案3・適合表示付き）。1つも装着していなければ出さない（§7：迷ったら消す） */}
           {PART_SLOTS.some(slot => r.parts && r.parts[slot]) && (() => {

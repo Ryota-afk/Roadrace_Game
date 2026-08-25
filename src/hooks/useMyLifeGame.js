@@ -6,7 +6,7 @@ import { T } from "../data/theme.js";
 import { ML_STOCK_ITEMS, computeMyLifeClearPoints, noteAbilityDiscovery, persistCourseRecord, protegeState } from "../logic/support.js";
 import { mlRecordLegend } from "../breeding/breeding.js";
 import { buildMyLifeSim, computeAchievements, advanceWorldYear, initMyLife, loadMeta, recordTitle, saveMeta, saveMyLife } from "../state/state.js";
-import { mlGenRace } from "../domain/mylife/race.js";
+import { mlGenRace, mlSelectedRace } from "../domain/mylife/race.js";
 import { mlCreateChar as domainMlCreateChar } from "../domain/mylife/createChar.js";
 import { resolveNationalRole, buildLastRaceMeta } from "../controllers/mylife/raceStart.js";
 import { mlAdvanceMonth as mmAdvanceMonth } from "../controllers/mylife/month.js";
@@ -138,10 +138,20 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     if (!a) return;
     mlCreateChar(a.type, a.background, a.master, a.partner);
   }
-  // v36(#5リセマラ): この素質でデビュー確定。mylife_main へ遷移して初めて自動セーブが走る。
+  // v36(#5リセマラ): この素質でデビュー確定。第41弾: mylife_mainへ直接ではなく、
+  // 目標バッジ宣言（mylife_badge_goals）を挟んでから始まる。自動セーブはmylife_main到達時のまま。
   function mlConfirmCandidate() {
-    setMl(s => ({ ...s, screen: "mylife_main" }));
+    setMl(s => ({ ...s, screen: "mylife_badge_goals" }));
   }
+  // 第41弾: 目標バッジは強制力・ボーナスの無い「しおり」。上限3個到達後にさらに選ぶと
+  // 最も古い選択を外して入れる（確認を挟まない・コストが無いため）。
+  const mlToggleBadgeGoal = (id) => setMl(s => {
+    const goals = s.badgeGoals || [];
+    if (goals.includes(id)) return { ...s, badgeGoals: goals.filter(g => g !== id) };
+    if (goals.length < 3) return { ...s, badgeGoals: [...goals, id] };
+    return { ...s, badgeGoals: [...goals.slice(1), id] };
+  });
+  const mlConfirmBadgeGoals = () => setMl(s => ({ ...s, screen: "mylife_main" }));
   const mlSetFocus = (key) => setMl(s => mshSetFocus(s, key));
   // v41(§Step7第9弾): メンター就任・弟子イベント・ライバル対話は controllers/mylife/event.js
   // （mlResolveProtegeEvent/mlResolveRivalScene/mlRivalSceneContinue）と
@@ -162,15 +172,23 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   function mlStartRace() {
     if (ml.screen !== "mylife_main") return;
     const baseDirectiveKey = ml.directive ? ml.directive.key : null;
-    const { race, directiveKey } = resolveNationalRole(ml.races[0], ml.managerEval, baseDirectiveKey);
+    const selectedRace = mlSelectedRace(ml);
+    const { race, directiveKey } = resolveNationalRole(selectedRace, ml.managerEval, baseDirectiveKey);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
     const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, ml.worldRosters, protegeForRace, ml.bonds);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
+    // 第41弾: 複数候補から選んだレース（selectedRace）をresolveNationalRoleで解決した結果を
+    // 該当idの位置へ書き戻す。sel.raceIdも明示的に固定し、以降の結果確定側（mlSelectedRace）が
+    // 常にこの1本を指すようにする。
     setMl(s => s.screen !== "mylife_main" ? s : ({
-      ...s, races: race !== ml.races[0] ? [race, ...s.races.slice(1)] : s.races,
+      ...s,
+      races: race !== selectedRace ? s.races.map(r => r.id === selectedRace.id ? race : r) : s.races,
+      sel: { ...s.sel, raceId: race.id },
       result: sim, screen: "mylife_startlist",
     }));
   }
+  // 第41弾: 通常月の3候補から選ぶ。特別月（候補1本）では使われない。
+  const mlSelectRace = (raceId) => setMl(s => ({ ...s, sel: { ...s.sel, raceId } }));
   function mlStartLastRace() {
     if (ml.screen !== "mylife_main") return;
     const meta = buildLastRaceMeta(ml.player, ml.year, ml.classIdx);
@@ -244,6 +262,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   return {
     ml, setMl, mlCreateArgsRef, ML_MILESTONE_LABEL,
     mlCreateChar, mlRerollCandidate, mlConfirmCandidate, mlSetFocus,
+    mlToggleBadgeGoal, mlConfirmBadgeGoals, mlSelectRace,
     mlBecomeMentor, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue,
     mlStartRace, mlStartLastRace, mlLastRaceFinish, mlRaceFinish, mlAdvanceMonth,
     mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlRetireAdviceAccept,

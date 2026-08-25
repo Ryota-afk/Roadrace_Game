@@ -7,7 +7,7 @@ import { MANAGER_DIRECTIVES } from "../../data/directives.js";
 import { mulberry, overall, pickRiderName, ridState, rollAbilities } from "../../core/core.js";
 import { mlTeammatesFromRoster } from "../../state/state.js";
 import { ML_CROSSROADS, ML_OFFSEASON_CHOICES, abilityDeltaSummary, mlGenDirective, mlRollCrossroads } from "../../logic/support.js";
-import { mlGenRace } from "../../domain/mylife/race.js";
+import { mlGenRaceCandidates } from "../../domain/mylife/race.js";
 
 // v18: シーズンモードのキャプテン制度に対応するマイライフ側の役割。30歳以降、
 // チームの精神的支柱（メンター）になることを選べる。一度なると解除はできない
@@ -40,7 +40,7 @@ export function mlChooseTeam(s, offer) {
   const money = s.money + offer.bonus;
   const classIdx = offer.tier != null ? offer.tier : s.classIdx;
   const classChanged = classIdx !== s.classIdx;
-  const races = classChanged ? [mlGenRace(s.year, s.month, classIdx)] : s.races;
+  const races = classChanged ? mlGenRaceCandidates(s.year, s.month, classIdx) : s.races;
   const managerEval = s.managerEval;
   const directive = offer.aceGuarantee
     ? MANAGER_DIRECTIVES.ace
@@ -63,7 +63,7 @@ export function mlChooseTeam(s, offer) {
     : s.teammates;
   // 第18弾: 移籍すると僚友が入れ替わるため、絆も新チームで0から
   const newBonds = offer.team !== s.team ? {} : s.bonds;
-  return { ...s, team: offer.team, classIdx, races, directive, salary, money, teammates: newTeammates, bonds: newBonds, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
+  return { ...s, team: offer.team, classIdx, races, sel: classChanged ? { ...s.sel, raceId: null } : s.sel, directive, salary, money, teammates: newTeammates, bonds: newBonds, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
 }
 
 // v28: 引退勧告への応答。pendingAdviceに次年度以降の続行state（オフシーズン画面）が

@@ -9,6 +9,7 @@ import { RiderPortrait } from "../../components/RiderPortrait.jsx";
 import { GOLD_REQS, overall } from "../../core/core.js";
 import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
+import { mlSelectedRace } from "../../domain/mylife/race.js";
 import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlAcquireAbility, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
 import { Item, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
@@ -17,7 +18,7 @@ export function renderMyLifeRiderScreen(ctx) {
   const { ml, mlWrap, mlAcquireBadge, setMl } = ctx;
   const r = ml.player;
   if (!r) return null;
-  const race = ml.races[0];
+  const race = mlSelectedRace(ml);
   const ph = growthPhase(r);
   const powRevealed = mlGrowthPowRevealed(ml);
   const cap = mlGrowthCap(ml.year, r, ml);

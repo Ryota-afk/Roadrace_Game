@@ -16,10 +16,11 @@ import {
 } from "../../logic/support.js";
 import { mlBondsAfterRace } from "../../domain/mylife/bonds.js";
 import { segMixOfRace } from "../../domain/shared/segMix.js";
+import { mlSelectedRace } from "../../domain/mylife/race.js";
 
 export function mlRaceFinish(s) {
   const sim = s.result;
-  const race = s.races[0];
+  const race = mlSelectedRace(s);
   if (sim.teamTT) return mlFinishTeamTT(s, sim, race);
   const me = sim.ranked.find(e => e.isPlayerChar);
   const pts = Math.round((PTS[me.rank - 1] || 0) * GRADE_MUL[race.grade]);

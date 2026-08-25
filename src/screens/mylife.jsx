@@ -13,7 +13,7 @@ import { renderMyLifeRiderScreen } from "./mylife/rider.jsx";
 import { renderMyLifeWorldScreen } from "./mylife/world.jsx";
 import { renderMyLifeArchiveScreen } from "./mylife/archive.jsx";
 
-const CREATE_SCREENS = new Set(["mylife_create", "mylife_scout"]);
+const CREATE_SCREENS = new Set(["mylife_create", "mylife_scout", "mylife_badge_goals"]);
 const HUB_SCREENS = new Set(["mylife_main", "mylife_achievements", "mylife_abilityfile", "mylife_riderstats", "mylife_worldstats", "mylife_records"]);
 const RACE_SCREENS = new Set(["mylife_startlist", "mylife_race", "mylife_result", "mylife_rival_scene", "mylife_newspaper"]);
 const EVENT_SCREENS = new Set(["mylife_shop", "mylife_event", "mylife_protege_event", "mylife_event_result", "mylife_offseason", "mylife_offseason_result", "mylife_crossroads", "mylife_crossroads_result", "mylife_contract"]);

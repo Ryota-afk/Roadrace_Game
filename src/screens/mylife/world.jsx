@@ -3,6 +3,7 @@
 // ライバル・ニュースをここへ集約した。決定事項「ニュースはホームから外し世界タブへ」の実体。
 import React from "react";
 import { FONT_DOT, T } from "../../data/theme.js";
+import { mlSelectedRace } from "../../domain/mylife/race.js";
 import { mlAmbitionPath, mlCurrentAmbition, mlAmbitionProgressText, mlMediaHeadline, mlWorldBoard, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { Screen, Section } from "../../components/kit.jsx";
 
@@ -29,7 +30,7 @@ const RivalPanel = ({ rival, record, present }) => {
 export function renderMyLifeWorldScreen(ctx) {
   const { ml, mlWrap, setMl } = ctx;
   if (!ml.player) return null;
-  const race = ml.races[0];
+  const race = mlSelectedRace(ml);
   const path = mlAmbitionPath(ml);
   const amb = mlCurrentAmbition(ml);
   const board = mlWorldBoard(ml);

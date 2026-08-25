@@ -60,6 +60,20 @@ DEVLOG.mdは索引とTODOに専念させる。
 ### マイライフ状態
 - `initMyLife()` / `mlCreateChar(type, background, master, partner, cpMeta)` / `mlGenRace(year, month, classIdx)`
 - 月次：`mlAdvanceMonth`, `mlApplyMonthEffect(player, mode, ctx)`
+- **レース選択（第41弾）**：`mlGenRaceCandidates(year, month, classIdx)`（`domain/mylife/race.js`）が
+  月ごとの候補配列を返す。看板レース6ヶ月（5/8/10月の古典・9月世界選手権・7月五輪年・3月年度末）
+  は長さ1、残り6ヶ月は長さ3（地形重複なし・グレード/天候/ライバルは候補ごとに個別に振る）。
+  生成は決定的（同一年月クラスは常に同一候補）。`mlGenRace`は`mlGenRaceCandidates(...)[0]`を返す
+  薄いラッパとして残置（`worldRank.js`等の1本で足りる用途向け・無改変）。
+  **`mlSelectedRace(ml)`が`ml.sel.raceId`（`initMyLife`に元から存在した未使用フィールド）を
+  解決し、未設定/該当なしは`races[0]`へフォールバック**——`races[0]`を直接読んでいた6箇所は
+  全てこのヘルパー経由に統一済み。`mlStartRace`は選択中の候補を`resolveNationalRole`で解決した
+  結果を該当id位置へ書き戻し、`sel.raceId`をその id へ固定する。新しい月の候補生成時は必ず
+  `sel:{raceId:null}`にリセットする（前月の選択を持ち越さない）。
+- **目標バッジ宣言（第41弾）**：`ml.badgeGoals`（最大3件・配列）。キャラ作成の素質確認後の
+  `mylife_badge_goals`画面で、`ACQUIRE_REQS`から体質12種（`iron`等）を除きその脚質の`gate`を
+  通るもの（常に10種）から選ぶ。**強制力・ボーナスは一切ない「しおり」**——効果には未接続。
+  上限到達後にさらに選ぶと最も古い選択を外す（`mlToggleBadgeGoal`、確認は挟まない）。
 - セーブ：`ML_SAVE_FIELDS`（配列）、`saveMyLife/loadMyLife`。**playerはまるごと保存**されるので player.* は保存フィールド追加不要。
 - **成長キャップ**：
   `mlGrowthCap(year, player, ml) = min(140, 90 + timeComponent(年数-1、最大+8) + achievementBonus(rungs×4+majors×5+winsBonus上限16)×難易度係数(易1.3/普1.0/難0.75/鬼0.5) + player.talentCap)`。
