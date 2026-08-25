@@ -159,7 +159,15 @@ DEVLOG.mdは索引とTODOに専念させる。
 
 ### 殿堂・その他
 - 殿堂：localStorage `roadrace_v12_mylife_legends`。`ML_LEGENDS_KEY`, `mlLegendSnapshot(s)`, `mlRecordLegend(s)`, `protegeInherit`
-- 特殊能力：`ABILITIES`（`iron`鉄人 / `tough`頑丈 / `glass`ガラスの体[bad] / `big`大舞台 / `finisher` 等）, `GOLD_CONDITIONS`, `hasAbility/hasGoldAbility`
+- 特殊能力（バッジ）：`ABILITIES`（48種8カテゴリ）。取得条件は`ACQUIRE_REQS`
+  （`domain/mylife/cp.js`）・強化(金)条件は`GOLD_REQS`（`core/core.js`）で、いずれも
+  `{gate, cur(r), need, unit}`の構造化データ（第39弾で`r=>boolean`から移行・進捗の分子を
+  取り出せる）。後方互換の`ACQUIRE_CONDITIONS`/`GOLD_CONDITIONS`（`{id: r=>boolean}`）は
+  この構造から自動導出されるため、既存コード（`breeding.js`・`panels.jsx`の存在チェック等）
+  は無改変で動く。**習得経路がモードで異なる（意図的）**：シーズンは`acquireNewAbility`が
+  月15%抽選で自動習得（据え置き）、マイライフは`mlAcquireAbility`／`mlAcquireBadge`で
+  プレイヤーが選手画面から選んで習得する（第39弾）。所持上限3個は両モード共通で維持中
+  （撤廃は使用量・退行を入れる後続弾とセット）。`hasAbility/hasGoldAbility`は判定ヘルパー。
 - 新ステータス（2026-08・Phase1/2）：`breakthrough`(突破力)/`stability`(安定感)/`luck`(運)。生成時固定値、`core/core.js`の`genSubStats()`。
   `RiderRadarChart`（`components/RadarChart.jsx`）で6角形表示。イベント経由のみ例外的に増減可（`*Delta`系effects）。
 - シーズンモード：別state（`g`/`initGame`）。`TEMPLATES`(コース), `signBredYouth`（シーズンの血統ユース）。

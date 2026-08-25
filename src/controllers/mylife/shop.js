@@ -5,7 +5,7 @@ import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_COACH_MAX_BY_CLASS, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX } from "../../data/gear.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PARTS } from "../../sim/race.js";
-import { addAb, mlGrowthCapFor, mlPrivateCampCost } from "../../logic/support.js";
+import { addAb, mlAcquireAbility, mlGrowthCapFor, mlPrivateCampCost } from "../../logic/support.js";
 
 export function mlBuyPart(s, pid) {
   const p = PARTS[pid];
@@ -110,6 +110,13 @@ export function mlBuyHouse(s) {
 
 export function mlSetFocus(s, key) {
   return { ...s, player: { ...s.player, focus: key } };
+}
+
+// 第39弾: 条件を満たしたバッジをプレイヤーが選んで習得する（月15%抽選の廃止）。
+// 所持上限3個時はswapOutIdで指定した1個と入れ替える（省略時は上限未満でのみ習得できる）。
+export function mlAcquireBadge(s, id, swapOutId) {
+  const player = mlAcquireAbility(s.player, id, swapOutId);
+  return player === s.player ? s : { ...s, player };
 }
 
 // 第36弾: 専門コーチの段階制。Lv0→1は契約金＋雇用枠の空きが要る。Lv→Lv+1（昇格）は

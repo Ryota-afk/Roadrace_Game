@@ -6,15 +6,15 @@ import React from "react";
 import { DisciplineGrid } from "../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { RiderPortrait } from "../../components/RiderPortrait.jsx";
-import { overall } from "../../core/core.js";
+import { GOLD_REQS, overall } from "../../core/core.js";
 import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { FAVORS_TO_DISCIPLINE, growthPhase, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
+import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlAcquireAbility, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
-import { Item, Screen, Section, TypeChip } from "../../components/kit.jsx";
+import { Item, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
 
 export function renderMyLifeRiderScreen(ctx) {
-  const { ml, mlWrap, setMl } = ctx;
+  const { ml, mlWrap, mlAcquireBadge, setMl } = ctx;
   const r = ml.player;
   if (!r) return null;
   const race = ml.races[0];
@@ -64,23 +64,88 @@ export function renderMyLifeRiderScreen(ctx) {
         {r.talentCap ? <Item label="才能による上限" value={`+${r.talentCap}`} /> : null}
       </Section>
 
-      {abils.length > 0 && (
-        <Section title="特殊能力" padded>
-          {abils.map((id, i) => {
-            const a = ABILITIES[id];
-            if (!a) return null;
-            return (
-              <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                  <span style={{ color: a.bad ? T.color.bad : T.color.text }}>{a.label}</span>
-                  {golds.has(id) && <span style={{ fontSize: T.size.caption, color: T.color.accent }}>金</span>}
-                </div>
-                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs, lineHeight: 1.6 }}>{a.desc}</div>
-              </div>
-            );
-          })}
-        </Section>
-      )}
+      {(() => {
+        // 第39弾: 取得済み（金への進捗込み）＋未取得の到達可能な進捗を1つの並びに統合する。
+        // gate不成立（脚質違い等）・進捗0のものは表示しない（並べても情報量がない・devlog/wave39.md）。
+        const heldRows = abils.filter(id => ABILITIES[id]).map(id => {
+          const a = ABILITIES[id];
+          const gr = GOLD_REQS[id];
+          const isGold = golds.has(id);
+          const cur = gr ? gr.cur(r) : 0;
+          const need = gr ? gr.need : 0;
+          return { id, a, held: true, isGold, gr, cur, need, ratio: isGold ? 2 : gr ? cur / need : 1.5 };
+        }).sort((a, b) => b.ratio - a.ratio); // 取得済みは金→銅（金への進捗が高い順）の並びにする
+        const heldSet = new Set(abils);
+        const candRows = Object.entries(ACQUIRE_REQS)
+          .filter(([id]) => !heldSet.has(id) && ABILITIES[id])
+          .map(([id, q]) => ({ id, a: ABILITIES[id], q, gateOk: !q.gate || q.gate(r), cur: q.cur(r), need: q.need, unit: q.unit }))
+          .filter(x => x.gateOk && x.cur > 0)
+          .map(x => ({ ...x, held: false, eligible: x.cur >= x.need, ratio: x.cur / x.need }))
+          .sort((a, b) => b.ratio - a.ratio);
+        const rows = [...heldRows, ...candRows];
+        if (rows.length === 0) return null;
+        const full = abils.length >= 3;
+        const swapTarget = ml.uiBadgeSwap && candRows.some(c => c.id === ml.uiBadgeSwap) ? ml.uiBadgeSwap : null;
+        return (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
+              <span style={{ color: T.color.accent }}>バッジ</span>
+              <span style={{ color: full ? T.color.accent : T.color.sub }}>{abils.length} / 3 所持</span>
+            </div>
+            <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
+              {rows.map((row, i) => {
+                const border = i === 0 ? "none" : `1px solid ${T.color.rule}`;
+                if (row.held) {
+                  const { id, a, isGold, gr, cur, need } = row;
+                  return (
+                    <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                        <span style={{ color: a.bad ? T.color.bad : T.color.text }}>{a.label}</span>
+                        <span style={{ fontSize: T.size.caption, color: isGold ? T.color.accent : T.color.sub, flex: "none" }}>{isGold ? "金" : "銅"}</span>
+                      </div>
+                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6 }}>
+                        {a.desc}{!isGold && gr && `　　金まで ${cur} / ${need}${gr.unit}`}
+                      </div>
+                      {!isGold && gr && (
+                        <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
+                          <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.accent }} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                const { id, a, eligible, cur, need, unit } = row;
+                return (
+                  <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
+                      <span style={{ fontSize: T.size.body, color: T.color.sub }}>{a.label}</span>
+                      {eligible
+                        ? <ShopBtn onClick={() => full ? setMl(s => ({ ...s, uiBadgeSwap: id })) : mlAcquireBadge(id)}>習得</ShopBtn>
+                        : <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{cur} / {need}{unit}</span>}
+                    </div>
+                    {!eligible && (
+                      <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
+                        <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.action }} />
+                      </div>
+                    )}
+                    {swapTarget === id && (
+                      <div style={{ background: T.color.surfaceUp, padding: T.space.sm, marginTop: T.space.xs }}>
+                        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>所持は上限（3個）です。外すバッジを選んでください</div>
+                        {abils.filter(hid => ABILITIES[hid]).map(hid => (
+                          <div key={hid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${T.space.xs}px 0` }}>
+                            <span style={{ fontSize: T.size.body, color: T.color.text }}>{ABILITIES[hid].label}</span>
+                            <ShopBtn onClick={() => { mlAcquireBadge(id, hid); setMl(s => ({ ...s, uiBadgeSwap: null })); }} outline>これと入れ替える</ShopBtn>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        );
+      })()}
 
       <Section title="経歴" padded>
         {r.lineageName && <Item first label="系統" value={r.lineageName} />}

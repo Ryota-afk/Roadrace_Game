@@ -15,26 +15,36 @@ export function upgradeGoldAbilities(r) {
   return changed ? { ...r, goldAbilities: next } : r;
 }
 
-export const ACQUIRE_CONDITIONS = {
-  mount:       r => r.type === "CLM" && countWins(r) >= 2,
-  puncheur:    r => r.type === "PUN" && countWins(r) >= 2,
-  flatlander:  r => r.type === "RUL" && countWins(r) >= 2,
-  sprinter_sp: r => r.type === "SPR" && countWins(r) >= 2,
-  soloist:     r => r.type === "TT" && countWins(r) >= 2,
-  closer:      r => countWins(r) >= 4,
-  escape:      r => countRoleUses(r, e => e.role === "breakaway") >= 3,
-  domestique:  r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)) >= 5,
-  iron:        r => (r.raceLog || []).length >= 15,
-  big:         r => (r.raceLog || []).some(e => (e.name.includes("世界選手権") || e.name.includes("オリンピック")) && e.rank <= 3),
+// 第39弾: r=>booleanの不透明な条件をgate/cur/need/unitへ構造化し、進捗の分子を取り出せるように
+// した（マイライフのバッジ進捗UIが使う）。ACQUIRE_CONDITIONSは後方互換のため従来どおり
+// {id: r=>boolean} 形で導出する。gateは脚質など「満たさない限り永久に到達不可」な前提
+// （UIはgate不成立の行を表示しない）。
+const podiumIn = (mon, rankMax) => r => (r.raceLog || []).some(e => e.monument === mon && e.rank <= rankMax) ? 1 : 0;
+export const ACQUIRE_REQS = {
+  mount:       { gate: r => r.type === "CLM", cur: countWins, need: 2, unit: "勝" },
+  puncheur:    { gate: r => r.type === "PUN", cur: countWins, need: 2, unit: "勝" },
+  flatlander:  { gate: r => r.type === "RUL", cur: countWins, need: 2, unit: "勝" },
+  sprinter_sp: { gate: r => r.type === "SPR", cur: countWins, need: 2, unit: "勝" },
+  soloist:     { gate: r => r.type === "TT", cur: countWins, need: 2, unit: "勝" },
+  closer:      { cur: countWins, need: 4, unit: "勝" },
+  escape:      { cur: r => countRoleUses(r, e => e.role === "breakaway"), need: 3, unit: "回" },
+  domestique:  { cur: r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)), need: 5, unit: "回" },
+  iron:        { cur: r => (r.raceLog || []).length, need: 15, unit: "回" },
+  big:         { cur: r => (r.raceLog || []).some(e => (e.name.includes("世界選手権") || e.name.includes("オリンピック")) && e.rank <= 3) ? 1 : 0, need: 1, unit: "" },
   // v28: 新特殊能力の後天習得条件
-  finisher:    r => countWins(r) >= 5,
-  engine:      r => (r.raceLog || []).length >= 20,
+  finisher:    { cur: countWins, need: 5, unit: "勝" },
+  engine:      { cur: r => (r.raceLog || []).length, need: 20, unit: "回" },
   // v34(C-2): 各モニュメント（古典）で表彰台に立つと、その古典専用の適性に開眼する余地が生まれる（脚質別）
-  pave_sp:     r => (r.raceLog || []).some(e => e.monument === "pave" && e.rank <= 3),
-  ardennes_sp: r => (r.raceLog || []).some(e => e.monument === "ardennes" && e.rank <= 3),
-  autumn_sp:   r => (r.raceLog || []).some(e => e.monument === "autumn" && e.rank <= 3),
+  pave_sp:     { cur: podiumIn("pave", 3), need: 1, unit: "" },
+  ardennes_sp: { cur: podiumIn("ardennes", 3), need: 1, unit: "" },
+  autumn_sp:   { cur: podiumIn("autumn", 3), need: 1, unit: "" },
 };
+export const ACQUIRE_CONDITIONS = Object.fromEntries(
+  Object.entries(ACQUIRE_REQS).map(([id, q]) => [id, r => (!q.gate || q.gate(r)) && q.cur(r) >= q.need])
+);
 
+// シーズンモードは従来どおり自動習得（据え置き・第39弾の対象外。理由はdevlog/wave39.md参照：
+// 6名分の習得選択を毎月迫るのは作業でしかなく、シーズンの主体性は練習指定とロースター運用が担う）。
 export function acquireNewAbility(r) {
   const abilities = r.abilities || [];
   if (abilities.length >= 3) return r;
@@ -42,6 +52,17 @@ export function acquireNewAbility(r) {
   if (eligible.length === 0 || Math.random() >= 0.15) return r;
   const id = eligible[Math.floor(Math.random() * eligible.length)];
   return { ...r, abilities: [...abilities, id] };
+}
+
+// 第39弾: マイライフはランダム抽選をやめ、プレイヤーが選んで習得する。所持上限3個は維持
+// （撤廃は使用量・退行を入れる弾と同時。歯止めが無いまま先に外さない）。上限に達している
+// 場合は既存の1つを外して入れ替える（swapOutId省略時は先頭を外す＝呼び出し側でUI選択させる）。
+export function mlAcquireAbility(r, id, swapOutId) {
+  const abilities = r.abilities || [];
+  if (abilities.includes(id) || !ACQUIRE_CONDITIONS[id] || !ACQUIRE_CONDITIONS[id](r)) return r;
+  if (abilities.length < 3) return { ...r, abilities: [...abilities, id] };
+  if (!swapOutId || !abilities.includes(swapOutId)) return r;
+  return { ...r, abilities: [...abilities.filter(a => a !== swapOutId), id] };
 }
 
 export const ABILITY_FILE_KEY = "roadrace_v12_ability_file";

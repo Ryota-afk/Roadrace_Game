@@ -28,34 +28,42 @@ export function countWins(r) { return (r.raceLog || []).filter(e => e.rank === 1
 
 export function countRoleUses(r, pred) { return (r.raceLog || []).filter(pred).length; }
 
-export const GOLD_CONDITIONS = {
-  mount:       r => r.type === "CLM" && countWins(r) >= 5,
-  puncheur:    r => r.type === "PUN" && countWins(r) >= 5,
-  flatlander:  r => r.type === "RUL" && countWins(r) >= 5,
-  sprinter_sp: r => r.type === "SPR" && countWins(r) >= 5,
-  soloist:     r => r.type === "TT" && countWins(r) >= 5,
-  closer:      r => countWins(r) >= 8,
-  escape:      r => countRoleUses(r, e => e.role === "breakaway") >= 5,
-  domestique:  r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)) >= 8,
+// 第39弾: r=>booleanの不透明な条件をgate/cur/need/unitへ構造化し、進捗の分子を取り出せるように
+// した（マイライフのバッジ進捗UIが使う）。GOLD_CONDITIONSは後方互換のため従来どおり
+// {id: r=>boolean} 形で導出する（breeding.js・panels.jsxが存在チェック＋呼び出しに使用中）。
+// unit: 進捗の単位表記（"勝"/"回"/空文字＝しきい値到達で即成立する一過性の条件）。
+const countMonumentPodium = (mon, rankMax) => r => (r.raceLog || []).some(e => e.monument === mon && e.rank <= rankMax) ? 1 : 0;
+export const GOLD_REQS = {
+  mount:       { gate: r => r.type === "CLM", cur: countWins, need: 5, unit: "勝" },
+  puncheur:    { gate: r => r.type === "PUN", cur: countWins, need: 5, unit: "勝" },
+  flatlander:  { gate: r => r.type === "RUL", cur: countWins, need: 5, unit: "勝" },
+  sprinter_sp: { gate: r => r.type === "SPR", cur: countWins, need: 5, unit: "勝" },
+  soloist:     { gate: r => r.type === "TT", cur: countWins, need: 5, unit: "勝" },
+  closer:      { cur: countWins, need: 8, unit: "勝" },
+  escape:      { cur: r => countRoleUses(r, e => e.role === "breakaway"), need: 5, unit: "回" },
+  domestique:  { cur: r => countRoleUses(r, e => ASSIST_ROLES.has(e.role)), need: 8, unit: "回" },
   // v28: 新特殊能力の金特条件
-  finisher:    r => countWins(r) >= 8,
-  engine:      r => (r.raceLog || []).length >= 30,
-  allrounder_sp: r => countWins(r) >= 6,
+  finisher:    { cur: countWins, need: 8, unit: "勝" },
+  engine:      { cur: r => (r.raceLog || []).length, need: 30, unit: "回" },
+  allrounder_sp: { cur: countWins, need: 6, unit: "勝" },
   // v34(C-2): 各モニュメント（古典）を制覇すると、その古典専用の適性が金特に進化する（脚質別）
-  pave_sp:     r => (r.raceLog || []).some(e => e.monument === "pave" && e.rank === 1),
-  ardennes_sp: r => (r.raceLog || []).some(e => e.monument === "ardennes" && e.rank === 1),
-  autumn_sp:   r => (r.raceLog || []).some(e => e.monument === "autumn" && e.rank === 1),
+  pave_sp:     { cur: countMonumentPodium("pave", 1), need: 1, unit: "" },
+  ardennes_sp: { cur: countMonumentPodium("ardennes", 1), need: 1, unit: "" },
+  autumn_sp:   { cur: countMonumentPodium("autumn", 1), need: 1, unit: "" },
   // v37: 新特能の金特条件（実績で金特化）。金特効果は sim 側（hasGoldAbility）で配線済み。
-  kicker:      r => countWins(r) >= 8,                                   // 差し脚で勝ち星を量産
-  climbengine: r => r.type === "CLM" && (r.raceLog || []).length >= 20,  // 山を走り込んだクライマー
-  rouleur:     r => countRoleUses(r, e => e.role === "breakaway") >= 5,  // 逃げを打ち続けた鉄脚
-  grinder:     r => (r.raceLog || []).length >= 25,                      // 幾多のレースを完走した粘り
-  sponge:      r => (r.raceLog || []).length >= 20,                      // 場数から学び続けた
+  kicker:      { cur: countWins, need: 8, unit: "勝" },                                    // 差し脚で勝ち星を量産
+  climbengine: { gate: r => r.type === "CLM", cur: r => (r.raceLog || []).length, need: 20, unit: "回" }, // 山を走り込んだクライマー
+  rouleur:     { cur: r => countRoleUses(r, e => e.role === "breakaway"), need: 5, unit: "回" }, // 逃げを打ち続けた鉄脚
+  grinder:     { cur: r => (r.raceLog || []).length, need: 25, unit: "回" },               // 幾多のレースを完走した粘り
+  sponge:      { cur: r => (r.raceLog || []).length, need: 20, unit: "回" },               // 場数から学び続けた
   // v37(第2弾)
-  allclimber:  r => r.type === "CLM" && countWins(r) >= 6,               // 山を制した岳人
-  bigheart:    r => countWins(r) >= 10,                                  // 大舞台を勝ち抜いた
-  diesel:      r => (r.raceLog || []).length >= 30,                      // 走り込んだ鉄の心肺
+  allclimber:  { gate: r => r.type === "CLM", cur: countWins, need: 6, unit: "勝" },        // 山を制した岳人
+  bigheart:    { cur: countWins, need: 10, unit: "勝" },                                   // 大舞台を勝ち抜いた
+  diesel:      { cur: r => (r.raceLog || []).length, need: 30, unit: "回" },               // 走り込んだ鉄の心肺
 };
+export const GOLD_CONDITIONS = Object.fromEntries(
+  Object.entries(GOLD_REQS).map(([id, q]) => [id, r => (!q.gate || q.gate(r)) && q.cur(r) >= q.need])
+);
 
 export const condMul = (c) => [0.92, 0.96, 1.0, 1.04, 1.08][c - 1];
 

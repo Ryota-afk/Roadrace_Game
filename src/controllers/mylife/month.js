@@ -9,7 +9,7 @@ import { PARTS } from "../../data/parts.js";
 import { mulberry, overall, hasAbility } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
-  GRADE_MUL, ML_AB_COACH_KEY, ML_COACH_MUL, ML_COACH_SALARY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, acquireNewAbility, addAb, ageRival, computeWorldRank,
+  GRADE_MUL, ML_AB_COACH_KEY, ML_COACH_MUL, ML_COACH_SALARY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, addAb, ageRival, computeWorldRank,
   decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCapFor, mlLivingCost, mlTeamTier,
   mlUpdateRiderStats, mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
@@ -241,13 +241,9 @@ export function mlAdvanceMonth(s, mode) {
       .forEach(id => log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[id].label}」が金の特殊能力に覚醒した！`));
     player = upgradedPlayer;
   }
-  // v17: 特殊能力の後天的獲得判定
-  const acquiredPlayer = acquireNewAbility(player);
-  if (acquiredPlayer !== player) {
-    const newId = acquiredPlayer.abilities[acquiredPlayer.abilities.length - 1];
-    log.push(`【${s.year}年目 ${MONTHS[s.month]}】特殊能力「${ABILITIES[newId].label}」を新たに身につけた！`);
-    player = acquiredPlayer;
-  }
+  // 第39弾: v17由来の月15%抽選による自動習得は廃止した。マイライフは条件を満たしたバッジを
+  // プレイヤーが選手画面から自分で選んで習得する（mlAcquireAbility）。シーズンは据え置き
+  // （acquireNewAbilityは自動習得のままcontrollers/season/month.jsで使用中）。
   // v14.3: 毎月、練習を積んだり生活基盤（一戸建て）が整っていると監督評価がじわじわ上がる。
   // 年俸は毎月1/12ずつ資金として振り込まれる
   const passiveEvalDelta = (mode === "train" ? 0.4 : 0) + (s.houseLv >= 2 ? 0.3 : 0) + (s.houseLv >= 3 ? 0.2 : 0) + (s.flags?.mentor ? 0.3 : 0);
