@@ -122,7 +122,7 @@ export function TraitLine({ abilities, goldAbilities }) {
             <span style={{ color: isGold ? T.color.accent : t.bad ? T.color.bad : T.color.text, marginRight: T.space.xs }}>
               {t.label}
             </span>
-            {t.desc}{isGold ? "（金は効果2倍）" : ""}
+            {t.desc}
           </div>
         );
       })}

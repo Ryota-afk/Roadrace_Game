@@ -197,3 +197,57 @@ B1は3枠なので、血脈4つを持って生まれると1つ入らない。`ml
 10. 旧セーブ（`bloodAbilities`なし・血脈が`abilities`に直接入っている）を読み込んで、
     装着状態が維持されたまま`bloodAbilities`が生成されること（遡って弱くならない）。
 11. `pageerror`ゼロ・**縦線ゼロ**（§8）・**絵文字ゼロ**（§8）。
+
+## 実装結果（2026-08・Sonnet）
+
+**`src/domain/mylife/cp.js`**
+- `mlBadgeKind(id)`・`mlSlotUsed(r)`を新設。`mlAcquireAbility`・`mlUnequipAbility`の枠判定を
+  `abilities.length`から`mlSlotUsed(r)`基準へ変更。`mlUnequipAbility`は`taishitsu`なら
+  何もせず`r`を返す。入れ替え（`swapOutId`）も`taishitsu`は対象外。新規`mlEquipBlood(r, id, maxSlots)`
+  （`bloodAbilities`にあり枠に空きがある場合のみ`abilities`へ加える）。`acquireNewAbility`
+  （シーズン側）の枠判定も同じ数え間違いだったため`mlSlotUsed`基準へ統一。
+
+**`src/domain/mylife/createChar.js`**
+- 全ての特能付与処理の直後（`return`直前）に後処理を追加：`player.abilities`中の
+  `breedOnly`idを`bloodAbilities`として記録し、血脈レシピ由来を優先度の先頭へ並べ替えた上で、
+  開始クラス（B1=3枠）に収まる分だけ`abilities`に残す。300回のランダム配合で試行し、
+  `bloodAbilities`が常に配列であること・装着中の血脈が`bloodAbilities`の部分集合であること・
+  開始時点で枠超過が起きないことを確認済み。
+
+**`src/state/mylifeState.js`**
+- `loadMyLifeGame()`に移行処理を追加：`player.bloodAbilities`が無ければ`abilities`の
+  `breedOnly`から生成する（装着状態は維持・超過を許す）。
+
+**`src/controllers/mylife/shop.js` / `src/hooks/useMyLifeGame.js`**
+- `mlEquipBloodBadge`を新設し`mlEquipBlood`としてctxへ配線（第44弾の`mlUnequipBadge`と同じ形）。
+
+**`src/screens/mylife/rider.jsx`**
+- 「使用中のバッジ」節をバッジ（`mlBadgeKind==="badge"`）だけに絞り、枠数計算を`mlSlotUsed`
+  基準へ変更。入れ替えパネルの候補も枠を使っているもの（バッジ・血脈）だけに絞った
+  （体質を渡す踏み倒し経路を封鎖）。新設した「体質」節（生まれつき・変更できません、
+  良い体質→悪特性の順、ボタンなし）と「血脈」節（`{使用中}/{所持}を使用中・枠を使います`、
+  使用中は「はずす」、未使用は空きがあれば「付ける」・無ければ「空き枠なし」）。
+  バッジ節が空かつ血脈で枠が埋まっている場合は「血脈で枠が埋まっています」を表示。
+
+**`src/components/panels.jsx`**
+- `TraitLine`の「（金は効果2倍）」を削除（第45弾の4段階化で不正確になっていたため。
+  金の到達は既に文字色(`accent`)で示しており、誤った倍率表記を消すだけで足りる＝§7）。
+
+**検証（Node・Playwright実機）**
+1. `ABILITIES`48種の内訳が設計どおり badge:24 / taishitsu:16 / ketsumyaku:8 であることを確認。
+2. 体質を`mlUnequipAbility`で外そうとしても変化しないこと、バッジ・血脈は外せることを確認。
+3. 悪特性3つ持ちで`mlSlotUsed=0`（体質は数えない）、バッジ1+血脈1+体質1で`mlSlotUsed=2`を確認。
+4. 入れ替え対象に体質を渡すと拒否され、バッジ・血脈を渡すと正常に入れ替わることを確認。
+5. **血脈をはずすと`effAbilities`の実測値が下がることを確認**（`sovereign`装着時flat=66.0→
+   未装着60.0）。案Cの核心（枠と発動が連動する）が実際に機能していることを数値で確認。
+6. 血脈をはずして`mlEquipBlood`で付け直すと復元されることを確認（永久消失しない）。
+7. PRO(5枠)で「血脈4+バッジ1」「血脈2+バッジ3」の両方が実際に作れることを確認。
+8. B1(3枠)で血脈4つを持つケースで3つだけ装着され1つが未使用のまま残ることを確認。
+9. 旧セーブ相当（`bloodAbilities`欠落）の移行ロジックが装着状態を維持したまま
+   `bloodAbilities`を補完することを確認。
+10. Playwright実機（PRO・血脈4つのうち2装着のテスト選手）で3節構造が設計どおりに描画され、
+    血脈の「付ける」クリックで「残り1枠→0枠」に変わり、残る未装着の血脈が「空き枠なし」に
+    切り替わることを確認。バッジ0・血脈で枠が埋まっている状態で「血脈で枠が埋まっています」
+    が表示されることも確認。体質（`天才肌`・`ガラスの体`）に一切ボタンが出ないことを
+    画面上の全ボタン一覧で確認（はずす5個＝バッジ2+血脈3のみ）。
+11. `pageerror`ゼロ。縦線・絵文字は追加していない。`npx vite build`成功。

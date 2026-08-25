@@ -16,7 +16,7 @@ import {
   mlUseStock as mshUseStock, mlPrivateCamp as mshPrivateCamp, mlBuyCar as mshBuyCar, mlBuyHouse as mshBuyHouse,
   mlSetFocus as mshSetFocus, mlBuyGrowthPowUp as mshBuyGrowthPowUp, mlBuyGrowthShift as mshBuyGrowthShift,
   mlHireCoach as mshHireCoach, mlDismissCoach as mshDismissCoach, mlAcquireBadge as mshAcquireBadge,
-  mlUnequipBadge as mshUnequipBadge,
+  mlUnequipBadge as mshUnequipBadge, mlEquipBloodBadge as mshEquipBloodBadge,
 } from "../controllers/mylife/shop.js";
 import {
   mlBecomeMentor as mcBecomeMentor, mlChooseTeam as mcChooseTeam,
@@ -272,6 +272,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   const mlDismissCoach = (key) => setMl(s => mshDismissCoach(s, key));
   const mlAcquireBadge = (id, swapOutId) => setMl(s => mshAcquireBadge(s, id, swapOutId));
   const mlUnequipBadge = (id) => setMl(s => mshUnequipBadge(s, id));
+  const mlEquipBlood = (id) => setMl(s => mshEquipBloodBadge(s, id));
 
   return {
     ml, setMl, mlCreateArgsRef, ML_MILESTONE_LABEL,
@@ -283,6 +284,6 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     mlChooseTeam, mlResolveOffseason, mlContinueAfterOffseason, mlResolveCrossroads, mlContinueAfterCrossroads,
     mlTriggerSponsorGig, mlResolveEvent,
     mlBuyPart, mlSetPart, mlUpgradePart, mlBuyGear, mlBuyStock, mlUseStock, mlUseStockConfirm,
-    mlPrivateCamp, mlBuyCar, mlBuyHouse, mlBuyGrowthPowUp, mlBuyGrowthShift, mlHireCoach, mlDismissCoach, mlAcquireBadge, mlUnequipBadge, mlGenRace,
+    mlPrivateCamp, mlBuyCar, mlBuyHouse, mlBuyGrowthPowUp, mlBuyGrowthShift, mlHireCoach, mlDismissCoach, mlAcquireBadge, mlUnequipBadge, mlEquipBlood, mlGenRace,
   };
 }

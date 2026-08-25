@@ -5,7 +5,7 @@ import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_COACH_MAX_BY_CLASS, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX } from "../../data/gear.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PARTS } from "../../sim/race.js";
-import { addAb, mlAcquireAbility, mlBadgeSlots, mlGrowthCapFor, mlPrivateCampCost, mlUnequipAbility } from "../../logic/support.js";
+import { addAb, mlAcquireAbility, mlBadgeSlots, mlEquipBlood, mlGrowthCapFor, mlPrivateCampCost, mlUnequipAbility } from "../../logic/support.js";
 
 export function mlBuyPart(s, pid) {
   const p = PARTS[pid];
@@ -121,9 +121,17 @@ export function mlAcquireBadge(s, id, swapOutId) {
 }
 
 // 第44弾: バッジを外す（装備を解く）。累積実績（goldAbilities含む）は失われず、
-// 「付ける」でいつでも戻せる。
+// 「付ける」でいつでも戻せる。第47弾: 体質（taishitsu）はmlUnequipAbility側で弾かれるため
+// ここでは何もせず`s`が返る（UIも体質にははずすボタンを出さない）。
 export function mlUnequipBadge(s, id) {
   const player = mlUnequipAbility(s.player, id);
+  return player === s.player ? s : { ...s, player };
+}
+
+// 第47弾: 血脈を枠に装着する。bloodAbilitiesに記録済みのものだけが対象で、
+// 枠に空きが無ければ何も起きない（UIが「空き枠なし」を表示する）。
+export function mlEquipBloodBadge(s, id) {
+  const player = mlEquipBlood(s.player, id, mlBadgeSlots(s));
   return player === s.player ? s : { ...s, player };
 }
 

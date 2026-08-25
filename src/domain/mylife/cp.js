@@ -1,6 +1,6 @@
 // クリアポイント(CP)・アビリティ習得（メタ進行）。第13弾Phase0でlogic/support.jsから分離。
 import { ASSIST_ROLES, GOLD_CONDITIONS, GOLD_REQS, TIER_LADDER, allTerrainMin, bigStagePodium, countRoleUses, countWins, mulberry, newRider, terrainCount, terrainPodium, terrainWin } from "../../core/core.js";
-import { AB_KEYS } from "../../data/abilities.js";
+import { AB_KEYS, ABILITIES } from "../../data/abilities.js";
 import { UNLOCK_TEMPLATES } from "../../data/course.js";
 import { MLCP_DIFF_MUL, ML_CP_MILESTONES } from "../../data/economy.js";
 import { ML_BADGE_SLOTS_BY_CLASS } from "../../data/gear.js";
@@ -69,11 +69,28 @@ export const ACQUIRE_CONDITIONS = Object.fromEntries(
   Object.entries(ACQUIRE_REQS).map(([id, q]) => [id, r => (!q.gate || q.gate(r)) && q.cur(r) >= q.need])
 );
 
+// 第47弾: r.abilitiesに同居する3種を機械的に見分ける（devlog/wave47.md）。
+// - badge     ：ACQUIRE_REQSがある24種。実績で獲得。付け外し可能・枠を消費する。
+// - ketsumyaku：ABILITIES[id].breedOnlyの8種（血脈）。配合限定。付け外し可能・枠を消費する。
+// - taishitsu ：上記以外（体質系10＋悪特性6）。生まれつきで選べないため付け外し不可・
+//   枠を消費しない（良い体質が枠を食うのも、悪特性を外して踏み倒せるのも筋が通らない）。
+export function mlBadgeKind(id) {
+  if (ACQUIRE_REQS[id]) return "badge";
+  if (ABILITIES[id] && ABILITIES[id].breedOnly) return "ketsumyaku";
+  return "taishitsu";
+}
+
+// 枠を消費している件数（badge＋ketsumyaku。taishitsuは数えない）。バッジ枠の判定は
+// すべてこれを基準にする（旧・abilities.length基準は体質を巻き込んでいたバグ）。
+export function mlSlotUsed(r) {
+  return (r.abilities || []).filter(id => mlBadgeKind(id) !== "taishitsu").length;
+}
+
 // シーズンモードは従来どおり自動習得（据え置き・第39弾の対象外。理由はdevlog/wave39.md参照：
 // 6名分の習得選択を毎月迫るのは作業でしかなく、シーズンの主体性は練習指定とロースター運用が担う）。
 export function acquireNewAbility(r) {
   const abilities = r.abilities || [];
-  if (abilities.length >= 3) return r;
+  if (mlSlotUsed(r) >= 3) return r;
   const eligible = Object.keys(ACQUIRE_CONDITIONS).filter(id => !abilities.includes(id) && ACQUIRE_CONDITIONS[id](r));
   if (eligible.length === 0 || Math.random() >= 0.15) return r;
   const id = eligible[Math.floor(Math.random() * eligible.length)];
@@ -85,21 +102,35 @@ export function acquireNewAbility(r) {
 // 全員が同じ組み合わせになり個性が消えるため（devlog/wave44.md）。
 // maxSlots省略時は3（シーズン側の呼び出し・旧テスト等の後方互換）。上限に達している場合は
 // 既存の1つを外して入れ替える（swapOutId省略時は失敗＝呼び出し側でUI選択させる）。
+// 第47弾: 枠の判定をmlSlotUsed基準へ（体質は数えない）。入れ替え対象も枠を使っているもの
+// （バッジ・血脈）に限る——体質を渡されても入れ替えの土俵に乗せない。
 export function mlAcquireAbility(r, id, swapOutId, maxSlots = 3) {
   const abilities = r.abilities || [];
   if (abilities.includes(id) || !ACQUIRE_CONDITIONS[id] || !ACQUIRE_CONDITIONS[id](r)) return r;
-  if (abilities.length < maxSlots) return { ...r, abilities: [...abilities, id] };
-  if (!swapOutId || !abilities.includes(swapOutId)) return r;
+  if (mlSlotUsed(r) < maxSlots) return { ...r, abilities: [...abilities, id] };
+  if (!swapOutId || !abilities.includes(swapOutId) || mlBadgeKind(swapOutId) === "taishitsu") return r;
   return { ...r, abilities: [...abilities.filter(a => a !== swapOutId), id] };
 }
 
 // 第44弾: バッジを外す（＝装備を解く）。ACQUIRE_CONDITIONSは累積実績を見るため、外しても
 // 条件を満たしたままなら「付ける」でいつでも戻せる（goldAbilitiesの実績も無条件で保持される。
 // hasAbility/hasGoldAbilityは常にabilities側をゲートに使うため、外している間は効果も発火しない）。
+// 第47弾: 体質（taishitsu）は生まれつきで選べないため外せない（何もせず`r`を返す）。
+// バッジ・血脈は許可。
 export function mlUnequipAbility(r, id) {
   const abilities = r.abilities || [];
-  if (!abilities.includes(id)) return r;
+  if (!abilities.includes(id) || mlBadgeKind(id) === "taishitsu") return r;
   return { ...r, abilities: abilities.filter(a => a !== id) };
+}
+
+// 第47弾: 血脈（breedOnly）専用の装着関数。血脈はACQUIRE_CONDITIONSを持たないため
+// mlAcquireAbilityの経路には乗らない。生成時に授かった血脈は丸ごとr.bloodAbilitiesへ
+// 記録済みで（domain/mylife/createChar.js参照）、外しても失われない。枠に空きがあるときだけ
+// r.abilitiesへ加える＝効果はr.abilitiesを見るhasAbility側でそのまま発火する。
+export function mlEquipBlood(r, id, maxSlots = 3) {
+  const abilities = r.abilities || [];
+  if (abilities.includes(id) || !(r.bloodAbilities || []).includes(id) || mlSlotUsed(r) >= maxSlots) return r;
+  return { ...r, abilities: [...abilities, id] };
 }
 
 // 第44弾: プレイヤーの現在のバッジ枠数（最高到達クラス基準・降格しても減らない）。

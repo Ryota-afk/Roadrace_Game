@@ -5,12 +5,13 @@
 // （呼び出し側でlocalStorageを読み、本関数自体はlocalStorageに一切触れない。詳細はDEVLOG §9参照）。
 import { AB_KEYS, AB_LABEL, ABILITIES } from "../../data/abilities.js";
 import { ML_BACKGROUNDS } from "../../data/events.js";
+import { ML_BADGE_SLOTS_BY_CLASS } from "../../data/gear.js";
 import { SUB_STAT_KEYS, mulberry, newRider, overall, pickRiderName } from "../../core/core.js";
 import { legendAncestorSet, legendBloodId, mlBloodlineBonus, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
 import { GROWTHPOW_ORDER } from "../../data/progression.js";
 import { MYLIFE_TEAMS, mlTeammatesFromRoster, sharedWorldRosters, cpShopMylifePerks } from "../../state/state.js";
-import { bumpGrowthPow, mlCpPerks, mlCreateRival, mlGenDirective } from "../../logic/support.js";
+import { bumpGrowthPow, mlBadgeKind, mlCpPerks, mlCreateRival, mlGenDirective } from "../../logic/support.js";
 import { mlGenRaceCandidates } from "./race.js";
 
 export function mlCreateChar(s, type, background, master, partner, cpMeta) {
@@ -245,6 +246,25 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     }
   } else {
     initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
+  }
+  // 第47弾: 血脈（breedOnly）は付け外し可能にする。ここまでの処理でabilitiesに積まれた
+  // 血脈の全件をbloodAbilitiesへ記録し、開始クラス（B1=3枠）に収まる分だけ実際に装着する。
+  // あぶれた分は未使用のままbloodAbilitiesに残り、選手画面でいつでも付けられる
+  // （devlog/wave47.md「生成時のデフォルト」）。優先順は「血脈レシピ由来（最も入手困難）→
+  // exclusiveの生成順」——レシピのidはここまでの処理で末尾に追加されているため先頭へ動かす。
+  const bloodIds = (player.abilities || []).filter(id => ABILITIES[id] && ABILITIES[id].breedOnly);
+  if (bloodIds.length) {
+    const recipeId = player.bloodRecipe && player.bloodRecipe.abilityId;
+    const ordered = recipeId && bloodIds.includes(recipeId)
+      ? [recipeId, ...bloodIds.filter(id => id !== recipeId)]
+      : bloodIds;
+    player.bloodAbilities = ordered;
+    const nonBlood = player.abilities.filter(id => !bloodIds.includes(id));
+    const badgeCount = nonBlood.filter(id => mlBadgeKind(id) === "badge").length;
+    const bloodSlots = Math.max(0, ML_BADGE_SLOTS_BY_CLASS[0] - badgeCount);
+    player.abilities = [...nonBlood, ...ordered.slice(0, bloodSlots)];
+  } else {
+    player.bloodAbilities = [];
   }
   return {
     ...s, player, team: team.name, classIdx: 0, classIdxBest: 0, year: 1, month: 0, points: 0,

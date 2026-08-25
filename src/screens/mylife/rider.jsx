@@ -10,12 +10,12 @@ import { badgeTier, GOLD_REQS, overall, TIER_LADDER, TIER_LABEL } from "../../co
 import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
-import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlBadgeSlots, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
+import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlBadgeKind, mlBadgeSlots, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, mlSlotUsed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
 import { BadgeTierMark, Item, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
 
 export function renderMyLifeRiderScreen(ctx) {
-  const { ml, mlWrap, mlAcquireBadge, mlUnequipBadge, setMl } = ctx;
+  const { ml, mlWrap, mlAcquireBadge, mlUnequipBadge, mlEquipBlood, setMl } = ctx;
   const r = ml.player;
   if (!r) return null;
   const race = mlSelectedRace(ml);
@@ -67,12 +67,15 @@ export function renderMyLifeRiderScreen(ctx) {
       {(() => {
         // 第44弾: 「使用中／使っていない」の2節構造に分離（devlog/wave44.md）。
         // 所持上限3個は撤廃ではなく、クラス別の枠（B1:3/A:4/PRO:5・最高到達クラス基準）へ拡張。
-        // 上限は既に「無料で付け替えられる装備スロット」だった（外しても累積実績は保持され
-        // いつでも戻せる）ため、UIの言葉も「習得/外す」ではなく「付ける/はずす」にする。
+        // 第47弾: r.abilitiesに同居する3種（バッジ/体質/血脈）を分けて3節構造にした
+        // （devlog/wave47.md）。「使用中のバッジ」節はバッジ（実績で獲得・24種）だけを表示し、
+        // 体質・血脈はそれぞれ専用の節へ切り出す。枠（mlSlotUsed）もバッジ＋使用中の血脈だけを
+        // 数え、体質は数えない。
         const maxSlots = mlBadgeSlots(ml);
+        const badgeIds = abils.filter(id => mlBadgeKind(id) === "badge");
         // 第45弾: TIER_LADDER登録種（19種）は銅/銀/金/虹の4段階。未登録種（古典3種の表彰台判定・
         // 鉄人/大舞台に強いの金条件なし等）は従来どおり銅/金の2段階のまま（devlog/wave44.md）。
-        const heldRows = abils.filter(id => ABILITIES[id]).map(id => {
+        const heldRows = badgeIds.filter(id => ABILITIES[id]).map(id => {
           const a = ABILITIES[id];
           const gr = GOLD_REQS[id];
           const ladder = TIER_LADDER[id];
@@ -106,9 +109,20 @@ export function renderMyLifeRiderScreen(ctx) {
         // 第44弾: 所持0個でも「使用中のバッジ」節は（空き）だけを並べて出す（devlog/wave44.md
         // empty state）。枠の存在自体を新規キャラの初日から見せる。「使っていないバッジ」節は
         // 表示すべき候補が無ければ出さない（並べても情報量が無いため・第39弾の方針を踏襲）。
-        const full = abils.length >= maxSlots;
-        const remaining = Math.max(0, maxSlots - abils.length);
+        const slotUsed = mlSlotUsed(r);
+        const full = slotUsed >= maxSlots;
+        const remaining = Math.max(0, maxSlots - slotUsed);
+        // 第47弾: 入れ替え対象は枠を使っているもの（バッジ・血脈）に限る。体質を選ばせない
+        // （悪特性を「これと入れ替える」で踏み倒す経路の封鎖）。
+        const swapCandidates = abils.filter(id => ABILITIES[id] && mlBadgeKind(id) !== "taishitsu");
         const swapTarget = ml.uiBadgeSwap && candRows.some(c => c.id === ml.uiBadgeSwap) ? ml.uiBadgeSwap : null;
+        // 第47弾: 体質（生まれつき・付け外し不可・枠を消費しない）。良い体質→悪特性の順。
+        const taishitsuIds = abils.filter(id => mlBadgeKind(id) === "taishitsu" && ABILITIES[id]);
+        const taishitsuRows = [...taishitsuIds.filter(id => !ABILITIES[id].bad), ...taishitsuIds.filter(id => ABILITIES[id].bad)];
+        // 第47弾: 血脈（配合限定・付け外し可能・枠を消費し、枠に入れた分だけ効果が出る）。
+        // 並び順はbloodAbilities（生成時に決まる）のまま——使用中を上に寄せない
+        // （並びが操作のたびに動くと、どれを触ったか分からなくなるため）。
+        const bloodIds = (r.bloodAbilities || []).filter(id => ABILITIES[id]);
         return (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
@@ -139,7 +153,11 @@ export function renderMyLifeRiderScreen(ctx) {
                   </div>
                 );
               })}
-              {Array.from({ length: remaining }).map((_, i) => (
+              {remaining === 0 && heldRows.length === 0 ? (
+                <div style={{ padding: `${T.space.sm}px 0` }}>
+                  <span style={{ fontSize: T.size.body, color: T.color.sub, paddingLeft: 18 }}>血脈で枠が埋まっています</span>
+                </div>
+              ) : Array.from({ length: remaining }).map((_, i) => (
                 <div key={`empty${i}`} style={{ padding: `${T.space.sm}px 0`, borderTop: (heldRows.length === 0 && i === 0) ? "none" : `1px solid ${T.color.rule}` }}>
                   <span style={{ fontSize: T.size.body, color: T.color.sub, paddingLeft: 18 }}>（空き）</span>
                 </div>
@@ -171,7 +189,7 @@ export function renderMyLifeRiderScreen(ctx) {
                         {swapTarget === id && (
                           <div style={{ background: T.color.surfaceUp, padding: T.space.sm, marginTop: T.space.xs }}>
                             <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>所持は上限（{maxSlots}個）です。はずすバッジを選んでください</div>
-                            {abils.filter(hid => ABILITIES[hid]).map(hid => (
+                            {swapCandidates.map(hid => (
                               <div key={hid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${T.space.xs}px 0` }}>
                                 <span style={{ fontSize: T.size.body, color: T.color.text }}>{ABILITIES[hid].label}</span>
                                 <ShopBtn onClick={() => { mlAcquireBadge(id, hid); setMl(s => ({ ...s, uiBadgeSwap: null })); }} outline>これと入れ替える</ShopBtn>
@@ -179,6 +197,52 @@ export function renderMyLifeRiderScreen(ctx) {
                             ))}
                           </div>
                         )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {taishitsuRows.length > 0 && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
+                  <span style={{ color: T.color.accent }}>体質</span>
+                  <span style={{ color: T.color.sub }}>生まれつき・変更できません</span>
+                </div>
+                <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
+                  {taishitsuRows.map((id, i) => {
+                    const a = ABILITIES[id];
+                    return (
+                      <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                        <div style={{ fontSize: T.size.body, color: a.bad ? T.color.bad : T.color.text, paddingLeft: 18 }}>{a.label}</div>
+                        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6, paddingLeft: 18 }}>{a.desc}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {bloodIds.length > 0 && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
+                  <span style={{ color: T.color.accent }}>血脈</span>
+                  <span style={{ color: T.color.sub }}>{`${bloodIds.filter(id => heldSet.has(id)).length} / ${bloodIds.length} を使用中・枠を使います`}</span>
+                </div>
+                <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
+                  {bloodIds.map((id, i) => {
+                    const a = ABILITIES[id];
+                    const equipped = heldSet.has(id);
+                    return (
+                      <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                          <span style={{ color: equipped ? T.color.text : T.color.sub, paddingLeft: 18 }}>{a.label}</span>
+                          {equipped
+                            ? <ShopBtn onClick={() => mlUnequipBadge(id)} outline>はずす</ShopBtn>
+                            : full
+                              ? <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>空き枠なし</span>
+                              : <ShopBtn onClick={() => mlEquipBlood(id)}>付ける</ShopBtn>}
+                        </div>
+                        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6, paddingLeft: 18 }}>{a.desc}</div>
                       </div>
                     );
                   })}

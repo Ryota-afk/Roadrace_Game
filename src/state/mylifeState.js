@@ -1,6 +1,6 @@
 // マイライフの状態：init/save/load・アンビション（生き方の路線）・固定チームメイト。
 // state/state.js から分離（第15弾F）。localStorageキー：roadrace_v12_mylife_save。
-import { TYPES } from "../data/abilities.js";
+import { ABILITIES, TYPES } from "../data/abilities.js";
 import { CLASSES } from "../data/progression.js";
 import { WORLD_ROSTER_SIZE } from "../data/teams.js";
 import { mulberry, pickRiderName, ridState, rollAbilities } from "../core/core.js";
@@ -244,6 +244,13 @@ export function loadMyLifeGame() {
     // 第16弾A: 旧セーブ（retiredRivals未保存）はここで初期化。rival/rival2にageが
     // 無い旧セーブはageRival()側が26歳として扱うため、ここでの補完は不要。
     if (!Array.isArray(merged.retiredRivals)) merged.retiredRivals = [];
+    // 第47弾: bloodAbilities未保存の旧セーブは、r.abilitiesの中のbreedOnly（血脈）を
+    // 抜き出して補完する。装着状態は維持する（枠を超過していても遡って外さない・
+    // devlog/wave47.md「既存セーブの移行」＝既存プレイヤーを黙って弱くしないため）。
+    if (merged.player && !Array.isArray(merged.player.bloodAbilities)) {
+      const blood = (merged.player.abilities || []).filter(id => ABILITIES[id] && ABILITIES[id].breedOnly);
+      merged.player = { ...merged.player, bloodAbilities: blood };
+    }
     return merged;
   } catch (e) { return null; }
 }
