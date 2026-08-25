@@ -63,12 +63,17 @@ export function rollCondDir() {
 // v43(マイライフ難易度調整Phase 1・柱0): GROWTH[r.growth].gainMulを乗算し、成長タイプごとの
 // 伸び速度に差をつける（詳細はdata/abilities.jsのGROWTH定義コメント参照）。season/mylife
 // 両方がこの関数を共有するため、係数は両モードへ自動的に効く。
+// 第38弾: 係数を1.0/0.5/0.1→0.55/0.30/0.28へ再較正（GROWTHのpeak終端は全タイプ+4歳）。
+// 旧係数は30歳の衰え期入りで伸びが1/10に急落し、平均的なプレイでも9〜10年目に上限を
+// 6〜7点残したまま成長が止まっていた（原因は上限ではなくこの崖）。相手選手（AI）は
+// growthPhaseの対象外で毎回別経路生成されるため、総量を増やすと両モードとも難易度が
+// 下がる＝総量はほぼ保存する前提で配分を組み替えた（詳細・実測はdevlog/wave38.md）。
 export function growthPhase(r) {
   const def = GROWTH[r.growth];
   const [ps, pe] = def.peak;
   const mul = def.gainMul ?? 1.0;
-  if (r.age < ps) return { gain: 1.0 * mul, dec: 0, tag: "成長期" };
-  if (r.age <= pe) return { gain: 0.5 * mul, dec: 0, tag: "全盛期" };
+  if (r.age < ps) return { gain: 0.55 * mul, dec: 0, tag: "成長期" };
+  if (r.age <= pe) return { gain: 0.30 * mul, dec: 0, tag: "全盛期" };
   // 第15弾: 血脈レシピ達成の伝説特能は、レシピの深さ（希少さ）に応じて衰えが緩やかになる。
   // 2代レシピ(revenant/twinsoul)＝3割抑制、3代レシピ(destiny/unfallen)＝5割抑制、
   // 4代レシピ(sovereign)＝衰えなし。devlog/wave15.mdの初期案（destiny=0.5・sovereign=0）を、
@@ -81,7 +86,7 @@ export function growthPhase(r) {
   // 実測：33歳で全能力94から63まで低下）。slope/capを緩め、キャリア終盤が「上昇→プラトー→
   // 緩やかな下降」の形になるようにした（33歳で78程度に留まる）。この関数はシーズン/マイライフ
   // 共有のため両モードのベテランが長持ちする。実測ではGF優勝率をほぼ動かさない（誤差範囲）。
-  return { gain: 0.1 * mul, dec: Math.min(0.6, 0.12 * (r.age - pe)) * decayMul, tag: "衰え期" };
+  return { gain: 0.28 * mul, dec: Math.min(0.6, 0.12 * (r.age - pe)) * decayMul, tag: "衰え期" };
 }
 
 // v43(マイライフ難易度調整Phase 1・成長力マスク化): revealPow=falseの間はpowScoreを除外する

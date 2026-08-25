@@ -39,14 +39,15 @@ export const ML_TYPE_CAP_OFFSET = {
 // 早熟・普通の完全上位互換）。ここに速度側の逆補正を掛けて、「早く強くなるが総量は
 // 少ない（早熟）」⇔「総量は多いが遅い（晩成）」という本来のトレードオフに戻す。
 // season/mylife両方がgrowthPhase()を共有するため、この係数は両モードへ自動的に効く。
+// 第38弾: peak終端を全タイプ+4歳（logic/growth.jsの係数再較正とセット。詳細はdevlog/wave38.md）。
 export const GROWTH = {
-  early: { label: "早熟", peak: [21, 25], gainMul: 1.7 },
-  normal: { label: "普通", peak: [24, 29], gainMul: 1.25 },
-  late: { label: "晩成", peak: [28, 33], gainMul: 1.0 },
+  early: { label: "早熟", peak: [21, 29], gainMul: 1.7 },
+  normal: { label: "普通", peak: [24, 33], gainMul: 1.25 },
+  late: { label: "晩成", peak: [28, 37], gainMul: 1.0 },
   // v19: 早熟・晩成それぞれの極端形。superEarly/超晩成は通常の3タイプよりさらに
   // ピークが偏っており、ごく稀にしか出現しない（newRiderの生成時に低確率で抽選）
-  super_early: { label: "超早熟", peak: [18, 21], gainMul: 2.4 },
-  super_late: { label: "超晩成", peak: [32, 38], gainMul: 0.85 },
+  super_early: { label: "超早熟", peak: [18, 25], gainMul: 2.4 },
+  super_late: { label: "超晩成", peak: [32, 42], gainMul: 0.85 },
 };
 
 export const POW = {
