@@ -247,7 +247,7 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     initLog.push(`【1年目 4月】チームの${mentorName}が新人指導を買って出てくれた。しばらくは練習・出走の伸びに手心を加えてもらえそうだ`);
   }
   return {
-    ...s, player, team: team.name, classIdx: 0, year: 1, month: 0, points: 0,
+    ...s, player, team: team.name, classIdx: 0, classIdxBest: 0, year: 1, month: 0, points: 0,
     difficulty: s.mlDiffChoice || "easy", // v38(#6): マイライフの難易度（相手強さ・CP倍率）
     races: mlGenRaceCandidates(1, 0, 0), sel: { raceId: null },
     directive: mlGenDirective(1, 0, 0, 30),

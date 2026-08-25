@@ -101,6 +101,67 @@ mount を外して finisher を習得 → closer, escape, finisher
 - 目標バッジ（`badgeGoals`）は**3つのまま**。キャリア開始時に狙いを宣言する「しおり」で、
   枠とは別概念。
 
+## 実装結果（2026-08・Sonnet）
+
+**データ・状態**
+- `src/data/gear.js`：`ML_BADGE_SLOTS_BY_CLASS = [3, 4, 5]`を追加（既存の
+  `ML_COACH_SLOTS_BY_CLASS`と同じ命名規則・置き場所に揃えた）。
+- `src/state/mylifeState.js`：`ml.classIdxBest`を追加（`initMyLife()`の既定値0・
+  `ML_SAVE_FIELDS`に登録）。
+- `src/domain/mylife/createChar.js`：新キャリア開始時に`classIdxBest: 0`をリセット。
+
+**classIdxBestの更新箇所（2箇所・降格しても減らさない）**
+- `src/controllers/mylife/career.js`（`mlChooseTeam`＝移籍によるクラス変更）
+- `src/controllers/mylife/month.js`（年度末の昇格/降格判定。`finalizeYearEnd`を呼ぶ
+  2つの分岐——契約オファーが来る場合／来ない場合——の両方に追加）
+- いずれも`Math.max(s.classIdxBest ?? s.classIdx, classIdx)`で更新。
+
+**ロジック**
+- `src/domain/mylife/cp.js`：`mlAcquireAbility(r, id, swapOutId, maxSlots = 3)`に
+  第4引数を追加（`maxSlots`省略時は3＝シーズン側・後方互換）。新規`mlUnequipAbility(r, id)`
+  （abilitiesから外すだけ。goldAbilitiesは触らない＝累積実績は保持）。新規`mlBadgeSlots(ml)`
+  （`classIdxBest`から枠数を引く。欠落時は`classIdx`にフォールバック）。
+- `src/controllers/mylife/shop.js`：`mlAcquireBadge`が`mlBadgeSlots(s)`を計算して渡すよう変更。
+  新規`mlUnequipBadge(s, id)`。
+- `src/logic/support.js`：`mlUnequipAbility`・`mlBadgeSlots`を再エクスポートに追加。
+- `src/hooks/useMyLifeGame.js`：`mlUnequipBadge`ハンドラを新設しctxへ配線。
+
+**UI（`src/screens/mylife/rider.jsx`）**
+- 「使用中のバッジ」「使っていないバッジ」の2節構造に分離（案3）。
+- 使用中の行は右端が「はずす」ボタン。段階（金/銅）はwave44時点で表示位置が未確定
+  だったため、名前の右にインラインの小さな文字で残した（名前の色は「使用中＝text」に
+  専念させ、段階との二重の意味を持たせなかった）。第45弾のマーク表示に置き換える前提の
+  暫定配置。
+- 見出し右の枠数表示は「残り{N}枠」。空き枠は「（空き）」行として明示的に描画。
+- 未使用の行は「付ける」ボタン（枠に空きがある場合）。満杯時は既存の入れ替えパネルへ
+  （文言は「所持は上限（{maxSlots}個）です。はずすバッジを選んでください」に更新）。
+- **empty state不備を自己修正**：当初`heldRows.length===0 && candRows.length===0`で
+  節ごと非表示にする旧ロジックを残していたが、これは設計書の「所持0個でも（空き）だけ
+  並べる」に反していた（新規キャラ初日は通常この状態になる）。該当の早期returnを削除し、
+  使用中の節は常に描画されるよう修正。
+
+**副次的に発見・修正したバグ（第43弾の取りこぼし）**
+- `src/controllers/mylife/month.js`の年度末「契約オファーが来ない」分岐で、`mlGenRaceCandidates`
+  に`s.raceFocus`が渡っていなかった（同じ関数内の「オファーが来る」分岐だけ渡していた）。
+  第43弾の`replace_all`編集がインデント差により該当行を拾えていなかったための取りこぼし。
+  出走計画を宣言していても、契約更新のみでオファーが来なかった年は翌年の初月候補に
+  反映されない、という実害のあるバグだったため、この弾で発見次第すぐに修正した。
+
+**検証**（Playwright、フレッシュキャラごとに再現性を確認）
+1. B1新規キャラで3枠・「残り2枠」表示を確認。
+2. 「はずす」→「使っていないバッジ」節へ移動→「付ける」→**金のまま**使用中へ復活
+   することを確認（累積実績＝goldAbilitiesがはずしても保持される設計どおり）。
+3. `classIdx`/`classIdxBest`を直接操作し、A=4枠・PRO=5枠になることを確認。
+4. B1へ降格（`classIdx=0`）してもPRO到達済み（`classIdxBest=2`）なら5枠のまま
+   維持されることを確認。
+5. 旧セーブ相当（`classIdxBest`欠落）で`classIdx`からのフォールバックが機能し、
+   クラッシュしないことを確認。
+6. 所持0個・候補0件のempty state（（空き）だけが並ぶ）を確認（自己修正後）。
+7. `pageerror`ゼロ。縦線・絵文字は追加していない。
+
+**やらなかったこと（設計どおり）**：4段階化・AIへの段階配布は第45弾。
+`acquireNewAbility`（シーズン）・`badgeGoals`（3つ固定）は無変更。
+
 ## 検証項目
 
 1. B1で3枠・Aで4枠・PROで5枠になること。

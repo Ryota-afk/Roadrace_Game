@@ -63,7 +63,9 @@ export function mlChooseTeam(s, offer) {
     : s.teammates;
   // 第18弾: 移籍すると僚友が入れ替わるため、絆も新チームで0から
   const newBonds = offer.team !== s.team ? {} : s.bonds;
-  return { ...s, team: offer.team, classIdx, races, sel: classChanged ? { ...s.sel, raceId: null } : s.sel, directive, salary, money, teammates: newTeammates, bonds: newBonds, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
+  // 第44弾: バッジ枠は最高到達クラスで決まる。降格しても枠を減らさないためclassIdxBestを更新する
+  const classIdxBest = Math.max(s.classIdxBest ?? s.classIdx, classIdx);
+  return { ...s, team: offer.team, classIdx, classIdxBest, races, sel: classChanged ? { ...s.sel, raceId: null } : s.sel, directive, salary, money, teammates: newTeammates, bonds: newBonds, contractOffers: null, biddingWar: false, screen: "mylife_main", log };
 }
 
 // v28: 引退勧告への応答。pendingAdviceに次年度以降の続行state（オフシーズン画面）が

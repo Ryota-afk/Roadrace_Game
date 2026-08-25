@@ -420,6 +420,8 @@ export function mlAdvanceMonth(s, mode) {
     else if (s.classIdx > 0 && s.points < mlRelegateLine) classIdx = s.classIdx - 1;
     if (classIdx > s.classIdx) log.push(`【${s.year}年目 3月】${CLASSES[classIdx].label}に昇格！`);
     else if (classIdx < s.classIdx) log.push(`【${s.year}年目 3月】不振により${CLASSES[classIdx].label}へ降格…雪辱を期す`);
+    // 第44弾: バッジ枠は最高到達クラスで決まる。降格しても枠を減らさないためclassIdxBestを更新する
+    const classIdxBest = Math.max(s.classIdxBest ?? s.classIdx, classIdx);
     // v14.3: 年俸改定。その年のポイント・勝利・表彰台に応じて年俸が上がる
     const yearRaces = (player.raceLog || []).filter(e => e.year === s.year);
     const yearWins = yearRaces.filter(e => e.rank === 1).length;
@@ -453,7 +455,7 @@ export function mlAdvanceMonth(s, mode) {
       }));
       const stayOffer = { team: s.team, tier: mlTeamTier(s.team), salaryMul: biddingWar ? 1.1 : 1, bonus: biddingWar ? 40 : 0, aceGuarantee: false };
       return finalizeYearEnd({
-        ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
+        ...s, player, classIdx, classIdxBest, points: 0, year: s.year + 1, month: 0,
         races: mlGenRaceCandidates(s.year + 1, 0, classIdx, s.raceFocus), sel: { ...s.sel, raceId: null },
         directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
         contractOffers: [stayOffer, ...offerTeams], biddingWar,
@@ -464,8 +466,8 @@ export function mlAdvanceMonth(s, mode) {
       });
     }
     return finalizeYearEnd({
-      ...s, player, classIdx, points: 0, year: s.year + 1, month: 0,
-      races: mlGenRaceCandidates(s.year + 1, 0, classIdx), sel: { ...s.sel, raceId: null },
+      ...s, player, classIdx, classIdxBest, points: 0, year: s.year + 1, month: 0,
+      races: mlGenRaceCandidates(s.year + 1, 0, classIdx, s.raceFocus), sel: { ...s.sel, raceId: null },
       directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
       salary, money, managerEval, carLv, houseLv, coaches, debtMonths, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
       rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,

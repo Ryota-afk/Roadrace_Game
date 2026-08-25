@@ -106,7 +106,7 @@ export function mlAmbitionCleared(ml, amb) {
 export function initMyLife() {
   return {
     screen: "mylife_create", typeChoice: "RUL", bgChoice: "university",
-    year: 1, month: 0, classIdx: 0, points: 0,
+    year: 1, month: 0, classIdx: 0, classIdxBest: 0, points: 0,
     player: null, team: null,
     races: [], sel: { raceId: null },
     result: null, resultInfo: null,
@@ -159,7 +159,7 @@ export function initMyLife() {
 export const ML_SAVE_KEY = "roadrace_v12_mylife_save";
 const ML_SAVE_VERSION = "v12ml";
 const ML_SAVE_FIELDS = [
-  "screen", "year", "month", "classIdx", "points", "player", "team", "races", "log", "retired",
+  "screen", "year", "month", "classIdx", "classIdxBest", "points", "player", "team", "races", "log", "retired",
   "directive", "managerEval", "salary", "money", "partsInv", "stock", "gear", "houseLv", "carLv",
   "rival", "rivalRecord", "rival2", "rivalRecord2", "retiredRivals", "flags", "rewardedAchievements",
   // v30: 世界ランキング＆キャリア・アンビション

@@ -5,7 +5,7 @@ import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_COACH_MAX_BY_CLASS, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_GEAR, ML_HOUSES, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE, ML_PART_UPGRADE_COST, ML_PART_LV_MAX } from "../../data/gear.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PARTS } from "../../sim/race.js";
-import { addAb, mlAcquireAbility, mlGrowthCapFor, mlPrivateCampCost } from "../../logic/support.js";
+import { addAb, mlAcquireAbility, mlBadgeSlots, mlGrowthCapFor, mlPrivateCampCost, mlUnequipAbility } from "../../logic/support.js";
 
 export function mlBuyPart(s, pid) {
   const p = PARTS[pid];
@@ -113,9 +113,17 @@ export function mlSetFocus(s, key) {
 }
 
 // 第39弾: 条件を満たしたバッジをプレイヤーが選んで習得する（月15%抽選の廃止）。
-// 所持上限3個時はswapOutIdで指定した1個と入れ替える（省略時は上限未満でのみ習得できる）。
+// 第44弾: 所持枠はクラス別（B1:3/A:4/PRO:5・最高到達クラス基準）。枠が埋まっている場合は
+// swapOutIdで指定した1個と入れ替える（省略時は枠に空きがある場合のみ習得できる）。
 export function mlAcquireBadge(s, id, swapOutId) {
-  const player = mlAcquireAbility(s.player, id, swapOutId);
+  const player = mlAcquireAbility(s.player, id, swapOutId, mlBadgeSlots(s));
+  return player === s.player ? s : { ...s, player };
+}
+
+// 第44弾: バッジを外す（装備を解く）。累積実績（goldAbilities含む）は失われず、
+// 「付ける」でいつでも戻せる。
+export function mlUnequipBadge(s, id) {
+  const player = mlUnequipAbility(s.player, id);
   return player === s.player ? s : { ...s, player };
 }
 

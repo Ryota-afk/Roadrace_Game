@@ -40,6 +40,10 @@ export const ML_COACH_MUL    = [1, 1.25, 1.33, 1.40];    // Lv0..3 の練習効�
 export const ML_COACH_SALARY = [0, 6, 10, 15];           // Lv0..3 の月給（万円/月）
 export const ML_COACH_SIGNING = 100;                      // 契約金（Lv0→Lv1のときのみ）
 
+// 第44弾: バッジ所持枠：B1 / A / PRO。降格しても枠は減らさないため、コーチ枠（現在の
+// classIdxで引く）とは異なり、最高到達クラス（ml.classIdxBest）で引く（devlog/wave44.md）。
+export const ML_BADGE_SLOTS_BY_CLASS = [3, 4, 5];
+
 export const ML_STOCK_ITEMS = {
   drink: { label: "リカバリードリンク", desc: "疲労を30回復", price: 15, fatigueDelta: -30 },
   supp:  { label: "上質な休養サプリ", desc: "疲労を60回復", price: 32, fatigueDelta: -60 },

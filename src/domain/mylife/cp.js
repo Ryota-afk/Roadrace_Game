@@ -3,6 +3,7 @@ import { ASSIST_ROLES, GOLD_CONDITIONS, countRoleUses, countWins, mulberry, newR
 import { AB_KEYS } from "../../data/abilities.js";
 import { UNLOCK_TEMPLATES } from "../../data/course.js";
 import { MLCP_DIFF_MUL, ML_CP_MILESTONES } from "../../data/economy.js";
+import { ML_BADGE_SLOTS_BY_CLASS } from "../../data/gear.js";
 
 export function upgradeGoldAbilities(r) {
   const abilities = r.abilities || [];
@@ -54,15 +55,32 @@ export function acquireNewAbility(r) {
   return { ...r, abilities: [...abilities, id] };
 }
 
-// 第39弾: マイライフはランダム抽選をやめ、プレイヤーが選んで習得する。所持上限3個は維持
-// （撤廃は使用量・退行を入れる弾と同時。歯止めが無いまま先に外さない）。上限に達している
-// 場合は既存の1つを外して入れ替える（swapOutId省略時は先頭を外す＝呼び出し側でUI選択させる）。
-export function mlAcquireAbility(r, id, swapOutId) {
+// 第44弾: バッジ枠はクラス別（ML_BADGE_SLOTS_BY_CLASS＝B1:3/A:4/PRO:5）。上限3個固定は撤廃したが
+// 「撤廃」ではなく「キャリアで増やす」——各脚質の到達可能バッジは約10種あり、無制限にすると
+// 全員が同じ組み合わせになり個性が消えるため（devlog/wave44.md）。
+// maxSlots省略時は3（シーズン側の呼び出し・旧テスト等の後方互換）。上限に達している場合は
+// 既存の1つを外して入れ替える（swapOutId省略時は失敗＝呼び出し側でUI選択させる）。
+export function mlAcquireAbility(r, id, swapOutId, maxSlots = 3) {
   const abilities = r.abilities || [];
   if (abilities.includes(id) || !ACQUIRE_CONDITIONS[id] || !ACQUIRE_CONDITIONS[id](r)) return r;
-  if (abilities.length < 3) return { ...r, abilities: [...abilities, id] };
+  if (abilities.length < maxSlots) return { ...r, abilities: [...abilities, id] };
   if (!swapOutId || !abilities.includes(swapOutId)) return r;
   return { ...r, abilities: [...abilities.filter(a => a !== swapOutId), id] };
+}
+
+// 第44弾: バッジを外す（＝装備を解く）。ACQUIRE_CONDITIONSは累積実績を見るため、外しても
+// 条件を満たしたままなら「付ける」でいつでも戻せる（goldAbilitiesの実績も無条件で保持される。
+// hasAbility/hasGoldAbilityは常にabilities側をゲートに使うため、外している間は効果も発火しない）。
+export function mlUnequipAbility(r, id) {
+  const abilities = r.abilities || [];
+  if (!abilities.includes(id)) return r;
+  return { ...r, abilities: abilities.filter(a => a !== id) };
+}
+
+// 第44弾: プレイヤーの現在のバッジ枠数（最高到達クラス基準・降格しても減らない）。
+export function mlBadgeSlots(ml) {
+  const idx = ml && ml.classIdxBest != null ? ml.classIdxBest : (ml ? ml.classIdx : 0);
+  return ML_BADGE_SLOTS_BY_CLASS[idx] ?? ML_BADGE_SLOTS_BY_CLASS[ML_BADGE_SLOTS_BY_CLASS.length - 1];
 }
 
 export const ABILITY_FILE_KEY = "roadrace_v12_ability_file";

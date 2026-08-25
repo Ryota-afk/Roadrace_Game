@@ -10,12 +10,12 @@ import { GOLD_REQS, overall } from "../../core/core.js";
 import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
-import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlAcquireAbility, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
+import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlBadgeSlots, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
 import { Item, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
 
 export function renderMyLifeRiderScreen(ctx) {
-  const { ml, mlWrap, mlAcquireBadge, setMl } = ctx;
+  const { ml, mlWrap, mlAcquireBadge, mlUnequipBadge, setMl } = ctx;
   const r = ml.player;
   if (!r) return null;
   const race = mlSelectedRace(ml);
@@ -66,84 +66,105 @@ export function renderMyLifeRiderScreen(ctx) {
       </Section>
 
       {(() => {
-        // 第39弾: 取得済み（金への進捗込み）＋未取得の到達可能な進捗を1つの並びに統合する。
-        // gate不成立（脚質違い等）・進捗0のものは表示しない（並べても情報量がない・devlog/wave39.md）。
+        // 第44弾: 「使用中／使っていない」の2節構造に分離（devlog/wave44.md）。
+        // 所持上限3個は撤廃ではなく、クラス別の枠（B1:3/A:4/PRO:5・最高到達クラス基準）へ拡張。
+        // 上限は既に「無料で付け替えられる装備スロット」だった（外しても累積実績は保持され
+        // いつでも戻せる）ため、UIの言葉も「習得/外す」ではなく「付ける/はずす」にする。
+        const maxSlots = mlBadgeSlots(ml);
         const heldRows = abils.filter(id => ABILITIES[id]).map(id => {
           const a = ABILITIES[id];
           const gr = GOLD_REQS[id];
           const isGold = golds.has(id);
           const cur = gr ? gr.cur(r) : 0;
           const need = gr ? gr.need : 0;
-          return { id, a, held: true, isGold, gr, cur, need, ratio: isGold ? 2 : gr ? cur / need : 1.5 };
-        }).sort((a, b) => b.ratio - a.ratio); // 取得済みは金→銅（金への進捗が高い順）の並びにする
+          return { id, a, isGold, gr, cur, need };
+        });
         const heldSet = new Set(abils);
         const candRows = Object.entries(ACQUIRE_REQS)
           .filter(([id]) => !heldSet.has(id) && ABILITIES[id])
           .map(([id, q]) => ({ id, a: ABILITIES[id], q, gateOk: !q.gate || q.gate(r), cur: q.cur(r), need: q.need, unit: q.unit }))
           .filter(x => x.gateOk && x.cur > 0)
-          .map(x => ({ ...x, held: false, eligible: x.cur >= x.need, ratio: x.cur / x.need }))
+          .map(x => ({ ...x, eligible: x.cur >= x.need, ratio: x.cur / x.need }))
           .sort((a, b) => b.ratio - a.ratio);
-        const rows = [...heldRows, ...candRows];
-        if (rows.length === 0) return null;
-        const full = abils.length >= 3;
+        // 第44弾: 所持0個でも「使用中のバッジ」節は（空き）だけを並べて出す（devlog/wave44.md
+        // empty state）。枠の存在自体を新規キャラの初日から見せる。「使っていないバッジ」節は
+        // 表示すべき候補が無ければ出さない（並べても情報量が無いため・第39弾の方針を踏襲）。
+        const full = abils.length >= maxSlots;
+        const remaining = Math.max(0, maxSlots - abils.length);
         const swapTarget = ml.uiBadgeSwap && candRows.some(c => c.id === ml.uiBadgeSwap) ? ml.uiBadgeSwap : null;
         return (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
-              <span style={{ color: T.color.accent }}>バッジ</span>
-              <span style={{ color: full ? T.color.accent : T.color.sub }}>{abils.length} / 3 所持</span>
+              <span style={{ color: T.color.accent }}>使用中のバッジ</span>
+              <span style={{ color: full ? T.color.sub : T.color.accent }}>{`残り${remaining}枠`}</span>
             </div>
             <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
-              {rows.map((row, i) => {
+              {heldRows.map((row, i) => {
                 const border = i === 0 ? "none" : `1px solid ${T.color.rule}`;
-                if (row.held) {
-                  const { id, a, isGold, gr, cur, need } = row;
-                  return (
-                    <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                        <span style={{ color: a.bad ? T.color.bad : T.color.text }}>{a.label}</span>
-                        <span style={{ fontSize: T.size.caption, color: isGold ? T.color.accent : T.color.sub, flex: "none" }}>{isGold ? "金" : "銅"}</span>
-                      </div>
-                      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6 }}>
-                        {a.desc}{!isGold && gr && `　　金まで ${cur} / ${need}${gr.unit}`}
-                      </div>
-                      {!isGold && gr && (
-                        <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
-                          <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.accent }} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-                const { id, a, eligible, cur, need, unit } = row;
+                const { id, a, isGold, gr, cur, need } = row;
                 return (
                   <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
-                      <span style={{ fontSize: T.size.body, color: T.color.sub }}>{a.label}</span>
-                      {eligible
-                        ? <ShopBtn onClick={() => full ? setMl(s => ({ ...s, uiBadgeSwap: id })) : mlAcquireBadge(id)}>習得</ShopBtn>
-                        : <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{cur} / {need}{unit}</span>}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
+                      <span style={{ display: "flex", alignItems: "baseline", gap: T.space.xs }}>
+                        <span style={{ color: a.bad ? T.color.bad : T.color.text }}>{a.label}</span>
+                        <span style={{ fontSize: T.size.caption, color: isGold ? T.color.accent : T.color.sub }}>{isGold ? "金" : "銅"}</span>
+                      </span>
+                      <ShopBtn onClick={() => mlUnequipBadge(id)} outline>はずす</ShopBtn>
                     </div>
-                    {!eligible && (
+                    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6 }}>
+                      {a.desc}{!isGold && gr && `　　金まで ${cur} / ${need}${gr.unit}`}
+                    </div>
+                    {!isGold && gr && (
                       <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
-                        <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.action }} />
-                      </div>
-                    )}
-                    {swapTarget === id && (
-                      <div style={{ background: T.color.surfaceUp, padding: T.space.sm, marginTop: T.space.xs }}>
-                        <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>所持は上限（3個）です。外すバッジを選んでください</div>
-                        {abils.filter(hid => ABILITIES[hid]).map(hid => (
-                          <div key={hid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${T.space.xs}px 0` }}>
-                            <span style={{ fontSize: T.size.body, color: T.color.text }}>{ABILITIES[hid].label}</span>
-                            <ShopBtn onClick={() => { mlAcquireBadge(id, hid); setMl(s => ({ ...s, uiBadgeSwap: null })); }} outline>これと入れ替える</ShopBtn>
-                          </div>
-                        ))}
+                        <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.accent }} />
                       </div>
                     )}
                   </div>
                 );
               })}
+              {Array.from({ length: remaining }).map((_, i) => (
+                <div key={`empty${i}`} style={{ padding: `${T.space.sm}px 0`, borderTop: (heldRows.length === 0 && i === 0) ? "none" : `1px solid ${T.color.rule}` }}>
+                  <span style={{ fontSize: T.size.body, color: T.color.sub }}>（空き）</span>
+                </div>
+              ))}
             </div>
+            {candRows.length > 0 && (
+              <>
+                <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>使っていないバッジ</div>
+                <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
+                  {candRows.map((row, i) => {
+                    const border = i === 0 ? "none" : `1px solid ${T.color.rule}`;
+                    const { id, a, eligible, cur, need, unit } = row;
+                    return (
+                      <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
+                          <span style={{ fontSize: T.size.body, color: T.color.sub }}>{a.label}</span>
+                          {eligible
+                            ? <ShopBtn onClick={() => full ? setMl(s => ({ ...s, uiBadgeSwap: id })) : mlAcquireBadge(id)}>付ける</ShopBtn>
+                            : <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{cur} / {need}{unit}</span>}
+                        </div>
+                        {!eligible && (
+                          <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
+                            <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.action }} />
+                          </div>
+                        )}
+                        {swapTarget === id && (
+                          <div style={{ background: T.color.surfaceUp, padding: T.space.sm, marginTop: T.space.xs }}>
+                            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.xs }}>所持は上限（{maxSlots}個）です。はずすバッジを選んでください</div>
+                            {abils.filter(hid => ABILITIES[hid]).map(hid => (
+                              <div key={hid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${T.space.xs}px 0` }}>
+                                <span style={{ fontSize: T.size.body, color: T.color.text }}>{ABILITIES[hid].label}</span>
+                                <ShopBtn onClick={() => { mlAcquireBadge(id, hid); setMl(s => ({ ...s, uiBadgeSwap: null })); }} outline>これと入れ替える</ShopBtn>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </>
         );
       })()}

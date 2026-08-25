@@ -43,7 +43,7 @@ export {
 // v52(第13弾Phase0): 以下、旧本ファイルの実装（成長計算・CP・血統・スタッフ・ライバル演出・実績・
 // 世界ランク・キャリア年表・野望・セーブ入出力・buildSim等）を分割先から再エクスポートする。
 export {
-  upgradeGoldAbilities, ACQUIRE_CONDITIONS, ACQUIRE_REQS, acquireNewAbility, mlAcquireAbility, ABILITY_FILE_KEY,
+  upgradeGoldAbilities, ACQUIRE_CONDITIONS, ACQUIRE_REQS, acquireNewAbility, mlAcquireAbility, mlUnequipAbility, mlBadgeSlots, ABILITY_FILE_KEY,
   loadAbilityFile, saveAbilityFile, noteAbilityDiscovery, bumpRosterAbAll, bumpEquipLv, addProdigyRookie,
   CP_MILESTONES, applyCpMilestones, mlCpPerks, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows,
   cpMilestoneSummary,
