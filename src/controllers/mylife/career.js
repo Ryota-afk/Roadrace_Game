@@ -40,7 +40,7 @@ export function mlChooseTeam(s, offer) {
   const money = s.money + offer.bonus;
   const classIdx = offer.tier != null ? offer.tier : s.classIdx;
   const classChanged = classIdx !== s.classIdx;
-  const races = classChanged ? mlGenRaceCandidates(s.year, s.month, classIdx) : s.races;
+  const races = classChanged ? mlGenRaceCandidates(s.year, s.month, classIdx, s.raceFocus) : s.races;
   const managerEval = s.managerEval;
   const directive = offer.aceGuarantee
     ? MANAGER_DIRECTIVES.ace

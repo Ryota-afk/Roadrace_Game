@@ -10,8 +10,8 @@ import { AbilityGrid, TraitLine } from "../../components/panels.jsx";
 import { PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
 import { fmtRelTime, overall } from "../../core/core.js";
 import { ABILITIES, AB_LABEL, TYPES } from "../../data/abilities.js";
-import { SEG_LABEL } from "../../data/course.js";
-import { DIFFICULTIES } from "../../data/progression.js";
+import { SEG_LABEL, TEMPLATES } from "../../data/course.js";
+import { DIFFICULTIES, DISCIPLINE_KEYS, DISCIPLINES, FAVORS_TO_DISCIPLINE } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { ACQUIRE_REQS, MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGrowthPowRevealed, mlTalentRank } from "../../logic/support.js";
 import { loadMyLifeGame, myLifeSaveInfo } from "../../state/state.js";
@@ -38,7 +38,7 @@ const PickNote = ({ children }) => (
 );
 
 export function renderMyLifeCreateScreens(ctx) {
-  const { askConfirm, ml, mlConfirmBadgeGoals, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlToggleBadgeGoal, mlWrap, setMl, setSuperMode } = ctx;
+  const { askConfirm, ml, mlConfirmBadgeGoals, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlSetRaceFocus, mlToggleBadgeGoal, mlWrap, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
@@ -290,6 +290,9 @@ export function renderMyLifeCreateScreens(ctx) {
     // 変更できる）。母集団はACQUIRE_REQSを持つ15種のうち、脚質のgateを通り体質(iron)を除いたもの
     // （devlog/wave41.md B-1）。D案：全候補の条件を常時表示する（2Kの「全バッジと要件が
     // 最初から見える」に最も近い形）。
+    // 第43弾: 出走計画（案A：目指すバッジのあとに置く。devlog/wave43.md）。選択肢は
+    // DISCIPLINE_KEYSのうち実際にTEMPLATESが対応するもの（flatは対応するテンプレが無いため
+    // 選択肢から除外——既存語彙をそのまま使い新しい言葉は作らない）。
     if (ml.screen === "mylife_badge_goals" && ml.player) {
       const r = ml.player;
       const goalPool = Object.keys(ACQUIRE_REQS).filter(id => id !== "iron" && ABILITIES[id] && (!ACQUIRE_REQS[id].gate || ACQUIRE_REQS[id].gate(r)));
@@ -301,11 +304,13 @@ export function renderMyLifeCreateScreens(ctx) {
         if (id === "autumn_sp") return "山岳の古典《秋の女王》で表彰台";
         return `${q.need}${q.unit}で解放`;
       };
+      const focusOptions = DISCIPLINE_KEYS.filter(k => TEMPLATES.some(t => (FAVORS_TO_DISCIPLINE[t.favors] || "flat") === k));
+      const focus = ml.raceFocus || null;
       return mlWrap(
         <Screen>
           <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>目指す選手像</div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
-            <span style={{ color: T.color.accent }}>目指す選手像</span>
+            <span style={{ color: T.color.accent }}>目指すバッジ</span>
             <span style={{ color: goals.length >= 3 ? T.color.accent : T.color.sub }}>{goals.length} / 3 選択</span>
           </div>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>
@@ -330,6 +335,39 @@ export function renderMyLifeCreateScreens(ctx) {
                 </button>
               );
             })}
+          </div>
+          <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>出走計画</div>
+          <div style={{ background: T.color.surface, marginBottom: T.space.md }}>
+            {focusOptions.map((k, i) => {
+              const selected = focus === k;
+              return (
+                <button key={k} onClick={() => mlSetRaceFocus(k)} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+                  background: selected ? T.color.surfaceUp : "transparent", border: 0,
+                  borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                  color: selected ? T.color.action : T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.body,
+                  padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+                }}>
+                  <span>{DISCIPLINES[k].label}中心</span>
+                  {selected && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+                </button>
+              );
+            })}
+            <button onClick={() => mlSetRaceFocus(null)} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+              background: focus === null ? T.color.surfaceUp : "transparent", border: 0,
+              borderTop: `1px solid ${T.color.rule}`,
+              color: focus === null ? T.color.action : T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.body,
+              padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+            }}>
+              <span>特に決めない</span>
+              {focus === null && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+            </button>
+            {focus && (
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>
+                毎月の候補に{DISCIPLINES[focus].label}のレースが必ず1本入る
+              </div>
+            )}
           </div>
           <PrimaryBtn onClick={mlConfirmBadgeGoals}>この内容でキャリアを始める →</PrimaryBtn>
         </Screen>

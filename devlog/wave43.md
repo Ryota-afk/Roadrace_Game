@@ -151,3 +151,62 @@ gateされたもの）。これでは「クライマーが意図して平坦を�
 6. ホームで計画を変えても**今月の候補が入れ替わらず**、翌月から反映されることを実プレイで確認。
 7. 旧セーブ（`raceFocus`欠落）で**クラッシュせず現状と同一挙動**になることを確認。
 8. `pageerror`ゼロ・**縦線ゼロ**（§8）・**絵文字ゼロ**（§8）。
+
+## 実装結果（2026-08・Sonnet）
+
+**①第42弾の撤回を先に実施**（本題の前提作業）：
+- `src/sim/buildMyLifeSim.js`：`goldAbilities: liveGoldAbilities(player)`を
+  `goldAbilities: player.goldAbilities`へ戻し、`liveGoldAbilities`のimportを削除。
+- `src/screens/mylife/rider.jsx`：状態C（`drifting`）の分岐一式を削除し、第39弾の状態A/B/D/E
+  のみに戻した。`badge.js`からの関連import（`badgeExposureScore`/`badgeReturnLabel`/
+  `EXPOSURE_NORM`/`swapsToRestoreGold`）も削除。
+- `src/domain/mylife/badge.js`：ファイル冒頭に「現在どこからも呼ばれていない」「N=8では
+  分離できないと実測済み」「第43弾の後に計測1〜3を測り直し、分離するようになってから
+  再接続すること」を明記。関数自体は削除せず残した（次弾以降の計測土台）。
+- 実プレイで確認：平坦専門で8戦走っても`山の申し子`が「金」のまま（退行なし）。
+
+**②第43弾（出走計画）の実装**：
+- `src/domain/mylife/race.js`：`mlGenRaceCandidates`に第4引数`focus`を追加。通常月
+  （候補3本）のみ、`FAVORS_TO_DISCIPLINE`が`focus`と一致するTEMPLATEを1本、候補の先頭へ
+  差し替える（候補が複数あれば`rng()`を1回追加消費して選ぶ。`focus`未指定時はRNG消費が
+  一切増えないため出力は不変）。`mlGenRace`は変更なし（他クラス用・シグネチャ据え置き）。
+- `src/state/mylifeState.js`：`ml.raceFocus`（既定`null`）を追加し`ML_SAVE_FIELDS`に登録。
+- `src/domain/mylife/createChar.js`：新キャリア開始時に`raceFocus: null`へリセット。
+- `src/hooks/useMyLifeGame.js`：`mlSetRaceFocus(focus)`ハンドラを新設（既存の`mlSetFocus`＝
+  練習メニューの集中先とは無関係な別概念）。`mlConfirmBadgeGoals`を拡張し、`raceFocus`が
+  設定されていれば初月の`races`をその場で作り直す。
+- `src/controllers/mylife/career.js`・`src/controllers/mylife/month.js`：クラス変動時・
+  年跨ぎ・翌月への3箇所で`mlGenRaceCandidates`に`s.raceFocus`を追加で渡す。
+  `month.js`の他クラス用`mlGenRace`呼び出し（世界ランク集計）は設計どおり無変更。
+- `src/screens/mylife/create.jsx`：目標バッジ宣言画面に「出走計画」セクションを追加
+  （案A：目指すバッジのあと）。選択肢は`DISCIPLINE_KEYS`のうち実際に対応するTEMPLATEが
+  存在するもの（`flat`は自動的に除外される）。併せて画面タイトルとセクション見出しの重複
+  （どちらも「目指す選手像」）を解消し、セクション見出しを「目指すバッジ」に変更。
+- `src/screens/mylife/hub.jsx`：既存の「レース作戦」PressRowの直後に同型の「出走計画」
+  PressRowを追加。開閉状態は`ml.uiRaceFocusOpen`で管理。
+
+**検証**（検証項目1〜8を実施）：
+1. `focus=null`／未指定について、旧実装の再現コードと新実装を年1〜20×月0〜11×クラス0〜3
+   の960通りで突き合わせ、**差分ゼロ**を確認。
+2. 4適性（climb/hill/sprint/solo）それぞれについて、通常月570通り全てで**候補に必ず1本
+   その適性が含まれる**ことを確認。
+3. 看板レース月（候補1本の月）について、`focus`の値によらず**出力が完全に不変**であることを
+   全年月で確認。
+4. `month.js`の他クラス用`mlGenRace`呼び出しは元々`focus`を渡さない設計のため、対象外
+   （偏りが生じないことは自明——コード上`raceFocus`を一切参照しない）。
+5. Playwrightで実際にキャラを作成し「独走（TT）中心」を選択、初月の`races`にTT区間
+   （個人TT）が含まれることを確認。
+6. Playwrightでホームから「山岳中心」に変更した直後、`ml.races`が変更前と**完全一致**
+   （入れ替わらない）ことを確認。その後「完全休養」で翌月（通常月）へ進み、新しい候補に
+   宣言した適性（TT）が含まれることを確認。
+7. `raceFocus`フィールドを削除した旧セーブ相当を読み込ませ、クラッシュせず
+   「特に決めない」表示にフォールバックすることを確認。
+8. `pageerror`はテスト全体を通じて0件（無関係な404リソースエラーを除く）。
+   縦線・絵文字は追加していない（既存の`PressRow`/アコーディオン構造を流用したため）。
+
+**やらなかったこと（設計どおり）**：退行の再導入・看板レース月への選択肢追加・コーステンプレ
+追加・バッジ所持上限の撤廃。
+
+**次にやること**：devlog/wave42.md末尾の計測1〜3を、この弾の実装後の状態で測り直す。
+N=8で無頓着/狙うの分布が分離するようになったかを確認し、分離すれば退行を再検討する
+（Opus・計測担当）。

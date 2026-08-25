@@ -259,6 +259,7 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     houseLv: -1, carLv: -1,
     coaches: {}, debtMonths: 0, // 第36弾: 前キャリアの状態を持ち越さない
     badgeGoals: [], // 第41弾: 前キャリアの目標を持ち越さない
+    raceFocus: null, // 第43弾: 前キャリアの出走計画を持ち越さない
     rival, rivalRecord: { meetings: 0, wins: 0, losses: 0 },
     rival2, rivalRecord2: { meetings: 0, wins: 0, losses: 0 },
     flags: { ...s.flags, mentorName, mentorActive: true, master: master ? master.name : null },

@@ -146,6 +146,9 @@ export function initMyLife() {
     coaches: {}, debtMonths: 0,
     // 第41弾: 目標バッジ宣言（キャラ作成時に選ぶ、強制力・ボーナスの無い「しおり」・最大3個）
     badgeGoals: [],
+    // 第43弾: 出走計画。climb/hill/sprint/solo/null（未指定）。宣言すると通常月の候補に
+    // その適性のレースが必ず1本入る（devlog/wave43.md）
+    raceFocus: null,
     difficulty: "easy", mlDiffChoice: "easy", // v38(#6): 難易度
     // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」。デビュー時にcpShopMylifePerks()から
     // 一度だけ適用される（既定は無購入＝0）。
@@ -178,6 +181,7 @@ const ML_SAVE_FIELDS = [
   "coaches", // 第36弾: 専門コーチの段階（能力キーごとのLv、0=未雇用）
   "debtMonths", // 第36弾: 連続赤字月数（赤字ペナルティの段階判定に使う）
   "badgeGoals", // 第41弾: 目標バッジ宣言（強制力・ボーナスの無い「しおり」）
+  "raceFocus", // 第43弾: 出走計画（宣言した適性が通常月の候補に必ず1本入る）
 ];
 
 export function saveMyLife(ml) {

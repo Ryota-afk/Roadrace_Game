@@ -12,7 +12,8 @@ import { RiderPortrait } from "../../components/RiderPortrait.jsx";
 import { overall } from "../../core/core.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
 import { AB_KEYS, AB_LABEL, ABILITIES, POW, TYPES } from "../../data/abilities.js";
-import { MONTHS } from "../../data/course.js";
+import { MONTHS, TEMPLATES } from "../../data/course.js";
+import { DISCIPLINES } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { Item, Prose, PressRow, QuietBtn, Screen, Section, Tag, TypeChip } from "../../components/kit.jsx";
 import { ACQUIRE_REQS, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, disciplineScore, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
@@ -55,7 +56,7 @@ const StatRow = ({ name, nameColor, sub, badge, yrWins, wins, podiums, bestRank,
 };
 
 export function renderMyLifeHubScreen(ctx) {
-  const { askConfirm, ml, mlAdvanceMonth, mlBecomeMentor, mlGenRace, mlSelectRace, mlSetFocus, mlStartLastRace, mlStartRace, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode } = ctx;
+  const { askConfirm, ml, mlAdvanceMonth, mlBecomeMentor, mlGenRace, mlSelectRace, mlSetFocus, mlSetRaceFocus, mlStartLastRace, mlStartRace, mlTriggerSponsorGig, mlUseStockConfirm, mlWrap, openRename, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_main" && ml.player) {
       const r = ml.player;
       const race = mlSelectedRace(ml);
@@ -327,6 +328,53 @@ export function renderMyLifeHubScreen(ctx) {
               </div>
             </div>
           )}
+
+          {/* 第43弾: 出走計画。宣言した適性のレースが通常月の候補に必ず1本入る（devlog/wave43.md）。
+              「レース作戦」と同じアコーディオン構造にして、作成画面と同じ見え方に揃える。
+              変更は翌月の候補から効く（今見ている候補は入れ替わらない）。 */}
+          {(() => {
+            const focusOptions = DISCIPLINE_KEYS.filter(k => TEMPLATES.some(t => (FAVORS_TO_DISCIPLINE[t.favors] || "flat") === k));
+            const focus = ml.raceFocus || null;
+            const focusLabel = focus ? `${DISCIPLINES[focus].label}中心` : "特に決めない";
+            return (
+              <>
+                <PressRow label="出走計画" value={focusLabel}
+                  onClick={() => setMl(s => ({ ...s, uiRaceFocusOpen: !s.uiRaceFocusOpen }))} />
+                {ml.uiRaceFocusOpen && (
+                  <div style={{ background: T.color.surface }}>
+                    {focusOptions.map((k, i) => {
+                      const on = focus === k;
+                      return (
+                        <button key={k} onClick={() => mlSetRaceFocus(k)} style={{
+                          display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+                          background: on ? T.color.surfaceUp : "none", border: 0,
+                          borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                          color: on ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+                          padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+                        }}>
+                          <span>{DISCIPLINES[k].label}中心</span>
+                          {on && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+                        </button>
+                      );
+                    })}
+                    <button onClick={() => mlSetRaceFocus(null)} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+                      background: focus === null ? T.color.surfaceUp : "none", border: 0,
+                      borderTop: `1px solid ${T.color.rule}`,
+                      color: focus === null ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+                      padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
+                    }}>
+                      <span>特に決めない</span>
+                      {focus === null && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+                    </button>
+                    <div style={{ fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>
+                      {focus ? `毎月の候補に${DISCIPLINES[focus].label}のレースが必ず1本入る。変更は翌月の候補から効く` : "毎月の候補は成り行きで決まる"}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* 第32弾: 練習メニュー。こちらも「今月どう過ごすか」の決断なのでホームに残すが、
               作戦と同じくPressRow＋アコーディオンへ圧縮した。 */}

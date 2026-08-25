@@ -6,7 +6,7 @@ import { T } from "../data/theme.js";
 import { ML_STOCK_ITEMS, computeMyLifeClearPoints, noteAbilityDiscovery, persistCourseRecord, protegeState } from "../logic/support.js";
 import { mlRecordLegend } from "../breeding/breeding.js";
 import { buildMyLifeSim, computeAchievements, advanceWorldYear, initMyLife, loadMeta, recordTitle, saveMeta, saveMyLife } from "../state/state.js";
-import { mlGenRace, mlSelectedRace } from "../domain/mylife/race.js";
+import { mlGenRace, mlGenRaceCandidates, mlSelectedRace } from "../domain/mylife/race.js";
 import { mlCreateChar as domainMlCreateChar } from "../domain/mylife/createChar.js";
 import { resolveNationalRole, buildLastRaceMeta } from "../controllers/mylife/raceStart.js";
 import { mlAdvanceMonth as mmAdvanceMonth } from "../controllers/mylife/month.js";
@@ -151,7 +151,19 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     if (goals.length < 3) return { ...s, badgeGoals: [...goals, id] };
     return { ...s, badgeGoals: [...goals.slice(1), id] };
   });
-  const mlConfirmBadgeGoals = () => setMl(s => ({ ...s, screen: "mylife_main" }));
+  // 第43弾: 出走計画（climb/hill/sprint/solo/null）。宣言すると通常月の候補にその適性が
+  // 必ず1本入る（devlog/wave43.md）。ホームの「レース作戦」と同じアコーディオンで
+  // 選び直せる（mlSetFocusとは無関係の別概念——あちらは練習メニューの集中先）。
+  const mlSetRaceFocus = (focus) => setMl(s => ({ ...s, raceFocus: focus }));
+  const mlConfirmBadgeGoals = () => setMl(s => {
+    if (!s.raceFocus) return { ...s, screen: "mylife_main" };
+    // まだ1戦も走っていない初月のみ、選んだ出走計画を反映して候補を作り直す
+    return {
+      ...s, screen: "mylife_main",
+      races: mlGenRaceCandidates(s.year, s.month, s.classIdx, s.raceFocus),
+      sel: { ...s.sel, raceId: null },
+    };
+  });
   const mlSetFocus = (key) => setMl(s => mshSetFocus(s, key));
   // v41(§Step7第9弾): メンター就任・弟子イベント・ライバル対話は controllers/mylife/event.js
   // （mlResolveProtegeEvent/mlResolveRivalScene/mlRivalSceneContinue）と
@@ -262,7 +274,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   return {
     ml, setMl, mlCreateArgsRef, ML_MILESTONE_LABEL,
     mlCreateChar, mlRerollCandidate, mlConfirmCandidate, mlSetFocus,
-    mlToggleBadgeGoal, mlConfirmBadgeGoals, mlSelectRace,
+    mlToggleBadgeGoal, mlConfirmBadgeGoals, mlSelectRace, mlSetRaceFocus,
     mlBecomeMentor, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue,
     mlStartRace, mlStartLastRace, mlLastRaceFinish, mlRaceFinish, mlAdvanceMonth,
     mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlRetireAdviceAccept,
