@@ -28,6 +28,26 @@ export function countWins(r) { return (r.raceLog || []).filter(e => e.rank === 1
 
 export function countRoleUses(r, pred) { return (r.raceLog || []).filter(pred).length; }
 
+// 第46弾: raceLogのsegMix（第40弾で記録済み・既存セーブのレース履歴にも遡って効く）から
+// レースの主要地形を1つに分類する。9種（岳人・鉄脚の巡航機関等）の取得条件が使う軸。
+// 実測（devlog/wave46.md）で全6テンプレートが例外なくいずれかに分類されることを確認済み。
+export const TERRAINS = ["climb", "flat", "hill", "solo"];
+export function terrainOfMix(mix) {
+  if (!mix) return null;
+  if ((mix.tt || 0) >= 0.5) return "solo";
+  if ((mix.climb || 0) + (mix.mtn || 0) >= 0.5) return "climb";
+  if ((mix.hill || 0) >= 0.5) return "hill";
+  if ((mix.flat || 0) >= 0.6) return "flat";
+  return null;
+}
+export function terrainCount(r, terrain) { return (r.raceLog || []).filter(e => terrainOfMix(e.segMix) === terrain).length; }
+export function terrainPodium(r, terrain, rankMax) { return (r.raceLog || []).filter(e => terrainOfMix(e.segMix) === terrain && e.rank <= rankMax).length; }
+export function terrainWin(r, terrains) { return (r.raceLog || []).filter(e => terrains.includes(terrainOfMix(e.segMix)) && e.rank === 1).length; }
+// 「全地形で満遍なく」を表す軸。4地形の最小値＝一番手薄な地形が足を引っ張る（1地形に
+// 偏った専門選手は届きにくく、複数地形をこなす万能選手ほど伸びる）。
+export function allTerrainMin(r, fn) { return Math.min(...TERRAINS.map(t => fn(r, t))); }
+export function bigStagePodium(r, rankMax) { return (r.raceLog || []).filter(e => (e.monument || /世界選手権|オリンピック/.test(e.name || "")) && e.rank <= rankMax).length; }
+
 // 第39弾: r=>booleanの不透明な条件をgate/cur/need/unitへ構造化し、進捗の分子を取り出せるように
 // した（マイライフのバッジ進捗UIが使う）。GOLD_CONDITIONSは後方互換のため従来どおり
 // {id: r=>boolean} 形で導出する（breeding.js・panels.jsxが存在チェック＋呼び出しに使用中）。
@@ -45,29 +65,33 @@ export const GOLD_REQS = {
   // v28: 新特殊能力の金特条件
   finisher:    { cur: countWins, need: 8, unit: "勝" },
   engine:      { cur: r => (r.raceLog || []).length, need: 30, unit: "回" },
-  allrounder_sp: { cur: countWins, need: 6, unit: "勝" },
+  // 第46弾: 万能さ＝全4地形で入賞できる選手のみ伸びる（1地形専門では頭打ち。devlog/wave46.md）
+  allrounder_sp: { cur: r => allTerrainMin(r, (rr, t) => terrainPodium(rr, t, 5)), need: 6, unit: "回" },
   // v34(C-2): 各モニュメント（古典）を制覇すると、その古典専用の適性が金特に進化する（脚質別）
   pave_sp:     { cur: countMonumentPodium("pave", 1), need: 1, unit: "" },
   ardennes_sp: { cur: countMonumentPodium("ardennes", 1), need: 1, unit: "" },
   autumn_sp:   { cur: countMonumentPodium("autumn", 1), need: 1, unit: "" },
-  // v37: 新特能の金特条件（実績で金特化）。金特効果は sim 側（hasGoldAbility）で配線済み。
-  kicker:      { cur: countWins, need: 8, unit: "勝" },                                    // 差し脚で勝ち星を量産
-  climbengine: { gate: r => r.type === "CLM", cur: r => (r.raceLog || []).length, need: 20, unit: "回" }, // 山を走り込んだクライマー
-  rouleur:     { cur: r => countRoleUses(r, e => e.role === "breakaway"), need: 5, unit: "回" }, // 逃げを打ち続けた鉄脚
-  grinder:     { cur: r => (r.raceLog || []).length, need: 25, unit: "回" },               // 幾多のレースを完走した粘り
-  sponge:      { cur: r => (r.raceLog || []).length, need: 20, unit: "回" },               // 場数から学び続けた
-  // v37(第2弾)
-  allclimber:  { gate: r => r.type === "CLM", cur: countWins, need: 6, unit: "勝" },        // 山を制した岳人
-  bigheart:    { cur: countWins, need: 10, unit: "勝" },                                   // 大舞台を勝ち抜いた
-  diesel:      { cur: r => (r.raceLog || []).length, need: 30, unit: "回" },               // 走り込んだ鉄の心肺
+  // 第46弾: 「そのバッジらしい遊び方」の地形軸へ全面的に置き換え（旧軸は総出走数・総勝利数等の
+  // 脚質非依存カウンタで、専門化してもしなくても同じ速さで埋まっていた。devlog/wave46.md）。
+  kicker:      { cur: r => terrainWin(r, ["flat", "hill"]), need: 10, unit: "勝" },        // 平坦・丘陵で勝ち切る差し脚
+  climbengine: { cur: r => terrainPodium(r, "climb", 5), need: 16, unit: "回" },           // 山岳で入賞を重ねた山の吸血鬼
+  rouleur:     { cur: r => terrainCount(r, "flat"), need: 45, unit: "回" },                // 平坦を走り込んだ鉄脚
+  grinder:     { cur: r => terrainCount(r, "hill"), need: 45, unit: "回" },                // 丘陵を走り込んだ食らいつく脚
+  sponge:      { cur: r => allTerrainMin(r, terrainCount), need: 14, unit: "回" },         // 全地形をまんべんなく経験した
+  allclimber:  { cur: r => terrainCount(r, "climb"), need: 45, unit: "回" },               // 山岳を制した岳人
+  bigheart:    { cur: r => bigStagePodium(r, 3), need: 10, unit: "回" },                   // 大舞台の表彰台に立ち続けた
+  diesel:      { cur: r => terrainCount(r, "solo"), need: 25, unit: "回" },                // 独走を重ねた鉄の心肺
 };
-// 第45弾: バッジを銅/銀/金/虹の4段階へ拡張。銅（習得条件・ACQUIRE_REQS）と金（GOLD_REQS）の
-// 値は一切動かさない（既存セーブのプレイヤーを弱くしないため）。銀を間に挟み、虹を上に足す。
-// devlog/wave44.md「梯子（銅→銀→金→虹）」参照。
-// - 自然な梯子10種（銅の実績条件がACQUIRE_REQSに存在）：silverNeed=round((銅+金)/2)
-// - 配合限定9種（ACQUIRE_REQSに銅の実績条件が無い＝配合でしか手に入らない）：
-//   silverNeed=round(金×0.6)
-// - 全19種共通：rainbowNeed=金×2
+// 第45弾: バッジを銅/銀/金/虹の4段階へ拡張。銀を間に挟み、虹を上に足す。devlog/wave44.md
+// 「梯子（銅→銀→金→虹）」参照。
+// - 自然な梯子10種（mount〜engine。銅=ACQUIRE_REQS・金=GOLD_REQS。値は一切動かしていない）：
+//   silverNeed=round((銅+金)/2)・rainbowNeed=金×2
+// 第46弾: 残る9種（allrounder_sp〜diesel）は元々「銅の取得条件が無く配合でしか手に入らない」
+// ためsilverNeed=round(金×0.6)の仮の式を置いていたが、そもそも銅・金とも総出走数／総勝利数
+// という脚質非依存の軸で、専門化してもしなくても同じ速さで埋まり「バッジで個性を出す」の
+// 母集団になっていなかった（devlog/wave46.md）。銅・金の軸自体を地形別（山岳/平坦/丘陵/独走）
+// のraceLog実績へ全面的に置き換え、銀・虹もその新しい軸の上で個別に設計した値（公式には
+// 従わない。到達可能性を実測した上での明示的な設計値）。
 // 石畳巧者/アルデンヌの狼/秋の女王（表彰台の二値）・鉄人/大舞台に強い（金条件なし）は
 // 4段階化の対象外＝このテーブルに載せない（従来どおり銅/金の2段階のまま）。
 export const TIER_LADDER = {
@@ -81,15 +105,15 @@ export const TIER_LADDER = {
   domestique:    { silverNeed: 7,  rainbowNeed: 16 },
   finisher:      { silverNeed: 7,  rainbowNeed: 16 },
   engine:        { silverNeed: 25, rainbowNeed: 60 },
-  allrounder_sp: { silverNeed: 4,  rainbowNeed: 12 },
-  kicker:        { silverNeed: 5,  rainbowNeed: 16 },
-  climbengine:   { silverNeed: 12, rainbowNeed: 40 },
-  rouleur:       { silverNeed: 3,  rainbowNeed: 10 },
-  grinder:       { silverNeed: 15, rainbowNeed: 50 },
-  sponge:        { silverNeed: 12, rainbowNeed: 40 },
-  allclimber:    { silverNeed: 4,  rainbowNeed: 12 },
-  bigheart:      { silverNeed: 6,  rainbowNeed: 20 },
-  diesel:        { silverNeed: 18, rainbowNeed: 60 },
+  allrounder_sp: { silverNeed: 3,  rainbowNeed: 10 },
+  kicker:        { silverNeed: 5,  rainbowNeed: 18 },
+  climbengine:   { silverNeed: 8,  rainbowNeed: 28 },
+  rouleur:       { silverNeed: 25, rainbowNeed: 70 },
+  grinder:       { silverNeed: 25, rainbowNeed: 70 },
+  sponge:        { silverNeed: 8,  rainbowNeed: 22 },
+  allclimber:    { silverNeed: 25, rainbowNeed: 70 },
+  bigheart:      { silverNeed: 5,  rainbowNeed: 18 },
+  diesel:        { silverNeed: 10, rainbowNeed: 50 },
 };
 
 export const TIER_ORDER = ["bronze", "silver", "gold", "rainbow"];

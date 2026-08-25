@@ -1,5 +1,5 @@
 // クリアポイント(CP)・アビリティ習得（メタ進行）。第13弾Phase0でlogic/support.jsから分離。
-import { ASSIST_ROLES, GOLD_CONDITIONS, GOLD_REQS, TIER_LADDER, countRoleUses, countWins, mulberry, newRider } from "../../core/core.js";
+import { ASSIST_ROLES, GOLD_CONDITIONS, GOLD_REQS, TIER_LADDER, allTerrainMin, bigStagePodium, countRoleUses, countWins, mulberry, newRider, terrainCount, terrainPodium, terrainWin } from "../../core/core.js";
 import { AB_KEYS } from "../../data/abilities.js";
 import { UNLOCK_TEMPLATES } from "../../data/course.js";
 import { MLCP_DIFF_MUL, ML_CP_MILESTONES } from "../../data/economy.js";
@@ -51,6 +51,19 @@ export const ACQUIRE_REQS = {
   pave_sp:     { cur: podiumIn("pave", 3), need: 1, unit: "" },
   ardennes_sp: { cur: podiumIn("ardennes", 3), need: 1, unit: "" },
   autumn_sp:   { cur: podiumIn("autumn", 3), need: 1, unit: "" },
+  // 第46弾: 元々「銅の取得条件が無く配合でしか手に入らない」9種に、地形別（raceLogの
+  // segMixから分類・第40弾で記録済みの過去レースにも遡って効く）の取得経路を新設した。
+  // 軸はGOLD_REQSの同じ種と揃える（cur関数を共有し、needだけ銅の値に差し替え）。
+  // devlog/wave46.md参照。
+  allrounder_sp: { cur: r => allTerrainMin(r, (rr, t) => terrainPodium(rr, t, 5)), need: 1, unit: "回" },
+  kicker:        { cur: r => terrainWin(r, ["flat", "hill"]), need: 2, unit: "勝" },
+  climbengine:   { cur: r => terrainPodium(r, "climb", 5), need: 3, unit: "回" },
+  rouleur:       { cur: r => terrainCount(r, "flat"), need: 10, unit: "回" },
+  grinder:       { cur: r => terrainCount(r, "hill"), need: 10, unit: "回" },
+  sponge:        { cur: r => allTerrainMin(r, terrainCount), need: 3, unit: "回" },
+  allclimber:    { cur: r => terrainCount(r, "climb"), need: 10, unit: "回" },
+  bigheart:      { cur: r => bigStagePodium(r, 3), need: 2, unit: "回" },
+  diesel:        { cur: r => terrainCount(r, "solo"), need: 3, unit: "回" },
 };
 export const ACQUIRE_CONDITIONS = Object.fromEntries(
   Object.entries(ACQUIRE_REQS).map(([id, q]) => [id, r => (!q.gate || q.gate(r)) && q.cur(r) >= q.need])
