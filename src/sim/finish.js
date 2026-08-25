@@ -1,6 +1,14 @@
 // レースの決着処理（判断カードの再計算・フィニッシュクラスタ・チームTT・順位確定）。
 // sim/race.jsから分離（第16弾D）。
 import { RACE_MOVES, TICK_SEC, capExcessiveGaps, simulateTicks } from "./ticks.js";
+import { badgeSegmentBonus } from "./effects.js";
+
+// 第50弾: 決着（finishAbility）にバッジの区間ボーナスを合流させる際の重み。
+// 実測（devlog/wave49.md・wave50.md）で、同じ量のボーナスでも区間限定で与えると
+// 素の能力に足すより遥かに効きが弱いと判明したため、決着スコアに乗せる際は
+// このKで底上げする。値は実装後にK=1/2/3/4を同一シードで実測して確定する
+// （現状は暫定値。バランス確定まではここを直接書き換えて測る）。
+export const FINISH_BADGE_K = 1;
 
 // v39(A案): レースを途中tickから「フォーク」して再計算する。注目選手にプレイヤーの選択(moveId)を
 // 適用し、fromTick以降の履歴（posHist等）と着順を作り直す。posHist[0..fromTick]はそのまま残るので、
@@ -44,10 +52,15 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
 // 反映されにくかった。フィニッシュ区間の地形に応じた「決め所の力」で決着させる。
 export function finishAbility(en, segType) {
   const sp = en.sprint || 0, cl = en.climb || 0, fl = en.flat || 0, so = en.solo || 0;
-  if (segType === "climb" || segType === "mtn") return cl * 0.75 + sp * 0.25; // 山頂決着＝登坂主体
-  if (segType === "hill") return sp * 0.45 + cl * 0.35 + fl * 0.20;           // 丘のパンチ力
-  if (segType === "tt") return so * 0.6 + fl * 0.4;                          // 独走決着
-  return sp; // 平坦・スプリント区間の集団ゴール＝従来どおりスプリント
+  let base;
+  if (segType === "climb" || segType === "mtn") base = cl * 0.75 + sp * 0.25; // 山頂決着＝登坂主体
+  else if (segType === "hill") base = sp * 0.45 + cl * 0.35 + fl * 0.20;      // 丘のパンチ力
+  else if (segType === "tt") base = so * 0.6 + fl * 0.4;                     // 独走決着
+  else base = sp; // 平坦・スプリント区間の集団ゴール＝従来どおりスプリント
+  // 第50弾: バッジ由来の区間ボーナスを決着にも合流させる（devlog/wave50.md）。
+  // 従来はここでbadgeSegmentBonusが一切参照されておらず、僅差ゴール集団
+  // （実測で約半分のレース）ではバッジが無かったことになっていた。
+  return base + badgeSegmentBonus(segType, en) * FINISH_BADGE_K;
 }
 
 export function resolveFinishClusters(entrants, finishSegType) {

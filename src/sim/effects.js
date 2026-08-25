@@ -123,13 +123,12 @@ export function typeAffinityBonus(type, segType) {
   return (TYPES[type]?.affinity?.[segType]) || 0;
 }
 
-export function segmentAbility(segType, e, steepness) {
-  let ab;
-  if (segType === "sprint") ab = e.sprint;
-  else if (segType === "tt") ab = e.solo * 0.6 + e.flat * 0.4;
-  else if (segType === "mtn") ab = e.climb * 0.7 + e.sprint * 0.3;
-  else { const w = climbWeightFor(segType, steepness); ab = e.flat * (1 - w) + e.climb * w; }
-  ab += typeAffinityBonus(e.type, segType);
+// 第50弾: バッジ由来の区間別ボーナスだけを切り出した（地形の基礎値・脚質相性は含まない）。
+// segmentAbility()に合流させるのはもちろん、sim/finish.jsのfinishAbility()（僅差ゴール集団の
+// 決着）にも同じ値を合流させる——決着ロジックが素の能力しか見ておらずバッジを無視していた
+// 断絶を塞ぐための切り出し（devlog/wave50.md参照）。計算は必ずここ1箇所に保つ。
+export function badgeSegmentBonus(segType, e) {
+  let ab = 0;
   // v15: 特殊能力による区間タイプ別の能力補正（第45弾: 銅/銀/金/虹の4段階）
   if (hasAbility(e, "mount") && ["climb", "mtn"].includes(segType)) ab += tierValue(4, 8, badgeTier(e, "mount"));
   if (hasAbility(e, "puncheur") && segType === "hill") ab += tierValue(4, 8, badgeTier(e, "puncheur"));
@@ -147,5 +146,16 @@ export function segmentAbility(segType, e, steepness) {
   // v37(第2弾): 岳人＝丘/登/山で+4、重量級（悪特性）＝登/山で-4（第45弾: 4段階化）
   if (hasAbility(e, "allclimber") && ["hill", "climb", "mtn"].includes(segType)) ab += tierValue(4, 8, badgeTier(e, "allclimber"));
   if (hasAbility(e, "heavy") && ["climb", "mtn"].includes(segType)) ab -= 4;
+  return ab;
+}
+
+export function segmentAbility(segType, e, steepness) {
+  let ab;
+  if (segType === "sprint") ab = e.sprint;
+  else if (segType === "tt") ab = e.solo * 0.6 + e.flat * 0.4;
+  else if (segType === "mtn") ab = e.climb * 0.7 + e.sprint * 0.3;
+  else { const w = climbWeightFor(segType, steepness); ab = e.flat * (1 - w) + e.climb * w; }
+  ab += typeAffinityBonus(e.type, segType);
+  ab += badgeSegmentBonus(segType, e);
   return ab;
 }

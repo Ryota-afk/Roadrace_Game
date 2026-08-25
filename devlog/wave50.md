@@ -108,3 +108,32 @@ export function finishAbility(en, segType) {
 4. 悪特性（`heavy`）持ちは山頂決着で`finishAbility`が下がること。
 5. `K = 1.0/2.0/3.0/4.0`での勝率を同一シードで実測し、銅→虹の差を表にする（Opus）。
 6. `pageerror`ゼロ・ビルド成功・第45〜48弾の既存検証スクリプトが全て通ること。
+
+## 実装結果（2026-08・Sonnet）
+
+**`src/sim/effects.js`**
+- `badgeSegmentBonus(segType, e)`を新設。`segmentAbility`内にあったバッジ群（`mount`〜`heavy`
+  の12種）をそのまま移し、`segmentAbility`は`地形基礎+affinity+badgeSegmentBonus(...)`という
+  形に変更（計算は1箇所のまま・数値は不変）。
+
+**`src/sim/finish.js`**
+- `effects.js`から`badgeSegmentBonus`をimport。`FINISH_BADGE_K = 1`（暫定値。実測して
+  Opusが確定する前提で`export const`にした）を新設。`finishAbility`の戻り値へ
+  `+ badgeSegmentBonus(segType, en) * FINISH_BADGE_K`を追加（バッジ無しの選手は`+0`＝無影響）。
+
+**検証**（Node・Playwright実機）
+1. 5種の異なる特能構成×全6区間タイプで「地形基礎+affinity+badgeSegmentBonus」を手計算し、
+   `segmentAbility`の実際の戻り値と完全一致することを確認（切り出しによる回帰ゼロ）。
+2. バッジ無しの選手で`finishAbility`（climb/hill/tt/sprintの4区間）が現行の計算式と
+   完全一致することを確認。
+3. `mount`虹持ち選手の山頂決着スコアが77.25、持たない選手が66.25で、期待どおり押し上げ。
+4. `heavy`（悪特性）持ちの山頂決着スコアが62.25で、持たない選手（66.25）より低いことを確認。
+5. 第45〜48弾の既存検証スクリプト（`w45_verify1/2/3`・`w46_verify`・`w47_verify`・
+   `w47_createchar`・`w48_verify`）を全て再実行し、回帰が無いことを確認。
+6. Playwright実機：マイライフのレースを1本、判断カード選択→スキップ機能で最後まで走らせ、
+   スタートリスト（32名参加）→中継→結果画面（11位/32人中）まで到達。`pageerror`ゼロ
+   （コンソールの404はfavicon等の無関係なリソースで実害なし）。`npx vite build`成功。
+
+**やらなかったこと（設計どおり）**：`FINISH_BADGE_K`の確定値の実測はOpusの担当
+（devlog/wave49.mdの3点固定＝`Math.random`/`Date.now`/`ridState.value`が必須）。
+tick側（`segmentAbility`の値自体）は無変更。専用の相乗テーブルは作っていない。
