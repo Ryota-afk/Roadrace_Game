@@ -62,3 +62,8 @@ export const T = {
   radius: 0,
 };
 
+// 虹（大勝負／バッジ最上位段階）は特定の意味色1つに割り当てられない「特別枠」の演出色なので、
+// T.color（accent/action/good/bad）とは別枠の固定パレットとして持つ。第9弾（DecisionCard判断
+// カードのレア度）と第45弾（バッジ最上位段階「虹」のマーク）が共有する（devlog/wave44.md）。
+export const RAINBOW_STOPS = ["#e88bb0", "#F2C94C", "#7FB069", "#4f8fe8", "#A76ADC"];
+

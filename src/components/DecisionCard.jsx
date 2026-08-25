@@ -4,12 +4,8 @@
 // 第13弾Phase3-E：kit.jsxへ移行。争点E2・案A「文字のみ」——選択肢アイコン（約15種の絵文字）を
 // 撤去し文言だけに。レア度発光と「脚の残り」バーはデータ層の情報として維持（詳細はdevlog/wave13.md）。
 import React from "react";
-import { FONT_DOT, T } from "../data/theme.js";
+import { FONT_DOT, RAINBOW_STOPS, T } from "../data/theme.js";
 import { moveEdge } from "../domain/shared/moveEdge.js";
-
-// 虹（大勝負）は特定の意味色1つに割り当てられない「特別枠」の演出色なので、
-// T.color（accent/action/good/bad）とは別枠の固定パレットを使う（COND_COLOR等と同じ扱い）。
-const RAINBOW_STOPS = ["#e88bb0", "#F2C94C", "#7FB069", "#4f8fe8", "#A76ADC"];
 
 // v39.10以来この画面の演出は一貫してSVGのanimate（CSSの@keyframesは未使用）。
 // カードの光り方もこれに揃える：出現の一瞬だけスイープ光が走り、虹／金は縁の発光が

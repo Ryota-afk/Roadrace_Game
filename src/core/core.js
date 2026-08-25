@@ -61,6 +61,64 @@ export const GOLD_REQS = {
   bigheart:    { cur: countWins, need: 10, unit: "勝" },                                   // 大舞台を勝ち抜いた
   diesel:      { cur: r => (r.raceLog || []).length, need: 30, unit: "回" },               // 走り込んだ鉄の心肺
 };
+// 第45弾: バッジを銅/銀/金/虹の4段階へ拡張。銅（習得条件・ACQUIRE_REQS）と金（GOLD_REQS）の
+// 値は一切動かさない（既存セーブのプレイヤーを弱くしないため）。銀を間に挟み、虹を上に足す。
+// devlog/wave44.md「梯子（銅→銀→金→虹）」参照。
+// - 自然な梯子10種（銅の実績条件がACQUIRE_REQSに存在）：silverNeed=round((銅+金)/2)
+// - 配合限定9種（ACQUIRE_REQSに銅の実績条件が無い＝配合でしか手に入らない）：
+//   silverNeed=round(金×0.6)
+// - 全19種共通：rainbowNeed=金×2
+// 石畳巧者/アルデンヌの狼/秋の女王（表彰台の二値）・鉄人/大舞台に強い（金条件なし）は
+// 4段階化の対象外＝このテーブルに載せない（従来どおり銅/金の2段階のまま）。
+export const TIER_LADDER = {
+  mount:         { silverNeed: 4,  rainbowNeed: 10 },
+  puncheur:      { silverNeed: 4,  rainbowNeed: 10 },
+  flatlander:    { silverNeed: 4,  rainbowNeed: 10 },
+  sprinter_sp:   { silverNeed: 4,  rainbowNeed: 10 },
+  soloist:       { silverNeed: 4,  rainbowNeed: 10 },
+  closer:        { silverNeed: 6,  rainbowNeed: 16 },
+  escape:        { silverNeed: 4,  rainbowNeed: 10 },
+  domestique:    { silverNeed: 7,  rainbowNeed: 16 },
+  finisher:      { silverNeed: 7,  rainbowNeed: 16 },
+  engine:        { silverNeed: 25, rainbowNeed: 60 },
+  allrounder_sp: { silverNeed: 4,  rainbowNeed: 12 },
+  kicker:        { silverNeed: 5,  rainbowNeed: 16 },
+  climbengine:   { silverNeed: 12, rainbowNeed: 40 },
+  rouleur:       { silverNeed: 3,  rainbowNeed: 10 },
+  grinder:       { silverNeed: 15, rainbowNeed: 50 },
+  sponge:        { silverNeed: 12, rainbowNeed: 40 },
+  allclimber:    { silverNeed: 4,  rainbowNeed: 12 },
+  bigheart:      { silverNeed: 6,  rainbowNeed: 20 },
+  diesel:        { silverNeed: 18, rainbowNeed: 60 },
+};
+
+export const TIER_ORDER = ["bronze", "silver", "gold", "rainbow"];
+export const TIER_LABEL = { bronze: "銅", silver: "銀", gold: "金", rainbow: "虹" };
+
+// そのバッジの現在の段階（"bronze"|"silver"|"gold"|"rainbow"）。未所持ならnull。
+// TIER_LADDER未登録（2段階のまま据え置きの種）はhasGoldAbilityの真偽だけで銅/金を返す
+// （従来どおりの後方互換）。段階は一度到達したら永久に落ちない
+// （r.silverAbilities/r.goldAbilities/r.rainbowAbilitiesはcp.jsのupgradeGoldAbilitiesが
+// 加算のみで更新する。第42/43弾で確定した「退行は入れない」を4段階でも踏襲）。
+export function badgeTier(r, id) {
+  if (!hasAbility(r, id)) return null;
+  if (!TIER_LADDER[id]) return hasGoldAbility(r, id) ? "gold" : "bronze";
+  if (r && r.rainbowAbilities && r.rainbowAbilities.includes(id)) return "rainbow";
+  if (hasGoldAbility(r, id)) return "gold";
+  if (r && r.silverAbilities && r.silverAbilities.includes(id)) return "silver";
+  return "bronze";
+}
+
+// 銅→金の値を線形補間/外挿して銀・虹の効果値を出す（devlog/wave44.md「効果」参照）。
+// 加算値・乗算値のどちらも同じ式でよい（生の数値をそのまま補間するだけ）。
+export function tierValue(bronze, gold, tier) {
+  const delta = gold - bronze;
+  if (tier === "rainbow") return gold + delta * 0.75;
+  if (tier === "gold") return gold;
+  if (tier === "silver") return bronze + delta * 0.5;
+  return bronze;
+}
+
 export const GOLD_CONDITIONS = Object.fromEntries(
   Object.entries(GOLD_REQS).map(([id, q]) => [id, r => (!q.gate || q.gate(r)) && q.cur(r) >= q.need])
 );

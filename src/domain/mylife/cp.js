@@ -1,19 +1,31 @@
 // クリアポイント(CP)・アビリティ習得（メタ進行）。第13弾Phase0でlogic/support.jsから分離。
-import { ASSIST_ROLES, GOLD_CONDITIONS, countRoleUses, countWins, mulberry, newRider } from "../../core/core.js";
+import { ASSIST_ROLES, GOLD_CONDITIONS, GOLD_REQS, TIER_LADDER, countRoleUses, countWins, mulberry, newRider } from "../../core/core.js";
 import { AB_KEYS } from "../../data/abilities.js";
 import { UNLOCK_TEMPLATES } from "../../data/course.js";
 import { MLCP_DIFF_MUL, ML_CP_MILESTONES } from "../../data/economy.js";
 import { ML_BADGE_SLOTS_BY_CLASS } from "../../data/gear.js";
 
+// 第45弾: 金の判定はそのまま。TIER_LADDER登録種（4段階化の対象19種）のみ、同じcur/gate
+// （GOLD_REQS）を使って銀・虹も判定する。段階は一度到達したら永久に落ちない
+// （加算のみ・削除なし。第42/43弾の「退行は入れない」を4段階でも踏襲）。
 export function upgradeGoldAbilities(r) {
   const abilities = r.abilities || [];
-  const current = r.goldAbilities || [];
-  const next = [...current];
+  const nextGold = [...(r.goldAbilities || [])];
+  const nextSilver = [...(r.silverAbilities || [])];
+  const nextRainbow = [...(r.rainbowAbilities || [])];
   let changed = false;
   Object.keys(GOLD_CONDITIONS).forEach(id => {
-    if (abilities.includes(id) && !next.includes(id) && GOLD_CONDITIONS[id](r)) { next.push(id); changed = true; }
+    if (!abilities.includes(id)) return;
+    if (!nextGold.includes(id) && GOLD_CONDITIONS[id](r)) { nextGold.push(id); changed = true; }
+    const ladder = TIER_LADDER[id];
+    if (!ladder) return;
+    const q = GOLD_REQS[id];
+    if (q.gate && !q.gate(r)) return;
+    const cur = q.cur(r);
+    if (!nextSilver.includes(id) && cur >= ladder.silverNeed) { nextSilver.push(id); changed = true; }
+    if (!nextRainbow.includes(id) && cur >= ladder.rainbowNeed) { nextRainbow.push(id); changed = true; }
   });
-  return changed ? { ...r, goldAbilities: next } : r;
+  return changed ? { ...r, goldAbilities: nextGold, silverAbilities: nextSilver, rainbowAbilities: nextRainbow } : r;
 }
 
 // 第39弾: r=>booleanの不透明な条件をgate/cur/need/unitへ構造化し、進捗の分子を取り出せるように

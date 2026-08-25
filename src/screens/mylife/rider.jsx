@@ -6,13 +6,13 @@ import React from "react";
 import { DisciplineGrid } from "../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { RiderPortrait } from "../../components/RiderPortrait.jsx";
-import { GOLD_REQS, overall } from "../../core/core.js";
+import { badgeTier, GOLD_REQS, overall, TIER_LADDER, TIER_LABEL } from "../../core/core.js";
 import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
 import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlBadgeSlots, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
-import { Item, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
+import { BadgeTierMark, Item, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
 
 export function renderMyLifeRiderScreen(ctx) {
   const { ml, mlWrap, mlAcquireBadge, mlUnequipBadge, setMl } = ctx;
@@ -27,7 +27,6 @@ export function renderMyLifeRiderScreen(ctx) {
   const capFor = (k) => mlGrowthCapFor(ml.year, r, ml, k);
   const pot = potentialHint(r, powRevealed);
   const abils = [...(r.abilities || [])];
-  const golds = new Set(r.goldAbilities || []);
 
   return mlWrap(
     <Screen>
@@ -71,20 +70,38 @@ export function renderMyLifeRiderScreen(ctx) {
         // 上限は既に「無料で付け替えられる装備スロット」だった（外しても累積実績は保持され
         // いつでも戻せる）ため、UIの言葉も「習得/外す」ではなく「付ける/はずす」にする。
         const maxSlots = mlBadgeSlots(ml);
+        // 第45弾: TIER_LADDER登録種（19種）は銅/銀/金/虹の4段階。未登録種（古典3種の表彰台判定・
+        // 鉄人/大舞台に強いの金条件なし等）は従来どおり銅/金の2段階のまま（devlog/wave44.md）。
         const heldRows = abils.filter(id => ABILITIES[id]).map(id => {
           const a = ABILITIES[id];
           const gr = GOLD_REQS[id];
-          const isGold = golds.has(id);
+          const ladder = TIER_LADDER[id];
+          const tier = badgeTier(r, id); // "bronze"|"silver"|"gold"|"rainbow"
           const cur = gr ? gr.cur(r) : 0;
-          const need = gr ? gr.need : 0;
-          return { id, a, isGold, gr, cur, need };
+          let nextLabel = null, nextNeed = null;
+          if (gr) {
+            if (ladder) {
+              if (tier === "bronze") { nextLabel = TIER_LABEL.silver; nextNeed = ladder.silverNeed; }
+              else if (tier === "silver") { nextLabel = TIER_LABEL.gold; nextNeed = gr.need; }
+              else if (tier === "gold") { nextLabel = TIER_LABEL.rainbow; nextNeed = ladder.rainbowNeed; }
+              // tier === "rainbow"：最上段。次の段階なし
+            } else if (tier !== "gold") {
+              nextLabel = TIER_LABEL.gold; nextNeed = gr.need;
+            }
+          }
+          return { id, a, tier, gr, cur, nextLabel, nextNeed };
         });
         const heldSet = new Set(abils);
+        // 第45弾: 過去に到達した段階（金・銀・虹）ははずしても失われない（累積実績）ため、
+        // 未使用でも到達済みならマークを出す（再び付ければ即その段階に戻る）。
+        const achievedTier = id => (r.rainbowAbilities || []).includes(id) ? "rainbow"
+          : (r.goldAbilities || []).includes(id) ? "gold"
+          : (r.silverAbilities || []).includes(id) ? "silver" : "bronze";
         const candRows = Object.entries(ACQUIRE_REQS)
           .filter(([id]) => !heldSet.has(id) && ABILITIES[id])
           .map(([id, q]) => ({ id, a: ABILITIES[id], q, gateOk: !q.gate || q.gate(r), cur: q.cur(r), need: q.need, unit: q.unit }))
           .filter(x => x.gateOk && x.cur > 0)
-          .map(x => ({ ...x, eligible: x.cur >= x.need, ratio: x.cur / x.need }))
+          .map(x => ({ ...x, eligible: x.cur >= x.need, ratio: x.cur / x.need, tier: achievedTier(x.id) }))
           .sort((a, b) => b.ratio - a.ratio);
         // 第44弾: 所持0個でも「使用中のバッジ」節は（空き）だけを並べて出す（devlog/wave44.md
         // empty state）。枠の存在自体を新規キャラの初日から見せる。「使っていないバッジ」節は
@@ -101,22 +118,22 @@ export function renderMyLifeRiderScreen(ctx) {
             <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
               {heldRows.map((row, i) => {
                 const border = i === 0 ? "none" : `1px solid ${T.color.rule}`;
-                const { id, a, isGold, gr, cur, need } = row;
+                const { id, a, tier, gr, cur, nextLabel, nextNeed } = row;
                 return (
                   <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
-                      <span style={{ display: "flex", alignItems: "baseline", gap: T.space.xs }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: T.space.xs }}>
+                        <BadgeTierMark tier={tier} />
                         <span style={{ color: a.bad ? T.color.bad : T.color.text }}>{a.label}</span>
-                        <span style={{ fontSize: T.size.caption, color: isGold ? T.color.accent : T.color.sub }}>{isGold ? "金" : "銅"}</span>
                       </span>
                       <ShopBtn onClick={() => mlUnequipBadge(id)} outline>はずす</ShopBtn>
                     </div>
-                    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6 }}>
-                      {a.desc}{!isGold && gr && `　　金まで ${cur} / ${need}${gr.unit}`}
+                    <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6, paddingLeft: 18 }}>
+                      {a.desc}{nextLabel != null && `　　${nextLabel}まで ${cur} / ${nextNeed}${gr.unit}`}
                     </div>
-                    {!isGold && gr && (
-                      <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
-                        <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.accent }} />
+                    {nextLabel != null && (
+                      <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs, marginLeft: 18 }}>
+                        <div style={{ height: 3, width: `${Math.min(100, cur / nextNeed * 100)}%`, background: T.color.accent }} />
                       </div>
                     )}
                   </div>
@@ -124,7 +141,7 @@ export function renderMyLifeRiderScreen(ctx) {
               })}
               {Array.from({ length: remaining }).map((_, i) => (
                 <div key={`empty${i}`} style={{ padding: `${T.space.sm}px 0`, borderTop: (heldRows.length === 0 && i === 0) ? "none" : `1px solid ${T.color.rule}` }}>
-                  <span style={{ fontSize: T.size.body, color: T.color.sub }}>（空き）</span>
+                  <span style={{ fontSize: T.size.body, color: T.color.sub, paddingLeft: 18 }}>（空き）</span>
                 </div>
               ))}
             </div>
@@ -134,11 +151,14 @@ export function renderMyLifeRiderScreen(ctx) {
                 <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px`, marginBottom: T.space.md }}>
                   {candRows.map((row, i) => {
                     const border = i === 0 ? "none" : `1px solid ${T.color.rule}`;
-                    const { id, a, eligible, cur, need, unit } = row;
+                    const { id, a, eligible, cur, need, unit, tier } = row;
                     return (
                       <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
-                          <span style={{ fontSize: T.size.body, color: T.color.sub }}>{a.label}</span>
+                          <span style={{ display: "flex", alignItems: "center", gap: T.space.xs }}>
+                            {eligible && <BadgeTierMark tier={tier} />}
+                            <span style={{ fontSize: T.size.body, color: T.color.sub }}>{a.label}</span>
+                          </span>
                           {eligible
                             ? <ShopBtn onClick={() => full ? setMl(s => ({ ...s, uiBadgeSwap: id })) : mlAcquireBadge(id)}>付ける</ShopBtn>
                             : <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{cur} / {need}{unit}</span>}

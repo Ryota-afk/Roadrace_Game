@@ -1,6 +1,6 @@
 // レースの能力計算（天候・モニュメント適性・実戦値・地形別能力）。sim/race.jsから分離（第16弾D）。
 import { AB_KEYS, TYPES } from "../data/abilities.js";
-import { condMul, hasAbility, hasGoldAbility } from "../core/core.js";
+import { badgeTier, condMul, hasAbility, hasGoldAbility, tierValue } from "../core/core.js";
 import { ML_PART_LV_MUL } from "../data/gear.js";
 import { PART_SLOTS, PARTS } from "../data/parts.js";
 import { climbWeightFor } from "./course.js";
@@ -58,7 +58,8 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   const mental = r.mental ?? 50;
   const mentalBig = grade === 3 ? 1 + (mental - 50) / 600 : 1;
   // v37(第2弾): 大舞台の申し子＝★3/★4で+7%（世界選手権・五輪でも発揮）。既存bigは★3のみ+6%。
-  const bigheartMul = (grade >= 3 && hasAbility(r, "bigheart")) ? (hasGoldAbility(r, "bigheart") ? 1.10 : 1.07) : 1;
+  // 第45弾: 4段階化（銅1.07/銀1.085/金1.10/虹1.12）。
+  const bigheartMul = (grade >= 3 && hasAbility(r, "bigheart")) ? tierValue(1.07, 1.10, badgeTier(r, "bigheart")) : 1;
   const bigMul = (grade === 3 ? (hasAbility(r, "big") ? 1.06 : hasAbility(r, "nervous") ? 0.95 : 1) : 1) * mentalBig * bigheartMul;
   // 第17弾：雨天用タイヤ／シーズンの雨仕様セットアップは雨ペナルティを緩和する
   // （最大でも0.99止まり＝雨のマイナスを完全には消さない）
@@ -75,7 +76,8 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   const destinyMul = (grade >= 3 && hasAbility(r, "destiny")) ? 1.05 : 1;
   AB_KEYS.forEach(k => { e[k] = e[k] * cm * fatPen * bigMul * wMul * formMul * mMul * destinyMul; });
   // v28: オールラウンダーは全能力を控えめに底上げ（脚質を選ばない万能型）
-  if (hasAbility(r, "allrounder_sp")) AB_KEYS.forEach(k => { e[k] += hasGoldAbility(r, "allrounder_sp") ? 4 : 2; });
+  // 第45弾: 4段階化（銅+2/銀+3/金+4/虹+5.5）。
+  if (hasAbility(r, "allrounder_sp")) { const v = tierValue(2, 4, badgeTier(r, "allrounder_sp")); AB_KEYS.forEach(k => { e[k] += v; }); }
   // v31.2: 配合限定特能。系統の申し子＝全能力+3、覇道の血脈＝全能力+2かつスタミナ+3
   if (hasAbility(r, "sireline")) AB_KEYS.forEach(k => { e[k] += 3; });
   if (hasAbility(r, "dynasty")) { AB_KEYS.forEach(k => { e[k] += 2; }); e.stamina += 3; }
@@ -124,13 +126,13 @@ export function segmentAbility(segType, e, steepness) {
   else if (segType === "mtn") ab = e.climb * 0.7 + e.sprint * 0.3;
   else { const w = climbWeightFor(segType, steepness); ab = e.flat * (1 - w) + e.climb * w; }
   ab += typeAffinityBonus(e.type, segType);
-  // v15: 特殊能力による区間タイプ別の能力補正（金特なら効果2倍）
-  if (hasAbility(e, "mount") && ["climb", "mtn"].includes(segType)) ab += hasGoldAbility(e, "mount") ? 8 : 4;
-  if (hasAbility(e, "puncheur") && segType === "hill") ab += hasGoldAbility(e, "puncheur") ? 8 : 4;
-  if (hasAbility(e, "flatlander") && segType === "flat") ab += hasGoldAbility(e, "flatlander") ? 8 : 4;
-  if (hasAbility(e, "sprinter_sp") && segType === "sprint") ab += hasGoldAbility(e, "sprinter_sp") ? 8 : 4;
-  if (hasAbility(e, "soloist") && segType === "tt") ab += hasGoldAbility(e, "soloist") ? 8 : 4;
-  if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += hasGoldAbility(e, "closer") ? 8 : 4;
+  // v15: 特殊能力による区間タイプ別の能力補正（第45弾: 銅/銀/金/虹の4段階）
+  if (hasAbility(e, "mount") && ["climb", "mtn"].includes(segType)) ab += tierValue(4, 8, badgeTier(e, "mount"));
+  if (hasAbility(e, "puncheur") && segType === "hill") ab += tierValue(4, 8, badgeTier(e, "puncheur"));
+  if (hasAbility(e, "flatlander") && segType === "flat") ab += tierValue(4, 8, badgeTier(e, "flatlander"));
+  if (hasAbility(e, "sprinter_sp") && segType === "sprint") ab += tierValue(4, 8, badgeTier(e, "sprinter_sp"));
+  if (hasAbility(e, "soloist") && segType === "tt") ab += tierValue(4, 8, badgeTier(e, "soloist"));
+  if (hasAbility(e, "closer") && (segType === "sprint" || segType === "mtn")) ab += tierValue(4, 8, badgeTier(e, "closer"));
   // v31.2: 配合限定「二刀流」。丘陵・山岳・スプリントの各区間で+5（登坂型とスプリント型の血を併せ持つ証）
   if (hasAbility(e, "hybrid") && ["hill", "climb", "mtn", "sprint"].includes(segType)) ab += 5;
   // 第15弾: 血脈レシピ達成の伝説特能。万能の極致(twinsoul)＝全地形+4（二刀流の対象地形を拡張した上位互換）、
@@ -138,8 +140,8 @@ export function segmentAbility(segType, e, steepness) {
   if (hasAbility(e, "twinsoul")) ab += 4;
   if (hasAbility(e, "unfallen") && ["climb", "mtn"].includes(segType)) ab += 6;
   if (hasAbility(e, "sovereign")) ab += 5;
-  // v37(第2弾): 岳人＝丘/登/山で+4、重量級（悪特性）＝登/山で-4
-  if (hasAbility(e, "allclimber") && ["hill", "climb", "mtn"].includes(segType)) ab += hasGoldAbility(e, "allclimber") ? 8 : 4;
+  // v37(第2弾): 岳人＝丘/登/山で+4、重量級（悪特性）＝登/山で-4（第45弾: 4段階化）
+  if (hasAbility(e, "allclimber") && ["hill", "climb", "mtn"].includes(segType)) ab += tierValue(4, 8, badgeTier(e, "allclimber"));
   if (hasAbility(e, "heavy") && ["climb", "mtn"].includes(segType)) ab -= 4;
   return ab;
 }

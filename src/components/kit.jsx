@@ -5,7 +5,7 @@
 // Phase3-D-4-bでShopRow/ShopBtnもmylife/events.jsxから移設——mlUi.jsxからkit.jsxへ改名。
 import React from "react";
 import { TYPES } from "../data/abilities.js";
-import { FONT_DOT, T } from "../data/theme.js";
+import { FONT_DOT, RAINBOW_STOPS, T } from "../data/theme.js";
 
 // 第32弾（第2次UI改革）: 脚質の意味色チップ。塗り＝TYPES[type].color、文字は背景に対して
 // 常に暗色（#0E0E10）固定でよい（脚質色はいずれも明るい原色系のため）。
@@ -20,6 +20,30 @@ export const TypeChip = ({ type, label }) => {
       fontSize: T.size.caption, padding: "2px 7px 1px", fontFamily: FONT_DOT,
     }}>{label || t.label}</span>
   );
+};
+
+// 第45弾: バッジの段階（銅/銀/金/虹）を示す菱形マーク。名前の左に置く小さな印。
+// 色相では4段を作れない（紅はbad、銅はaccentと近すぎ）ため、輪郭/塗り/二重という
+// 形の情報量で段階差を作る（devlog/wave44.md「マーク」参照）。虹だけ一回り大きい
+// （14px、他は10px）ことも上位の合図にしている。
+export const BadgeTierMark = ({ tier }) => {
+  const gradId = React.useId();
+  if (tier === "rainbow") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 16 16" style={{ flex: "none" }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            {RAINBOW_STOPS.map((c, i) => <stop key={i} offset={`${Math.round(i / (RAINBOW_STOPS.length - 1) * 100)}%`} stopColor={c} />)}
+          </linearGradient>
+        </defs>
+        <path d="M8 0 L16 8 L8 16 L0 8 Z" fill="none" stroke={`url(#${gradId})`} strokeWidth="1.3" />
+        <path d="M8 4 L12 8 L8 12 L4 8 Z" fill={T.color.accent} />
+      </svg>
+    );
+  }
+  if (tier === "gold") return <svg width="10" height="10" viewBox="0 0 12 12" style={{ flex: "none" }}><path d="M6 1 L11 6 L6 11 L1 6 Z" fill={T.color.accent} /></svg>;
+  if (tier === "silver") return <svg width="10" height="10" viewBox="0 0 12 12" style={{ flex: "none" }}><path d="M6 1 L11 6 L6 11 L1 6 Z" fill="#C8CCD0" /></svg>;
+  return <svg width="10" height="10" viewBox="0 0 12 12" style={{ flex: "none" }}><path d="M6 1 L11 6 L6 11 L1 6 Z" fill="none" stroke={T.color.sub} strokeWidth="1.4" /></svg>;
 };
 
 // 状態タグ（成長フェーズ・全盛期など）。押せない・意味色でもない、控えめな添え字。

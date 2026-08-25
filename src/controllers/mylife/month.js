@@ -6,7 +6,7 @@ import { CLASSES } from "../../data/progression.js";
 import { MONTHS, SEG_AB } from "../../data/course.js";
 import { ML_CARS, ML_HOUSES } from "../../data/gear.js";
 import { PARTS } from "../../data/parts.js";
-import { mulberry, overall, hasAbility } from "../../core/core.js";
+import { badgeTier, mulberry, overall, hasAbility, tierValue } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
   GRADE_MUL, ML_AB_COACH_KEY, ML_COACH_MUL, ML_COACH_SALARY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, addAb, ageRival, computeWorldRank,
@@ -79,8 +79,12 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     const raceGradeMul = (ctx && ctx.raceGrade) ? (GRADE_MUL[ctx.raceGrade] || 1) : 1;
     // v25: 新人時代に恩師の指導を受けている間は、出走経験の伸びにもボーナスがかかる
     // v28: 「天才肌」は25歳以下の伸びが+15%
+    // 第45弾: 吸収の天才は元々2段階の効果差が無かった（銅も金も一律+25%）。金の値が
+    // 存在しなかったため、他の消耗軽減系（鉄の心肺93→88等）と同程度の上げ幅で暫定的に
+    // 金1.35を置き、銀・虹はtierValueの式でそこから機械的に算出した（要バランス見直し）。
+    const spongeMul = hasAbility(player, "sponge") ? tierValue(1.25, 1.35, badgeTier(player, "sponge")) : 1;
     const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
-      * (hasAbility(player, "sponge") ? 1.25 : 1) // v37: 吸収の天才＝出走経験の伸び+25%
+      * spongeMul // v37: 吸収の天才＝出走経験の伸び+25%（第45弾で4段階化）
       * vitMul; // v38(#9 B-2): 活力が低いと出走経験の伸びも鈍る
     const ph = growthPhase(player);
     raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), capFor(k)));

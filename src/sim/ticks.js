@@ -1,6 +1,6 @@
 // レースのtickシミュレーション本体（集団判定・移動・エネルギー・判断カード）。
 // sim/race.jsから分離（第16弾D）。
-import { hasAbility, hasGoldAbility } from "../core/core.js";
+import { badgeTier, hasAbility, tierValue } from "../core/core.js";
 import { segmentAbility } from "./effects.js";
 import { terrainSpeedMul } from "./course.js";
 
@@ -81,8 +81,8 @@ export function tickSpeedFactor(en, segType, mode, steepness) {
   let ab = segmentAbility(segType, en, steepness);
   // v15: 展開依存の特殊能力（逃げ屋・献身のアシスト）は、能力算出時点ではmodeを
   // 知らないsegmentAbilityではなくここで加算する
-  if (hasAbility(en, "escape") && mode === "attack") ab += hasGoldAbility(en, "escape") ? 8 : 4;
-  if (hasAbility(en, "domestique") && mode === "pull") ab += hasGoldAbility(en, "domestique") ? 6 : 3;
+  if (hasAbility(en, "escape") && mode === "attack") ab += tierValue(4, 8, badgeTier(en, "escape"));
+  if (hasAbility(en, "domestique") && mode === "pull") ab += tierValue(3, 6, badgeTier(en, "domestique"));
   // v29: 加速力はアタック（飛び出し・ギャップ埋め）の鋭さに効く
   if (mode === "attack") ab += ((en.accel ?? 50) - 50) * 0.2;
   let f = 1 + (ab - 70) / 260;
@@ -126,13 +126,13 @@ export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこ
 // 順位が全区分で明確に改善（例：能力105・finale発火で着差14.5秒→11.7秒、平均順位9.0→5.5）。
 // 「時々刺さるがリスクの高い一手」という設計意図に沿う形になった（詳細はDEVLOG §40）。
 function energyDrain(en, mode, segType, steepness) {
-  // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（金特で更に軽減）
-  const engineMul = hasAbility(en, "engine") ? (hasGoldAbility(en, "engine") ? 0.80 : 0.88)
-    : hasAbility(en, "diesel") ? (hasGoldAbility(en, "diesel") ? 0.88 : 0.93) : 1; // v37(第2弾): 鉄の心肺＝汎用の消耗軽減
-  // v37: 地形特化のエコラン（消耗軽減）。登坂＝山の吸血鬼、平坦＆独走/逃げ＝巡航機関。
-  const climbEco = (hasAbility(en, "climbengine") && (segType === "climb" || segType === "mtn")) ? (hasGoldAbility(en, "climbengine") ? 0.78 : 0.85) : 1;
+  // v28: 「無尽蔵のエンジン」はレース中のエネルギー消耗が軽い（第45弾: 4段階化）
+  const engineMul = hasAbility(en, "engine") ? tierValue(0.88, 0.80, badgeTier(en, "engine"))
+    : hasAbility(en, "diesel") ? tierValue(0.93, 0.88, badgeTier(en, "diesel")) : 1; // v37(第2弾): 鉄の心肺＝汎用の消耗軽減
+  // v37: 地形特化のエコラン（消耗軽減）。登坂＝山の吸血鬼、平坦＆独走/逃げ＝巡航機関（第45弾: 4段階化）。
+  const climbEco = (hasAbility(en, "climbengine") && (segType === "climb" || segType === "mtn")) ? tierValue(0.85, 0.78, badgeTier(en, "climbengine")) : 1;
   // 巡航機関は平坦に加え、独走・逃げ（solo/attack）でも垂れにくい＝逃げ脚質・独走屋に効く
-  const rouleurEco = (hasAbility(en, "rouleur") && (segType === "flat" || mode === "solo" || mode === "attack")) ? (hasGoldAbility(en, "rouleur") ? 0.78 : 0.85) : 1;
+  const rouleurEco = (hasAbility(en, "rouleur") && (segType === "flat" || mode === "solo" || mode === "attack")) ? tierValue(0.85, 0.78, badgeTier(en, "rouleur")) : 1;
   const terrainEcoMul = climbEco * rouleurEco;
   const brk = en.committedBreak && (mode === "solo" || mode === "attack")
     ? ({ mtn: 0.4, climb: 0.45, hill: 0.55, flat: 0.75, sprint: 0.85, tt: 0.75 }[segType] ?? 1) : 1;
@@ -476,7 +476,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         if (!en.tag && (teamAhead > 0 || pullerIsMate)) en.tag = "shelter";
         // v47(第8弾Phase4): hangOnのkeepThresh緩和を0.05→HANGON_KEEPTHRESH_RELIEF(0.12)へ強化
         // （詳細は定数コメント参照）。
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? (hasGoldAbility(en, "grinder") ? 0.06 : 0.04) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief;
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -509,9 +509,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
             const sprintEdge = (segType === "sprint" ? 0.5 : 1) * (en.sprint - 70) / 260;
             const edgeMul = segType === "sprint" ? 1.7 : 0.9;
             // v28: 「豪脚のラストスパート」は最終区間の追い込みが上乗せされる
-            const finishKick = (hasAbility(en, "finisher") ? (hasGoldAbility(en, "finisher") ? 0.06 : 0.035) : 0)
+            const finishKick = (hasAbility(en, "finisher") ? tierValue(0.035, 0.06, badgeTier(en, "finisher")) : 0)
               // v37: 剛脚の差し脚＝最終直線の追い込みがさらに鋭い（finisherと重複可）／勝負弱い＝鈍る（悪特性）
-              + (hasAbility(en, "kicker") ? (hasGoldAbility(en, "kicker") ? 0.05 : 0.03) : 0)
+              + (hasAbility(en, "kicker") ? tierValue(0.03, 0.05, badgeTier(en, "kicker")) : 0)
               // 第15弾: 血脈レシピ「雪辱の継承」＝最終直線の追い込みがさらに鋭くなる
               + (hasAbility(en, "revenant") ? 0.04 : 0)
               - (hasAbility(en, "choke") ? 0.03 : 0)
