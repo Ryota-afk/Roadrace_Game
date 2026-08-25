@@ -106,7 +106,11 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   // NaNがシミュレーション全体（finishTime等）に伝播し、最終的にレース描画がクラッシュして
   // 画面が真っ暗になる恐れがあった。非有限値は安全な既定値(50)に丸めて必ず有限にする
   AB_KEYS.forEach(k => { e[k] = Number.isFinite(e[k]) ? Math.min(135, e[k]) : 50; });
+  // 第48弾バグ修正: goldAbilitiesしかコピーしておらず、badgeTier(e,id)がエントラント上では
+  // 銀→銅・虹→金に潰れていた（4段階化した16種のうち区間補正で参照する16種が対象。
+  // 大舞台の申し子/オールラウンダー/吸収の天才は選手オブジェクト(r)を直接見るため無事だった）。
   e.type = r.type; e.abilities = r.abilities; e.goldAbilities = r.goldAbilities;
+  e.silverAbilities = r.silverAbilities; e.rainbowAbilities = r.rainbowAbilities;
   // v29: 副ステータスをエントラントにも持たせ、tick計算・最終区間で参照する
   e.accel = r.accel ?? 50; e.mental = mental; e.build = build;
   // v52(第14弾C): 安定感（stability）をsimへ接続。TTのペース配分ゆらぎ（ttPacing）の
