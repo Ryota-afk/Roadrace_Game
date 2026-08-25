@@ -15,6 +15,7 @@ import {
   rivalDrama, rivalMeetingHeat, rivalScene, worldPointsForFinish,
 } from "../../logic/support.js";
 import { mlBondsAfterRace } from "../../domain/mylife/bonds.js";
+import { segMixOfRace } from "../../domain/shared/segMix.js";
 
 export function mlRaceFinish(s) {
   const sim = s.result;
@@ -73,7 +74,7 @@ export function mlRaceFinish(s) {
   });
   const player = {
     ...s.player,
-    raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role, monument: race.monument || undefined }],
+    raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role, monument: race.monument || undefined, segMix: segMixOfRace(race) }],
     popularity: newPopularity,
     popMilestones: [...popMilestones, ...newlyHit],
   };
@@ -220,7 +221,7 @@ export function mlFinishTeamTT(s, sim, race) {
     time: t.time, gap: t.time - baseTime,
     riders: (t.riders || []).map(r => r.name),
   }));
-  const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] };
+  const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt", segMix: segMixOfRace(race) }] };
   const wpGain = worldPointsForFinish(teamRank, race.grade, CLASSES[s.classIdx].prizeMul);
   const worldPoints = (s.worldPoints || 0) + wpGain;
   const worldRank = computeWorldRank(s.riderStats, worldPoints);
@@ -247,7 +248,7 @@ export function mlLastRaceFinish(s) {
     : rank <= 10 ? "最後まで集団に食らいつき、力を出し切って走り抜けた。"
     : "結果は振るわなかったが、最後まで自分の走りを貫いた。悔いはない。";
   // ラストレースの戦績も通算記録に含めてから殿堂入りさせる
-  const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: sim.raceMeta.name, rank, role: "ace" }] };
+  const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: sim.raceMeta.name, rank, role: "ace", segMix: segMixOfRace(sim.raceMeta) }] };
   return {
     ...s, player, inLastRace: false, result: null,
     lastRaceResult: { rank, total, flavor, name: sim.raceMeta.name },

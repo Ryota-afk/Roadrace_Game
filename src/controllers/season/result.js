@@ -19,6 +19,7 @@ import {
   GRADE_MUL, PRIZES, advanceObjective, bumpCareerStats, peekCourseRecord, raceObjectiveEvent,
 } from "../../logic/support.js";
 import { addRivalPoints, teamPointsFromRanked } from "../../domain/season/points.js";
+import { segMixOfRace } from "../../domain/shared/segMix.js";
 
 export function finishRace(s, sim, race, stageOverride) {
   // v35(チームTT): チーム単位の合算タイム。チーム順位で得点・賞金を確定する
@@ -45,11 +46,12 @@ export function finishRace(s, sim, race, stageOverride) {
   // v13.1: ライバルチームに拾われた元選手が出走していれば、そちらのraceLogも伸ばす
   const alumniRankById = {}; sim.ranked.filter(e => e.isAlumnus).forEach(e => { alumniRankById[e.id] = e.rank; });
   const alumniRoleById = {}; sim.ranked.filter(e => e.isAlumnus).forEach(e => { alumniRoleById[e.id] = e.isAce ? "ace" : e.role; });
+  const segMix = segMixOfRace(race);
   const roster = s.roster.map(r => rankById[r.id] != null
-    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleById[r.id] }] }
+    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleById[r.id], segMix }] }
     : r);
   const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
-    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: alumniRoleById[r.id] }] }
+    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: alumniRoleById[r.id], segMix }] }
     : r);
   // v40（第1候補②）：シーズン中期目標の進捗。達成した瞬間に資金＋ノルマptを付与する
   let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
@@ -88,7 +90,7 @@ export function finishTeamTT(s, sim, race) {
   if (mandateHit) pts = Math.round(pts * 1.3);
   const starterIds = new Set((playerTeam ? playerTeam.riders : []).map(r => r.id));
   const roster = s.roster.map(r => starterIds.has(r.id)
-    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt" }] }
+    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt", segMix: segMixOfRace(race) }] }
     : r);
   // v40（第1候補②）：チームTTでも中期目標の進捗を判定（チーム着順を最上位着順とみなす。エース年齢は無し）
   let sponsor = (s.sponsor && mandateHit) ? { ...s.sponsor, mandatesMet: s.sponsor.mandatesMet + 1 } : s.sponsor;
@@ -149,14 +151,15 @@ export function finishStage(s, sim, race, stageOverride) {
   const stageBreakdownFor = (id) => race.stageRace
     ? dayLogs.map(dl => ({ day: dl.day, role: dl.roleById[id], rank: dl.rankById[id] })).filter(d => d.rank != null)
     : undefined;
+  const stageSegMix = segMixOfRace(race);
   const roster = s.roster.map(r => rankById[r.id] != null
-    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id) }] }
+    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: rankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id), segMix: stageSegMix }] }
     : r);
   // v13.1: ライバルチームに拾われた元選手のGC総合成績もraceLogへ記録する
   const alumniRanks = order.map(([id], i) => ({ id, rank: i + 1 })).filter(o => idToEntrant[o.id]?.isAlumnus);
   const alumniRankById = {}; alumniRanks.forEach(o => { alumniRankById[o.id] = o.rank; });
   const rivalAlumni = (s.rivalAlumni || []).map(r => alumniRankById[r.id] != null
-    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id) }] }
+    ? { ...r, raceLog: [...(r.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: alumniRankById[r.id], role: roleOf(r.id), stageBreakdown: stageBreakdownFor(r.id), segMix: stageSegMix }] }
     : r);
   // v14.8: グランツールで自チーム総合優勝ならそのgtIndexを勝利記録に加える（重複防止）
   const gtNewWin = race.grandTour && bestRank === 1 && race.gtIndex != null && !(s.gtWins || []).includes(race.gtIndex);

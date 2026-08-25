@@ -168,6 +168,15 @@ DEVLOG.mdは索引とTODOに専念させる。
   月15%抽選で自動習得（据え置き）、マイライフは`mlAcquireAbility`／`mlAcquireBadge`で
   プレイヤーが選手画面から選んで習得する（第39弾）。所持上限3個は両モード共通で維持中
   （撤廃は使用量・退行を入れる後続弾とセット）。`hasAbility/hasGoldAbility`は判定ヘルパー。
+  ⚠️**48種のうち12種（`iron``recover``recover2``tough``glass``trainer``sponge``genius_sp`
+  `lateblow_sp``lazy_sp``steady_sp``moody`）はレース中に一切発火せず「体質」として分離予定**
+  （第40弾で確定・未実装）。段階を持たず育たず退行しない扱いになる見込み。
+- **使用量の計装（第40弾・`domain/mylife/badge.js`）**：`raceLog`の各エントリに`segMix`
+  （区間タイプ別距離割合。`domain/shared/segMix.js`の`segMixOf`/`segMixOfRace`で算出、
+  raceLog書き込み全8箇所に配線済み）。`badgeExposure(player, id, n)`が直近nレースの
+  露出率(0〜1)を返す（地形8種は`segMix`から、展開3種`escape`/`domestique`/`rouleur`は
+  `role`から算出）。**残り25種は未分類でnullを返す。この関数はまだ効果にもUIにも未接続**
+  （計測専用）。実測ではウィンドウN=20だと転向の反映に1〜2年かかるためN=5〜8を推奨。
 - 新ステータス（2026-08・Phase1/2）：`breakthrough`(突破力)/`stability`(安定感)/`luck`(運)。生成時固定値、`core/core.js`の`genSubStats()`。
   `RiderRadarChart`（`components/RadarChart.jsx`）で6角形表示。イベント経由のみ例外的に増減可（`*Delta`系effects）。
 - シーズンモード：別state（`g`/`initGame`）。`TEMPLATES`(コース), `signBredYouth`（シーズンの血統ユース）。
