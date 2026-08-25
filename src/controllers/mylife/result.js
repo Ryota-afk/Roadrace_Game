@@ -30,6 +30,10 @@ export function mlRaceFinish(s) {
   // v33.6: 「アシストに徹する」を選んだ場合は監督指示ではなく献身の走りとして評価する。
   // 献身は自らの着順を犠牲にする行為なので、監督評価は下げず（むしろ小幅加点）運ゲーにしない
   const assistChosen = !!(ML_TACTICS[s.tactic] && ML_TACTICS[s.tactic].playerAssist);
+  // 第42弾: 「早めに逃げる」作戦を選んだ回はroleを"breakaway"として記録する。
+  // 従来は監督指示のキー（ace/breakthrough/support/experience）しか記録されず、
+  // 逃げ役3回で解放のescape・5回で金のrouleurがマイライフでは経験上一切取得できなかった。
+  const breakawayChosen = !!(ML_TACTICS[s.tactic] && ML_TACTICS[s.tactic].playerBreakaway);
   const fulfilled = assistChosen ? true : ((directive && typeof directive.check === "function") ? directive.check(me.rank, sim.ranked.length) : false);
   const evalDelta = assistChosen ? 3 : (directive ? (fulfilled ? directive.evalGain : -directive.evalPenalty) : 0);
   const prize = Math.round((PRIZES[me.rank - 1] || 0) * (0.4 + s.classIdx * 0.25));
@@ -62,7 +66,9 @@ export function mlRaceFinish(s) {
   // v14.6: マイライフでは監督指示のキー自体がその一戦での役割を表すので、そのまま記録する
   // v33.6: ただし「アシストに徹する」を選んだ場合は監督指示に関わらず献身役として記録し、
   // 献身の道（アンビション）へ確実にカウントされるようにする（監督指示待ちの運ゲーを解消）
-  const role = assistChosen ? "support" : (directive ? directive.key : (me.isAce ? "ace" : "support"));
+  const role = assistChosen ? "support"
+    : breakawayChosen ? "breakaway"
+    : (directive ? directive.key : (me.isAce ? "ace" : "support"));
   // v25: 個人スポンサー・メディア人気度。着順が良いほど、また規模の大きいレースほど伸びる
   // v28: 代表の役割を全うすれば名声（人気度）が上乗せされる
   const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade] + natPopBonus;

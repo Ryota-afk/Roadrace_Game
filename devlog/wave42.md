@@ -57,6 +57,7 @@ score = clamp01((raw - base) / (target - base))
 ```js
 // domain/mylife/badge.js
 // ⚠️TEMPLATESや候補数（mlGenRaceCandidates）を変えたらこの表を測り直すこと。
+// ⚠️heavyは下記「heavyの除外」により意図的に含めない（GOLD_REQSに金条件が存在しないため）。
 export const EXPOSURE_NORM = {
   mount:       { base: 0.234, target: 0.501 },
   puncheur:    { base: 0.236, target: 0.372 },
@@ -65,7 +66,6 @@ export const EXPOSURE_NORM = {
   soloist:     { base: 0.116, target: 0.327 },
   allclimber:  { base: 0.469, target: 0.710 },
   climbengine: { base: 0.234, target: 0.501 },
-  heavy:       { base: 0.234, target: 0.501 },
 };
 ```
 
@@ -159,3 +159,95 @@ export const EXPOSURE_NORM = {
 ⚠️ 状態Cで**生の露出率（0.42等）は出さない**——開発上の数値であってプレイヤーに伝わらない
 （CLAUDE.md §7「開発上の語彙をユーザーに見せていないか」）。伝えるべきは
 「実績は足りている／走り方が離れているので今は銅／戻せば金に戻る」の3点。
+
+## 状態Cのモック提示とユーザーの指摘
+
+案1（実績への進捗バーと同じ位置に「山から離れている」とaction色のバーで出す）・
+案2（言葉だけ）・案3（段階欄のみ「金→銅」）の3案を提示。ユーザーの指摘：
+「案1 山から離れているは何？」——**造語であり初見のプレイヤーに伝わらない**という、
+CLAUDE.md §7への直接の指摘。
+
+**確定した対応**：
+- `src/data/course.js`の`SEG_LABEL`（既存の地形名語彙：山岳・丘陵・平坦・ゴールスプリント・
+  山頂フィニッシュ・TT区間）をそのまま使う。新しい言葉を作らない。
+- 文言は状態A「金まで {cur}/{need}{unit}」と同じ形に揃える：
+  **「金に戻るまで {地形/役割名} あと{n}回」**
+- 地形名は`TERRAIN_EXPOSURE[id]`のsegType配列からSEG_LABELを引いて機械的に導出する
+  （山頂フィニッシュ(mtn)は山岳(climb)に畳んで表示。例：mount/climbengine→「山岳」、
+  allclimber→「丘陵・山岳」）。役割系（escape/domestique/rouleur）は既存の作戦名の語彙に
+  合わせ「逃げ」「アシスト」を手書きで対応させる。
+- **色**：バーの色はCLAUDE.md §9により`action`（操作専用）を使わず、状態Aと同じ`accent`
+  （データ強調）にした——このバーはクリックできない受動的な進捗表示であり、§9の
+  「同じ色を両方の役割で兼任させない」の裏返しとして、action色を非操作要素へ流用しないため。
+  モック案1のaction色指定はこの理由で採用しなかった。
+- **「あと{n}回」の算出**：直近N=8件の窓の中身をそのまま使い、寄与が低い（＝その地形/役割に
+  最も遠い）レースから順に「その地形/役割に100%該当する仮想レース」へ1件ずつ置き換える
+  シミュレーションを行い、置き換えるたびにスコアを再計算、score>=0.5を初めて超えた時点の
+  置き換え回数を返す。寄与の低い順に置き換えるのは、線形な合計しきい値に対して常に最少手数に
+  なるため（貪欲法が最適）。1〜N=8の範囲に収まる（実装：`swapsToRestoreGold`）。
+
+## heavyの除外（発見・確定）
+
+`heavy`（bad特性、山岳区間で常に-4）は第40弾で`TERRAIN_EXPOSURE`（露出計測）に含めたが、
+**`GOLD_REQS`に金条件そのものが存在しない**（`sim/effects.js`でも`hasGoldAbility`の分岐が
+一切ない、常に固定-4）。「金に戻る」という状態Cの前提が成立しないため、
+**`EXPOSURE_NORM`（段階制）には含めない**——`TERRAIN_EXPOSURE`での露出計測自体（将来利用の
+可能性を残す）とは分離して扱う。UI・効果のどちらにも段階制としては接続しない。
+
+## 実装結果（2026-08・Sonnet）
+
+**やったこと（「この弾の範囲」1〜5・7を実施。6は前述のとおり範囲外）**
+
+1. `src/controllers/mylife/result.js`: `breakawayChosen`を追加し、`role`の判定に
+   `breakawayChosen ? "breakaway"`を割り込ませてバグ修正。
+2. `src/domain/mylife/badge.js`: `EXPOSURE_NORM`（7種・heavy除外）、
+   `badgeExposureScore(player, id, n=8)`（0/無頓着〜1/狙い続けたの正規化スコア）、
+   `badgeTier(player, id, n=8)`（実績×スコアで"金"|"銅"を返す。EXPOSURE_NORM未定義の種は
+   従来どおり実績のみ＝永続金）、`liveGoldAbilities(player)`（goldAbilitiesのうち今も
+   金として発火してよいものだけへ絞る）、`badgeReturnLabel(id)`（SEG_LABEL由来の地形名／
+   役割名）、`swapsToRestoreGold(player, id, n=8)`（状態Cの「あと{n}回」算出）を追加。
+   `badgeExposure`のデフォルト窓を10→8へ変更。
+3. 役割系の`base`はresult.jsの修正を前提に実測済み（既に本ファイルに記載の値をそのまま採用）。
+4. `badgeTier`が段階判定そのもの。
+5. **効果への接続方法（設計時点の想定から変更）**：当初は`hasGoldAbility`の47箇所の
+   呼び出し個々を書き換える想定だったが、実際にはマイライフの選手エンティティを組み立てる
+   `src/sim/buildMyLifeSim.js`の1箇所（`riders.push({... goldAbilities: player.goldAbilities ...})`）
+   だけが人間プレイヤーの`goldAbilities`をsimへ渡す唯一の経路だと判明した。そこを
+   `liveGoldAbilities(player)`に差し替えるだけで、`sim/effects.js`・`sim/ticks.js`の
+   47箇所の`hasGoldAbility`呼び出しは一切変更せずに済んだ（呼び出し側は変わらず
+   `r.goldAbilities.includes(id)`を見ているだけなので、そこに渡す配列を絞ればよい）。
+   AI・ライバル・レジェンドの`goldAbilities`はこの弾では触っていない（各自の生成箇所で
+   従来どおり自分の`goldAbilities`を直接渡しており、Phase 6まで意図的に据え置き）。
+   breeding.js・panels.jsx（図鑑）等、`hasGoldAbility`を実績の意味で参照する箇所も無変更。
+7. `src/screens/mylife/rider.jsx`: 状態Cの行を追加。実績(`golds.has(id)`)は満たすが
+   `badgeExposureScore>=0.5`でない場合、段階欄は「銅」のまま、補足行に
+   「{効果}　　金に戻るまで {地形/役割名} あと{n}回」、バーは`accent`色で
+   `min(100, score/0.5*100)%`（状態Aの「しきい値までの距離」と同じ考え方）。
+
+**確定した文言・配色の変更点（設計から実装までの間の決定）**
+- 状態Cの文言はモック案1の「山から離れている」ではなく、ユーザー指摘を受けて
+  「金に戻るまで {地形/役割名} あと{n}回」に確定（本ファイル上記「状態Cのモック提示と
+  ユーザーの指摘」参照）。
+- 状態Cのバー色は案1のaction色ではなくaccent色に変更（CLAUDE.md §9のaction=操作専用ルールに
+  抵触するため、実装時に自己修正。ユーザーへの再確認は行っていない——色相ルールの機械的な
+  適用であり新しいデザイン判断ではないため）。
+
+**検証**
+- `npx vite build`：エラーなし。
+- Node単体テスト（`badgeExposure`/`badgeExposureScore`/`badgeTier`/`swapsToRestoreGold`/
+  `liveGoldAbilities`/`badgeReturnLabel`）：無頓着→銅・狙い続け→金・中間状態のswaps数・
+  役割系の計算・未達成なら常に銅・heavyがEXPOSURE_NORM対象外・未分類種(closer等)は
+  従来どおり実績のみで金、をいずれも期待どおりに確認。
+- レガシーセーブ相当（`goldAbilities`欠落・`raceLog`に`segMix`が無い旧エントリ）でも
+  クラッシュせず銅にフォールバックすることを確認（無移行で保護）。
+- Playwrightで実際にマイライフを開始し、選手の`goldAbilities`と`raceLog`（平坦8戦・
+  山岳露出0）を直接注入して選手画面を開き、実際のUIに
+  「山岳・山頂フィニッシュ区間で能力+4　　金に戻るまで 山岳 あと3回」が表示され、
+  ページエラーが出ないことを確認（単体テストで別途出した「swaps=3」と一致）。
+- Playwrightで「早めに逃げる」作戦を実際に選んでレースを1本完走し、`raceLog`の
+  最新エントリの`role`が`"breakaway"`になっていることを確認（バグ修正の実地検証）。
+
+**やらなかったこと（設計どおり）**
+- 所持上限3個の撤廃（次弾へ）。
+- AIへの段階配布（Phase 6・効果拡張とセット）。
+- 33種への解放経路拡張・体質12種のUI分離（後続弾）。

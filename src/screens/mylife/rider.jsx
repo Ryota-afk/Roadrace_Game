@@ -9,6 +9,7 @@ import { RiderPortrait } from "../../components/RiderPortrait.jsx";
 import { GOLD_REQS, overall } from "../../core/core.js";
 import { ABILITIES, GROWTH, PERSONALITIES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
+import { badgeExposureScore, badgeReturnLabel, EXPOSURE_NORM, swapsToRestoreGold } from "../../domain/mylife/badge.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
 import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlAcquireAbility, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
@@ -71,11 +72,18 @@ export function renderMyLifeRiderScreen(ctx) {
         const heldRows = abils.filter(id => ABILITIES[id]).map(id => {
           const a = ABILITIES[id];
           const gr = GOLD_REQS[id];
-          const isGold = golds.has(id);
+          const achieved = golds.has(id);
+          // 第42弾: 実績（天井）は達成していても、直近の走り方が離れていればscore<0.5で銅へ戻る（状態C）。
+          const norm = EXPOSURE_NORM[id];
+          const score = achieved && norm ? badgeExposureScore(r, id) : null;
+          const isGold = achieved && (norm ? (score !== null && score >= 0.5) : true);
+          const drifting = achieved && !isGold; // 状態C: 実績はあるが今は銅
           const cur = gr ? gr.cur(r) : 0;
           const need = gr ? gr.need : 0;
-          return { id, a, held: true, isGold, gr, cur, need, ratio: isGold ? 2 : gr ? cur / need : 1.5 };
-        }).sort((a, b) => b.ratio - a.ratio); // 取得済みは金→銅（金への進捗が高い順）の並びにする
+          const swaps = drifting ? swapsToRestoreGold(r, id) : null;
+          const returnLabel = drifting ? badgeReturnLabel(id) : null;
+          return { id, a, held: true, isGold, drifting, gr, cur, need, score, swaps, returnLabel, ratio: isGold ? 2 : drifting ? 1.9 : gr ? cur / need : 1.5 };
+        }).sort((a, b) => b.ratio - a.ratio); // 取得済みは金→（離れた金）→銅の並びにする
         const heldSet = new Set(abils);
         const candRows = Object.entries(ACQUIRE_REQS)
           .filter(([id]) => !heldSet.has(id) && ABILITIES[id])
@@ -97,7 +105,7 @@ export function renderMyLifeRiderScreen(ctx) {
               {rows.map((row, i) => {
                 const border = i === 0 ? "none" : `1px solid ${T.color.rule}`;
                 if (row.held) {
-                  const { id, a, isGold, gr, cur, need } = row;
+                  const { id, a, isGold, drifting, gr, cur, need, score, swaps, returnLabel } = row;
                   return (
                     <div key={id} style={{ padding: `${T.space.sm}px 0`, borderTop: border }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
@@ -105,11 +113,18 @@ export function renderMyLifeRiderScreen(ctx) {
                         <span style={{ fontSize: T.size.caption, color: isGold ? T.color.accent : T.color.sub, flex: "none" }}>{isGold ? "金" : "銅"}</span>
                       </div>
                       <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2, lineHeight: 1.6 }}>
-                        {a.desc}{!isGold && gr && `　　金まで ${cur} / ${need}${gr.unit}`}
+                        {a.desc}
+                        {!isGold && !drifting && gr && `　　金まで ${cur} / ${need}${gr.unit}`}
+                        {drifting && returnLabel != null && swaps != null && `　　金に戻るまで ${returnLabel} あと${swaps}回`}
                       </div>
-                      {!isGold && gr && (
+                      {!isGold && !drifting && gr && (
                         <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
                           <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.accent }} />
+                        </div>
+                      )}
+                      {drifting && (
+                        <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
+                          <div style={{ height: 3, width: `${Math.min(100, (score || 0) / 0.5 * 100)}%`, background: T.color.accent }} />
                         </div>
                       )}
                     </div>

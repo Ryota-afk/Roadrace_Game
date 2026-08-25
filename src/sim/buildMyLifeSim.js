@@ -10,6 +10,7 @@ import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, 
 import { aiPowerFor, mlAiCapFor } from "../domain/shared/scouting.js";
 import { loadMlLegends } from "../breeding/breeding.js";
 import { avgBondFor } from "../domain/mylife/bonds.js";
+import { liveGoldAbilities } from "../domain/mylife/badge.js";
 
 // 第16弾A: ライバルの強さは年齢の山なりで変化する（世界のロースターと同じ「全盛期が最も強い」
 // 発想）。従来は生成時の年齢によらず常にpower+6の固定強度だったため、世界の300名が世代交代する
@@ -230,7 +231,9 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
       // v32（条件付き作戦）：早めに逃げる作戦なら、プレイヤーを逃げ要員として飛び出させる
       const playerRole = tac.playerBreakaway ? "breakaway" : (playerIsAce ? "lead" : "sub");
       riders.push({
-        id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: player.goldAbilities, ...playerEff,
+        // 第42弾: 効果に反映する金特は「実績（天井）はあるが今の走り方は離れている」ものを除いた
+        // 現在ライブな金特のみ（対象外の種は従来どおり永続金のまま）。AI・ライバル等は据え置き。
+        id: player.id, name: player.name, type: player.type, abilities: player.abilities, goldAbilities: liveGoldAbilities(player), ...playerEff,
         team: "PLAYER", teamName: myTeamName, color: T.color.accent,
         isAce: playerIsAce, role: playerRole, isPlayerChar: true,
         // v35: アシストに徹する選手は脚を賢く使い自滅しない（energyDrainで消耗軽減）
