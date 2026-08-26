@@ -114,9 +114,12 @@ export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこ
 // 決まり、牽引できる人数（eligible.length）には一切依存しなかった——これが第53・54弾の
 // 全ての失敗の根本原因だった（逃げが集団より速くなる余地が構造的に存在しなかった）。
 // coopMulは「牽引できる働き手の数」に飽和カーブの速度上乗せを与える。workers=1（単独走・
-// 単独逃げ）は必ずcoopMul=1（見返り無し）。workers=3→+8.0%、6→+13.5%、12→+16.5%、
-// 24→+17.0%（COOP_MAXに漸近）。初期値は仮置き。実装後にOpusが実測して確定する。
-const COOP_MAX = 0.17;
+// 単独逃げ）は必ずcoopMul=1（見返り無し）。
+// ⚠️Phase2実測（devlog/wave55.md）: 出荷時COOP_MAX=0.17は全地形で決着規模が-49〜-68%・
+// 未完走率が最大98%まで壊れた。原因は適用位置の2欠陥（牽引者がgroupDistで進まず自分の
+// 集団から千切れる／残留判定がgroupDist基準でcoopMulを二重計上）で、両方を修正した上で
+// 0.08まで下げると撤退基準（決着規模±20%・所要時間±15%）を満たすことを実測で確認した。
+const COOP_MAX = 0.08;
 const COOP_K = 3.15;
 // 第55弾: 「牽引意欲ゲート」。本隊（最多人数の集団）だけに適用し、逃げ集団
 // （committedBreak）は対象外＝逃げは最初から全員が100%協調する、という設計上の非対称。
@@ -469,6 +472,13 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       const workers = Math.max(1, puller.workerCount ?? members.length);
       const coopMul = 1 + COOP_MAX * (1 - Math.exp(-(workers - 1) / COOP_K));
       const groupDist = puller.lastOwnDist * coopMul;
+      // 第55弾Phase2: 移動パス(手順3)は牽引者を先に「自分の出力dist」で進めてしまうため、
+      // ここでdrafts側だけがgroupDist(=dist×coopMul)で進むと、⚠️ドラフト勢が毎tick
+      // coopMul分だけ牽引者を追い越し、約8tickで牽引者が自分の集団から千切れる
+      // （ローテーション20tickごとに再発）。牽引者の位置を集団速度まで引き上げて揃える。
+      // ⚠️消耗(energy)は引き上げない——協調の見返りはローテーション効率であって、
+      // 牽引者が余計に踏むことではない（第52弾までと同じくpull相当のdrainのまま）。
+      puller.pos = Math.min(course.length, puller.pos + (groupDist - puller.lastOwnDist));
       // v47(第8弾A案): 集団内の位置取り（slot）を、脚力・残脚・判断カードから作り直す。
       // ownCapableはMath.random()のtickジッターを含むため、順位付け用と移動判定用で
       // 2回呼ぶと食い違う。1回だけ計算してキャッシュし、両方で使い回す。
@@ -530,7 +540,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         // v47(第8弾Phase4): hangOnのkeepThresh緩和を0.05→HANGON_KEEPTHRESH_RELIEF(0.12)へ強化
         // （詳細は定数コメント参照）。
         const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight + tempoTighten - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief;
-        if (ownCapable >= groupDist * keepThresh) {
+        // 第55弾Phase2: ⚠️groupDistを基準にするとcoopMulが「選抜の厳格化」として二重計上
+        // される（実効keepThreshが0.9→0.9×1.17＝1.053＝ドラフト勢は牽引者より強くないと
+        // 残れない＝ドラフトの利点そのものが消える）。協調の見返りは速度であって選抜の
+        // 厳格化ではないため、残留の可否は協調前のペース(puller.lastOwnDist)で判定する。
+        if (ownCapable >= puller.lastOwnDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
           // ゴールタイムが不自然なほど大量に完全一致してしまう（差が均質すぎる問題）。
