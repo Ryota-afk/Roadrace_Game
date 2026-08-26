@@ -130,3 +130,46 @@ const raceDrainMul = Math.pow(racePaceMul, TEMPO_DRAIN_EXP);
 7. `TEMPO_ADJUST_*`が完全に削除され、参照が残っていないこと。
 8. 第45〜53弾の既存検証スクリプトが全て通ること・`npx vite build`成功・
    Playwright実機で`pageerror`ゼロ。
+
+## 実装結果（2026-08・Sonnet）
+
+**`src/sim/ticks.js`**
+- `groups`構築の直後に`racePaceMul`/`raceDrainMul`をレース全体で1回だけ計算する処理を新設。
+  「本隊」＝`Object.values(groups)`のうち`members.length`が最大の集団（同数なら`members[0].pos`
+  が大きい方）を選び、`leadPos - bunchPos`から`urgency`を求めて`TEMPO_BASE + (1-TEMPO_BASE)*urgency`
+  とする。`noGroup`時・本隊が終盤/最終区間にいるときは1のまま。
+- モード決定（`Object.values(groups).forEach`）の**後**に、`active.forEach`で全選手に
+  一律`groupPaceMul`/`groupDrainMul`を設定する処理を追加：`committedBreak && (mode==="solo"||"attack")`
+  の選手（＝逃げている選手）だけ1、それ以外（集団内の選手・千切れた非逃げの単独走者）は
+  `racePaceMul`/`raceDrainMul`。旧`members.forEach`内での個別代入は撤去。
+- 移動パス（`active.forEach`、`mode!=="draft"`）で`dist *= en.groupPaceMul`と
+  `energyDrain(...) * en.groupDrainMul`を**pull/solo/attack全モードに一律**適用するよう変更
+  （旧`pull`限定から拡張。「千切れた単独走者も減速させる」という第54弾の核心）。
+- ドラフト勢の`drain`計算（`sheltered ? (en.groupDrainMul ?? 1) : 1`）は式自体は無変更
+  （`groupDrainMul`の中身がレース全体で1つの値に変わっただけ）。
+- `TEMPO_ADJUST_PUSH`/`TEMPO_ADJUST_HOLD`定数と、`rotSpan`分岐内の`tempoAdjust`代入を完全に削除。
+  `chaseMode`/AIスタイルは`rotSpan`（ローテーション周期）にのみ効く形に戻った。
+
+**検証**（Node・Playwright実機。`w54_verify.mjs`をscratchpadに作成）
+1. 同一tickで、本隊・後方の追走集団（別グループ）の`groupPaceMul`が完全に同一の値になる
+   ことを確認（第53弾の失敗——集団間に速度差が生じる——の再発防止）。
+2. 千切れた単独走者（`committedBreak`なし）は本隊と同じ`groupPaceMul`、逃げている選手
+   （`committedBreak`あり）は`groupPaceMul=1`になり、扱いが正しく分かれることを確認。
+3. 逃げが本隊に対して実際に前進し続けること（tick1→tick10でギャップが拡大）を確認。
+4. `gapToBunch = CHASE_FULL_GAP`ちょうどのとき、本隊も`groupPaceMul=1`（全力）に戻る
+   ことを確認。⚠️`simulateTicks`は完走かMAX_TICKS到達まで丸ごと走るため、tick=1時点の
+   値だけを見たい場合はコースを極端に短くして「全員が1tick目で完走する」状態を作る必要が
+   あった（通常長のコースで最終状態を読むと、長距離走行による疲労等の別要因が混ざる）。
+5. 個人TT・チームTT（`noGroup`）は`chaseMode`を変えても`finishTime`が完全一致——無影響。
+6. 終盤（`prog >= TEMPO_END_PROG`）で`groupPaceMul = 1`になることを確認。
+7. `TEMPO_ADJUST_*`の参照がソースに残っていないことを確認。
+8. 第45〜52弾の既存検証スクリプト全て回帰なし。⚠️`w53_verify.mjs`の「事前作戦push/holdで
+   groupPaceMulが変わる」検証2件は**期待どおり失敗する**——`TEMPO_ADJUST_*`を撤去した
+   （確定仕様3）ことによる、設計どおりの変化であって回帰ではない（`w54_verify.mjs`が
+   この機能を引き継いでいないのも同じ理由）。`npx vite build`成功。Playwright実機：
+   マイライフのレースで「登りで抜け出す」を選択→観戦中に「逃げとメインのギャップ：
+   約49秒」の実況表示を確認（大きなギャップが実際に形成された）、`pageerror`ゼロ。
+
+**やらなかったこと（設計どおり）**：`attack`/`send`の定数・`mid`カードは無変更。
+`chaseMode`を展開に接続する件は扱っていない（確定仕様3の帰結として未解決のまま）。
+`TEMPO_BASE`等4定数の確定と、予測・撤退基準に基づく判定はOpusの実測待ち。
