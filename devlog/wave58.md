@@ -255,3 +255,120 @@ AIの逃げロールは`ticks.js`の`fromTick===0`枝で
 ⚠️**コードは実装済み・全検証項目は通過しているが、狙った効果が出ていないためユーザー
 判断待ち。** 撤退基準には抵触していない（`hold`は12.00で不変）が、目的（`attack−hold`
 +1〜+3）も達成していない中間状態。
+
+---
+
+# 第58弾 Phase 2：逃げている間だけ足並みを揃える（設計確定・ユーザー合意済み）
+
+## 原因の特定（Opus実測・`scratchpad/w58_why.mjs`）
+
+分裂の実体は⚠️**プレイヤーが同乗者より12〜32%速いこと**だった。
+
+| seed | 区間 | プレイヤーの1tick | 同乗者の1tick | 速度差 |
+|---|---|---|---|---|
+| 1000 | climb | 0.2302 | 0.1744 / 0.1957 | **+18〜32%** |
+| 1001 | hill | 0.2683 | 0.2400 / 0.2387 | +12% |
+| 1003 | climb | 0.2327 | 0.2082 / 0.2027 | +12〜15% |
+| 2005 | hill | 0.2819 | 0.2466 / 0.2439 | +14〜16% |
+
+35tickで8前後進む中での12%差は約1.0の開きになり、`GROUP_GAP_DIST`(0.22)を大きく超える。
+
+⚠️**能力を揃えるだけでは解決しない**：seed=1003の同乗者1は登坂87でプレイヤー90とほぼ同等
+なのに、バッジ（虹のmount/allclimber）の区間ボーナスで実速度は12%差が付く。
+
+## 中核の気づき
+
+⭐**`attackLeft`が切れて集団になれば、その後は集団の仕組み（牽引ローテとドラフト）が働く。**
+壊れているのは**その前の10〜30tickで散ってしまうこと**だけである。したがって
+**逃げている間だけ足並みを揃えれば足りる**。
+
+## 確定仕様
+
+### 1. `RACE_MOVES.attack`：リーダーにも自己参照のマーカーを立てる
+
+現状、同乗者には`en.bridgedFrom = r.id`が立つが**リーダー（プレイヤー本人）には立たない**。
+コホートを1回の`filter`で取れるよう、`attack`の中で`r.bridgedFrom = r.id`（自己参照）も立てる。
+
+⚠️`finish.js`の難易度スケールは`if (en !== focus && en.bridgedFrom === focus.id ...)`と
+`en !== focus`で本人を除いているため、自己参照を足しても**そのまま正しく動く**（確認済み）。
+
+### 2. `ticks.js`の移動パス：コホートの上限を1tickにつき1回だけ計算する
+
+⚠️`tickDistance`は`Math.random()`のtickジッターを含むため、**同じ選手に2回呼ぶと値が
+食い違う**（`ownCapable`のコメントに前例あり）。したがって移動パスの`active.forEach`の
+**直前**にコホートごとの上限を1回だけ算出してMapに持つ。
+
+```js
+    // 第58弾Phase2(devlog/wave58.md): 同じ逃げに乗った仲間は足並みを揃える。
+    // attackモードは個人の独立走行でgroupDistによる同期がかからないため、能力差が
+    // そのまま位置の差になり、attackLeftが切れて集団になる前に散ってしまう（実測で
+    // 同乗者の92.4%が35tick以内に別集団へ分裂）。pullモードの「エースを置き去りに
+    // しない」処理と同じ型で、コホート内の最も遅い選手の速度を上限にする。
+    // ⚠️tickDistanceはtickジッターを含むので、1tickにつき1回だけ計算して使い回す。
+    const bridgeCap = new Map(); // leaderId -> そのtickでの上限距離
+    if (!noGroup) {
+      const byLeader = new Map();
+      active.forEach(en => {
+        if (en.mode !== "attack" || en.bridgedFrom == null) return;
+        if (!byLeader.has(en.bridgedFrom)) byLeader.set(en.bridgedFrom, []);
+        byLeader.get(en.bridgedFrom).push(en);
+      });
+      byLeader.forEach((cohort, leaderId) => {
+        if (cohort.length < 2) return; // 単独なら上限なし＝従来どおり
+        // ⚠️千切れた同乗者に引きずられないよう、先頭からGROUP_GAP_DIST以内の仲間だけを対象にする
+        const lead = Math.max(...cohort.map(en => en.pos));
+        const together = cohort.filter(en => lead - en.pos <= GROUP_GAP_DIST);
+        if (together.length < 2) return;
+        bridgeCap.set(leaderId, Math.min(...together.map(en =>
+          tickDistance(en, course.segTypeAt(en.pos).type, "attack", course.steepness))));
+      });
+    }
+```
+
+移動パス内、既存の`if (en.mode === "pull") { ...エースに合わせる... }`の**直後**に：
+
+```js
+      if (en.mode === "attack" && en.bridgedFrom != null && bridgeCap.has(en.bridgedFrom)) {
+        dist = Math.min(dist, bridgeCap.get(en.bridgedFrom));
+      }
+```
+
+### 3. クリアは追加不要
+
+`mode === "attack"`を条件にしているため、`attackLeft`が尽きればコホートは自動的に解散する。
+`bridgedFrom`自体は既に`fromTick===0`の初期化と`resumeSim`の冒頭でクリアしており、
+⚠️`resumeSim`は「全員クリア →（`applyMove`で）`attack`が再設定」の順なので順序も正しい。
+
+## やらないこと
+
+- ⚠️**同乗者の選出条件は変えない**（「その区間を走れるか」を足したい誘惑があるが、
+  2つ同時に入れると効果の切り分けができない——第53〜55弾で繰り返した失敗）。
+  足並み合わせだけを入れて測り、足りなければ次の一手にする。
+- `brk`・速度・AIの自発アタックには触れない（第58弾の「やらないこと」を継承）。
+
+## 予測と撤退基準（据え置き）
+
+**狙う値**：`attack−hold`を**+12.87 → +1〜+3**へ。
+
+**撤退基準**：①`hold`が12.00から2着超悪化 ②平坦の逃げが30%超 ③`attack−hold`がマイナス。
+
+⚠️**トレードオフを受け入れる**（ユーザー合意済み）：足並みを揃える＝プレイヤーは
+`attackLeft`の間だけ遅くなる。その代わり3人で回してドラフトし合える。実測で平坦の
+集団逃げは20%勝つのに**単独逃げは0%**なので、遅くなっても集団になるほうが有利なはず。
+
+## 検証項目
+
+1. **コホートの足並みが揃うこと**：同乗ありのレースで、`attackLeft`が尽きる頃
+   （t+35前後）に**全員が同じ集団に居る割合が7.6%から大きく改善**していること
+   （`scratchpad/w58_spread.mjs`をそのまま再実行して比較）。
+2. **上限が1tickにつき1回だけ計算されること**：同一コホートの全員が同じ上限値を使う
+   （`tickDistance`を2回呼んで食い違う実装になっていない）。
+3. **千切れた同乗者に引きずられないこと**：コホートの1人を`GROUP_GAP_DIST`より
+   後方に置いた合成データで、残りの上限がその選手に影響されないことを確認する。
+4. **同乗が0人なら上限が掛からない**こと（単独のattackは従来と完全に同一の挙動）。
+5. `noGroup`（個人TT）で上限計算に入らないこと。
+6. 第46〜52弾＋`w57_verify.mjs`＋`w58_verify.mjs`が全て通ること。
+7. `npx vite build`成功・Playwrightで`pageerror`ゼロ。
+8. ⚠️**実機で「仕掛ける」を選び、スクリーンショットで確認する**——
+   俯瞰マップで**仲間と一緒に逃げている**こと（自分だけが前に出ていない）。
+   ⚠️数値の検証だけで終わらせない。
