@@ -371,6 +371,30 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         }
       }
     });
+    // 第58弾Phase2(devlog/wave58.md): 逃げている間だけ足並みを揃える。attackLeftは
+    // 各人が自分の能力だけで独立に動くため位置の結合が無く、実測で92.4%のコホートが
+    // 30tick程度で分解していた（devlog/wave58.md w58_spread.mjs）。同乗コホート
+    // （同じbridgedFromを持つ、現在mode==="attack"の面々）が今もGROUP_GAP_DIST以内に
+    // 固まっている間だけ、最も遅い1人の到達距離を上限にする。tickDistanceは呼ぶたびに
+    // ジッターで値が変わる（既知の注意点）ため、このtick内で使う値はここで1回だけ計算し
+    // Mapに確定させる（移動パス側で同じ相手に対し2回目のtickDistanceを呼ばない）。
+    const bridgeCap = new Map();
+    if (!noGroup) {
+      const byLeader = new Map();
+      active.forEach(en => {
+        if (en.mode !== "attack" || en.bridgedFrom == null) return;
+        if (!byLeader.has(en.bridgedFrom)) byLeader.set(en.bridgedFrom, []);
+        byLeader.get(en.bridgedFrom).push(en);
+      });
+      byLeader.forEach((cohort, leaderId) => {
+        if (cohort.length < 2) return; // 同乗者0人（単独）はキャップ不要
+        const lead = Math.max(...cohort.map(en => en.pos));
+        const together = cohort.filter(en => lead - en.pos <= GROUP_GAP_DIST);
+        if (together.length < 2) return; // 既に千切れた相手はキャップの基準から外す（置き去りにされた側を道連れにしない）
+        bridgeCap.set(leaderId, Math.min(...together.map(en =>
+          tickDistance(en, course.segTypeAt(en.pos).type, "attack", course.steepness))));
+      });
+    }
     // 3. 移動：先にpull/solo/attackを確定、その後draftが「ついていけるか」を判定
     active.forEach(en => {
       if (en.mode === "draft") return;
@@ -385,6 +409,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       if (en.mode === "pull") {
         const ace = active.find(o => o.team === en.team && o.isAce && o.groupId === en.groupId);
         if (ace) dist = Math.min(dist, tickDistance(ace, segType, "pull", course.steepness));
+      }
+      // 第58弾Phase2(devlog/wave58.md): 同乗コホートが今も固まっている間は、
+      // 上のpullと同じ型で最も遅い1人に合わせる（＝逃げている間だけ足並みを揃える）。
+      if (en.mode === "attack" && en.bridgedFrom != null && bridgeCap.has(en.bridgedFrom)) {
+        dist = Math.min(dist, bridgeCap.get(en.bridgedFrom));
       }
       en.lastOwnDist = dist;
       en.pos = Math.min(course.length, en.pos + dist);
@@ -709,6 +738,10 @@ export const RACE_MOVES = {
     const g = legsLeft01(r);
     r.attackLeft = Math.round(ATTACK_MIN_TICKS + (BREAKAWAY_ATTACK_TICKS - ATTACK_MIN_TICKS) * g);
     r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; r.energy -= 9;
+    // 第58弾Phase2(devlog/wave58.md): 自分自身にもbridgedFromを立てる。逃げている間だけ
+    // 足並みを揃える処理（tickループのbridgeCap計算）は「同じbridgedFrom値を持つ全員」を
+    // コホートとして束ねるため、リーダー自身もこの印が無いと束ねの対象から漏れる。
+    r.bridgedFrom = r.id;
     // 第58弾(devlog/wave58.md): 仕掛けに仲間を乗せる。AIの逃げロールはfromTick===0で
     // 全員が同時に飛び出して最初から集団を作るのに対し、プレイヤーのattackは単独だった
     // （平坦・丘陵では単独逃げの勝率0.0%・devlog/wave57.md〜wave58.md実測）。同じ集団にいる、
