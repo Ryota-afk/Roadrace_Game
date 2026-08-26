@@ -27,6 +27,13 @@ const TEAM_SHELTER_FLOOR = 0.6;       // 下限（大所帯チームでも消耗
 const TEAM_KEEP_RELIEF_PER_MATE = 0.015;
 const TEAM_KEEP_RELIEF_PULL_BONUS = 0.02;
 const TEAM_KEEP_RELIEF_MAX = 0.08;
+// 第59弾(devlog/wave59.md): 吸収された逃げが集団に復帰できるようにする。attackが失敗して
+// 集団に飲まれた選手は、energyが集団より12〜20低いまま(mode="solo"はregenの対象外)、
+// 復帰直後にkeepThreshで即座に再び千切れて大敗する（実測：吸収時-6.33〜-9.78着）。
+// 一度きりの猶予tickの間だけkeepThreshを線形に緩め、既存のregen（集団に留まれば自然回復）が
+// 追いつく時間を与える。回復量・brk・速度には一切触れない（第52〜55弾で行き止まりと確定した軸）。
+const REJOIN_TICKS = 45;
+const REJOIN_KEEPTHRESH_RELIEF = 0.08;
 // v12: AIチームごとの隠しの戦略スタイル（プレイヤーの事前作戦とは独立）。
 // aggressive=push相当・conservative=hold相当のローテーションペースになる
 export const AI_STYLES = ["aggressive", "balanced", "conservative"];
@@ -223,6 +230,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       // holdOn>0の間は歯を食いしばって集団に食らいつく（keepThreshが下がる＝千切れにくい）。
       en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; en.tempoLeft = 0;
       en.bridgedFrom = null; // 第58弾: レースを跨いで残らないよう明示的にクリアする
+      en.rejoinLeft = 0; en.rejoinDone = false; // 第59弾: レースを跨いで残らないよう明示的にクリアする
       // v52(第14弾C): TTペース配分ゆらぎ。レース開始時（fromTick===0）に1回だけ引き、
       // レース中は変えない（tickSpeedFactorのtt区間で毎tick乗算される）
       en.ttPacing = 1 + (Math.random() - 0.5) * 2 * TT_PACING_SPREAD * steadyMul(en);
@@ -353,6 +361,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         if (en.attackLeft > 0) { en.mode = "attack"; en.slot = 0; en.attackLeft--; return; }
         en.mode = (puller && en === puller) ? "pull" : "draft";
         if (en.mode === "pull") en.slot = 0; // draft側はこの後の位置取りパスで割り当て直す
+        // 第59弾(devlog/wave59.md): attackLeftが尽きて集団に戻った選手（committedBreak）に
+        // 一度だけ復帰猶予（rejoinLeft）を与える。rejoinDoneで一度きりに固定し、
+        // 同じレースで何度も仕掛けて猶予を稼ぐことを防ぐ。
+        if (en.committedBreak && !en.rejoinDone) { en.rejoinLeft = REJOIN_TICKS; en.rejoinDone = true; }
       });
       // 第56弾(devlog/wave56.md): 集団に牽引者が1人も居ないと、ドラフト勢は移動パス
       // (手順3)から除外されたまま後段の集団ループも`if (!puller) return;`で抜けるため、
@@ -534,7 +546,10 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         const tempoTighten = members.some(m => m !== en && m.tempoLeft > 0 && hasTerrainBadge(m, segType)) ? TEMPO_KEEP_TIGHTEN : 0;
         // v47(第8弾Phase4): hangOnのkeepThresh緩和を0.05→HANGON_KEEPTHRESH_RELIEF(0.12)へ強化
         // （詳細は定数コメント参照）。
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight + tempoTighten - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief;
+        // 第59弾(devlog/wave59.md): 吸収された逃げの復帰猶予。残りtickに比例して線形に減衰
+        // させる（崖にしない）。既存のHANGON_KEEPTHRESH_RELIEF・grinder緩和と同じ型。
+        const rejoinRelief = en.rejoinLeft > 0 ? REJOIN_KEEPTHRESH_RELIEF * (en.rejoinLeft / REJOIN_TICKS) : 0;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight + tempoTighten - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief - rejoinRelief;
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -629,6 +644,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       if (en.conserveLeft > 0) en.conserveLeft--; // v39(A案): 温存の残りtickを消化
       if (en.holdOn > 0) en.holdOn--;             // v39(A案): 食らいつく残りtickを消化
       if (en.tempoLeft > 0) en.tempoLeft--;       // 第51弾: ふるいにかけるの残りtickを消化
+      if (en.rejoinLeft > 0) en.rejoinLeft--;     // 第59弾: 復帰猶予の残りtickを消化
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
       en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
       en.nextPullerHist[tick] = !!en.nextPuller;

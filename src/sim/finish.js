@@ -27,6 +27,7 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
     en.isLeadingOut = false;
     en.leadoutSurging = false;
     en.bridgedFrom = null; // 第58弾: 前回の一手で付いた同乗マーカーを毎回作り直す
+    en.rejoinLeft = 0; en.rejoinDone = false; // 第59弾: 前回の一手で付いた復帰猶予を毎回作り直す
     // 注目選手以外の判断由来の状態はリセット（assistLaunchでエースに付けた分は下で再適用される）
     if (en.id !== focusId) { en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; }
   });
