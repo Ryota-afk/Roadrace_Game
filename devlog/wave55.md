@@ -716,3 +716,19 @@ byte-for-byte一致**させる（テンポ撤去のときと同じ機械検証�
 という**外挿**で埋められており、着順がシミュレーションではなく外挿式で決まっている。
 ⭐**コース長・地形からtick予算を算出する形に直すのが素直**で、これは単体で価値があり
 `hold`の基準点も動かさない。**第56弾の第一候補**とする。
+
+## 撤去の実装結果（Sonnet・2026-08）
+
+`src/sim/ticks.js`を`git checkout c76c0b6 -- src/sim/ticks.js`で復元。
+⭐`git diff c76c0b6 -- src/sim/ticks.js`が**完全に無出力**＝byte-for-byte一致を確認。
+
+`w55_verify.mjs`は削除。`w52_verify.mjs`検証5は`attackLeft <= 11`から
+元の`attackLeft === 10`へ戻し、`w51_verify.mjs`は変更不要（既に元の較正値のまま）。
+
+⭐**試金石は両方通過**：`w51_verify.mjs`（元の較正値のまま）・`w52_verify.mjs`
+（`attackLeft===10`に戻した状態）どちらも全項目OK＝第52弾完了時点の挙動に
+正しく戻ったことを確認。第46〜52弾の既存検証も全て通過。`npx vite build`成功
+（ビルド後サイズが本セッション冒頭のテンポ撤去時と同一の1,415.03kB）。
+Playwrightで`pageerror`ゼロ。
+
+**第55弾はこれで終了。次は第56弾（`MAX_TICKS`固定値バグ、または`brk`の再較正）。**
