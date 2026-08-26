@@ -222,6 +222,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       // 脚を溜める（牽引しない＋消耗軽減）、finaleSend（数値）は最終区間の追い込みの上乗せ、
       // holdOn>0の間は歯を食いしばって集団に食らいつく（keepThreshが下がる＝千切れにくい）。
       en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; en.tempoLeft = 0;
+      en.bridgedFrom = null; // 第58弾: レースを跨いで残らないよう明示的にクリアする
       // v52(第14弾C): TTペース配分ゆらぎ。レース開始時（fromTick===0）に1回だけ引き、
       // レース中は変えない（tickSpeedFactorのtt区間で毎tick乗算される）
       en.ttPacing = 1 + (Math.random() - 0.5) * 2 * TT_PACING_SPREAD * steadyMul(en);
@@ -654,6 +655,9 @@ const SEND_MIN_TICKS = 4, SEND_MAX_TICKS = 18;      // 早駆けの持続（空:
 // 明確に上へ引き上げる。
 const SEND_MIN_KICK = 0.03, SEND_MAX_KICK = 0.13;   // 早駆けの最終直線での上乗せ
 const ATTACK_MIN_TICKS = 10;                        // 仕掛けの持続の下限（満はBREAKAWAY_ATTACK_TICKS）
+// 第58弾(devlog/wave58.md): 仕掛け(attack)に同乗する仲間の上限人数。プレイヤーと合わせて
+// 3人＝実測で勝っている集団逃げの規模。
+const BRIDGE_MAX = 2;
 // v47(第8弾Phase4): 差し脚系(kick/kickBig/sprintWait)は残脚に関係なく固定値の追い込みを
 // 得ていたため、attack/sendだけが残脚ゲートの代償を背負う非対称になっていた（Phase 3実測で
 // 発火点によらずkickが最強手として支配的だったのはこれが原因）。他の判断と同じく
@@ -701,10 +705,41 @@ export const RACE_MOVES = {
   // 踏み倒すだけ（send）が全脚質・全地形で最適解になっていた（丘陵クライマーで勝率0%→54%等）。
   // 出力を上げれば脚は減る＝脚が残っている時にだけ決まる、という当たり前の駆け引きに戻す。
   // v46(#27): 持続を残脚に比例させる（脚が空なら飛び出しても続かない）。
-  attack: (r) => {
+  attack: (r, riders) => {
     const g = legsLeft01(r);
     r.attackLeft = Math.round(ATTACK_MIN_TICKS + (BREAKAWAY_ATTACK_TICKS - ATTACK_MIN_TICKS) * g);
     r.committedBreak = true; r.conserveLeft = 0; r.holdOn = 0; r.energy -= 9;
+    // 第58弾(devlog/wave58.md): 仕掛けに仲間を乗せる。AIの逃げロールはfromTick===0で
+    // 全員が同時に飛び出して最初から集団を作るのに対し、プレイヤーのattackは単独だった
+    // （平坦・丘陵では単独逃げの勝率0.0%・devlog/wave57.md〜wave58.md実測）。同じ集団にいる、
+    // 集団ゴールで勝ち目が薄い選手を最大BRIDGE_MAX人、プレイヤーと同じ条件で同時に飛び出させる。
+    // ⚠️en.groupIdはこの時点ではレース終了直前（前回のtickループ終了時）の値のまま残っており、
+    // fromTick時点の実際の隊列を反映していない（実測で確認済み）。ここで現在のposを基準に
+    // グループを作り直して使う（手順1のグループ判定と同じアルゴリズム）。
+    if (riders) {
+      const active = riders.filter(en => !en.finished);
+      active.sort((a, b) => b.pos - a.pos);
+      let gid = 0;
+      active.forEach((en, i) => {
+        if (i === 0) { en._bridgeGroup = gid; return; }
+        en._bridgeGroup = (active[i - 1].pos - en.pos <= GROUP_GAP_DIST) ? active[i - 1]._bridgeGroup : ++gid;
+      });
+      const rGroup = r._bridgeGroup;
+      const mates = active
+        .filter(en => en !== r && !en.isAce && en.attackLeft <= 0 && !en.committedBreak
+          && en.mode !== "solo" && en.energy >= 42 && en._bridgeGroup === rGroup)
+        .map(en => {
+          const peak = Math.max(en.flat || 0, en.climb || 0, en.sprint || 0, en.stamina || 0, en.solo || 0);
+          return { en, sprintGap: peak - (en.sprint || 0) };
+        })
+        .filter(c => c.sprintGap >= 8) // スプリント型は集団ゴールを待つ＝乗る動機が無い
+        .sort((a, b) => b.sprintGap - a.sprintGap || a.en.id - b.en.id) // 動機の強い順・同値はid昇順で決定論的
+        .slice(0, BRIDGE_MAX);
+      mates.forEach(({ en }) => {
+        en.attackLeft = r.attackLeft; en.committedBreak = true; en.conserveLeft = 0; en.holdOn = 0;
+        en.energy -= 9; en.bridgedFrom = r.id;
+      });
+    }
   },
   // 🛡 脚を溜める：集団後方で牽かず消耗を抑える。勝負所に脚を残す堅実策
   // v47(第8弾Phase4): 500→260tickへ再較正（詳細は定数コメント参照）。

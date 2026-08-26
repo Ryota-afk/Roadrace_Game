@@ -26,6 +26,7 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
     en.committedBreak = false;
     en.isLeadingOut = false;
     en.leadoutSurging = false;
+    en.bridgedFrom = null; // 第58弾: 前回の一手で付いた同乗マーカーを毎回作り直す
     // 注目選手以外の判断由来の状態はリセット（assistLaunchでエースに付けた分は下で再適用される）
     if (en.id !== focusId) { en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; }
   });
@@ -46,6 +47,9 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
       if (focus.holdOn > 0) focus.holdOn = Math.round(focus.holdOn * eff);
       if (focus.tempoLeft > 0) focus.tempoLeft = Math.max(6, Math.round(focus.tempoLeft * eff));
       riders.forEach(en => { if (en !== focus && en.finaleSend) en.finaleSend *= eff; }); // アシストの射出も同様
+      // 第58弾(devlog/wave58.md): attackに同乗した仲間のattackLeftにも同じ難易度スケールを
+      // 掛ける。ここを漏らすとプレイヤーと同乗者の持続がズレて逃げが分解する。
+      riders.forEach(en => { if (en !== focus && en.bridgedFrom === focus.id && en.attackLeft > 0) en.attackLeft = Math.max(6, Math.round(en.attackLeft * eff)); });
     }
   };
   simulateTicks(sim.course, riders, fromTick, sim.directive || { chaseMode: "normal", aceEarly: false }, sim.groupMode === "solo", applyMove);
