@@ -162,3 +162,44 @@ Phase 1直後にOpusが以下を実測し、その結果を見てから再較正
   ストリームが進んでいるため。`scratchpad/w51_tempo.mjs`参照）。
 - `tempo`の3定数（`TEMPO_KEEP_TIGHTEN`／`TEMPO_ENERGY_COST`／`TEMPO_MIN/MAX_TICKS`）の
   確定もPhase 2で行う。
+
+## Phase 1 実装結果（2026-08・Sonnet）
+
+**`src/sim/ticks.js`**
+- `simulateTicks(course, riders, fromTick, directive, noGroup, onResume)`に第6引数
+  `onResume`を追加。`fromTick !== 0`の復元ブロック（pos/energy/各履歴のslice等）の直後、
+  tickループに入る前に`if (onResume) onResume(riders);`を呼ぶ。`fromTick === 0`の経路
+  （レース生成時）は無変更。
+
+**`src/sim/finish.js`**
+- `resumeSim`の`RACE_MOVES[moveId](focus, riders)`呼び出しと難易度スケール
+  （`MOVE_EFF_BY_DIFF`）のブロックを`applyMove`という関数にまとめ、`simulateTicks`の
+  第6引数として渡す形に変更。全選手一括リセット（`attackLeft`/`tempoLeft`/
+  `committedBreak`等）は従来どおり`simulateTicks`呼び出しより前のまま。
+- 難易度スケールに`focus.tempoLeft > 0`のケースを追加（第51弾で漏れていた分）。
+- バランス定数は1つも変更していない（設計どおり）。
+
+**検証**（Node・Playwright実機。`w52_verify.mjs`をscratchpadに作成）
+1〜3. `tempo`/`attack`/`send`/`hangOn`の4種で、UIが表示する残脚（`energyHist[ft-1]`）と
+   `RACE_MOVES`が実際に読んだ`r.energy`が一致し、消費（-14/-9/-17/-3）が復元後にも
+   残っていることを確認（修正前はいずれも差0.0だった）。
+4. 残脚満タンで`tempoLeft`=110・`attackLeft`=30・`send`の`finaleSend`=0.130と、各レンジの
+   **上限**に届くことを確認（修正前は常に下限の40/10/0.030だった）。
+5. 残脚僅少で`attackLeft`=10（下限）になり、UI側の`moveEdge`も「不発」表示と一致することを
+   確認。
+6. `teamShelter`/`teamChase`が僚友に与える消費（-7/-12）が変わらず機能することを確認。
+7. 難易度スケール（`easy`×1.15／`oni`×0.66）が`tempoLeft`にも正しく効くことを確認。
+8. ⚠️`onResume`を渡さない`fromTick===0`経路（レース生成時）は、同一シードで修正前後の
+   全選手の`finishTime`が完全一致し、`onResume`が呼ばれないことを機械検証（回帰ゼロ）。
+9. 第45〜51弾の既存検証スクリプト（`w45_verify1/2/3`・`w46_verify`・`w47_verify`・
+   `w48_verify`・`w50_verify`・`w51_verify`）を全て再実行し回帰なし。`npx vite build`成功。
+   Playwright実機：マイライフのレースを1本、スキップを使わず観戦し、判断カードが3回
+   （中盤・状況発火・勝負所）発火してそれぞれ選択→結果画面まで到達、`pageerror`ゼロ。
+
+**わかったこと（Phase 2への申し送り）**：修正によって`tempo`の実際の持続は40→最大110tick
+（2.75倍）に伸び、`send`の追い込みは0.030→最大0.130（4.3倍）になる。第51弾で実測した
+数字（tempo効果が平均0.6人しか削れない等）はすべて「消費0・持続40tick固定」という
+壊れた前提の上のものなので、Phase 2はゼロから測り直す。
+
+**やらなかったこと（設計どおり）**：バランス定数の変更・`tempo`の3定数の確定・
+他の一手（`kick`/`kickBig`/`sprintWait`/`conserve`）の再較正はすべてPhase 2へ持ち越し。

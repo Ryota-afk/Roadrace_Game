@@ -30,7 +30,12 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
     if (en.id !== focusId) { en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; }
   });
   const focus = riders.find(en => en.id === focusId);
-  if (focus && RACE_MOVES[moveId]) {
+  // 第52弾: 一手の適用をsimulateTicksの復元処理の"後"へ渡す（devlog/wave52.md）。
+  // 復元より前に適用すると、(1)一手が引いたenergyが復元で上書きされて消え、
+  // (2)RACE_MOVESが読むr.energyが前回の走り切りのゴール時の値になりlegsLeft01が
+  // 常に下限を返す、という2つのバグがあった。
+  const applyMove = () => {
+    if (!focus || !RACE_MOVES[moveId]) return;
     RACE_MOVES[moveId](focus, riders);
     // 難易度に応じて一手の効き（アタック持続・追い込み量・温存量）をスケールする
     const eff = MOVE_EFF_BY_DIFF[sim.difficulty] ?? 1;
@@ -39,10 +44,11 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
       if (focus.finaleSend) focus.finaleSend *= eff;
       if (focus.conserveLeft > 0) focus.conserveLeft = Math.round(focus.conserveLeft * eff);
       if (focus.holdOn > 0) focus.holdOn = Math.round(focus.holdOn * eff);
+      if (focus.tempoLeft > 0) focus.tempoLeft = Math.max(6, Math.round(focus.tempoLeft * eff));
       riders.forEach(en => { if (en !== focus && en.finaleSend) en.finaleSend *= eff; }); // アシストの射出も同様
     }
-  }
-  simulateTicks(sim.course, riders, fromTick, sim.directive || { chaseMode: "normal", aceEarly: false }, sim.groupMode === "solo");
+  };
+  simulateTicks(sim.course, riders, fromTick, sim.directive || { chaseMode: "normal", aceEarly: false }, sim.groupMode === "solo", applyMove);
   rankSim(sim);
   return sim;
 }

@@ -195,7 +195,7 @@ export function assignAIRoles(members, squadN) {
   return roles;
 }
 
-export function simulateTicks(course, riders, fromTick, directive, noGroup) {
+export function simulateTicks(course, riders, fromTick, directive, noGroup, onResume) {
   if (fromTick === 0) {
     riders.forEach(en => {
       en.pos = 0; en.energy = 100; en.finished = false; en.finishTime = null;
@@ -250,6 +250,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       if (en.pos < course.length) { en.finished = false; en.finishTime = null; }
       if (directive.aceEarly && en.isAce) { en.attackLeft = ATTACK_TICKS; en.committedBreak = true; }
     });
+    // 第52弾: 判断カードの一手はここ（復元の直後）で適用する。以前はresumeSim側で
+    // 復元より前に適用していたため、(1)一手が引いたenergyがこの復元処理で上書きされて
+    // 消え、(2)RACE_MOVESが読むr.energyが前回の走り切りのゴール時の値になり
+    // legsLeft01が常に下限を返していた（devlog/wave51.md・wave52.md）。
+    if (onResume) onResume(riders);
   }
   let tick = fromTick;
   while (tick < MAX_TICKS) {
