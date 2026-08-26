@@ -110,6 +110,23 @@ export function groupShelterMul(n) {
 }
 
 export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこない位置）での基礎回復量/tick
+// 第55弾(devlog/wave55.md): 集団の移動速度は牽引者1人の出力（puller.lastOwnDist）だけで
+// 決まり、牽引できる人数（eligible.length）には一切依存しなかった——これが第53・54弾の
+// 全ての失敗の根本原因だった（逃げが集団より速くなる余地が構造的に存在しなかった）。
+// coopMulは「牽引できる働き手の数」に飽和カーブの速度上乗せを与える。workers=1（単独走・
+// 単独逃げ）は必ずcoopMul=1（見返り無し）。workers=3→+8.0%、6→+13.5%、12→+16.5%、
+// 24→+17.0%（COOP_MAXに漸近）。初期値は仮置き。実装後にOpusが実測して確定する。
+const COOP_MAX = 0.17;
+const COOP_K = 3.15;
+// 第55弾: 「牽引意欲ゲート」。本隊（最多人数の集団）だけに適用し、逃げ集団
+// （committedBreak）は対象外＝逃げは最初から全員が100%協調する、という設計上の非対称。
+// レース序盤（未組織）は牽引できる中でもCHASE_EARLY_WILLING（45%）しか実際には前を牽かず、
+// 集団が「組織化」される（進行度がCHASE_ORGANIZE_PROGへ近づく）ほど参加率が100%へ上がる。
+// 選出はMath.random()ではなくriderHash01（決定論的）で行い、同一シードなら毎回同じ選手が
+// 早期に牽く。初期値は仮置き。実装後にOpusが実測して確定する。
+const CHASE_EARLY_WILLING = 0.45;
+const CHASE_ORGANIZE_PROG = 0.60;
+const CHASE_WILLING_SALT = 55;
 // v35(バランス): 勝負を賭けた逃げ（committedBreak）が単独で先頭に立っている間だけ、
 // 選抜地形で消耗が軽減される（brk係数）。登坂・山岳で最も効き（集団が組織的に追えず、
 // 登りでは集団のドラフト優位も縮む）、丘で中程度、平坦・スプリントでは軽め＝それでも吸収される。
@@ -302,6 +319,16 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         if (Math.random() < chance) { en.attackLeft = BREAKAWAY_ATTACK_TICKS; en.committedBreak = true; }
       });
     });
+    // 第55弾: 牽引意欲ゲートを適用する「本隊」＝最多人数の集団（同数なら前方の集団）を特定する。
+    // 逃げ集団（committedBreakだけで構成される集団）は本隊になり得ないので対象外は自動的に成立する。
+    let mainBunchId = null;
+    if (!noGroup) {
+      let mainBunch = null;
+      Object.values(groups).forEach(g => {
+        if (!mainBunch || g.length > mainBunch.length || (g.length === mainBunch.length && g[0].pos > mainBunch[0].pos)) mainBunch = g;
+      });
+      if (mainBunch) mainBunchId = mainBunch[0].groupId;
+    }
     Object.values(groups).forEach(members => {
       if (members.length === 1) {
         const en = members[0];
@@ -313,6 +340,20 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       const segType = course.segTypeAt(members[0].pos).type;
       // v39(A案): 「脚を溜める」判断中の選手は前を牽かない（集団後方で温存する）
       let eligible = members.filter(en => canPull(en, segType) && !(en.conserveLeft > 0));
+      // 第55弾(devlog/wave55.md): 牽引意欲ゲート。本隊にのみ適用し、逃げている選手が
+      // 混在する集団（committedBreakが1人でもいる集団＝逃げ集団への合流中）は対象外にする。
+      if (members[0].groupId === mainBunchId && !members.some(en => en.committedBreak) && eligible.length > 1) {
+        const prog = members[0].pos / course.length;
+        const organized = Math.min(1, prog / CHASE_ORGANIZE_PROG);
+        const willingFrac = CHASE_EARLY_WILLING + (1 - CHASE_EARLY_WILLING) * organized;
+        const willingCount = Math.max(1, Math.round(eligible.length * willingFrac));
+        eligible = [...eligible]
+          .sort((a, b) => riderHash01(a.id, CHASE_WILLING_SALT) - riderHash01(b.id, CHASE_WILLING_SALT))
+          .slice(0, willingCount);
+      }
+      // 第55弾: coopMul（groupDist算出時）が読む「働き手の数」。このtickでのeligible
+      // （ゲート適用後）をグループ全員に記録しておく。
+      members.forEach(en => { en.workerCount = eligible.length; });
       let rotSpan = ROTATION_PERIOD_TICKS;
       // v12: 自チームが関与するグループはプレイヤーの事前作戦（directive.chaseMode）に従う。
       // AIチームのみのグループは、そのグループの多数派チームが持つ隠しスタイル
@@ -423,7 +464,11 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
           });
         }
       }
-      const groupDist = puller.lastOwnDist;
+      // 第55弾(devlog/wave55.md): 集団速度＝牽引者1人の出力、という従来の式に「働き手の数」の
+      // 見返りを足す。workers=1（単独走・単独逃げ）は必ずcoopMul=1（見返り無し・自動的に成立）。
+      const workers = Math.max(1, puller.workerCount ?? members.length);
+      const coopMul = 1 + COOP_MAX * (1 - Math.exp(-(workers - 1) / COOP_K));
+      const groupDist = puller.lastOwnDist * coopMul;
       // v47(第8弾A案): 集団内の位置取り（slot）を、脚力・残脚・判断カードから作り直す。
       // ownCapableはMath.random()のtickジッターを含むため、順位付け用と移動判定用で
       // 2回呼ぶと食い違う。1回だけ計算してキャッシュし、両方で使い回す。

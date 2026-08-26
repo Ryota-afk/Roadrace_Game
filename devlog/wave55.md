@@ -324,3 +324,44 @@ const willingFrac = CHASE_EARLY_WILLING + (1 - CHASE_EARLY_WILLING) * organized;
 **テンポ（第53・54弾）の撤去を先に、単独のコミットで行うこと。** 撤去だけの状態で
 「第52弾完了時点と同一シードで`finishTime`が完全一致する」ことを機械検証してから、
 協調による速度を足す。⚠️2つを同時に入れると、問題が起きたときにどちらが原因か切り分けられない。
+
+## 実装結果（Sonnet・2026-08）
+
+### 手順1: テンポ撤去
+仕様どおり4定数・計算ブロック・`groupPaceMul`/`groupDrainMul`配布・移動パスの乗算・
+`tempoDrainMul`を削除。撤去後の`src/sim/ticks.js`は第52弾Phase2完了時点のコミット
+（`c76c0b6`）と`git diff`で**無変更＝byte-for-byte一致**を確認（実行時の`finishTime`比較
+より厳密な検証）。`TEMPO_KEEP_TIGHTEN`等は維持。
+
+### 手順2: coopMul + やる気ゲート
+仕様どおり実装（`eligible`はローテーション用のものを流用、`riderHash01(id, 55)`で
+決定論的に選出、`groupDist = puller.lastOwnDist * coopMul`）。`mainBunchId`はモード決定
+ループの直前で「最多人数の集団」として算出し、逃げ集団（`committedBreak`を1人でも含む
+集団）には適用しない。
+
+⚠️**副作用**：coopMulが集団全体の速度を最大+17%押し上げるため、第51弾の`tempo`カード
+検証（`w51_verify.mjs`検証6）で使っていた較正値（強組climb=80 vs 弱組climb=51）が無効化
+され、`hold`ですら弱組が即座に千切れる誤検知が発生した。**`tempo`本体のロジック
+（`TEMPO_KEEP_TIGHTEN`）は無変更**であることをdiffで確認した上で、境界値を弱組climb=51→75
+に再較正（id1の「mount正規化」climb=67→80も、coopMulの影響が支配的になったため不要に
+なり撤去）。fromTick=1〜150の広い範囲でhold=0/6・tempo=6/6が安定することを実測確認済み。
+
+### 検証結果（`w55_verify.mjs`新規作成）
+1. 同一`eligible`人数→同一`coopMul`（純関数）：OK
+2. `coopMul`が仕様表（1=1.000/3=1.080/6=1.135/12=1.165/24=1.170）と一致：OK
+3. 単独走者`coopMul=1.000`：OK
+4. 逃げ集団にやる気ゲートが掛からないこと・本隊には掛かること：合成コース
+   （本隊9人 vs 逃げ集団3人・`committedBreak`）で牽引者以外の実際の移動距離を
+   `tickDistance`から独立に再計算した期待値と突き合わせて確認。本隊は9人→4人
+   （`CHASE_EARLY_WILLING=0.45`込み）に絞られ、逃げ集団は3人のまま：OK
+5. やる気ゲートの選出が決定論的（`riderHash01`を同一salt・同一idで2回計算し一致）：OK
+6. 個人TT（`noGroup`）が無影響（同一シードで`finishTime`完全一致）：OK
+7. 第46〜52弾の既存検証スクリプトが全て通過（`w53_verify.mjs`・`w54_verify.mjs`は
+   テンポ撤去に伴い削除）。`w51_verify.mjs`は上記の較正値のみ更新して通過。
+8. `npx vite build`成功。Playwrightで`dist/index.html`初期表示時の`pageerror`ゼロ
+   （実機での深い画面遷移までは確認していない・簡易スモークテストの範囲）。
+
+### 次のアクション
+Phase 2（Opus担当）：`w55_shape.mjs`・`w55_breaktype.mjs`・`w54_sweep_one.mjs`で
+撤退基準（`hold`2着以内・+10秒人数±20%以内・レース長±15%以内）と目標表
+（集団逃げ10〜15%/8〜12%・単独逃げ10〜15%）を測定する。
