@@ -302,30 +302,35 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         if (Math.random() < chance) { en.attackLeft = BREAKAWAY_ATTACK_TICKS; en.committedBreak = true; }
       });
     });
+    // 第53弾: 集団のテンポ計算に使う「レースの現在の先頭位置」（noGroup時は使わない）
+    const leadPos = noGroup ? 0 : Math.max(...active.map(en => en.pos));
     Object.values(groups).forEach(members => {
       if (members.length === 1) {
         const en = members[0];
         en.mode = en.attackLeft > 0 ? "attack" : "solo";
         en.slot = 0;
+        en.groupPaceMul = 1; en.groupDrainMul = 1;
         if (en.attackLeft > 0) en.attackLeft--;
         return;
       }
-      const segType = course.segTypeAt(members[0].pos).type;
+      const segInfo0 = course.segTypeAt(members[0].pos);
+      const segType = segInfo0.type;
       // v39(A案): 「脚を溜める」判断中の選手は前を牽かない（集団後方で温存する）
       let eligible = members.filter(en => canPull(en, segType) && !(en.conserveLeft > 0));
       let rotSpan = ROTATION_PERIOD_TICKS;
+      let tempoAdjust = 0;
       // v12: 自チームが関与するグループはプレイヤーの事前作戦（directive.chaseMode）に従う。
       // AIチームのみのグループは、そのグループの多数派チームが持つ隠しスタイル
       // （aiStyle）に応じたペースになる（プレイヤーの作戦とは独立）
       if (members.some(en => en.team === "PLAYER")) {
-        if (directive.chaseMode === "push") rotSpan = Math.max(2, ROTATION_PERIOD_TICKS - 2);
-        if (directive.chaseMode === "hold") rotSpan = ROTATION_PERIOD_TICKS + 3;
+        if (directive.chaseMode === "push") { rotSpan = Math.max(2, ROTATION_PERIOD_TICKS - 2); tempoAdjust = TEMPO_ADJUST_PUSH; }
+        if (directive.chaseMode === "hold") { rotSpan = ROTATION_PERIOD_TICKS + 3; tempoAdjust = TEMPO_ADJUST_HOLD; }
       } else {
         const styleCounts = {};
         members.forEach(en => { if (en.aiStyle) styleCounts[en.aiStyle] = (styleCounts[en.aiStyle] || 0) + 1; });
         const domStyle = Object.entries(styleCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-        if (domStyle === "aggressive") rotSpan = Math.max(2, ROTATION_PERIOD_TICKS - 2);
-        if (domStyle === "conservative") rotSpan = ROTATION_PERIOD_TICKS + 3;
+        if (domStyle === "aggressive") { rotSpan = Math.max(2, ROTATION_PERIOD_TICKS - 2); tempoAdjust = TEMPO_ADJUST_PUSH; }
+        if (domStyle === "conservative") { rotSpan = ROTATION_PERIOD_TICKS + 3; tempoAdjust = TEMPO_ADJUST_HOLD; }
       }
       const rotIdx = Math.floor(tick / rotSpan);
       let puller = eligible.length ? eligible[rotIdx % eligible.length] : null;
@@ -349,6 +354,18 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         en.mode = (puller && en === puller) ? "pull" : "draft";
         if (en.mode === "pull") en.slot = 0; // draft側はこの後の位置取りパスで割り当て直す
       });
+      // 第53弾: 集団のテンポ。前に脅威（逃げ・単独の選手）が無ければペースを落として巡航し、
+      // 差が開くほど全力へ戻る。終盤・最終区間は常に全力（devlog/wave53.md）。
+      const prog = members[0].pos / course.length;
+      let paceMul = 1;
+      if (!noGroup && prog < TEMPO_END_PROG && segInfo0.idx !== course.finalIdx) {
+        const gapAhead = Math.max(0, leadPos - members[0].pos);
+        const urgency = Math.min(1, gapAhead / CHASE_FULL_GAP);
+        const base = Math.min(1, Math.max(0, TEMPO_BASE + tempoAdjust));
+        paceMul = base + (1 - base) * urgency;
+      }
+      const paceDrainMul = Math.pow(paceMul, TEMPO_DRAIN_EXP);
+      members.forEach(en => { en.groupPaceMul = paceMul; en.groupDrainMul = paceDrainMul; });
     });
     // 3. 移動：先にpull/solo/attackを確定、その後draftが「ついていけるか」を判定
     active.forEach(en => {
@@ -364,10 +381,15 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       if (en.mode === "pull") {
         const ace = active.find(o => o.team === en.team && o.isAce && o.groupId === en.groupId);
         if (ace) dist = Math.min(dist, tickDistance(ace, segType, "pull", course.steepness));
+        // 第53弾: 集団のテンポ。脅威が無ければ牽引ペースを落とす（devlog/wave53.md）
+        dist *= en.groupPaceMul ?? 1;
       }
       en.lastOwnDist = dist;
       en.pos = Math.min(course.length, en.pos + dist);
-      en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode, segType, course.steepness));
+      // 第53弾: ペースを落とした分だけ消耗も軽くする（掛けないとkeepThreshが緩み
+      // 千切れが減って団子ゴールが復活する。牽引者のみ対象・solo/attackは対象外）
+      const tempoDrainMul = en.mode === "pull" ? (en.groupDrainMul ?? 1) : 1;
+      en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode, segType, course.steepness) * tempoDrainMul);
     });
     Object.values(groups).forEach(members => {
       const puller = members.find(en => en.mode === "pull");
@@ -569,7 +591,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         // 0.60は過剰だった（中盤発火・持続tickを150まで削っても勝率93%と動かなかった＝tick数では
         // なくこの消費倍率そのものが支配的だったと実測で判明）。0.75へ緩和する。
         const conserveMul = en.conserveLeft > 0 ? 0.75 : 1;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * teamShelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul;
+        // 第53弾: ドラフト勢もペースが落ちている分だけ消耗が軽くなる（solo化した選手は対象外）
+        const tempoDrainMul = sheltered ? (en.groupDrainMul ?? 1) : 1;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * teamShelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul * tempoDrainMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
       });
@@ -672,6 +696,20 @@ const HANGON_ENERGY_COST = 3;
 export const TEMPO_KEEP_TIGHTEN = 0.06;
 export const TEMPO_ENERGY_COST = 14;
 export const TEMPO_MIN_TICKS = 40, TEMPO_MAX_TICKS = 110;
+
+// 第53弾(devlog/wave53.md): 集団のペース（groupPaceMul）。第52弾Phase2の実測で
+// 「逃げ(attack/send)は定数では直らない・構造の問題」と確定した——集団は常に
+// 「牽引できる中で最強の選手が全力で牽いた速度」で進むため、単独走者が集団より
+// 速くなる余地が無かった（attackの1.15倍加速では1.6倍の消耗を埋め合わせられない）。
+// 前に脅威（逃げ・単独の選手）が無い集団はTEMPO_BASEまでペースを落として巡航し、
+// 差が開くほど全力へ戻る。終盤(TEMPO_END_PROG以降)と最終区間は常に全力。
+// 初期値はすべて仮置き。実装後にOpusが実測して確定する。
+export const TEMPO_BASE = 0.94;
+export const CHASE_FULL_GAP = 1.2;
+export const TEMPO_END_PROG = 0.80;
+export const TEMPO_DRAIN_EXP = 1.0;
+// 事前作戦・AIスタイルによるTEMPO_BASEの加減（rotSpanの判定と同じ分岐を流用）
+const TEMPO_ADJUST_PUSH = 0.03, TEMPO_ADJUST_HOLD = -0.03;
 
 export const RACE_MOVES = {
   // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣

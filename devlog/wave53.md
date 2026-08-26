@@ -145,3 +145,62 @@ const paceDrainMul = Math.pow(paceMul, TEMPO_DRAIN_EXP);
   ⚠️測定は3点固定（`Math.random`/`Date.now`/`ridState.value`）＋`resumeSim`直前の副シード
   張り直し（`devlog/wave51.md`・`wave52.md`）。その後、`mid`カードと`attack`/`send`の
   定数を再評価する。
+
+## Phase 1 実装結果（2026-08・Sonnet）
+
+**`src/sim/ticks.js`**
+- `TEMPO_BASE`(0.94)・`CHASE_FULL_GAP`(1.2)・`TEMPO_END_PROG`(0.80)・`TEMPO_DRAIN_EXP`(1.0)を
+  新設（すべて仮置き・`export const`）。事前作戦・AIスタイルの加減（±0.03）は
+  `TEMPO_ADJUST_PUSH`/`TEMPO_ADJUST_HOLD`として定数化。
+- モード決定の`Object.values(groups).forEach`ループの末尾で`paceMul`/`paceDrainMul`を計算し、
+  `en.groupPaceMul`/`en.groupDrainMul`として全メンバーに書く。単独走者（`members.length===1`）
+  の分岐では両方1に固定。`leadPos`（レース全体の現在の先頭位置）はこのループの直前で1回だけ計算。
+  `chaseMode`/AIスタイルの判定を`rotSpan`と同じ分岐に相乗りさせ、`tempoAdjust`を同時に決める。
+- 移動パス（`active.forEach`、`mode !== "draft"`）で、`mode === "pull"`のときのみ
+  `dist *= en.groupPaceMul`（エースとのペース合わせより後）と`energyDrain(...) * en.groupDrainMul`
+  を適用。`en.lastOwnDist`は倍率を掛けた後の値を保持するため、ドラフト勢の`groupDist`計算
+  （`puller.lastOwnDist`を参照する既存コード）は無変更で倍率が伝播する。
+- ドラフト勢の`drain`計算に`sheltered ? (en.groupDrainMul ?? 1) : 1`を追加
+  （`sheltered = en.mode === "draft"`を流用。keepThresh判定でsoloに落ちた選手は対象外）。
+
+**検証**（Node・Playwright実機。`w53_verify.mjs`をscratchpadに作成）
+1. 個人TT（`noGroup=true`）は`chaseMode`を変えても`finishTime`が完全一致——テンポの対象外。
+2. 事前作戦`push`/`hold`で1tickあたりの集団の進み方が実際に変わることを確認（脅威の有無
+   両方のケースで）。
+3. 実レース経由（n=32）でfinishTimeの最大値・先頭クラスタの平均人数が破綻していないこと
+   （3.2名で第38弾以前の団子ゴール水準には戻っていない）。
+4. 第45〜52弾の既存検証スクリプト全て回帰なし。`npx vite build`成功。Playwright実機で
+   「登りで抜け出す」を選択して観戦を続行、`pageerror`ゼロ。
+
+## ⚠️ 実測で判明した副作用：`hold`の平均着順が全発火点で大きく悪化した
+
+Phase 2の格子測定（`scratchpad/w52_grid.mjs`）を再実行したところ、想定していなかった
+大きな副作用が見つかった。**`git stash`で導入前のコードに戻して同一測定を取り直し、
+数値の変化が実装によるものであることを確認済み**（測定スクリプトの誤りではない）。
+
+| 発火点 | 導入前`hold`平均着順 | 導入後`hold`平均着順 | 悪化幅 |
+|---|---|---|---|
+| mid | 10.57 | 18.56 | **+7.99** |
+| finale | 11.31 | 18.79 | **+7.48** |
+| terrain | 12.15 | 21.24 | **+9.09** |
+| sprint | 11.01 | 13.48 | **+2.47** |
+
+一方で`attack`と`hold`の**差**は縮まった（terrain: hold比+12.10→+6.29、mid: +4.23→+1.83、
+finale: +3.84→+2.88）。つまり**設計どおり逃げの相対的な価値は改善した**が、それ以上に
+**全体の基準点（`hold`）そのものが沈んだ**。
+
+⚠️**推定原因**：`TEMPO_BASE=0.94`で「前に脅威が無い集団」を6%減速させたことで、
+`ticks.js`が元々持っているAI由来の逃げ（`role: "breakaway"`での開始時アタック、および
+中盤の「大集団で非スプリンターが痺れを切らして飛び出す」自然発生ロジック）が、
+**閾値`CHASE_FULL_GAP=1.2`に達するまで本気で追われなくなり**、以前より生き残りやすく
+なった可能性が高い。プレイヤー（`hold`）を含むメイン集団全体が、AIの逃げに対して
+相対的に不利になった＝**個々の一手の優劣ではなく、フィールド全体の基準点が動いた**。
+
+これは設計時に想定した回帰リスク（団子ゴールの復活・レース時間の伸び）とは別種の、
+より大きな副作用である。**Phase 2で`TEMPO_BASE`を測り直す際、`attack`対`hold`の差だけでなく
+`hold`の絶対的な着順水準（導入前の10〜12着台）も一緒に見ること。** `TEMPO_BASE`を0.94より
+1に近づける、`CHASE_FULL_GAP`を小さくする（＝より小さい差でも追い始める）のいずれかで
+戻る可能性が高いが、実測せずに確定しない。
+
+**やらなかったこと**：`TEMPO_BASE`等の値の変更はしていない（設計どおりPhase 1のスコープ外）。
+上記の副作用はPhase 2の実測対象として引き継ぐ。
