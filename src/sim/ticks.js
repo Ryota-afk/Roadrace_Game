@@ -43,7 +43,11 @@ const ATTACK_TICKS = 25;          // アタック持続（25秒）
 // v14.10: 逃げ要員（breakaway）ロールの選手が実際に飛び出すための持続時間。
 // エースの早期発射（ATTACK_TICKS）よりやや長めにし、集団から確実に離れる間合いを作る
 const BREAKAWAY_ATTACK_TICKS = 30;
-const MAX_TICKS = 2500;
+// 第56弾(devlog/wave56.md): 2500は「予算」ではなく安全上限（ループは全員ゴールで早期
+// breakするため、上げても短いレースには一切コストがかからない）。欠陥1（牽引者不在の
+// 集団が完全停止するバグ）を修正した上での実測で必要なのは最大5,849tick。7000は
+// それに約20%の余裕を持たせた値。
+const MAX_TICKS = 7000;
 // v38(#2): スタミナ管理AI。牽引役はエネルギーがこの下限を割ると牽引をやめて集団内に戻り
 // （draft）回復し、上限まで戻るまで牽引に復帰しない（ヒステリシスでバタつき防止）。牽引しっぱなしの
 // 自滅（＝アシスト大敗や早め逃げの燃え尽きの一因）を抑え、現実のローテーション（先頭交代→後方回復）を再現。
@@ -349,6 +353,22 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         en.mode = (puller && en === puller) ? "pull" : "draft";
         if (en.mode === "pull") en.slot = 0; // draft側はこの後の位置取りパスで割り当て直す
       });
+      // 第56弾(devlog/wave56.md): 集団に牽引者が1人も居ないと、ドラフト勢は移動パス
+      // (手順3)から除外されたまま後段の集団ループも`if (!puller) return;`で抜けるため、
+      // ⚠️【その集団の全員が1ミリも動かない】。2経路ある：
+      //   A(恒久) 集団が全員エース … canPullも非常時フォールバックもエースを除外していた
+      //   B(一時) 選ばれた牽引者がattackLeft>0で"attack"に転じた
+      // どちらも「集団に居るのに前進0」という物理的にあり得ない状態なので、最後の砦として
+      // ドラフト勢の中で最も脚が残る選手を牽引に立てる（エースであっても立てる——
+      // 全員エースなら誰かが牽くしかない）。⚠️凍結する集団でのみ発火するため、
+      // 牽引者が居る正常な集団の挙動は完全に無変更。
+      if (!members.some(en => en.mode === "pull")) {
+        const pool = members.filter(en => en.mode === "draft");
+        if (pool.length) {
+          const p = pool.reduce((best, en) => (en.energy > best.energy ? en : best), pool[0]);
+          p.mode = "pull"; p.slot = 0;
+        }
+      }
     });
     // 3. 移動：先にpull/solo/attackを確定、その後draftが「ついていけるか」を判定
     active.forEach(en => {
