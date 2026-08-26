@@ -302,29 +302,6 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         if (Math.random() < chance) { en.attackLeft = BREAKAWAY_ATTACK_TICKS; en.committedBreak = true; }
       });
     });
-    // 第54弾(devlog/wave54.md): レース全体で1つのペース倍率を計算する（集団ごとに変えると
-    // 第53弾の失敗——先頭集団だけが遅くなり後続が追いついて融合する——を繰り返す）。
-    // 本隊＝人数が最も多い集団（同数なら前方の集団）。本隊から見た「レース先頭との差」が
-    // 一定（CHASE_FULL_GAP）を超えるまでは、本隊はTEMPO_BASEまでペースを落として巡航する。
-    let racePaceMul = 1, raceDrainMul = 1;
-    if (!noGroup) {
-      const groupArr = Object.values(groups);
-      let mainBunch = null;
-      groupArr.forEach(g => {
-        if (!mainBunch || g.length > mainBunch.length || (g.length === mainBunch.length && g[0].pos > mainBunch[0].pos)) mainBunch = g;
-      });
-      if (mainBunch) {
-        const bunchPos = mainBunch[0].pos;
-        const prog = bunchPos / course.length;
-        if (prog < TEMPO_END_PROG && course.segTypeAt(bunchPos).idx !== course.finalIdx) {
-          const leadPos = Math.max(...active.map(en => en.pos));
-          const gapToBunch = Math.max(0, leadPos - bunchPos);
-          const urgency = Math.min(1, gapToBunch / CHASE_FULL_GAP);
-          racePaceMul = TEMPO_BASE + (1 - TEMPO_BASE) * urgency;
-        }
-      }
-      raceDrainMul = Math.pow(racePaceMul, TEMPO_DRAIN_EXP);
-    }
     Object.values(groups).forEach(members => {
       if (members.length === 1) {
         const en = members[0];
@@ -373,15 +350,6 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         if (en.mode === "pull") en.slot = 0; // draft側はこの後の位置取りパスで割り当て直す
       });
     });
-    // 第54弾: 減速の対象外は「逃げている選手」（committedBreakかつsolo/attack）だけ。
-    // 千切れた単独走者（committedBreakでないsolo）も本隊と同じracePaceMulの対象にする
-    // ——ここを対象外にすると、本隊が緩めている間に千切れた選手まで追いついて戻ってきて
-    // しまい、第53弾と同じフィールド融合が起きる（devlog/wave54.md 実測参照）。
-    active.forEach(en => {
-      const escaping = !!en.committedBreak && (en.mode === "solo" || en.mode === "attack");
-      en.groupPaceMul = escaping ? 1 : racePaceMul;
-      en.groupDrainMul = escaping ? 1 : raceDrainMul;
-    });
     // 3. 移動：先にpull/solo/attackを確定、その後draftが「ついていけるか」を判定
     active.forEach(en => {
       if (en.mode === "draft") return;
@@ -397,14 +365,9 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         const ace = active.find(o => o.team === en.team && o.isAce && o.groupId === en.groupId);
         if (ace) dist = Math.min(dist, tickDistance(ace, segType, "pull", course.steepness));
       }
-      // 第54弾: 集団のテンポ。逃げている選手（groupPaceMul===1）以外は本隊のペースに従う
-      // （pull/solo/attackいずれも対象。solo/attackは`escaping`判定でgroupPaceMul=1になる
-      // ので、ここで一律に掛けてよい。devlog/wave54.md）。
-      dist *= en.groupPaceMul ?? 1;
       en.lastOwnDist = dist;
       en.pos = Math.min(course.length, en.pos + dist);
-      // ペースを落とした分だけ消耗も軽くする（同じ理由でgroupDrainMulを一律に掛ける）
-      en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode, segType, course.steepness) * (en.groupDrainMul ?? 1));
+      en.energy = Math.max(ENERGY_FLOOR, en.energy - energyDrain(en, en.mode, segType, course.steepness));
     });
     Object.values(groups).forEach(members => {
       const puller = members.find(en => en.mode === "pull");
@@ -606,10 +569,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         // 0.60は過剰だった（中盤発火・持続tickを150まで削っても勝率93%と動かなかった＝tick数では
         // なくこの消費倍率そのものが支配的だったと実測で判明）。0.75へ緩和する。
         const conserveMul = en.conserveLeft > 0 ? 0.75 : 1;
-        // 第54弾: ドラフト勢もペースが落ちている分だけ消耗が軽くなる（keepThreshより後に
-        // solo化した選手はこのtickではまだsheltered=falseなので対象外のまま。devlog/wave54.md）
-        const tempoDrainMul = sheltered ? (en.groupDrainMul ?? 1) : 1;
-        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * teamShelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul * tempoDrainMul;
+        const drain = energyDrain(en, en.mode === "solo" ? "solo" : "draft", segType, course.steepness) * windPenalty * shelterMul * teamShelterMul * (en.chemMul || 1) * leadoutDrainMul * selectiveDrainMul * conserveMul;
         en.energy = Math.min(100, Math.max(ENERGY_FLOOR, en.energy - drain + regen));
         en.leadoutSurging = false;
       });
@@ -712,19 +672,6 @@ const HANGON_ENERGY_COST = 3;
 export const TEMPO_KEEP_TIGHTEN = 0.06;
 export const TEMPO_ENERGY_COST = 14;
 export const TEMPO_MIN_TICKS = 40, TEMPO_MAX_TICKS = 110;
-
-// 第54弾(devlog/wave54.md): レースのペース（groupPaceMul）。第52弾Phase2の実測で
-// 「逃げ(attack/send)は定数では直らない・構造の問題」と確定した——集団は常に
-// 「牽引できる中で最強の選手が全力で牽いた速度」で進むため、単独走者が集団より
-// 速くなる余地が無かった（attackの1.15倍加速では1.6倍の消耗を埋め合わせられない）。
-// ⚠️第53弾（集団ごとにgapAheadを計算する式）は実測で失敗した——レースの先頭集団だけが
-// 常に最も遅くなり、後続が追いついてフィールドが融合した（devlog/wave53.md）。
-// 第54弾はracePaceMulをレース全体で1つの値にし、「逃げている選手（committedBreak）」
-// だけを対象外にすることでこれを直した。初期値はすべて仮置き。実装後にOpusが実測して確定する。
-export const TEMPO_BASE = 0.94;
-export const CHASE_FULL_GAP = 1.2;
-export const TEMPO_END_PROG = 0.80;
-export const TEMPO_DRAIN_EXP = 1.0;
 
 export const RACE_MOVES = {
   // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣
