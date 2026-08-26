@@ -642,7 +642,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
 // （scratchpad/legs_dist.mjsで丘陵/山岳/クリテの3コース×能力85/93/105×3発火点を実測）。
 // LEGS_EMPTY=-45/LEGS_FULL=95へ引き直し、能力93〜105帯で発火点ごとに0.27〜0.89まで
 // 開閉するようにした（詳細な分布はDEVLOG §39参照）。
-const LEGS_EMPTY = -45; // これ以下は完全に売り切れ扱い
+const LEGS_EMPTY = -45; // これ以下は残脚ゲージが下限（0）に張り付く
 const LEGS_FULL = 95;   // これ以上あれば全開で踏み切れる
 export function legsLeft01(en) {
   const e = en.energy ?? 100;
@@ -717,7 +717,8 @@ export const RACE_MOVES = {
   // 🔥 早駆け：ここから一気に踏んで抜け出し、そのままゴールまで踏み切る
   // 早駆けは"ゴール前の全開"であって長距離逃げではない。持続を短くし、committedBreakの
   // 地形割引も付けない（＝終盤に踏み倒すだけで勝てる状態を解消）。代償として脚を大きく使う。
-  // v46(#27): 持続・追い込み量とも残脚に比例させる。売り切れた脚での早駆けは不発に終わる。
+  // v46(#27): 持続・追い込み量とも残脚に比例させる。脚が尽きているほど早駆けは鈍る
+  // （ただし各値に下限があり、ゼロにはならない。第57弾でUIの「不発」表示は廃止した）。
   send: (r) => {
     const g = legsLeft01(r);
     r.attackLeft = Math.round(SEND_MIN_TICKS + (SEND_MAX_TICKS - SEND_MIN_TICKS) * g);
@@ -726,7 +727,8 @@ export const RACE_MOVES = {
     r.conserveLeft = 0; r.energy -= 17;
   },
   // ⏳ 差しにかける：最終直線まで脚を溜め、そこで鋭く伸びる（最終区間の追い込みを上乗せ）
-  // v47(第8弾Phase4): 固定値0.09→残脚比例。脚を使い切っていれば差し脚も不発になる（詳細は定数コメント参照）。
+  // v47(第8弾Phase4): 固定値0.09→残脚比例。脚を使い切っているほど差し脚も鈍る
+  // （下限KICK_MINまでで、ゼロにはならない。詳細は定数コメント参照）。
   kick: (r) => { const g = legsLeft01(r); r.finaleSend = KICK_MIN + (KICK_MAX - KICK_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // 🗡 会心の差し脚：差し脚・豪脚型が最終直線で最大の切れ味を出す（追い込み最大）
   kickBig: (r) => { const g = legsLeft01(r); r.finaleSend = KICKBIG_MIN + (KICKBIG_MAX - KICKBIG_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },

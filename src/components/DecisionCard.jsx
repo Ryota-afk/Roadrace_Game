@@ -1,17 +1,28 @@
 // 第9弾：レース中の判断カードUI。RaceView.jsx（1595行）から切り出し。
-// レア度（虹＝大勝負／金＝手堅い／通常＝無難／不発＝今は効かない）はdomain/shared/moveEdge.jsが
+// レア度（虹＝大勝負／金＝手堅い／通常＝無難）はdomain/shared/moveEdge.jsが
 // simと同じ式（legsLeft01）で計算する。見た目はここだけの責務（CLAUDE.md §5）。
 // 第13弾Phase3-E：kit.jsxへ移行。争点E2・案A「文字のみ」——選択肢アイコン（約15種の絵文字）を
 // 撤去し文言だけに。レア度発光と「脚の残り」バーはデータ層の情報として維持（詳細はdevlog/wave13.md）。
+// 第57弾(devlog/wave57.md): 「不発」グレーアウトを撤去。脚依存の一手（legsScaled）には
+// 代わりに残量の小さなバーを添え、鈍っているが押せることを示す。
 import React from "react";
 import { FONT_DOT, RAINBOW_STOPS, T } from "../data/theme.js";
 import { moveEdge } from "../domain/shared/moveEdge.js";
+
+// 「脚の残り」の4段階（十分／やや消耗／苦しい／限界）。LegsBarと選択肢の残量バーの
+// 両方が使うため、ここに1箇所だけ定義する（CLAUDE.md §5・色段階の二重管理を避ける）。
+function legsTier(energy) {
+  const raw = Math.max(-100, Math.min(100, energy ?? 100));
+  return raw >= 40 ? { t: "十分", c: T.color.good }
+    : raw >= 0 ? { t: "やや消耗", c: T.color.accent }
+      : raw >= -60 ? { t: "苦しい", c: "#e8a13c" }
+        : { t: "限界", c: T.color.bad };
+}
 
 // v39.10以来この画面の演出は一貫してSVGのanimate（CSSの@keyframesは未使用）。
 // カードの光り方もこれに揃える：出現の一瞬だけスイープ光が走り、虹／金は縁の発光が
 // 「点いた状態」で収まる（常時明滅はしない＝fill="freeze"で最終値に留める）。
 function CardGlow({ tier, delaySec }) {
-  if (tier === "dud") return null;
   const gradId = `dcGrad`;
   const ringColor = tier === "rainbow" ? `url(#${gradId})` : tier === "gold" ? T.color.accent : T.color.rule;
   return (
@@ -40,21 +51,22 @@ function CardGlow({ tier, delaySec }) {
   );
 }
 
-function CardButton({ choice, tier, delaySec, disabled, onChoose }) {
-  const dud = tier === "dud";
+function CardButton({ choice, tier, g, legsScaled, energy, delaySec, disabled, onChoose }) {
   return (
     <button disabled={disabled} onClick={() => onChoose(choice.move)} title={choice.desc}
       style={{
         position: "relative", overflow: "hidden", textAlign: "center", cursor: disabled ? "default" : "pointer",
         background: T.color.surfaceUp, color: T.color.text, border: "none",
         padding: `${T.space.sm}px ${T.space.xs}px`, minHeight: 52, display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        opacity: disabled ? 0.5 : (dud ? 0.45 : 1), filter: dud ? "saturate(.3)" : "none",
+        alignItems: "center", justifyContent: "center", gap: 4,
+        opacity: disabled ? 0.5 : 1,
       }}>
       <CardGlow tier={tier} delaySec={delaySec} />
-      <span style={{ fontFamily: FONT_DOT, fontSize: T.size.body, color: dud ? T.color.sub : T.color.text }}>{choice.label}</span>
-      {dud && (
-        <span style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "2px 6px 3px", fontSize: 9.5, letterSpacing: "0.06em", color: T.color.sub, background: "rgba(0,0,0,0.35)", fontFamily: FONT_DOT }}>不発</span>
+      <span style={{ fontFamily: FONT_DOT, fontSize: T.size.body, color: T.color.text }}>{choice.label}</span>
+      {legsScaled && (
+        <div style={{ width: "70%", height: 3, background: T.color.surface, overflow: "hidden" }}>
+          <div style={{ width: `${g * 100}%`, height: "100%", background: legsTier(energy).c }} />
+        </div>
       )}
     </button>
   );
@@ -74,8 +86,8 @@ function CardRows({ choices, energy, disabled, onChoose }) {
         }}>
           {row.map((c, ci) => {
             const idx = ri * 2 + ci;
-            const { tier } = moveEdge(c.move, energy);
-            return <CardButton key={c.move} choice={c} tier={tier} delaySec={idx * 0.08} disabled={disabled} onChoose={onChoose} />;
+            const { tier, g, legsScaled } = moveEdge(c.move, energy);
+            return <CardButton key={c.move} choice={c} tier={tier} g={g} legsScaled={legsScaled} energy={energy} delaySec={idx * 0.08} disabled={disabled} onChoose={onChoose} />;
           })}
         </div>
       ))}
@@ -91,10 +103,7 @@ function LegsBar({ energy }) {
   if (energy == null) return null;
   const raw = Math.max(-100, Math.min(100, energy));
   const pct = (raw + 100) / 2;
-  const tier = raw >= 40 ? { t: "十分", c: T.color.good }
-    : raw >= 0 ? { t: "やや消耗", c: T.color.accent }
-      : raw >= -60 ? { t: "苦しい", c: "#e8a13c" }
-        : { t: "売り切れ", c: T.color.bad };
+  const tier = legsTier(energy);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: T.space.sm, margin: `0 0 ${T.space.sm}px` }}>
       <span style={{ fontSize: T.size.caption, color: T.color.sub, flexShrink: 0 }}>脚の残り</span>

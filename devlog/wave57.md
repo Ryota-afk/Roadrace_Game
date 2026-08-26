@@ -129,6 +129,25 @@ export function moveEdge(moveId, energy) {
    グレーアウトが消えて**3択すべて押せる**こと／バーが**脚依存の2つにだけ**出ていること／
    脚バーの語が「限界」になっていること。⚠️数値の検証だけで終わらせない。
 
+## 実装結果（Sonnet・2026-08）
+
+仕様どおり4ファイルを変更：`moveEdge.js`（`dud`/`DUD_THRESHOLD`を廃止し
+`{tier, g, legsScaled}`を返す・`LEGS_SCALED_MOVES`をexport）、`DecisionCard.jsx`
+（グレーアウト・彩度低下・不発バッジを撤去、`legsTier(energy)`を1箇所に括り出して
+`LegsBar`と選択肢の残量バーで共用、脚依存の一手にだけ細いバーを追加）、
+`raceDecisions.js`（`react`副題「脚が尽きかけている」）、`ticks.js`（「売り切れ」
+「不発」を使った誤った説明3箇所をコメントとして訂正）。simの計算式・定数は無変更。
+
+新規`w57_verify.mjs`で検証項目1〜4を機械確認（全moveId×energyでdud無し・
+legsScaledの一致・legsTierの境界値・srcにユーザー可視の「売り切れ」「不発」が0件）、
+既存の`w51_verify.mjs`検証7・`w52_verify.mjs`検証5を`legsScaled`ベースへ差し替えて
+全通過（検証項目5）。第46〜52弾の既存検証・`npx vite build`も通過（検証項目6〜7）。
+
+⚠️実機確認（検証項目8）：マイライフでヒルクライムを最後まで再生し、勝負所の
+カード（`kick`/`send`/`hold`）が脚「苦しい」の状態でも**3択すべて押せる**こと、
+`kick`と`send`にだけ細い残量バーが付き`hold`には付かないこと、`pageerror`ゼロで
+結果画面まで到達することをスクリーンショットで確認した。
+
 ---
 
 # 【保留】仲間が乗る（プレイヤーの`attack`を集団にする）

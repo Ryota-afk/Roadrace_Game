@@ -35,7 +35,7 @@ export function buildDecisions(course, focusEnt, manager) {
   const decisions = [
     { id: "mid", at: atMid, kind: "mid" },
     { id: "finale", at: atFin, kind: "finale" },
-    // 状況発火：先頭で抜け出している or 脚が売り切れかけの時だけ、専用の一枚を差し込む
+    // 状況発火：先頭で抜け出している or 脚が尽きかけの時だけ、専用の一枚を差し込む
     { id: "react", kind: "react", cond: (c) => (c.inBreak && c.frac > 0.5 && c.frac < atFin - 0.02) || (c.energy < 38 && c.frac > 0.45 && c.frac < atFin - 0.02) },
   ];
   // v39.13: 最終スプリントそのものの一手。最終区間内でも発火する（allowFinal）
@@ -104,7 +104,7 @@ export function composeCard(kind, focus, ctx) {
   }
   if (kind === "react") {
     title = "苦しい局面";
-    sub = "脚が売り切れかけている——粘るか、立て直すか";
+    sub = "脚が尽きかけている——粘るか、立て直すか";
     choices = [
       { move: "hangOn", label: "食いしばって残る", desc: A("grinder") ? "食らいつく脚で集団にしがみつく" : "歯を食いしばって集団に残る" },
       { move: "conserve", label: "緩めて立て直す", desc: "一度ペースを落として脚の回復を待つ" },
