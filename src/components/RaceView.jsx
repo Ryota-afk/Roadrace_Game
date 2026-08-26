@@ -93,7 +93,7 @@ export function RaceView({ sim, onFinish }) {
     sim.entrants.find(e => e.isPlayerChar)
     || sim.entrants.find(e => e.team === "PLAYER" && e.isAce)
     || sim.entrants.find(e => e.team === "PLAYER"), [sim]);
-  const decisions = useMemo(() => buildDecisions(course, focusEnt), [sim]);
+  const decisions = useMemo(() => buildDecisions(course, focusEnt, !hasAvatar), [sim]);
   const [decision, setDecision] = useState(null);
   const decisionRef = useRef(null);
   const pausedRef = useRef(false);
@@ -117,6 +117,7 @@ export function RaceView({ sim, onFinish }) {
       // v39.3(演出): 選択に応じた実況＋「山場」演出。攻めの一手はスロー＆当該選手ズームで見せ場に。
       const AGGR = { attack: `${who}、ここで仕掛けた！単独で飛び出す！`, send: `${who}、勝負を賭けた！一気に踏み込む！` };
       const CALM = {
+        tempo: `${who}がペースを上げた！集団を絞り込みにかかる`,
         conserve: `${who}は脚を溜める。勝負所に賭ける構えだ`,
         hangOn: `${who}、歯を食いしばって食らいつく！`,
         kick: `${who}はギリギリまで待つ。差しにかける狙いだ`,

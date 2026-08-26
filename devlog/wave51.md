@@ -118,3 +118,70 @@ tempo（表示名「ふるいにかける」）
    （発動前後の集団人数を数える）。
 7. 脚が売り切れた状態で`tempo`が「不発」表示になること。
 8. `pageerror`ゼロ・ビルド成功・第45〜50弾の既存検証スクリプトが全て通ること。
+
+## 実装結果（2026-08・Sonnet）
+
+**`src/core/core.js`**
+- `TERRAIN_ABILITIES`（segType→地形バッジID配列）と`hasTerrainBadge(r, segType)`を新設。
+  判断カードの専用枠判定（raceDecisions.js）と`tempo`の発動条件判定（ticks.js）の両方が
+  この1箇所を参照する（計算の二重管理を避ける）。
+
+**`src/domain/shared/raceDecisions.js`**
+- `buildDecisions(course, focusEnt, manager)`に第3引数`manager`を追加。基本スロットを
+  `mid`/`finale`/`react`の3件（うち`react`は従来どおり状況発火のみ）に削減。`sprint`は
+  `SPRINT_BADGES`（sprinter_sp/kicker/finisher/closer）のいずれかを保持する選手にのみ追加。
+  `manager`が偽のとき、保持する地形バッジの最高段階（`bestTerrainTier`→
+  `terrainCardCap`：銅・銀・金=1／虹=2／無し=0）まで、コース先頭から見て条件に合う区間
+  （最終区間を除く）に`terrain-<segIdx>`カードを追加する。
+- `composeCard`に`kind==="terrain"`の分岐を追加。地形ごとの見出し（登り/丘/平坦/独走に
+  入った）と、共通の選択肢「ふるいにかける(`tempo`)／仕掛ける(`attack`)／流れに任せる(`hold`)」
+  を返す。
+
+**`src/sim/ticks.js`**
+- `TEMPO_KEEP_TIGHTEN`(0.06)・`TEMPO_ENERGY_COST`(14)・`TEMPO_MIN/MAX_TICKS`(40/110)を
+  新設（すべて仮置き・`export const`で外部から差し替えて実測できる形）。
+- `RACE_MOVES.tempo`を追加：残脚(`legsLeft01`)に比例した持続tickを`tempoLeft`にセットし、
+  `energy -= TEMPO_ENERGY_COST`。他の一手同様、attackLeft/committedBreak/conserveLeft/
+  holdOnをリセットする。
+- 集団の`keepThresh`計算に`tempoTighten`項を追加：同じ集団の**自分以外**の誰かが
+  `tempoLeft > 0`かつ`hasTerrainBadge(その選手, 現在のsegType)`なら`TEMPO_KEEP_TIGHTEN`を
+  上乗せする（発動者自身の得意地形の区間にいる間だけ効く。発動者自身は対象外）。
+- `tempoLeft`の初期化（レース開始時0）・毎tickの消化（`conserveLeft`/`holdOn`と同じ並びで
+  `--`）を追加。
+
+**`src/sim/finish.js`**
+- `resumeSim`の全選手一括リセットに`en.tempoLeft = 0`を追加（`attackLeft`と同様、選び直した
+  一手のたびに作り直す）。
+- `FINISH_BADGE_K`を**1→2**に変更（第50弾で実測確定済み・§80。K=2で飽和し3以上は完全に
+  同一値だったため、頭打ちになる最小値を確定値として適用）。
+
+**`src/domain/shared/moveEdge.js`**
+- `tempo`を`STEADY_MOVES`（金＝手堅い。自分は速くならない性質）と`LEGS_SCALED_MOVES`
+  （残脚依存＝脚が売り切れれば不発）の両方に追加。
+
+**`src/components/RaceView.jsx`**
+- `buildDecisions`呼び出しに`!hasAvatar`（シーズン＝監督視点かどうか）を渡すよう変更。
+- 判断の実況ラインに`tempo`用の1文を追加（「〜がペースを上げた！集団を絞り込みにかかる」）。
+
+**検証**（Node・Playwright実機。`w51_verify.mjs`をscratchpadに作成）
+1. バッジ無しの選手で判断定義が`mid`/`finale`/`react`の3件のみ（`sprint`/`terrain-*`が
+   無い）ことを確認。
+2. スプリント系バッジの有無で`sprint`カードの出現が切り替わることを確認。
+3・4. `mount`銅／金でterrainカードが1件、`mount`+`allclimber`虹（climb・hill両方所持）で
+   2件（上限を超えない）になることを確認。
+5. `manager=true`でterrainカードが出ないこと（`manager=false`では出ることも対照確認）。
+6. **`tempo`が実際に集団を削ること**を、`resumeSim`を使った実機同等の手順（tick0→150まで
+   助走→そこから`hold`と`tempo`をそれぞれ分岐実行）で確認。能力差だけでは千切れない
+   境界値（同一シード・`Math.random`固定）で、`hold`は弱組6名中0名千切れ、`tempo`は
+   6名中6名千切れることを確認（後述のteamKeepRelief・エネルギー履歴欠落の2点に注意が
+   必要だった。詳細はテスト実装時の調査メモとしてscratchpadに残す）。
+7. 満タンでは不発でない・残脚-90では`tempo`が「不発」表示になることを確認。
+8. 第45〜50弾の既存検証スクリプト（w45_verify1/2/3・w46_verify・w47_verify・w48_verify・
+   w50_verify）を全て再実行し回帰なし。`npx vite build`成功。Playwright実機：マイライフで
+   デビュー→目指すバッジ3つ選択→山岳ロード出走→観戦中に実際にterrainカード
+   「ふるいにかける／仕掛ける／流れに任せる」が発火→選択→結果画面（24位/41人中）まで
+   到達、`pageerror`ゼロ。
+
+**やらなかったこと（設計どおり）**：`TEMPO_KEEP_TIGHTEN`等3定数の実測確定はOpus担当
+（devlog/wave49.mdの3点固定＝`Math.random`/`Date.now`/`ridState.value`が必須）。専用の
+相乗テーブルは作っていない。

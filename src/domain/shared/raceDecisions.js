@@ -1,25 +1,60 @@
 // レース中の「判断カード」のデータ組み立て（RaceView.jsxから分離。第14弾D）。
 // JSXを持たない純関数のみ。カードのスロット定義(buildDecisions)と選択肢の組み立て(composeCard)。
-import { hasAbility } from "../../core/core.js";
+import { badgeTier, hasAbility, hasTerrainBadge, TERRAIN_ABILITIES, TIER_ORDER } from "../../core/core.js";
+
+// 第51弾: 数値でバッジの個性を出す道が構造的に塞がっている（devlog/wave51.md）ため、
+// 「選べる回数」をバッジの報酬にする。スプリント系バッジ保持者だけに出す最終スプリントの一手。
+const SPRINT_BADGES = ["sprinter_sp", "kicker", "finisher", "closer"];
+// 保持している地形バッジのうち最も高い段階を返す（TERRAIN_ABILITIESの全ID横断）。未所持ならnull。
+const ALL_TERRAIN_ABILITY_IDS = [...new Set(Object.values(TERRAIN_ABILITIES).flat())];
+function bestTerrainTier(ent) {
+  let bestIdx = -1, bestTier = null;
+  ALL_TERRAIN_ABILITY_IDS.forEach(id => {
+    const tier = badgeTier(ent, id);
+    if (tier) { const idx = TIER_ORDER.indexOf(tier); if (idx > bestIdx) { bestIdx = idx; bestTier = tier; } }
+  });
+  return bestTier;
+}
+// 銅・銀・金＝1回／虹＝2回。未所持は0回（専用カードは出ない）。
+function terrainCardCap(tier) { return tier === "rainbow" ? 2 : tier ? 1 : 0; }
 
 // v39(A案): レース中の「判断カード」スロット定義。注目選手のコース進捗(frac)が at を越えた／
 // 状況条件 cond を満たした瞬間に再生を止め、その時点の状況(ctx)に応じて composeCard で選択肢を
 // 組み立てて提示する。選んだ move は resumeSim でその地点から結果へ反映される。teamTT等の履歴が
-// 無いsimでは出さない。mid/finale は必ず、react は「逃げている／脚が売り切れかけ」の時だけ発火。
-export function buildDecisions(course, focusEnt) {
+// 無いsimでは出さない。
+// 第51弾(devlog/wave51.md): 基本はmid/finaleの2枚のみ（バッジ無しの判断回数を4→2に削減）。
+// reactは従来どおり状況発火のみ。sprintはスプリント系バッジ保持者だけに出す。得意地形の
+// 区間に入った瞬間の専用カード(terrain-*)は、所持する地形バッジの最高段階で回数が増える
+// （シーズンモード＝manager視点では出さない。選手本人の判断ではないため）。
+export function buildDecisions(course, focusEnt, manager) {
   if (!focusEnt || !focusEnt.posHist || focusEnt.posHist.length < 60) return [];
   const finalStart = (course.cumFrac && course.finalIdx > 0) ? course.cumFrac[course.finalIdx - 1] : 0.85;
   const atFin = Math.min(0.80, Math.max(0.58, finalStart - 0.03));
   const atMid = Math.min(0.5, atFin - 0.15);
   const atSprint = Math.min(0.95, Math.max(finalStart + 0.02, 0.9)); // 最終直線（ゴール手前）の一枚
-  return [
+  const decisions = [
     { id: "mid", at: atMid, kind: "mid" },
     { id: "finale", at: atFin, kind: "finale" },
     // 状況発火：先頭で抜け出している or 脚が売り切れかけの時だけ、専用の一枚を差し込む
     { id: "react", kind: "react", cond: (c) => (c.inBreak && c.frac > 0.5 && c.frac < atFin - 0.02) || (c.energy < 38 && c.frac > 0.45 && c.frac < atFin - 0.02) },
-    // v39.13: 最終スプリントそのものの一手。最終区間内でも発火する（allowFinal）
-    { id: "sprint", at: atSprint, kind: "sprint", allowFinal: true },
   ];
+  // v39.13: 最終スプリントそのものの一手。最終区間内でも発火する（allowFinal）
+  if (SPRINT_BADGES.some(id => hasAbility(focusEnt, id))) decisions.push({ id: "sprint", at: atSprint, kind: "sprint", allowFinal: true });
+  if (!manager) {
+    const cap = terrainCardCap(bestTerrainTier(focusEnt));
+    if (cap > 0) {
+      let fired = 0;
+      course.segs.forEach((seg, idx) => {
+        if (fired >= cap || idx === course.finalIdx || !hasTerrainBadge(focusEnt, seg.type)) return;
+        const segStart = idx === 0 ? 0 : course.cumFrac[idx - 1];
+        const at = segStart + 0.01;
+        if (at >= atFin - 0.03) return; // 勝負所の一手と被らないよう、その手前で打ち切る
+        decisions.push({ id: `terrain-${idx}`, at, kind: "terrain", segType: seg.type });
+        fired++;
+      });
+    }
+  }
+  return decisions;
 }
 
 // v39(A案): 判断カードの選択肢を、注目選手の脚質・特性・役割と、その瞬間の地形・状況から組み立てる。
@@ -74,6 +109,19 @@ export function composeCard(kind, focus, ctx) {
       { move: "hangOn", label: "食いしばって残る", desc: A("grinder") ? "食らいつく脚で集団にしがみつく" : "歯を食いしばって集団に残る" },
       { move: "conserve", label: "緩めて立て直す", desc: "一度ペースを落として脚の回復を待つ" },
       { move: "hold", label: "自分のペースで", desc: "無理をやめて淡々と進む" },
+    ];
+    return { title, sub, choices };
+  }
+  if (kind === "terrain") {
+    // 第51弾: 得意地形の区間に入った瞬間の専用カード。自分が速くなるのではなく、
+    // 同じ集団の他選手のkeepThreshを厳しくして集団を削る「ふるいにかける」だけの新しい一手。
+    const TERRAIN_TITLE = { climb: "登りに入った", mtn: "登りに入った", hill: "丘に入った", flat: "平坦に入った", tt: "独走区間に入った" };
+    title = TERRAIN_TITLE[ctx.segType] || "得意区間に入った";
+    sub = "自分の得意地形——ここでどう動く？";
+    choices = [
+      { move: "tempo", label: "ふるいにかける", desc: "ペースを上げて後続を千切る。脚を大きく使う" },
+      { move: "attack", label: "仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" },
+      { move: "hold", label: "流れに任せる", desc: "展開に乗って様子を見る" },
     ];
     return { title, sub, choices };
   }

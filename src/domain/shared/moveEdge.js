@@ -14,10 +14,11 @@ import { legsLeft01 } from "../../sim/race.js";
 const RISK_MOVES = new Set(["attack", "send", "teamChase"]);
 
 // 集団に残ったまま消耗を抑える／確実に上乗せを得る一手＝手堅い（金）。
-const STEADY_MOVES = new Set(["conserve", "hangOn", "kick", "kickBig", "sprintWait", "teamShelter", "assistLaunch"]);
+// 第51弾: tempo（ふるいにかける）も自分は速くならない手堅い性質の一手として金に分類する。
+const STEADY_MOVES = new Set(["conserve", "hangOn", "kick", "kickBig", "sprintWait", "teamShelter", "assistLaunch", "tempo"]);
 
 // legsLeft01（残脚）に比例して効果が決まる一手。脚が売り切れていれば「不発」になり得る。
-const LEGS_SCALED_MOVES = new Set(["attack", "send", "kick", "kickBig", "sprintWait"]);
+const LEGS_SCALED_MOVES = new Set(["attack", "send", "kick", "kickBig", "sprintWait", "tempo"]);
 
 // この残脚（0〜1）を下回ったら、脚依存の一手は「不発」表示に落ちる。
 const DUD_THRESHOLD = 0.15;

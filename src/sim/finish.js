@@ -6,9 +6,9 @@ import { badgeSegmentBonus } from "./effects.js";
 // 第50弾: 決着（finishAbility）にバッジの区間ボーナスを合流させる際の重み。
 // 実測（devlog/wave49.md・wave50.md）で、同じ量のボーナスでも区間限定で与えると
 // 素の能力に足すより遥かに効きが弱いと判明したため、決着スコアに乗せる際は
-// このKで底上げする。値は実装後にK=1/2/3/4を同一シードで実測して確定する
-// （現状は暫定値。バランス確定まではここを直接書き換えて測る）。
-export const FINISH_BADGE_K = 1;
+// このKで底上げする。K=1/2/3/4を同一シードで実測した結果、K=2で飽和し3以上は
+// 完全に同一の数値になった（devlog/wave50.md）ため、頭打ちになる最小の値を確定値とする。
+export const FINISH_BADGE_K = 2;
 
 // v39(A案): レースを途中tickから「フォーク」して再計算する。注目選手にプレイヤーの選択(moveId)を
 // 適用し、fromTick以降の履歴（posHist等）と着順を作り直す。posHist[0..fromTick]はそのまま残るので、
@@ -22,6 +22,7 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
   const riders = sim.entrants;
   riders.forEach(en => {
     en.attackLeft = 0;
+    en.tempoLeft = 0; // 第51弾: attackLeftと同様、選び直した一手で毎回作り直す
     en.committedBreak = false;
     en.isLeadingOut = false;
     en.leadoutSurging = false;

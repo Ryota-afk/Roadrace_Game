@@ -40,6 +40,19 @@ export function terrainOfMix(mix) {
   if ((mix.flat || 0) >= 0.6) return "flat";
   return null;
 }
+// 第51弾: 区間タイプ(segType)から「その地形の専用バッジ」を引く軸。terrainOfMix（レース単位の
+// 事後分類）とは別に、tick中の現在区間そのものに対して使う（判断カードの専用枠・tempoの発動条件）。
+export const TERRAIN_ABILITIES = {
+  climb: ["mount", "allclimber", "climbengine"],
+  mtn: ["mount", "allclimber", "climbengine"],
+  hill: ["puncheur", "allclimber"],
+  flat: ["flatlander", "rouleur"],
+  tt: ["soloist"],
+};
+export function hasTerrainBadge(r, segType) {
+  const ids = TERRAIN_ABILITIES[segType];
+  return !!ids && ids.some(id => hasAbility(r, id));
+}
 export function terrainCount(r, terrain) { return (r.raceLog || []).filter(e => terrainOfMix(e.segMix) === terrain).length; }
 export function terrainPodium(r, terrain, rankMax) { return (r.raceLog || []).filter(e => terrainOfMix(e.segMix) === terrain && e.rank <= rankMax).length; }
 export function terrainWin(r, terrains) { return (r.raceLog || []).filter(e => terrains.includes(terrainOfMix(e.segMix)) && e.rank === 1).length; }

@@ -1,6 +1,6 @@
 // レースのtickシミュレーション本体（集団判定・移動・エネルギー・判断カード）。
 // sim/race.jsから分離（第16弾D）。
-import { badgeTier, hasAbility, tierValue } from "../core/core.js";
+import { badgeTier, hasAbility, hasTerrainBadge, tierValue } from "../core/core.js";
 import { segmentAbility } from "./effects.js";
 import { terrainSpeedMul } from "./course.js";
 
@@ -217,7 +217,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
       // v39(A案): レース中の「判断カード」でプレイヤーが選ぶ動きの状態。conserveLeft>0の間は
       // 脚を溜める（牽引しない＋消耗軽減）、finaleSend（数値）は最終区間の追い込みの上乗せ、
       // holdOn>0の間は歯を食いしばって集団に食らいつく（keepThreshが下がる＝千切れにくい）。
-      en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0;
+      en.conserveLeft = 0; en.finaleSend = 0; en.holdOn = 0; en.tempoLeft = 0;
       // v52(第14弾C): TTペース配分ゆらぎ。レース開始時（fromTick===0）に1回だけ引き、
       // レース中は変えない（tickSpeedFactorのtt区間で毎tick乗算される）
       en.ttPacing = 1 + (Math.random() - 0.5) * 2 * TT_PACING_SPREAD * steadyMul(en);
@@ -474,9 +474,12 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
         // 既に付いていればそちらを優先＝上書きしない）。これで「協力が効いている」ことが
         // 脚バーの減り方だけでなく画面上のタグとしても常時見える。
         if (!en.tag && (teamAhead > 0 || pullerIsMate)) en.tag = "shelter";
+        // 第51弾: 「ふるいにかける」＝発動者以外のkeepThreshを厳しくする（集団を削る一手）。
+        // 発動者自身の得意地形の区間にいる間だけ効く（devlog/wave51.md）。
+        const tempoTighten = members.some(m => m !== en && m.tempoLeft > 0 && hasTerrainBadge(m, segType)) ? TEMPO_KEEP_TIGHTEN : 0;
         // v47(第8弾Phase4): hangOnのkeepThresh緩和を0.05→HANGON_KEEPTHRESH_RELIEF(0.12)へ強化
         // （詳細は定数コメント参照）。
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight + tempoTighten - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief;
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -570,6 +573,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup) {
     active.forEach(en => {
       if (en.conserveLeft > 0) en.conserveLeft--; // v39(A案): 温存の残りtickを消化
       if (en.holdOn > 0) en.holdOn--;             // v39(A案): 食らいつく残りtickを消化
+      if (en.tempoLeft > 0) en.tempoLeft--;       // 第51弾: ふるいにかけるの残りtickを消化
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
       en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;
       en.nextPullerHist[tick] = !!en.nextPuller;
@@ -655,6 +659,14 @@ const HANGON_TICKS = 220;
 // 緩和を強化し、脚の消費コストは半減して純粋な効果を見えやすくする。
 const HANGON_KEEPTHRESH_RELIEF = 0.20;
 const HANGON_ENERGY_COST = 3;
+// 第51弾(devlog/wave51.md): 「ふるいにかける」＝自分が速くなる一手ではなく、同じ集団の
+// 他選手のkeepThreshを厳しくして集団を削る一手。得意地形の専用カードでしか選べない。
+// 初期値は全て仮置き。実装後にOpusが実測して確定する（TEMPO_KEEP_TIGHTENは
+// selectiveTight=0.035とgrinderの緩和0.04〜0.06の間、TEMPO_ENERGY_COSTはattackの9と
+// sendの17の中間、持続レンジはattackに準拠）。
+export const TEMPO_KEEP_TIGHTEN = 0.06;
+export const TEMPO_ENERGY_COST = 14;
+export const TEMPO_MIN_TICKS = 40, TEMPO_MAX_TICKS = 110;
 
 export const RACE_MOVES = {
   // ⚡ 仕掛ける：単独で飛び出す。決まれば大きく前進、脚を使い切れば失速する諸刃の剣
@@ -705,6 +717,14 @@ export const RACE_MOVES = {
   teamChase: (r, riders) => {
     r.conserveLeft = 90; r.attackLeft = 0; r.committedBreak = false;
     if (riders) riders.forEach(o => { if (o !== r && o.team === r.team && !o.isAce && o.energy > 30) { o.attackLeft = 22; o.committedBreak = true; o.energy -= 12; } });
+  },
+  // 🌪 ふるいにかける：自分は速くならず、同じ集団の他選手のkeepThreshを厳しくして集団を削る
+  // （得意地形の専用カードだけの一手。第51弾・devlog/wave51.md）。持続は残脚に比例。
+  tempo: (r) => {
+    const g = legsLeft01(r);
+    r.tempoLeft = Math.round(TEMPO_MIN_TICKS + (TEMPO_MAX_TICKS - TEMPO_MIN_TICKS) * g);
+    r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; r.holdOn = 0;
+    r.energy -= TEMPO_ENERGY_COST;
   },
   // 🤝 エースを射出：アシストが自分の脚を使ってエースの最終スプリントを援護する（自分の順位は二の次）
   assistLaunch: (r, riders) => {
