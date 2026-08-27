@@ -103,7 +103,8 @@ export function renderMyLifeRaceScreens(ctx) {
       <RaceErrorBoundary onRecover={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish}>
         <RaceView sim={ml.result} onFinish={ml.inLastRace ? mlLastRaceFinish : mlRaceFinish} />
       </RaceErrorBoundary>
-      <div style={{ marginTop: T.space.sm, fontSize: T.size.caption, color: T.color.sub }}>● 印があなた</div>
+      {/* 第60弾(devlog/wave60.md): RaceView自体が凡例（◎ あなた等）を持っているため、
+          記号が食い違う（●／◎）上に内容も重複するこの注記は削除した。 */}
     </Screen>
   );
 
@@ -163,8 +164,9 @@ export function renderMyLifeRaceScreens(ctx) {
           <Item first label="獲得ポイント" value={`+${pts}pt`} valueColor={T.color.accent} />
           <Item label="賞金" value={`+${prize}万円`} valueColor={T.color.accent} />
           {forecast && (
-            <Item label="下馬評" value={`${forecast.mark}（${forecast.rank}番手予想）`}
-              detail={`実際は${rank}位${beatForecast ? "——予想を上回る快走" : rank > forecast.rank ? "——下馬評を下回る" : ""}`}
+            // 第60弾(devlog/wave60.md): 「下馬評」「無印」は競馬用語。事前の順位予想として言い直す。
+            <Item label="事前予想" value={`${forecast.rank}番手`}
+              detail={`実際は${rank}位${beatForecast ? "——予想を上回る快走" : rank > forecast.rank ? "——予想に届かず" : ""}`}
               detailColor={beatForecast ? T.color.good : rank > forecast.rank ? T.color.bad : T.color.sub} />
           )}
           {popGain > 0 && (
@@ -172,14 +174,18 @@ export function renderMyLifeRaceScreens(ctx) {
               detail={popBonus > 0 ? `個人スポンサー契約ボーナス +${popBonus}万円` : null} detailColor={T.color.accent} />
           )}
           {courseRecord && courseRecord.isNew && (
-            <Item label={`${courseRecord.kind} コースレコード`} value={courseRecord.speed}
+            // 第60弾: 内部指標(speed)の生値ではなく、誰でも読めるタイムを表示する
+            <Item label={`${courseRecord.kind} コースレコード`} value={fmtTime(courseRecord.timeSec)}
               valueColor={courseRecord.isPlayer ? T.color.good : T.color.text}
               detail={courseRecord.isPlayer ? "あなたが樹立" : `${courseRecord.holder}が樹立`}
               detailColor={courseRecord.isPlayer ? T.color.good : T.color.sub} />
           )}
           {worldRank != null && (
+            // 第60弾: 初めてランキングに載った回はworldRankPrevがnullになり「—位から後退」という
+            // 矛盾した表示になっていた（ptは+1なのに「後退」）。初掲載は専用の文言にする。
             <Item label="世界ランキング" value={`${worldRank}位`} valueColor={worldRankUp ? T.color.good : T.color.text}
-              detail={`${worldRankPrev ?? "—"}位から${worldRankUp ? "上昇" : "後退"}——ランキングpt +${wpGain}`}
+              detail={worldRankPrev == null ? `初めてランキングに載った——ランキングpt +${wpGain}`
+                : `${worldRankPrev}位から${worldRankUp ? "上昇" : "後退"}——ランキングpt +${wpGain}`}
               detailColor={worldRankUp ? T.color.good : T.color.sub} />
           )}
         </Section>
@@ -209,7 +215,9 @@ export function renderMyLifeRaceScreens(ctx) {
         )}
 
         <RivalBlock outcome={rivalOutcome} playerName={ml.player.name} />
-        <RivalBlock outcome={rivalOutcome2} introText={rival2Intro ? `${rivalOutcome2.name}という選手と初めて同じレースで走った。${rivalOutcome2.rank}位でフィニッシュした彼／彼女は、これから長く意識する存在になりそうだ。` : null} playerName={ml.player.name} />
+        {/* 第60弾: 見出しに好敵手の名前が出るため本文からは名前を落とす（二重表示の解消）。
+            「彼／彼女」も日本語では不要な代名詞なので使わない。 */}
+        <RivalBlock outcome={rivalOutcome2} introText={rival2Intro ? `初めて同じレースで走った。${rivalOutcome2.rank}位でフィニッシュし、これから長く意識する存在になりそうだ。` : null} playerName={ml.player.name} />
 
         {standings && standings.length > 0 && (
           <>

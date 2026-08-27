@@ -41,15 +41,17 @@ export function rivalDrama({ beat, gapSec, rivalName, rivalRank, myRank, heatBef
   const g = Math.abs(gapSec == null ? 99 : gapSec);
   const gTxt = g < 60 ? `${g.toFixed(1)}秒` : `${Math.floor(g / 60)}分${Math.round(g % 60)}秒`;
   const photo = g < 1, close = g < 4;
+  // 第60弾(devlog/wave60.md): 表示側（RivalBlock）が既に見出しでライバル名を出しているため、
+  // 本文でも名前を繰り返すと二重表示になる。全分岐で本文から名前を落とす。
   let line;
   if (beat) {
-    if (photo) line = `写真判定にもつれ込む死闘。わずか${gTxt}、あなたが${rivalName}を競り落とした。`;
-    else if (close) line = `最後まで並走する接戦を、${gTxt}振り切って制した。${rivalName}の視線が背中に刺さる。`;
-    else line = `${rivalName}を${gTxt}突き放す完勝。今日は完全にあなたの一日だった。`;
+    if (photo) line = `写真判定にもつれ込む死闘。わずか${gTxt}、競り落とした。`;
+    else if (close) line = `最後まで並走する接戦を、${gTxt}振り切って制した。視線が背中に刺さる。`;
+    else line = `${gTxt}突き放す完勝。今日は完全にあなたの一日だった。`;
   } else {
-    if (photo) line = `写真判定の末、わずか${gTxt}。${rivalName}に刺し返された。この悔しさは忘れない。`;
-    else if (close) line = `${rivalName}にわずか${gTxt}及ばず。あと一歩、その差を埋める日が来る。`;
-    else line = `${rivalName}に${gTxt}の完敗。力の差を見せつけられ、拳を握る。`;
+    if (photo) line = `写真判定の末、わずか${gTxt}。刺し返された。この悔しさは忘れない。`;
+    else if (close) line = `わずか${gTxt}及ばず。あと一歩、その差を埋める日が来る。`;
+    else line = `${gTxt}の完敗。力の差を見せつけられ、拳を握る。`;
   }
   const before = rivalHeatTier(heatBefore), after = rivalHeatTier(heatAfter);
   const promoted = after.key > before.key ? `——この一戦で、二人の因縁はついに『${after.label}』の域に入った。` : null;
@@ -141,9 +143,9 @@ const PLAYER_RESPOND = {
 // v38(改善:会話を厚く): その一戦の状況（接戦/圧勝/完敗/大舞台）を地の文で描写し、会話に文脈を与える。
 // 同じ性格の台詞でも「今この瞬間」の物語として立ち上がるようにする。
 const RIVAL_SITUATION = {
-  close: ["わずかな差だった。ゴール後、荒い息のまま二人の視線が交差する。", "紙一重。決着の余韻が残る中、彼／彼女がゆっくりと口を開いた。", "最後まで並走した末の一瞬の差。互いの脚を、誰より知っている。"],
-  blowoutWin: ["圧倒的な走りだった。悔しさを噛み殺しながら、彼／彼女が近づいてくる。", "背中も見せない完勝。それでも相手は、まっすぐこちらを見据えていた。"],
-  blowoutLose: ["完敗だった。息を整えるこちらへ、彼／彼女が静かに歩み寄る。", "力の差を見せつけられた。だが、うつむいている場合ではない。"],
+  close: ["わずかな差だった。ゴール後、荒い息のまま二人の視線が交差する。", "紙一重。決着の余韻が残る中、相手がゆっくりと口を開いた。", "最後まで並走した末の一瞬の差。互いの脚を、誰より知っている。"],
+  blowoutWin: ["圧倒的な走りだった。悔しさを噛み殺しながら、相手が近づいてくる。", "背中も見せない完勝。それでも相手は、まっすぐこちらを見据えていた。"],
+  blowoutLose: ["完敗だった。息を整えるこちらへ、相手が静かに歩み寄る。", "力の差を見せつけられた。だが、うつむいている場合ではない。"],
   bigWin: ["大舞台を制した高揚の中、宿敵がこちらへ手を伸ばしてきた。", "最高の舞台での勝利。その熱気の中で、二人はまた向き合う。"],
   bigLose: ["大一番で敗れた悔しさ。それでも、この舞台で競えたことに意味がある。", "大舞台の敗北は重い。だが宿敵の存在が、次への焔を灯す。"],
   normal: ["レースを終え、二人はまた言葉を交わす。", "ゴール後のわずかな時間。宿敵との、いつもの掛け合いが始まる。"],

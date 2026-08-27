@@ -37,7 +37,11 @@ export function renderMyLifeWorldScreen(ctx) {
   // ml.worldRankは初レースを終えるまでnull。その間もランキング表（mlWorldBoard）は自分を
   // 何位かに並べているため、そのまま「—位」と出すと表と食い違う。確定値が無い間は表の位置を使う。
   const rank = ml.worldRank == null ? board.myRank : ml.worldRank;
-  const tier = worldRankTier(rank);
+  // 第60弾(devlog/wave60.md): デビュー直後（出走0）は世界の台帳が空で、自分1人だけの表に
+  // なるため必ず「1位＝世界王者」になっていた（実プレイで確認済みの誤表示）。1度も
+  // 出走していない間は比較対象が存在しないので、確定的な順位を主張しない。
+  const hasRaced = ((ml.player && ml.player.raceLog) || []).length > 0;
+  const tier = hasRaced ? worldRankTier(rank) : { label: "未ランク", color: "#9aa3b5" };
   const media = mlMediaHeadline(ml);
   // 第32弾Phase B R3: 枠線ボタンを面(surfaceUp)＋chevronのアフォーダンス規約へ統一
   const linkBtn = (label, screen) => (
@@ -55,7 +59,7 @@ export function renderMyLifeWorldScreen(ctx) {
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{tier.label}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <span style={{ fontSize: T.size.display, lineHeight: 1, color: T.color.accent }}>{rank}</span>
+          <span style={{ fontSize: T.size.display, lineHeight: 1, color: T.color.accent }}>{hasRaced ? rank : "—"}</span>
           <span style={{ fontSize: T.size.caption, color: T.color.sub }}>位</span>
         </div>
       </div>

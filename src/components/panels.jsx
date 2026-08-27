@@ -11,7 +11,7 @@
 // 「自分の行だけアクセント」に一本化。絵文字は撤去、→★●等の機能記号は維持。
 import React from "react";
 import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, DISCIPLINES, DISCIPLINE_KEYS, aptGrade, buildDesc, disciplineScore, loadCourseRecords, raceForecast } from "../logic/support.js";
-import { GOLD_CONDITIONS } from "../core/core.js";
+import { GOLD_CONDITIONS, fmtTime } from "../core/core.js";
 import { ABILITIES, AB_COLOR, AB_KEYS, AB_LABEL, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL, PERSONALITIES, TYPES } from "../data/abilities.js";
 import { SEG_COLOR, TEMPLATES, UNLOCK_TEMPLATES } from "../data/course.js";
 import { TITLE_DEFS } from "../data/progression.js";
@@ -161,7 +161,7 @@ export function CourseRecordsPanel() {
   return (
     <div style={{ background: T.color.surface, padding: T.space.md }}>
       <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm, lineHeight: 1.7 }}>
-        コース種別ごとの最速記録（レコード指数＝コース距離÷勝者タイム×100）。全プレイ・両モードで共有されます。
+        コース種別ごとの最速記録。全プレイ・両モードで共有されます。
       </div>
       {!anyRec && <div style={{ fontSize: T.size.body, color: T.color.sub }}>まだ記録はありません。レースを走ると刻まれていきます。</div>}
       {kinds.map((k, i) => {
@@ -171,9 +171,11 @@ export function CourseRecordsPanel() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.body }}>
               <span style={{ color: T.color.text }}>{k}</span>
               {r ? (
+                // 第60弾(devlog/wave60.md): 内部指標(speed)の生値ではなく、誰でも読めるタイムを
+                // 表示する。旧セーブ（timeSec未保存）はタイム欄を省き、保持者・年だけ出す。
                 <span style={{ fontSize: T.size.caption, color: T.color.sub }}>
-                  指数<span style={{ color: T.color.accent, marginLeft: 3 }}>{r.speed}</span>
-                  <span style={{ marginLeft: T.space.sm, color: r.isPlayer ? T.color.accent : T.color.text }}>{r.holder}</span>
+                  {r.timeSec != null && <span style={{ color: T.color.accent, marginRight: T.space.sm }}>{fmtTime(r.timeSec)}</span>}
+                  <span style={{ color: r.isPlayer ? T.color.accent : T.color.text }}>{r.holder}</span>
                   <span style={{ marginLeft: T.space.xs }}>（{r.year}年目）</span>
                 </span>
               ) : <span style={{ fontSize: T.size.caption, color: T.color.sub }}>記録なし</span>}

@@ -546,7 +546,10 @@ export function RaceView({ sim, onFinish }) {
           const chaseR = sorted.find(r => r.gid !== leadG);
           if (chaseR) {
             curGapSec = Math.max(0, Math.round((sorted[0].frac - chaseR.frac) * totalRef.current));
-            gapText = `逃げとメインのギャップ：約${curGapSec}秒`;
+            // 第60弾(devlog/wave60.md): 「約396秒」のような秒のまま出す表示は読みづらい。
+            // 60秒以上は分単位も添える（例：約6分36秒）。
+            const gapReadable = curGapSec < 60 ? `${curGapSec}秒` : `${Math.floor(curGapSec / 60)}分${curGapSec % 60}秒`;
+            gapText = `逃げとメインのギャップ：約${gapReadable}`;
           }
         }
         // v35(UI): 注目選手（プレイヤー／自チームのエース）を名指しで実況。順位の急変・先頭浮上・

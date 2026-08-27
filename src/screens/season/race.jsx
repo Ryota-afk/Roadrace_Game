@@ -265,8 +265,9 @@ export function renderSeasonRaceScreens(ctx) {
           {!race.championship && <Item label="チームポイント" value={`+${pts}pt`} detail={mandateHit ? "指定レースボーナス込み" : undefined} />}
           <Item label="出走経験" value={expKeys.map(k => AB_LABEL[k]).join("・")} detail="が成長" />
           {courseRecord && courseRecord.isNew && (
+            // 第60弾(devlog/wave60.md): 内部指標(speed)の生値ではなく、誰でも読めるタイムを表示する
             <Item label={`${courseRecord.kind}のコースレコード`} value="更新！" valueColor={T.color.accent}
-              detail={`記録値${courseRecord.speed}／達成：${courseRecord.holder}${courseRecord.isPlayer ? "・自チーム" : ""}`} />
+              detail={`記録タイム${fmtTime(courseRecord.timeSec)}／達成：${courseRecord.holder}${courseRecord.isPlayer ? "・自チーム" : ""}`} />
           )}
           {om && <Item label={`中期目標「${om.label}」`} value={g.prizeInfo.objectiveDone ? "達成" : `進捗 ${om.tail}`} valueColor={g.prizeInfo.objectiveDone ? T.color.good : undefined} />}
         </Section>
