@@ -28,7 +28,7 @@ const PickRow = ({ items, value, onPick }) => (
         border: "none", cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
         padding: `${T.space.sm}px ${T.space.md}px`,
         background: value === it.key ? T.color.action : T.color.surfaceUp,
-        color: value === it.key ? T.color.bg : T.color.sub,
+        color: value === it.key ? T.color.ink : T.color.sub,
       }}>{it.label}{it.sub && <span style={{ fontSize: T.size.caption, marginLeft: 4 }}>{it.sub}</span>}</button>
     ))}
   </div>
@@ -54,7 +54,7 @@ export function renderMyLifeCreateScreens(ctx) {
             return (
               <PrimaryBtn onClick={() => { const loaded = loadMyLifeGame(); if (loaded) setMl(loaded); }}>
                 続きから
-                {info && <span style={{ display: "block", fontSize: T.size.caption, color: T.color.bg, opacity: 0.85, marginTop: 2 }}>{info.name}{info.age ? `（${info.age}歳）` : ""}・{info.classLabel}・{info.year}年目{info.savedAt ? ` — ${fmtRelTime(info.savedAt)}に保存` : ""}</span>}
+                {info && <span style={{ display: "block", fontSize: T.size.caption, color: T.color.ink, opacity: 0.85, marginTop: 2 }}>{info.name}{info.age ? `（${info.age}歳）` : ""}・{info.classLabel}・{info.year}年目{info.savedAt ? ` — ${fmtRelTime(info.savedAt)}に保存` : ""}</span>}
               </PrimaryBtn>
             );
           })()}

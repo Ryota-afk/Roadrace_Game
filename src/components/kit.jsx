@@ -103,7 +103,7 @@ export const Item = ({ label, value, valueColor, detail, detailColor, first }) =
 // hub.jsx側の直書きでheadになっていたため他画面が置き去りになっていた）。
 export const PrimaryBtn = ({ children, onClick, disabled }) => (
   <button onClick={onClick} disabled={disabled} style={{
-    width: "100%", background: disabled ? T.color.surfaceUp : T.color.action, color: disabled ? T.color.sub : T.color.bg,
+    width: "100%", background: disabled ? T.color.surfaceUp : T.color.action, color: disabled ? T.color.sub : T.color.ink,
     border: "none", fontFamily: FONT_DOT, fontSize: T.size.head, padding: T.space.md, cursor: disabled ? "default" : "pointer", marginBottom: T.space.sm,
   }}>{children}</button>
 );
@@ -146,7 +146,7 @@ export const ShopBtn = ({ children, onClick, disabled, outline, minWidth }) => (
   <button onClick={onClick} disabled={disabled} style={{
     flex: "none", minWidth, textAlign: minWidth ? "center" : undefined,
     background: disabled ? T.color.surfaceUp : outline ? "transparent" : T.color.action,
-    color: disabled ? T.color.sub : outline ? T.color.action : T.color.bg,
+    color: disabled ? T.color.sub : outline ? T.color.action : T.color.ink,
     border: outline ? `1px solid ${disabled ? T.color.sub : T.color.action}` : "none",
     fontFamily: FONT_DOT, fontSize: T.size.caption, padding: `${T.space.xs}px ${T.space.sm}px`, cursor: disabled ? "default" : "pointer", whiteSpace: "nowrap",
   }}>{children}</button>

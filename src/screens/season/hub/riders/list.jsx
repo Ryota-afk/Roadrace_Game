@@ -50,7 +50,7 @@ function RiderRow({ r, first, ovr, badge, ph, expanded, onToggle }) {
         ) : (
           <span style={{ display: "flex", alignItems: "center", gap: 4, flex: "none" }}>
             <span style={{ fontSize: T.size.micro, color: T.color.sub, fontVariantNumeric: "tabular-nums" }}>{Math.round(r.fatigue)}</span>
-            <span style={{ display: "block", width: 44, height: 4, background: T.color.surfaceUp }}>
+            <span style={{ display: "block", width: 44, height: 4, background: T.color.sunken }}>
               <span style={{ display: "block", height: 4, width: `${Math.min(100, r.fatigue)}%`, background: r.fatigue >= 70 ? T.color.bad : T.color.accent }} />
             </span>
           </span>

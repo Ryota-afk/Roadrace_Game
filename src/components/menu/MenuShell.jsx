@@ -16,7 +16,7 @@ export function MenuShell({ categories, menuState, openMenu, closeMenu, selectCa
       <button onClick={open ? closeMenu : openMenu} aria-label={open ? "メニューを閉じる" : "メニューを開く"}
         style={{
           position: "fixed", right: 18, bottom: 18, zIndex: 1100, width: 52, height: 52,
-          background: T.color.action, color: T.color.bg, border: "none", cursor: "pointer",
+          background: T.color.action, color: T.color.ink, border: "none", cursor: "pointer",
           fontSize: 20, fontFamily: FONT_DOT,
         }}>
         {open ? "✕" : "☰"}

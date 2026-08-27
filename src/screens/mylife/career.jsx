@@ -24,8 +24,8 @@ const ChoiceCard = ({ title, note, onClick, primary, danger }) => (
     fontFamily: FONT_DOT, padding: T.space.md, marginBottom: T.space.sm,
     background: primary ? T.color.action : T.color.surfaceUp,
   }}>
-    <div style={{ fontSize: T.size.head, color: primary ? T.color.bg : (danger ? T.color.bad : T.color.text) }}>{title}</div>
-    <div style={{ fontSize: T.size.caption, color: primary ? T.color.bg : T.color.sub, marginTop: 2, opacity: primary ? 0.75 : 1 }}>{note}</div>
+    <div style={{ fontSize: T.size.head, color: primary ? T.color.ink : (danger ? T.color.bad : T.color.text) }}>{title}</div>
+    <div style={{ fontSize: T.size.caption, color: primary ? T.color.ink : T.color.sub, marginTop: 2, opacity: primary ? 0.75 : 1 }}>{note}</div>
   </button>
 );
 

@@ -208,9 +208,9 @@ export function renderMyLifeEventScreens(ctx) {
                               border: "none", cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
                               padding: "6px 9px",
                               background: isSel ? T.color.action : T.color.surfaceUp,
-                              color: isSel ? T.color.bg : hiredHere ? T.color.text : T.color.sub,
+                              color: isSel ? T.color.ink : hiredHere ? T.color.text : T.color.sub,
                             }}>
-                              {AB_LABEL[k]}{hiredHere && ` Lv${lv}`}{capped && <span style={{ color: isSel ? T.color.bg : T.color.accent }}>（上限）</span>}
+                              {AB_LABEL[k]}{hiredHere && ` Lv${lv}`}{capped && <span style={{ color: isSel ? T.color.ink : T.color.accent }}>（上限）</span>}
                             </button>
                           );
                         })}

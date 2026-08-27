@@ -107,7 +107,7 @@ function LegsBar({ energy }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: T.space.sm, margin: `0 0 ${T.space.sm}px` }}>
       <span style={{ fontSize: T.size.caption, color: T.color.sub, flexShrink: 0 }}>脚の残り</span>
-      <div style={{ flex: 1, height: 6, background: T.color.surfaceUp, overflow: "hidden" }}>
+      <div style={{ flex: 1, height: 6, background: T.color.sunken, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: tier.c, transition: "width .2s" }} />
       </div>
       <span style={{ fontSize: T.size.caption, fontFamily: FONT_DOT, color: tier.c, flexShrink: 0 }}>{tier.t}</span>

@@ -178,7 +178,7 @@ export function renderMyLifeRiderScreen(ctx) {
                       {a.desc}{nextLabel != null && `　　${nextLabel}まで ${cur} / ${nextNeed}${gr.unit}`}
                     </div>
                     {nextLabel != null && (
-                      <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs, marginLeft: 18 }}>
+                      <div style={{ height: 3, background: T.color.sunken, marginTop: T.space.xs, marginLeft: 18 }}>
                         <div style={{ height: 3, width: `${Math.min(100, cur / nextNeed * 100)}%`, background: T.color.accent }} />
                       </div>
                     )}
@@ -214,7 +214,7 @@ export function renderMyLifeRiderScreen(ctx) {
                             : <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>{cur} / {need}{unit}</span>}
                         </div>
                         {!eligible && (
-                          <div style={{ height: 3, background: T.color.surfaceUp, marginTop: T.space.xs }}>
+                          <div style={{ height: 3, background: T.color.sunken, marginTop: T.space.xs }}>
                             <div style={{ height: 3, width: `${Math.min(100, cur / need * 100)}%`, background: T.color.action }} />
                           </div>
                         )}

@@ -172,7 +172,7 @@ export function renderMyLifeHubScreen(ctx) {
                   </div>
                   <div style={{ display: "flex", gap: 5, marginTop: T.space.xs }}>
                     {rows.map(([label, val, color]) => (
-                      <div key={label} style={{ flex: 1, height: 4, background: T.color.surfaceUp }}><div style={{ height: 4, width: `${val}%`, background: color }} /></div>
+                      <div key={label} style={{ flex: 1, height: 4, background: T.color.sunken }}><div style={{ height: 4, width: `${val}%`, background: color }} /></div>
                     ))}
                   </div>
                 </>
@@ -274,7 +274,7 @@ export function renderMyLifeHubScreen(ctx) {
               専用・actionは操作専用で兼任させない。副ボタンはcaption→bodyへ上げ、毎月かならず
               選ぶ行動が最小の文字段に置かれていた階層の逆転を解消した）。 */}
           <div style={{ background: T.color.surface, padding: T.space.md }}>
-            <button onClick={ACTION_HANDLER[nextAction.key]} style={{ width: "100%", background: T.color.action, color: T.color.bg, border: 0, padding: T.space.md, fontFamily: FONT_DOT, fontSize: T.size.head, cursor: "pointer" }}>
+            <button onClick={ACTION_HANDLER[nextAction.key]} style={{ width: "100%", background: T.color.action, color: T.color.ink, border: 0, padding: T.space.md, fontFamily: FONT_DOT, fontSize: T.size.head, cursor: "pointer" }}>
               {ACTION_LABEL[nextAction.key]} ▸
             </button>
             <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginTop: T.space.sm }}>

@@ -172,3 +172,62 @@
 7. ホーム画面が上記の順序どおりで、4択が同格に見える
 8. 候補1件の月・`topGoal`なしの両方で崩れない
 9. 実プレイのスクリーンショットで確認
+
+---
+
+## Phase 1 実装結果（Sonnet）
+
+**状態**：**実装・検証完了**。Phase 2（ホームの構造）は未着手。
+
+### 変更したファイル
+
+| ファイル | 内容 |
+|---|---|
+| `data/theme.js` | `bg`/`surface`/`surfaceUp`/`rule`/`text`/`sub`を案2の値へ。`ink`・`sunken`を新設 |
+| `index.html` | `html,body`の背景を`#0E0E10`→`#1A1A20`、`#loading`の色も`sub`の新値へ |
+| `components/kit.jsx` | `PrimaryBtn`・`ShopBtn`の文字色を`bg`→`ink` |
+| `components/chrome.jsx` | 改名モーダルの確定・確認ダイアログのOKを`bg`→`ink` |
+| `components/menu/MenuShell.jsx` | メニューFABの文字色を`bg`→`ink` |
+| `components/DecisionCard.jsx` | 脚の残りバーの溝を`surfaceUp`→`sunken` |
+| `screens/mylife/career.jsx` | `ChoiceCard`のprimary時の文字色を`bg`→`ink`（2箇所） |
+| `screens/mylife/hub.jsx` | 今月の行動の主ボタンを`bg`→`ink`／体調バーの溝を`sunken` |
+| `screens/mylife/create.jsx` | `PickRow`の選択中・「続きから」の補足を`bg`→`ink` |
+| `screens/mylife/events.jsx` | コーチ選択チップの選択中を`bg`→`ink`（2箇所） |
+| `screens/mylife/rider.jsx` | バッジ進捗バーの溝を`sunken`（2箇所） |
+| `screens/season/hub/riders/list.jsx` | 疲労バーの溝を`sunken` |
+
+⚠️**設計時のgrepでは6箇所としていたが、実際には11箇所あった。**
+設計時は`components/`と`career.jsx`しか見ておらず、`hub.jsx`の主ボタン・`create.jsx`の
+`PickRow`と「続きから」の補足・`events.jsx`のコーチ選択チップ（2箇所）を取りこぼしていた。
+`grep -rn "T\.color\.bg" src/ | grep -v "background:"`で**文字色としての使用が0件になるまで**
+潰した。⚠️今後`T.color.bg`を文字色に使わないこと（`ink`を使う）。
+
+### 実測（`scratchpad/contrast2.mjs`）
+
+| 指標 | 旧 | 新 |
+|---|---|---|
+| bg明度 | 15/255 | **28/255** |
+| bg→surface | 1.077:1 | **1.154:1** |
+| surface→surfaceUp | 1.077:1 | **1.202:1** |
+| surfaceUp→rule | 1.197:1 | **1.318:1** |
+| `text`対bg | 17.23:1 | **15.20:1**（ギラつき緩和） |
+| `sub`対bg | 5.58:1 | **6.45:1**（読みやすく） |
+| `ink`対`bad` | 4.27:1 | **4.27:1**（維持＝AA割れを回避） |
+| `sunken`明度 | — | 17（bgの28より暗い＝溝として機能） |
+
+### 検証結果
+
+1. 面の刻みが1.15〜1.32:1：**OK**（上表）
+2. `bad`ボタンの文字が`ink`で4.27:1維持：**OK**
+3. `T.color.bg`の文字色使用が0件：**OK**（grepで確認）
+4. `index.html`の`body`背景が新bg：**OK**
+5. 実プレイ巡回：**マイライフは全画面OK**——タイトル／選手作成／スカウト／目標バッジ／
+   ホーム／選手／世界／ショップ／記録／その他／出走表／レース開始／判断カード／
+   レース終了／リザルトの15画面をスクリーンショットで確認。パネルが背景から分離して
+   見えるようになり、ゲージの溝も沈んでいる。`pageerror`ゼロ。
+   **シーズンは7画面**（モード開始／スカウト方針／スポンサー選択／拠点のアイソメ画面／
+   メニューシェル／選手サブメニュー／レースサブメニュー）を確認、`pageerror`ゼロ。
+   ⚠️**シーズンの選手一覧・レース結果画面はPlaywrightの多段フローが安定せず未到達**。
+   ただし変更点は`list.jsx`の疲労バーの溝1箇所のみで、これはマイライフ側で実機確認済みの
+   バー（`hub.jsx`の体調バー・`rider.jsx`のバッジ進捗バー）と同一パターン。
+6. 既存回帰（w46〜52・w57〜60）全通過・`npx vite build`成功：**OK**

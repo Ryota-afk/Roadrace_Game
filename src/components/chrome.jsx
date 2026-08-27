@@ -62,7 +62,7 @@ export function RenameModal({ renameState, setRenameState }) {
         {badChars.length > 0 && <div style={{ color: T.color.bad, fontSize: T.size.caption, marginTop: T.space.xs }}>「{badChars.join("")}」は使えません</div>}
         <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.lg }}>
           <button onClick={() => setRenameState(null)} style={{ flex: 1, background: T.color.surfaceUp, color: T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer" }}>やめる</button>
-          <button onClick={commitRename} disabled={!canCommit} style={{ flex: 1, background: canCommit ? T.color.accent : T.color.surfaceUp, color: canCommit ? T.color.bg : T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: canCommit ? "pointer" : "default" }}>変更する</button>
+          <button onClick={commitRename} disabled={!canCommit} style={{ flex: 1, background: canCommit ? T.color.accent : T.color.surfaceUp, color: canCommit ? T.color.ink : T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: canCommit ? "pointer" : "default" }}>変更する</button>
         </div>
       </div>
     </div>
@@ -80,7 +80,7 @@ export function ConfirmDialog({ confirmDialog, setConfirmDialog }) {
         <div style={{ color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body, lineHeight: 1.9, marginBottom: T.space.lg, whiteSpace: "pre-wrap" }}>{confirmDialog.message}</div>
         <div style={{ display: "flex", gap: T.space.sm }}>
           <button onClick={() => setConfirmDialog(null)} style={{ flex: 1, background: T.color.surfaceUp, color: T.color.sub, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer" }}>やめる</button>
-          <button onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); fn(); }} style={{ flex: 1, background: T.color.bad, color: T.color.bg, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer" }}>{confirmDialog.confirmLabel || "OK"}</button>
+          <button onClick={() => { const fn = confirmDialog.onConfirm; setConfirmDialog(null); fn(); }} style={{ flex: 1, background: T.color.bad, color: T.color.ink, border: "none", fontFamily: FONT_DOT, fontSize: T.size.body, padding: T.space.md, cursor: "pointer" }}>{confirmDialog.confirmLabel || "OK"}</button>
         </div>
       </div>
     </div>
