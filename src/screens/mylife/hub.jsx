@@ -219,7 +219,10 @@ export function renderMyLifeHubScreen(ctx) {
                 // 描かれていたため4件目のレースに見えていた（実プレイで確認）。見出しを付けて
                 // 独立したブロックに分離する。
                 <div style={{ marginTop: T.space.sm }}>
-                  <div style={{ fontSize: T.size.caption, color: T.color.accent }}>目指すバッジ</div>
+                  {/* 第62弾フォローアップ(devlog/wave62.md): 同じ機能の見出しが画面ごとに
+                      「目指すバッジ」「目標バッジ」と食い違っていた（ユーザーからの指摘）。
+                      作成画面・選手タブに合わせて統一する。 */}
+                  <div style={{ fontSize: T.size.caption, color: T.color.accent }}>目標バッジ</div>
                   <div style={{ background: T.color.surface, padding: `${T.space.sm}px ${T.space.md}px`, marginTop: 2, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                     <span style={{ fontSize: T.size.body, color: T.color.text }}>{ABILITIES[topGoal.id].label}</span>
                     <span style={{ fontSize: T.size.caption, color: T.color.sub }}>あと{topGoal.need - topGoal.cur}{topGoal.unit}</span>
