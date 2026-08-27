@@ -306,11 +306,15 @@ export function renderMyLifeCreateScreens(ctx) {
       };
       const focusOptions = DISCIPLINE_KEYS.filter(k => TEMPLATES.some(t => (FAVORS_TO_DISCIPLINE[t.favors] || "flat") === k));
       const focus = ml.raceFocus || null;
+      // 第62弾(devlog/wave62.md): 選手タブの「選び直す」からキャリア途中でも再訪できるように
+      // なったため、「この内容でキャリアを始める」という開始専用の文言は再訪時には誤りになる。
+      const hasRaced = ((ml.player && ml.player.raceLog) || []).length > 0;
       return mlWrap(
         <Screen>
-          <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>目指す選手像</div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: T.size.caption, marginBottom: T.space.sm }}>
-            <span style={{ color: T.color.accent }}>目指すバッジ</span>
+          {/* 第62弾: 見出し「目指す選手像」は意味が伝わらないため「目標バッジ」に変更。
+              旧来の小見出し「目指すバッジ」は同語の重複になるため削除し、選択数の行だけ残す。 */}
+          <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>目標バッジ</div>
+          <div style={{ display: "flex", justifyContent: "flex-end", fontSize: T.size.caption, marginBottom: T.space.sm }}>
             <span style={{ color: goals.length >= 3 ? T.color.accent : T.color.sub }}>{goals.length} / 3 選択</span>
           </div>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.md }}>
@@ -369,7 +373,7 @@ export function renderMyLifeCreateScreens(ctx) {
               </div>
             )}
           </div>
-          <PrimaryBtn onClick={mlConfirmBadgeGoals}>この内容でキャリアを始める →</PrimaryBtn>
+          <PrimaryBtn onClick={mlConfirmBadgeGoals}>{hasRaced ? "この内容で決定する" : "この内容でキャリアを始める →"}</PrimaryBtn>
         </Screen>
       );
     }

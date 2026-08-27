@@ -132,7 +132,7 @@ export function makeMetaWrap({ renameState, setRenameState, confirmDialog, setCo
 // 全画面共通の足回りとして追加した。タブはキャラ作成前やレース中など「今そこから動かれると困る」
 // 画面では出さない（TAB_HIDDEN_SCREENS）。
 const TAB_HIDDEN_SCREENS = new Set([
-  "mylife_create", "mylife_scout",
+  "mylife_create", "mylife_scout", "mylife_badge_goals",
   "mylife_startlist", "mylife_race", "mylife_result", "mylife_rival_scene", "mylife_newspaper",
   "mylife_event", "mylife_protege_event", "mylife_event_result",
   "mylife_offseason", "mylife_offseason_result", "mylife_crossroads", "mylife_crossroads_result",

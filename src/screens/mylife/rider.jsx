@@ -12,7 +12,7 @@ import { FONT_DOT, T } from "../../data/theme.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
 import { ACQUIRE_REQS, FAVORS_TO_DISCIPLINE, growthPhase, mlBadgeKind, mlBadgeSlots, mlGrowthCap, mlGrowthCapFor, mlGrowthPowRevealed, mlSlotUsed, potentialHint, riderFlavorText } from "../../logic/support.js";
 import { riderNickname } from "../../state/state.js";
-import { BadgeTierMark, Item, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
+import { BadgeTierMark, Item, QuietBtn, Screen, Section, ShopBtn, TypeChip } from "../../components/kit.jsx";
 
 export function renderMyLifeRiderScreen(ctx) {
   const { ml, mlWrap, mlAcquireBadge, mlUnequipBadge, mlEquipBlood, setMl } = ctx;
@@ -62,6 +62,38 @@ export function renderMyLifeRiderScreen(ctx) {
         {/* pot.labelは「伸びしろ中」のように項目名を含むため、行の見出しと重複しないよう剥がす */}
         <Item label="伸びしろ" value={pot.label.replace(/^伸びしろ/, "")} />
         {r.talentCap ? <Item label="才能による上限" value={`+${r.talentCap}`} /> : null}
+      </Section>
+
+      {/* 第62弾(devlog/wave62.md): 宣言した目標バッジ（最大3件）はこれまでホームの「最も
+          進んでいる1件」しか表示されず、残り2件はどこにも見えていなかった（実プレイで
+          報告を受けて確認）。ここに全件を並べ、「選び直す」で作成時の宣言画面へ再訪できる
+          ようにする。ホーム側は現行どおり1件のみ（同じ情報を2箇所に出さない・DEVLOG §6）。 */}
+      <Section title="目標バッジ" right={`${(ml.badgeGoals || []).length} / 3`} padded>
+        {(ml.badgeGoals || []).length === 0 ? (
+          <div style={{ fontSize: T.size.body, color: T.color.sub, marginBottom: T.space.sm }}>まだ決めていません</div>
+        ) : (ml.badgeGoals || []).map((id, i) => {
+          const a = ABILITIES[id];
+          if (!a) return null;
+          const q = ACQUIRE_REQS[id];
+          const cur = q ? q.cur(r) : 0;
+          const done = q && cur >= q.need;
+          // 表彰台系（世界選手権/五輪・古典3種）は回数ではなく条件文で言う
+          // （目標バッジ宣言画面のcondTextと同じ言い回しに揃える）
+          const condText = id === "big" ? "世界選手権かオリンピックで表彰台"
+            : id === "pave_sp" ? "石畳の古典《春の地獄》で表彰台"
+            : id === "ardennes_sp" ? "丘陵の古典《アルデンヌ》で表彰台"
+            : id === "autumn_sp" ? "山岳の古典《秋の女王》で表彰台"
+            : q ? `あと${q.need - cur}${q.unit}` : "";
+          return (
+            <Item key={id} first={i === 0} label={a.label}
+              value={done ? "条件達成" : condText}
+              valueColor={done ? T.color.good : T.color.text}
+              detail={a.desc} />
+          );
+        })}
+        <div style={{ marginTop: T.space.sm }}>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_badge_goals" }))}>選び直す</QuietBtn>
+        </div>
       </Section>
 
       {(() => {

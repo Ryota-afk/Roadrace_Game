@@ -157,8 +157,14 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   // 選び直せる（mlSetFocusとは無関係の別概念——あちらは練習メニューの集中先）。
   const mlSetRaceFocus = (focus) => setMl(s => ({ ...s, raceFocus: focus }));
   const mlConfirmBadgeGoals = () => setMl(s => {
-    if (!s.raceFocus) return { ...s, screen: "mylife_main" };
-    // まだ1戦も走っていない初月のみ、選んだ出走計画を反映して候補を作り直す
+    // 第62弾(devlog/wave62.md): この画面は選手タブの「選び直す」からもキャリア途中で
+    // 再訪できるようになった。まだ1戦も走っていない初月以外で候補を作り直すと、
+    // 既に選んでいた今月のレース(sel.raceId)を無条件に消してしまう事故になるため、
+    // 「まだ1戦も走っていない」を明示的に確認してから候補再生成を行う
+    // （このコメントは元々あったが、以前は呼び出し口が作成フロー1つだけだったため
+    // コード上のチェックが無くても常に真だった）。
+    const hasRaced = ((s.player && s.player.raceLog) || []).length > 0;
+    if (!s.raceFocus || hasRaced) return { ...s, screen: "mylife_main" };
     return {
       ...s, screen: "mylife_main",
       races: mlGenRaceCandidates(s.year, s.month, s.classIdx, s.raceFocus),
