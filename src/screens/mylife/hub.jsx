@@ -452,11 +452,26 @@ export function renderMyLifeHubScreen(ctx) {
           })()}
           {/* 第13弾Phase3-A：ヘルプと、頻度が低く一部は取り返しがつかないキャリア操作。
               5つのタブのどれにも属さない性質（設定・生涯の区切り）なのでホーム末尾の折りたたみに置く。
-              取り返しがつかない操作だけは赤（T.color.bad）で示す。 */}
+              取り返しがつかない操作だけは赤（T.color.bad）で示す。
+              第64弾(devlog/wave64.md): 遊び方を学ぶ唯一の手段が、この折りたたみの中で
+              取り消せない操作（引退・削除）と同居していた。「遊び方を見る」を折りたたみの
+              外へ独立行として出し、ラベルも中身を言う「設定とキャリアの終わり」へ改めた
+              （旧「その他」は中身を1つも言っていなかった）。 */}
+          {/* archive.jsx:42-59の一覧行と同じ形（surfaceUp＋右端›）に揃える（kit.jsx規約） */}
+          <button onClick={() => setMl(s => ({ ...s, screen: "mylife_help" }))}
+            style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
+              background: T.color.surfaceUp, border: 0, marginBottom: T.space.xs,
+              color: T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+              padding: `${T.space.md}px`, cursor: "pointer", textAlign: "left",
+            }}>
+            <span>遊び方を見る</span>
+            <span style={{ color: T.color.sub }}>›</span>
+          </button>
           <div>
             <button onClick={() => setMl(s => ({ ...s, uiOtherOpen: !s.uiOtherOpen }))}
               style={{ width: "100%", background: "none", border: `1px solid ${T.color.rule}`, color: T.color.sub, cursor: "pointer", padding: `${T.space.sm}px ${T.space.md}px`, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: FONT_DOT, fontSize: T.size.caption }}>
-              <span>その他</span>
+              <span>設定とキャリアの終わり</span>
               <span>{ml.uiOtherOpen ? "閉じる" : "開く"}</span>
             </button>
             {ml.uiOtherOpen && (() => {
@@ -468,7 +483,6 @@ export function renderMyLifeHubScreen(ctx) {
               );
               return (
                 <div style={{ background: T.color.surface }}>
-                  {item("ヘルプ", () => setMl(s => ({ ...s, screen: "mylife_help" })))}
                   {item(`会話ドラマ：${ml.rivalDramaOn === false ? "非表示" : "表示中"}`, () => setMl(s => ({ ...s, rivalDramaOn: s.rivalDramaOn === false })))}
                   {ml.flags?.mentor
                     ? <div style={{ borderTop: `1px solid ${T.color.rule}`, color: T.color.sub, fontSize: T.size.caption, padding: `${T.space.sm}px ${T.space.md}px` }}>

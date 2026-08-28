@@ -14,7 +14,9 @@ export function renderMyLifeHelpScreens(ctx) {
     if (ml.screen === "mylife_help") {
       return mlWrap(
         <Screen>
-          <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>ヘルプ</div>
+          {/* 第64弾(devlog/wave64.md): 入口(hub.jsx「遊び方を見る」)と着地先の文言を同時に
+              揃える（第62弾で見出しが画面ごとに食い違う事故を起こしたのと同じ轍を踏まない）。 */}
+          <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>遊び方</div>
 
           <Section title="毎月の基本アクション">
             <HelpCard first>毎月1つだけアクションを選びます：<b style={{ color: T.color.text }}>①その月のレースに出走</b>／<b style={{ color: T.color.text }}>②練習</b>（指定能力+疲労増）／<b style={{ color: T.color.text }}>③完全休養</b>（疲労回復のみ）／<b style={{ color: T.color.text }}>④取材・私生活イベント</b>（能力・疲労に小さな効果）。出走すると賞金・ポイント・出走経験による能力成長が入りますが、疲労も大きく増えます。</HelpCard>
