@@ -128,6 +128,11 @@ export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこ
 // 風を受け、それより後ろは同程度に守られる）。
 export const REGEN_FRONT_FLOOR = 0.35;
 export const REGEN_SATURATION = 0.25;
+// 第77弾(devlog/wave75.md「第77弾」): 地形別・常時ONのふるい落とし。登坂ほど強く、
+// 平坦・スプリント・独走ではごく弱い（現実の集団も登坂で自然に絞られ平坦では絞られにくい）。
+// 実測でclimb/mtn=0.05・hill=0.035・平坦系=0.015が候補として選ばれた
+// （scratchpad/w77_patch.py `sel`候補・regen強化単独は効果なしと確認済み）。
+export const TERRAIN_KEEP_TIGHTEN = { climb: 0.05, mtn: 0.05, hill: 0.035, flat: 0.015, sprint: 0.015, tt: 0.015 };
 // v35(バランス): 勝負を賭けた逃げ（committedBreak）が単独で先頭に立っている間だけ、
 // 選抜地形で消耗が軽減される（brk係数）。登坂・山岳で最も効き（集団が組織的に追えず、
 // 登りでは集団のドラフト優位も縮む）、丘で中程度、平坦・スプリントでは軽め＝それでも吸収される。
@@ -581,7 +586,13 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         const finaleTight = (segInfo.idx === course.finalIdx) ? Math.min(0.045, 0.01 + members.length * 0.0009) : 0;
         // v38(改善): モニュメント/最上級グレードの選抜レースは、丘・登坂・最終で集団についていく基準が
         // 上がる＝実力上位だけが残る「select group」の決着に。極まった選手は残り、力の劣る選手はふるわれる。
-        const selectiveTight = (course.selective && (["hill", "climb", "mtn"].includes(segType) || segInfo.idx === course.finalIdx)) ? 0.035 : 0;
+        // 第77弾(devlog/wave75.md「第77弾」): 上記はcourse.selective（モニュメント/grade4）限定
+        // だったため、通常レースでは地形にふるいをかける力が一切働かず、決着クラスタが
+        // ほぼ常に2人前後（実測：先頭クラスタが発生するレース自体7〜27%）にしかならない一因
+        // だった。地形別の常時ONのふるい落とし（TERRAIN_KEEP_TIGHTEN）を追加し、登坂ほど
+        // 強くする。実測：ヒルクライムでCLM優勝率19%→49%（目標55%）。
+        const selectiveTight = (TERRAIN_KEEP_TIGHTEN[segType] || 0)
+          + ((course.selective && (["hill", "climb", "mtn"].includes(segType) || segInfo.idx === course.finalIdx)) ? 0.035 : 0);
         // v47(第8弾A案): 集団内の位置（0=先頭寄り〜1=最後方）に応じてkeepThreshを傾ける。
         // 先頭にいるほど千切れにくく、後方にいるほど千切れやすい（実際の集団分裂は前から
         // 割れずに後方から千切れていく現象を再現）。

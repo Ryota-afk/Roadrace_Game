@@ -55,8 +55,16 @@ export const FINISH_COMMENTARY = [
 export const TEMPLATES = [
   { kind: "クリテリウム", favors: "SPR", squadMin: 1, squadMax: 5, laps: 6, segs: [["flat", 300, 18], ["flat", 260, 15], ["sprint", 90, 4]] },
   { kind: "サーキットレース", favors: "SPR", squadMin: 1, squadMax: 5, laps: 4, segs: [["flat", 380, 20], ["hill", 260, 12], ["flat", 320, 16], ["sprint", 110, 4]] },
-  { kind: "丘陵ロード", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 480, 26], ["hill", 450, 17], ["hill", 450, 17], ["sprint", 130, 4]] },
-  { kind: "山岳ロード", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["flat", 460, 26], ["climb", 600, 13], ["climb", 640, 12], ["mtn", 190, 4]] },
+  // 第77弾(devlog/wave75.md「第77弾」・TODO#28): 決着をsprintからhillへ変更した。第74弾で
+  // グラベルレース(favors:"PUN")に入れた修正と同じもので、丘陵ロードには入っていなかった。
+  // 決着がスプリント力勝負になっていたためSPRが69〜79%で勝っていた（実測。グラベルは
+  // hill決着に直した後PUNが最上位になっている）。丘のパンチ力（決着式のhill: cl0.55+sp0.30+fl0.15）
+  // で決まるようにする。
+  { kind: "丘陵ロード", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 480, 26], ["hill", 450, 17], ["hill", 450, 17], ["hill", 130, 4]] },
+  // 第77弾(devlog/wave75.md「第77弾」・TODO#28): 平坦の距離比率が47%と高く、純登坂の
+  // ヒルクライム（climb87%・CLM優勝率43〜51%）に対して山岳ロードはPUNに負けていた
+  // （CLM31〜34%）。平坦を短縮し登坂区間を伸ばして、山岳としての性格を強める。
+  { kind: "山岳ロード", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["flat", 320, 16], ["climb", 620, 14], ["climb", 680, 13], ["mtn", 200, 5]] },
   { kind: "ヒルクライム", favors: "CLM", squadMin: 1, squadMax: 5, segs: [["climb", 560, 14], ["climb", 600, 12], ["mtn", 190, 4]] },
   // v46(#34): soloTTフラグを追加。個人TTは駆け引きの無い競技のため観戦を廃止する
   // （チームTTのteamTTフラグと対になる形。squadMin===squadMax===1という魔法数字での
