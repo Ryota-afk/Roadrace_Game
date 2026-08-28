@@ -33,9 +33,11 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
   // v36(#4): 経歴ごとの固有メリット。高校卒＝成長力アップ抽選、大学卒／実業団卒＝出自らしい
   // 特殊能力を持ってデビュー（人気・評価・資金の初期ボーナスは後段の state 初期化で反映）。
   const perk = bg.perk || {};
+  const difficulty = s.mlDiffChoice || "easy"; // v38(#6): マイライフの難易度（相手強さ・CP倍率）
   // v37: 生涯CPによるマイライフ特典（支度金・人気・評価・成長力抽選・当たり特能抽選の強化）。
-  const cpPerks = mlCpPerks(cpMeta.totalEarnedCP);
-  const cpShop = cpShopMylifePerks(cpMeta); // v37: CPショップで購入済みの特典
+  // 第70弾(devlog/wave70.md): 難易度でスケーリングする（強さカテゴリ・CP_BOOST_DIFF_MUL）。
+  const cpPerks = mlCpPerks(cpMeta.totalEarnedCP, difficulty);
+  const cpShop = cpShopMylifePerks(cpMeta, difficulty); // v37: CPショップで購入済みの特典
   const growthLottery = (perk.growthLottery || 0) + cpPerks.growthLottery;
   if (growthLottery && rng() < growthLottery) player.growthPow = bumpGrowthPow(player.growthPow, 1);
   if (cpShop.growthUp) player.growthPow = bumpGrowthPow(player.growthPow, 1); // ショップ：成長力+1確定
@@ -268,12 +270,16 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
   }
   return {
     ...s, player, team: team.name, classIdx: 0, classIdxBest: 0, year: 1, month: 0, points: 0,
-    difficulty: s.mlDiffChoice || "easy", // v38(#6): マイライフの難易度（相手強さ・CP倍率）
+    difficulty, // v38(#6): マイライフの難易度（相手強さ・CP倍率）
     races: mlGenRaceCandidates(1, 0, 0), sel: { raceId: null },
     directive: mlGenDirective(1, 0, 0, 30),
     managerEval: 30 + (perk.evalBonus || 0) + cpPerks.eval, salary: initialSalary, money: (perk.moneyBonus || 0) + cpPerks.money + cpShop.money,
     // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」
     partLvMaxBonus: cpShop.partLvMaxBonus,
+    // 第70弾(devlog/wave70.md): CPショップ「出走計画」(m_plan2)・「成長力の早期判明」
+    // (m_growthreveal)。前者は既定1（無購入でも第43弾の1本は無料）。
+    raceFocusSlots: 1 + (cpShop.focusSlots2 || 0),
+    cpGrowthRevealEarly: !!cpShop.growthReveal,
     partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
     gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },
     houseLv: -1, carLv: -1,

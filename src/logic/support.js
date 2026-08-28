@@ -44,7 +44,7 @@ export {
 // 世界ランク・キャリア年表・野望・セーブ入出力・buildSim等）を分割先から再エクスポートする。
 export {
   upgradeGoldAbilities, ACQUIRE_CONDITIONS, ACQUIRE_REQS, acquireNewAbility, mlAcquireAbility, mlUnequipAbility, mlEquipBlood, mlBadgeSlots, mlBadgeKind, mlSlotUsed, ABILITY_FILE_KEY,
-  loadAbilityFile, saveAbilityFile, noteAbilityDiscovery, bumpRosterAbAll, bumpEquipLv, addProdigyRookie,
+  loadAbilityFile, saveAbilityFile, noteAbilityDiscovery, bumpRosterAbAll, addProdigyRookie,
   CP_MILESTONES, applyCpMilestones, mlCpPerks, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows,
   cpMilestoneSummary,
 } from "../domain/mylife/cp.js";

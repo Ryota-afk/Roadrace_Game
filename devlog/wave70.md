@@ -1,6 +1,6 @@
 # 第70弾：クリアポイント(CP)経済の全体診断
 
-**状態**：**診断完了・設計方針の合意待ち（2026-08）。実装未着手。**
+**状態**：**実装・検証完了（2026-08）。**
 
 DEVLOG TODO #15（クリアポイント解禁の再設計）に着手。当初はコース解禁だけを直す想定だったが、
 ユーザー判断で**CP経済全体を先に見直す**方針になった。以下はその実測結果。
@@ -180,3 +180,80 @@ CP_BOOST_DIFF_MUL = { easy: 1.0, normal: 1.0, hard: 0.5, oni: 0 }
 
 ⚠️**出走計画は地形バッジの取得速度を上げる。** これは狙いどおりだが、
 **どの程度速くなるかは実測しないと分からない**。実装後にバッジ取得までの平均月数を計測すること。
+
+---
+
+## 実装結果
+
+確定した設計どおりに実装した。設計からの逸脱1件（下記「設計時に決まっていなかった点」）を除き、
+記載どおり。変更ファイルは以下（すべて既存ファイルの改修・新規ファイルなし）。
+
+### コース解禁の常駐化
+
+`data/course.js`: `UNLOCK_TEMPLATES`の3件を`TEMPLATES`の末尾に追記して1本の配列にし、
+`UNLOCK_TEMPLATES`自体を削除。⚠️**`TEMPLATES[2]`/`TEMPLATES[3]`/`TEMPLATES[5]`のような
+既存のハードコード添字参照（世界選手権・五輪・チャンピオンシップ・グランツール等7箇所）が
+壊れないよう、必ず末尾に追記して既存indexをずらさないこと**を確認して実装（実測で
+`TEMPLATES[0..5]`が変更前と同一であることを確認済み）。`state/prestige.js`の
+`unlockedTemplates()`は完全に不要になったため削除し、呼び出し2箇所（`seasonState.js`・
+`domain/mylife/race.js`）を`TEMPLATES`の直接参照へ差し替えた。
+
+### CP経済の再設計
+
+`domain/mylife/cp.js`：`CP_MILESTONES`から設備Lv系4件を削除。⚠️**`apply`クロージャを廃止し
+`fx`だけを唯一のソースにした**——難易度スケーリング（`CP_BOOST_DIFF_MUL`）を集計側
+（`cpMilestoneSummary`）と適用側（`applyCpMilestones`）の両方に一貫して効かせる必要があり、
+2箇所に別々のロジックを持つ二重管理を避けるため。`mlCpPerks`も同様に難易度引数を追加。
+
+`state/meta.js`：`CP_SHOP`から`s_equip`/`s_equip2`を削除し、`s_plan1`/`s_plan2`
+（シーズンの出走計画）・`m_plan2`（マイライフの出走計画2本目）・`m_growthreveal`
+（成長力の早期判明）を新設。`cpShopSeasonPerks`/`cpShopMylifePerks`は「強さ」系フィールドのみ
+`CP_BOOST_DIFF_MUL`でスケーリングし、「選択肢」系（`focusSlots`/`focusSlots2`/
+`growthReveal`）と既存の恒常上限拡張はスケーリングしない。
+
+⚠️**返金移行**：`loadMeta()`内で、削除済みid（`s_equip`/`s_equip2`）が`cpUnlocks`に
+残っていれば1度だけ全額返金してlocalStorageへ書き戻す実装にした（`load`系関数への書き込み
+副作用は例外的だが、他に「アプリ起動時に1回だけ走る」フックが無いため。Node上で
+移行→no-op化の2段階を実測確認済み）。
+
+### 出走計画（新しい「選択肢」の本体）
+
+⚠️**設計時に決まっていなかった点（実装時に判断）**：wave70.md設計時点では「宣言」という
+言葉を使っていたが、CLAUDE.md §8はUI変更に事前のモックアップ提示・合意を要求する。
+シーズン用に「地形を選ぶ画面」を新設するとこの手順を経ずにUIを追加することになるため、
+**新しいUIを作らず、ロースターで最も多い脚質を自動的に宣言地形とみなす**方式にした
+（`state/seasonState.js`の`seasonRaceFocus(roster)`）。これは`devlog/wave70.md`の
+「シーズン＝ロースターの脚質に合わせてレースを引き寄せる経営判断」という記述と整合する
+——スカウト・契約という既存の判断がそのままカレンダーに反映される。マイライフ側は
+第43弾で確立済みの「宣言」UI（`raceFocus`）をそのまま使い、`focusSlots`引数で
+枠数だけ拡張した。
+
+`genMonthRaces`/`mlGenRaceCandidates`とも、`focus`/`focusSlots`は末尾の省略可能引数として
+追加し、**未指定時は旧実装とバイト単位で同一の出力**になることをNode上で実測確認
+（`JSON.stringify`比較）。season側は「出走可能（`!locked`）な枠から`focusSlots`本」を
+事後上書き（`id`/`cls`/`locked`は不変、`tmpl`/`name`のみ差し替え）、mylife側は既存の
+1枠差し替えロジックをスロットごとのループへ拡張した。
+
+⚠️**既知の限界**：ロースターの主力脚質が`RUL`（ルーラー）の場合、`FAVORS_TO_DISCIPLINE`に
+`RUL`の対応が無く`"flat"`にフォールバックするが、`"flat"`に一致するコーステンプレートが
+1つも存在しないため出走計画が実質何もしない。⚠️これは今回の変更が生んだものではなく、
+マイライフの`raceFocus`選択肢（`create.jsx`の`focusOptions`）が元々`RUL`を候補から
+除外している、既存の世界設計上の欠落（平坦専門コースが無い）。今回のスコープでは
+新コースの追加は行わないため対応しない。
+
+### 検証結果
+
+- Node単体：`applyCpMilestones`/`cpMilestoneSummary`/`mlCpPerks`が難易度どおりに
+  スケーリングされること（oni=0倍・hard=0.5倍・easy/normal=1倍）を実測
+- Node単体：`loadMeta()`の返金移行が1回で完了しno-op化することを実測
+- Node単体：`genMonthRaces`/`mlGenRaceCandidates`の`focus`未指定時の決定性・
+  焦点差し替え後も`id`/`cls`/`locked`が不変であることを実測
+- Playwright：CPショップ画面に新項目が表示され旧設備項目が消えていること、購入・残高減算が
+  実際に動くことを確認
+- Playwright：CP保有状態でシーズン開始→ロースターの主力脚質（TT）どおりに出走計画の
+  2枠がTT系コースになることを実機で確認
+- Playwright：CP保有状態でマイライフ開始→宣言地形(climb)どおりに3候補中2件がCLM系に
+  なり、かつ成長力が1年目から表示される（`cpGrowthRevealEarly`）ことを実機で確認
+- Playwright：年間レースプログラム・コースレコード画面に新3コースが正しく表示されることを確認
+- 既存回帰（`w66_sweep.mjs`＝マイライフ全タブ、`w67_sweep.mjs`＝シーズン全18セクション）
+  全通過・`pageerror`ゼロ・`npm run build`成功・配信物(`index.html`)にも反映済み

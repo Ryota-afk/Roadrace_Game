@@ -460,7 +460,7 @@ export function mlAdvanceMonth(s, mode) {
       const stayOffer = { team: s.team, tier: mlTeamTier(s.team), salaryMul: biddingWar ? 1.1 : 1, bonus: biddingWar ? 40 : 0, aceGuarantee: false };
       return finalizeYearEnd({
         ...s, player, classIdx, classIdxBest, points: 0, year: s.year + 1, month: 0,
-        races: mlGenRaceCandidates(s.year + 1, 0, classIdx, s.raceFocus), sel: { ...s.sel, raceId: null },
+        races: mlGenRaceCandidates(s.year + 1, 0, classIdx, s.raceFocus, s.raceFocusSlots), sel: { ...s.sel, raceId: null },
         directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
         contractOffers: [stayOffer, ...offerTeams], biddingWar,
         salary, money, managerEval, carLv, houseLv, coaches, debtMonths, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
@@ -471,7 +471,7 @@ export function mlAdvanceMonth(s, mode) {
     }
     return finalizeYearEnd({
       ...s, player, classIdx, classIdxBest, points: 0, year: s.year + 1, month: 0,
-      races: mlGenRaceCandidates(s.year + 1, 0, classIdx, s.raceFocus), sel: { ...s.sel, raceId: null },
+      races: mlGenRaceCandidates(s.year + 1, 0, classIdx, s.raceFocus, s.raceFocusSlots), sel: { ...s.sel, raceId: null },
       directive: mlGenDirective(s.year + 1, 0, classIdx, managerEval),
       salary, money, managerEval, carLv, houseLv, coaches, debtMonths, worldRosters: aged.worldRosters, teammates: nextTeammates, bonds: nextBonds,
       rival: rival1Res.rival, rivalRecord: rival1Res.record, rival2: rival2Res.rival, rivalRecord2: rival2Res.record,
@@ -525,7 +525,7 @@ export function mlAdvanceMonth(s, mode) {
     month: s.month, year: s.year,
   };
   const base = {
-    ...s, player, month, races: mlGenRaceCandidates(s.year, month, s.classIdx, s.raceFocus), sel: { ...s.sel, raceId: null },
+    ...s, player, month, races: mlGenRaceCandidates(s.year, month, s.classIdx, s.raceFocus, s.raceFocusSlots), sel: { ...s.sel, raceId: null },
     directive: mlGenDirective(s.year, month, s.classIdx, managerEval),
     money, managerEval, carLv, houseLv, coaches, debtMonths, riderStats, growthReport, worldTicker,
     screen: "mylife_main", log,

@@ -1,7 +1,7 @@
 // シーズンモードの状態：月間レース生成・init/save/load。state/state.js から分離（第15弾F）。
 // localStorageキー：roadrace_v12_save。
 import { GRAND_TOURS, OVERSEAS_VENUES, REGIONS, TEMPLATES, VENUES } from "../data/course.js";
-import { CLASSES, DIFFICULTIES, seasonNeed } from "../data/progression.js";
+import { CLASSES, DIFFICULTIES, FAVORS_TO_DISCIPLINE, seasonNeed } from "../data/progression.js";
 import { MYLIFE_TEAMS, teamsForClass } from "../data/teams.js";
 import { raceEntryPlan } from "../domain/season/entryPlan.js";
 import { mulberry, ridState } from "../core/core.js";
@@ -10,14 +10,26 @@ import { genPoachTargets, genFaPool, genTradeOffers } from "../domain/season/tra
 import { teamPayroll } from "../domain/season/salary.js";
 import { initRoster, genScouts } from "../domain/season/roster.js";
 import { genSponsors } from "../domain/season/sponsor.js";
-import { unlockedTemplates } from "./prestige.js";
 import { sharedWorldRosters, topUpWorldRosters } from "./worldRoster.js";
 
-export function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
+// 第70弾(devlog/wave70.md): CPショップ「出走計画」(s_plan1/s_plan2)が生む地形。ロースターで
+// 最も多い脚質を宣言地形とみなす——新しい「宣言」UIは作らず、既にプレイヤーが行っている
+// スカウト・契約判断（誰を集めるか）をそのままカレンダーへ反映させる（§8のUI追加を避ける）。
+export function seasonRaceFocus(roster) {
+  if (!roster || roster.length === 0) return null;
+  const counts = {};
+  roster.forEach(r => { counts[r.type] = (counts[r.type] || 0) + 1; });
+  let best = null, bestN = 0;
+  Object.keys(counts).forEach(t => { if (counts[t] > bestN) { bestN = counts[t]; best = t; } });
+  return best ? (FAVORS_TO_DISCIPLINE[best] || "flat") : null;
+}
+
+// 第70弾: focus/focusSlotsは末尾2引数に追加（既存呼び出しは省略可＝未指定なら旧実装と
+// バイト単位で同一の出力。mlGenRaceCandidatesのfocus引数と同じ安全策）。
+export function genMonthRaces(year, month, classIdx, points, sponsor, gtWins, focus, focusSlots) {
   const rng = mulberry(year * 1000 + month * 37 + 5);
   const races = [];
-  // v28: 累計CPで解禁される新コース種別も抽選プールに含める
-  const pool = unlockedTemplates();
+  const pool = TEMPLATES;
   if (month === 11) {
     const isProFinal = classIdx === 2;
     const gtWinCount = (gtWins || []).length;
@@ -57,6 +69,19 @@ export function genMonthRaces(year, month, classIdx, points, sponsor, gtWins) {
       locked: !open || cls !== classIdx,
       lockReason: (!open || cls !== classIdx) ? `${CLASSES[cls].id}限定` : null,
     });
+  }
+  // 第70弾: 出走計画。宣言地形に合う候補を、出走可能（!locked）な枠からfocusSlots本だけ
+  // 差し替える。focus未指定時はrng()を一切消費せず、既存の出力とバイト単位で同一になる。
+  if (focus && focusSlots > 0) {
+    const matches = pool.map((t, i) => i).filter(i => (FAVORS_TO_DISCIPLINE[pool[i].favors] || "flat") === focus);
+    if (matches.length > 0) {
+      const openIdxs = races.map((r, i) => i).filter(i => !races[i].locked).slice(0, focusSlots);
+      openIdxs.forEach(idx => {
+        const mi = matches.length === 1 ? matches[0] : matches[Math.floor(rng() * matches.length)];
+        const t = pool[mi];
+        races[idx] = { ...races[idx], tmpl: t, name: `${races[idx].venue}${t.kind}` };
+      });
+    }
   }
   // v13: グランツール・海外遠征。年3戦（春・夏・秋）、その年のクラスに開かれた
   // 3日間の海外遠征ステージレースを追加する。stageTmplsで日ごとにコース性格を変え、
@@ -169,6 +194,8 @@ export function initGame() {
     // v51(第12弾12-C): CP交換所の恒久上限拡張・年俸割引。既定は無購入＝ボーナス0／割引なし。
     // 実際の付与はscreens/season/intro.jsxのゲーム開始時にcpShopSeasonPerks()から一度だけ適用される。
     rosterMaxBonus: 0, staffMaxBonus: 0, salaryDiscountMul: 1,
+    // 第70弾: CPショップ「出走計画」(s_plan1/s_plan2)で買った枠数。既定0＝出走計画は不使用。
+    raceFocusSlots: 0,
   };
 }
 
@@ -186,6 +213,8 @@ const SAVE_FIELDS = [
   "payrollMigrated",
   // v51(第12弾12-C): CP交換所の恒久上限拡張・年俸割引
   "rosterMaxBonus", "staffMaxBonus", "salaryDiscountMul",
+  // 第70弾: CPショップ「出走計画」の購入済み枠数
+  "raceFocusSlots",
 ];
 
 export function serializeState(g) {

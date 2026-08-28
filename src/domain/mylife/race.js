@@ -5,7 +5,6 @@ import { ML_MONUMENTS, TEMPLATES, VENUES } from "../../data/course.js";
 import { mulberry } from "../../core/core.js";
 import { FAVORS_TO_DISCIPLINE } from "../../data/progression.js";
 import { rollWeather } from "../../sim/race.js";
-import { unlockedTemplates } from "../../state/state.js";
 
 // 第41弾: 看板レース（世界選手権・五輪・古典・年度末）は従来どおり1本だけを返す
 // （選択肢を出すと格が下がるため）。通常月だけ3本の候補を返す。候補ごとに地形・グレード・
@@ -14,7 +13,10 @@ import { unlockedTemplates } from "../../state/state.js";
 // 第43弾: 第4引数focus（climb/hill/sprint/solo/null）。通常月のみ、focusと同じ適性の
 // テンプレを1本先に確保してから残りを引く。focus=nullなら旧実装とバイト単位で同一の出力
 // （RNGの消費順を一切変えない・devlog/wave43.md）。看板レース月は無変更。
-export function mlGenRaceCandidates(year, month, classIdx, focus) {
+// 第70弾(devlog/wave70.md): 第5引数focusSlots（CPショップm_plan2で1→2）。未指定/1なら
+// 第43弾の挙動とバイト単位で同一。2以上でも、宣言地形に合うテンプレが2種未満の場合は
+// 用意できる分だけ差し替える（例：TT系は個人TT/チームTTの2種のみ）。
+export function mlGenRaceCandidates(year, month, classIdx, focus, focusSlots) {
   if (month === 5 && classIdx >= 1) {
     const wrng = mulberry(year * 401 + month * 7 + 501);
     return [{ id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) }];
@@ -30,7 +32,7 @@ export function mlGenRaceCandidates(year, month, classIdx, focus) {
     return [{ id: `ml-mon-${mon.id}-${year}`, name: `${year}年目 ${mon.name}`, tmpl: mon.tmpl, grade: mon.grade, cls: classIdx, monument: mon.id, monumentName: mon.name, rivalPresent: true, rival2Present: mrng() < 0.5, weather: rollWeather(mrng) }];
   }
   const rng = mulberry(year * 3001 + month * 97 + classIdx * 17);
-  const pool = unlockedTemplates();
+  const pool = TEMPLATES;
   // 3月（年度末）は従来どおりグレード3固定・候補1本のまま（看板レース扱い）
   const n = month === 11 ? 1 : 3;
   // 地形は重複なしで引く（部分Fisher-Yates。TEMPLATESは常時6種以上あるためn<=poolで足りる）
@@ -41,12 +43,17 @@ export function mlGenRaceCandidates(year, month, classIdx, focus) {
   }
   let indices = order.slice(0, n);
   // 第43弾: focus指定時、通常月（n===3）は候補の先頭を宣言した適性のテンプレへ差し替える。
-  // 候補が複数あれば追加で1回rng()を消費して選ぶ（focus=nullの出力には一切影響しない）。
+  // 候補が複数あれば追加で1回rng()を消費して選ぶ（focus=null、またはfocusSlots未指定/1なら
+  // この1本目の差し替えのみで、旧実装とバイト単位で同一の出力）。
   if (focus && n === 3) {
-    const matches = pool.map((t, i) => i).filter(i => (FAVORS_TO_DISCIPLINE[pool[i].favors] || "flat") === focus);
-    if (matches.length > 0) {
+    const slots = Math.max(1, Math.min(focusSlots || 1, n));
+    const usedMatchIdx = new Set();
+    for (let slot = 0; slot < slots; slot++) {
+      const matches = pool.map((t, i) => i).filter(i => (FAVORS_TO_DISCIPLINE[pool[i].favors] || "flat") === focus && !usedMatchIdx.has(i));
+      if (matches.length === 0) break;
       const focusIdx = matches.length === 1 ? matches[0] : matches[Math.floor(rng() * matches.length)];
-      if (!indices.includes(focusIdx)) indices = [focusIdx, ...indices.slice(1)];
+      usedMatchIdx.add(focusIdx);
+      if (!indices.includes(focusIdx)) indices = indices.map((idx, k) => k === slot ? focusIdx : idx);
     }
   }
   const candidates = [];

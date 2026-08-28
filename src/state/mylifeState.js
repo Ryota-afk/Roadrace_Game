@@ -149,6 +149,11 @@ export function initMyLife() {
     // 第43弾: 出走計画。climb/hill/sprint/solo/null（未指定）。宣言すると通常月の候補に
     // その適性のレースが必ず1本入る（devlog/wave43.md）
     raceFocus: null,
+    // 第70弾(devlog/wave70.md): 出走計画の枠数。既定1（無購入でも第43弾の1本は無料）。
+    // CPショップm_plan2購入で2になり、2本目も宣言地形になる。
+    raceFocusSlots: 1,
+    // 第70弾: CPショップm_growthreveal購入時true。成長力の判明を1年目（既定3年目）へ早める。
+    cpGrowthRevealEarly: false,
     // 第63弾(devlog/wave63.md): 既定をeasy→normalへ。初見が難易度の意味を理解しないまま
     // 「とりあえずデビュー」した場合、他チームが控えめすぎる易よりノーマルの方が本来の
     // バランスに近い（easyはmylife側にCP必要数のロックが無く常に選べるため、変更しても
@@ -186,6 +191,7 @@ const ML_SAVE_FIELDS = [
   "debtMonths", // 第36弾: 連続赤字月数（赤字ペナルティの段階判定に使う）
   "badgeGoals", // 第41弾: 目標バッジ宣言（強制力・ボーナスの無い「しおり」）
   "raceFocus", // 第43弾: 出走計画（宣言した適性が通常月の候補に必ず1本入る）
+  "raceFocusSlots", "cpGrowthRevealEarly", // 第70弾: CPショップの出走計画枠・成長力早期判明
 ];
 
 export function saveMyLife(ml) {

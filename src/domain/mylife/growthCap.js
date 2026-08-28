@@ -85,7 +85,10 @@ export function pickMlEvent(player) {
 // v43(マイライフ難易度調整Phase 1・成長力マスク化): 成長力(growthPow)はリセマラ・引き直しでの
 // 「Sが出るまで粘る」を防ぐため、デビュー直後（3年目未満）は選手本人にも非公開にする。
 // 3年目（year>=3）になった時点で判明する。判断⑫（ユーザー承認済み）。
+// 第70弾(devlog/wave70.md): CPショップm_growthreveal購入時は1年目から判明する
+// （情報の解禁＝難易度に関わらず常に効く「選択肢」カテゴリ）。
 export function mlGrowthPowRevealed(ml) {
+  if (ml && ml.cpGrowthRevealEarly) return true;
   return ((ml && ml.year) || 1) >= 3;
 }
 

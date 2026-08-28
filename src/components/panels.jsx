@@ -13,7 +13,7 @@ import React from "react";
 import { ABILITY_CATEGORY_ORDER, APT_GRADE_COLOR, DISCIPLINES, DISCIPLINE_KEYS, aptGrade, buildDesc, disciplineScore, loadCourseRecords, raceForecast } from "../logic/support.js";
 import { GOLD_CONDITIONS, fmtTime } from "../core/core.js";
 import { ABILITIES, AB_COLOR, AB_KEYS, AB_LABEL, COND_FC_ARROW, COND_FC_COLOR, COND_FC_LABEL, PERSONALITIES, TYPES } from "../data/abilities.js";
-import { SEG_COLOR, TEMPLATES, UNLOCK_TEMPLATES } from "../data/course.js";
+import { SEG_COLOR, TEMPLATES } from "../data/course.js";
 import { TITLE_DEFS } from "../data/progression.js";
 import { FONT_DOT, T } from "../data/theme.js";
 import { PARTS, PART_SLOTS, generateCourse } from "../sim/race.js";
@@ -156,7 +156,7 @@ export function CondFc({ dir }) {
 
 export function CourseRecordsPanel() {
   const recs = loadCourseRecords();
-  const kinds = [...TEMPLATES, ...UNLOCK_TEMPLATES].map(t => t.kind);
+  const kinds = TEMPLATES.map(t => t.kind);
   const anyRec = kinds.some(k => recs[k]);
   return (
     <div style={{ background: T.color.surface, padding: T.space.md }}>

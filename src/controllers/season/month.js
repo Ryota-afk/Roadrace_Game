@@ -11,7 +11,7 @@ import { mulberry, overall, hasAbility, strHash } from "../../core/core.js";
 import { PARTS } from "../../data/parts.js";
 import {
   MYLIFE_TEAMS, ageWorldRosters, genFaPool, genMonthRaces, genPoachTargets, raceEntryPlan,
-  genScouts, genSponsors, genTradeOffers, makePoachOffer, teamsForClass,
+  genScouts, genSponsors, genTradeOffers, makePoachOffer, seasonRaceFocus, teamsForClass,
 } from "../../state/state.js";
 import {
   EVENTS, EVENT_CHANCE, GRADE_MUL, acquireNewAbility, addAb, champPromoteCut, expireObjective,
@@ -296,7 +296,7 @@ export function advanceMonth(s, raceInfo) {
       ...info.retiredRiders.filter(isHallOfFameWorthy).map(n => ({ ...n, farewellYear: s.year, farewellReason: "retired" })),
       ...retiredAlumniHof,
     ];
-    const nextRaces = genMonthRaces(year, 0, classIdx, 0, null, []);
+    const nextRaces = genMonthRaces(year, 0, classIdx, 0, null, [], seasonRaceFocus(survivors), s.raceFocusSlots);
     return {
       ...s, roster: survivors, classIdx, points: 0, year, month: 0,
       budget: s.budget + income + delta + standingsMoney - upkeep - staffSalary - objectivePenalty,
@@ -327,7 +327,7 @@ export function advanceMonth(s, raceInfo) {
   const month = s.month + 1;
   const upkeep = teamPayroll(roster, s.salaryDiscountMul || 1);
   const staffSalary = staffSalaryTotal(s.staff) + (s.obCoach ? OB_COACH_SALARY : 0);
-  const nextMonthRaces = genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins);
+  const nextMonthRaces = genMonthRaces(s.year, month, s.classIdx, s.points, sponsor, s.gtWins, seasonRaceFocus(roster), s.raceFocusSlots);
   const base = {
     ...s, roster, month, camp: false,
     budget: s.budget + income - upkeep - staffSalary - objectivePenalty,

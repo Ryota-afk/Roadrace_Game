@@ -10,8 +10,8 @@ import { TYPES } from "../../data/abilities.js";
 import { MONTHS } from "../../data/course.js";
 import { DIFFICULTIES } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { CP_MILESTONES, SCOUT_POLICIES, applyCpMilestones, addProdigyRookie, bumpEquipLv, bumpRosterAbAll, clearSaveGame, cpMilestoneSummary, hasSaveGame, pickMandateMonths, genSeasonObjective, objectiveStatusText } from "../../logic/support.js";
-import { cpShopSeasonPerks, genScouts, initGame, legendToSeasonRider, loadGame, loadMeta, saveGameInfo } from "../../state/state.js";
+import { CP_MILESTONES, SCOUT_POLICIES, applyCpMilestones, addProdigyRookie, bumpRosterAbAll, clearSaveGame, cpMilestoneSummary, hasSaveGame, pickMandateMonths, genSeasonObjective, objectiveStatusText } from "../../logic/support.js";
+import { cpShopSeasonPerks, genMonthRaces, genScouts, initGame, legendToSeasonRider, loadGame, loadMeta, saveGameInfo, seasonRaceFocus } from "../../state/state.js";
 import { findUnsupportedChars } from "../../domain/shared/textInput.js";
 
 export function renderSeasonIntroScreens(ctx) {
@@ -56,7 +56,11 @@ export function renderSeasonIntroScreens(ctx) {
     const meta = loadMeta();
     const nextMilestone = CP_MILESTONES.find(m => meta.totalEarnedCP < m.cp);
     const teamNameBadChars = findUnsupportedChars(teamNameChoice);
-    const fx = cpMilestoneSummary(meta.totalEarnedCP);
+    // 第70弾(devlog/wave70.md): 開幕ブーストは難易度で効き方が変わる（CP_BOOST_DIFF_MUL）ため、
+    // プレビューも実際に開始ボタンが使うsafeDiffと同じロジックで難易度を確定させてから渡す
+    // （ロック中の難易度を選択中に見せかけの数値が出ないようにする）。
+    const previewDiff = DIFFICULTIES.find(d => d.id === diffChoice && meta.totalEarnedCP >= d.needCP) ? diffChoice : "easy";
+    const fx = cpMilestoneSummary(meta.totalEarnedCP, previewDiff);
     const legends = [...loadMlLegends()].reverse();
     return metaWrap(
       <div style={{ display: "grid", gap: T.space.lg }}>
@@ -109,7 +113,6 @@ export function renderSeasonIntroScreens(ctx) {
           <Section title="開幕ボーナス（自動適用）">
             {fx.budget > 0 && <Item first label="開幕資金" value={`+${fx.budget}万円`} />}
             {fx.abAll > 0 && <Item first={fx.budget === 0} label="初期選手の能力" value={`+${fx.abAll}`} />}
-            {fx.equipLv > 0 && <Item label="チーム設備" value={`Lv+${fx.equipLv}`} />}
             {fx.rookie > 0 && <Item label="逸材新人" value={`${fx.rookie}名`} />}
             {fx.items > 0 && <Item label="開幕アイテム" value={`各${fx.items}個`} />}
             {nextMilestone && (
@@ -125,15 +128,21 @@ export function renderSeasonIntroScreens(ctx) {
           // （そちらでリセットされた等の理由で）既にロック済みになっているケースを開始直前に
           // 再検証し、その場合はeasyへ安全に倒す（ロック済み難易度のまま開始してしまう事故防止）。
           const safeDiff = DIFFICULTIES.find(d => d.id === diffChoice && meta.totalEarnedCP >= d.needCP) ? diffChoice : "easy";
-          let base = applyCpMilestones({ ...initGame(), difficulty: safeDiff, teamName: name || "あなたのチーム" }, meta.totalEarnedCP);
-          // v37: CPショップで購入済みのシーズン特典を適用
-          const shop = cpShopSeasonPerks(meta);
+          let base = applyCpMilestones({ ...initGame(), difficulty: safeDiff, teamName: name || "あなたのチーム" }, meta.totalEarnedCP, safeDiff);
+          // v37: CPショップで購入済みのシーズン特典を適用（第70弾: 強さ系はsafeDiffでスケーリング）
+          const shop = cpShopSeasonPerks(meta, safeDiff);
           for (let i = 0; i < shop.prodigyRookie; i++) base = addProdigyRookie(base);
           if (shop.budget) base = { ...base, budget: base.budget + shop.budget };
-          if (shop.equipLv) base = bumpEquipLv(base, shop.equipLv);
           if (shop.rosterBoost) base = bumpRosterAbAll(base, shop.rosterBoost);
           // v51(第12弾12-C): CP交換所の恒久上限拡張・年俸割引
           base = { ...base, rosterMaxBonus: shop.rosterMaxBonus, staffMaxBonus: shop.staffMaxBonus, salaryDiscountMul: shop.salaryDiscountMul };
+          // 第70弾(devlog/wave70.md): 出走計画（s_plan1/s_plan2）。initGame()内部の1年目1月の
+          // 候補はまだこの特典を知らないため、ここで作り直す（raceEntryPlanはid/cls/lockedのみ
+          // 参照しtmpl/nameは見ないため再計算不要）。
+          base = { ...base, raceFocusSlots: shop.focusSlots };
+          if (shop.focusSlots > 0) {
+            base = { ...base, races: genMonthRaces(1, 0, 0, 0, null, [], seasonRaceFocus(base.roster), shop.focusSlots) };
+          }
           // v38(#9 A-2): 招聘したレジェンドを創設メンバーとしてロースターへ加える
           if (g.legendRecruitIdx != null) {
             const leg = legends[g.legendRecruitIdx];

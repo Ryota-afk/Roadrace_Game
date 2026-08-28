@@ -17,6 +17,15 @@ export const ML_CP_MILESTONES = [
 
 export const MLCP_DIFF_MUL = { easy: 0.7, normal: 1.0, hard: 1.5, oni: 2.2 };
 
+// 第70弾(devlog/wave70.md): CPの「開幕ブースト」（強さ）に効く難易度倍率。上のMLCP_DIFF_MUL
+// （CPの獲得側）と対になる——獲得側は難易度が高いほど増え、消費側（ブースト）は逆に
+// 難易度が高いほど絞られる。oniで稼いだCPは「oniを楽にする」のではなく、難易度に関わらず
+// 常に効く「選択肢」（出走計画・恒常上限拡張・情報の解禁）に注ぐ、という筋を通すための設計。
+// ⚠️「強さ」＝開幕資金・能力底上げ・逸材新人・アイテム（CP_MILESTONES/ML_CP_MILESTONES/
+// CP_SHOPの対応する各項目）にのみ適用し、「選択肢」（出走計画・恒常上限拡張・情報の解禁）には
+// 適用しない。
+export const CP_BOOST_DIFF_MUL = { easy: 1.0, normal: 1.0, hard: 0.5, oni: 0 };
+
 export const STAFF_ROLES = {
   manager: { label: "監督", desc: "スポンサー契約が好条件に（Lvごと月収+12%・ノルマ-8%・成功報酬+10%）" },
   trainer: { label: "トレーナー", desc: "練習の成長効果がアップする（Lvごと+12%・恒常）" },

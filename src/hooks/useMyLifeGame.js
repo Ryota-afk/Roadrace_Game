@@ -167,7 +167,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     if (!s.raceFocus || hasRaced) return { ...s, screen: "mylife_main" };
     return {
       ...s, screen: "mylife_main",
-      races: mlGenRaceCandidates(s.year, s.month, s.classIdx, s.raceFocus),
+      races: mlGenRaceCandidates(s.year, s.month, s.classIdx, s.raceFocus, s.raceFocusSlots),
       sel: { ...s.sel, raceId: null },
     };
   });

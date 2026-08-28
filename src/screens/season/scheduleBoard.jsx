@@ -7,7 +7,7 @@ import { Item, QuietBtn, Section, TypeChip } from "../../components/kit.jsx";
 import { MONTHS } from "../../data/course.js";
 import { T } from "../../data/theme.js";
 import { WEATHER, computeStandings, seasonRivalDex, standingsRankReward } from "../../logic/support.js";
-import { computePrestige, genMonthRaces, riderNickname } from "../../state/state.js";
+import { computePrestige, genMonthRaces, riderNickname, seasonRaceFocus } from "../../state/state.js";
 
 export function renderSeasonScheduleBoardScreens(ctx) {
   const { cls, g, setG, wrap } = ctx;
@@ -17,7 +17,7 @@ export function renderSeasonScheduleBoardScreens(ctx) {
         <Section title="年間レースプログラム" right={`${g.year}年目・${cls.label}`}>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.6, marginBottom: T.space.sm }}>会場・グレードは月初に確定するため、先の月は目安です。</div>
           {MONTHS.map((m, mi) => {
-            const races = genMonthRaces(g.year, mi, g.classIdx, mi === 11 ? 9999 : 0, g.sponsor, g.gtWins);
+            const races = genMonthRaces(g.year, mi, g.classIdx, mi === 11 ? 9999 : 0, g.sponsor, g.gtWins, seasonRaceFocus(g.roster), g.raceFocusSlots);
             const isMandate = g.sponsor && g.sponsor.mandateMonths.includes(mi);
             const isNow = mi === g.month;
             return (
