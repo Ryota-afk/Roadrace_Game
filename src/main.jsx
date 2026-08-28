@@ -8,7 +8,7 @@ import "./styles/transitions.css";
 
 import { initGame } from "./state/state.js";
 import { makeWrap, makeMlWrap, makeMetaWrap } from "./components/chrome.jsx";
-import { mlTransitionKind } from "./data/screenTransition.js";
+import { mlTransitionKind, seasonTransitionKind } from "./data/screenTransition.js";
 import { renderMetaScreens } from "./screens/meta.jsx";
 import { renderMyLifeScreens } from "./screens/mylife.jsx";
 import { renderSeasonScreens } from "./screens/season.jsx";
@@ -37,7 +37,24 @@ function App() {
   const becomeManager = () => { setSuperMode("season"); setG({ ...initGame(), screen: "newgame_setup", legendRecruitIdx: 0 }); };
 
   const modal = { renameState, setRenameState, confirmDialog, setConfirmDialog };
-  const wrap = makeWrap({ g, setG, ...modal });
+  // 第67弾(devlog/wave67.md): シーズンも同じ「enterKeyが同じ間はkindを凍結する」対策が
+  // 要る（第66弾Phase1で踏んだkindドリフトのバグと同じ構造のため）。⚠️seasonMenuの
+  // menuState.sectionをkeyへ含めるのが本体——これが無いとメニュー移動（main画面内での
+  // section差し替え）は一切アニメーションしない（実測済み・devlog/wave67.md）。
+  // ⚠️方向つき横スライドは使わないためprevScreenは不要。
+  const seasonSection = seasonMenu.menuState.section;
+  const seasonTransitionRef = React.useRef({ year: g.year, month: g.month, enterKey: null, kind: "rise" });
+  const prevSeasonTransition = seasonTransitionRef.current;
+  const seasonMonthChanged = prevSeasonTransition.year !== g.year || prevSeasonTransition.month !== g.month;
+  const seasonCandidateKind = seasonTransitionKind({ screen: g.screen, section: seasonSection, monthChanged: seasonMonthChanged });
+  const seasonCandidateKey = seasonCandidateKind === "none" ? "static" : `${g.screen}:${seasonSection || "base"}:${g.year}-${g.month}`;
+  const seasonSameAsBefore = seasonCandidateKey === prevSeasonTransition.enterKey;
+  const seasonTransitionInfo = {
+    enterKey: seasonCandidateKey,
+    kind: seasonSameAsBefore ? prevSeasonTransition.kind : seasonCandidateKind,
+  };
+  seasonTransitionRef.current = { year: g.year, month: g.month, enterKey: seasonTransitionInfo.enterKey, kind: seasonTransitionInfo.kind };
+  const wrap = makeWrap({ g, setG, transitionInfo: seasonTransitionInfo, ...modal });
   // 第66弾Phase1(devlog/wave66.md): 画面ID＋年月からenterKeyとkindを決め、
   // 「enterKeyが変わった時だけ」新しいkindを採用して固定する。
   // ⚠️kindを毎レンダー素朴に計算し直すと、月が進んだ直後の次のレンダー（例：

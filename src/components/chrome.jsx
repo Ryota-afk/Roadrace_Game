@@ -24,14 +24,16 @@ function HeaderStat({ label, value, unit, valueColor, align }) {
 // 第13弾Phase3-D-4-a: 18項目を詰め込んでいた旧ヘッダを、常時参照する7項目だけに絞った
 // （実測で幅420pxでは値の途中改行まで起きていた。詳細・移設先はdevlog/wave13.md）。
 // スポンサー詳細・支出内訳・ダイナスティ周回はrace_status（レース→シーズン状況）へ移設。
-export function SeasonHeader({ g, cls }) {
+// 第67弾(devlog/wave67.md): kind==="month"のときだけ年月にパルスを付ける
+// （マイライフのmakeMlWrapと同じ扱い。第66弾Phase1ではシーズン側は未対応だった）。
+export function SeasonHeader({ g, cls, monthPulse }) {
   const need = seasonNeed(g.classIdx);
   const sr = seasonRank(g);
   return (
     <div style={{ padding: `${T.space.sm}px 0 ${T.space.md}px`, borderBottom: `1px solid ${T.color.rule}`, marginBottom: T.space.md, fontFamily: FONT_DOT }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: T.size.caption, color: T.color.sub }}>
         <span>{cls.label}</span>
-        <span>{g.year}年目 {MONTHS[g.month]}</span>
+        <span key={monthPulse ? `${g.year}-${g.month}` : "static"} className={monthPulse ? "ml-year-pulse" : undefined}>{g.year}年目 {MONTHS[g.month]}</span>
       </div>
       <div style={{ fontSize: T.size.head, color: T.color.text, marginTop: T.space.xs, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.teamName || "あなたのチーム"}</div>
       <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.sm }}>
@@ -95,8 +97,12 @@ export function ConfirmDialog({ confirmDialog, setConfirmDialog }) {
 // 第66弾Phase1(devlog/wave66.md): シーズン・モード選択は分類を持たないため既定の
 // 「持ち上がり」だけを当てる（片方のモードだけ動いて片方が静止していると不具合に見えるため）。
 // keyは画面IDのみ——同じ画面内でのUI操作（アコーディオン開閉等）では再アニメしない。
-export function makeWrap({ g, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
+// 第67弾Phase(devlog/wave67.md): マイライフと同じ6分類の考え方をシーズンにも適用。
+// transitionInfo={ enterKey, kind }はmain.jsx側で確定済みの値（kindはenterKeyが
+// 変わった瞬間にだけ再計算・固定される。理由はmakeMlWrapのコメント参照）。
+export function makeWrap({ g, transitionInfo, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
   const cls = CLASSES[g.classIdx];
+  const { enterKey, kind } = transitionInfo || { enterKey: "static", kind: "rise" };
   return (children, opts = {}) => (
     <div style={{ minHeight: "100svh", background: T.color.bg, fontFamily: FONT_DOT, ...(opts.fill ? { display: "flex", flexDirection: "column" } : null) }}>
       <div style={{
@@ -104,8 +110,8 @@ export function makeWrap({ g, renameState, setRenameState, confirmDialog, setCon
         padding: opts.fill ? "6px 14px 10px" : "6px 14px 40px",
         ...(opts.fill ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : null),
       }}>
-        <SeasonHeader g={g} cls={cls} />
-        <div key={g.screen} className="ml-enter-rise" style={opts.fill ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : undefined}>{children}</div>
+        <SeasonHeader g={g} cls={cls} monthPulse={kind === "month"} />
+        <div key={enterKey} className={`ml-enter-${kind}`} style={opts.fill ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : undefined}>{children}</div>
       </div>
       <RenameModal renameState={renameState} setRenameState={setRenameState} />
       <ConfirmDialog confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />

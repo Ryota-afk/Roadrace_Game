@@ -54,3 +54,45 @@ export function mlTransitionKind({ prevScreen, nextScreen, monthChanged }) {
   }
   return "rise";
 }
+
+// 第67弾（devlog/wave67.md）: シーズンの画面遷移アニメーション分類。
+// ⚠️マイライフとは分類の体系が別（メニューは"main"画面の中でsectionを差し替える
+// カイロソフト式で、g.screenが変わらない）ため、同じ表に混ぜず別に持つ。
+// ⚠️方向つき横スライドは使わない（ドリルダウン式メニューでセクション同士の左右関係が
+// プレイヤーの頭に無いため）。そのためprevScreenは不要。
+
+// main画面内：読むための画面（動かさない）。
+const SEASON_READ_SECTIONS = new Set(["help", "records_archive"]);
+
+// main画面内：長い一覧（上から満ちる）。
+const SEASON_LIST_SECTIONS = new Set([
+  "riders_list", "riders_team", "market_scout", "market_transfer", "market_shop",
+  "facility_equip", "facility_staff", "facility_ob", "race_calendar",
+  "records_career", "records_hall", "records_standings",
+]);
+// 上記以外のセクション（riders_youth/facility_room/race_status/misc_settings）と
+// BaseView（section===null）は既定のrise。
+
+// g.screen（"main"以外）：レースの流れ（横スイープ）。
+const SEASON_RACE_SCREENS = new Set([
+  "startlist", "lineup", "race", "result_pending", "result",
+  "gc_stage", "gc_role_setup", "gc_final",
+]);
+// g.screen（"main"以外）：長い一覧（上から満ちる）。
+const SEASON_LIST_SCREENS = new Set(["program", "standings", "trophy", "rivals"]);
+// 上記以外の画面（intro/newgame_setup/scoutpolicy_initial/sponsor/event/event_result/
+// yearend/clear）は既定のrise。
+
+// 優先順位：月が進んだ(month) > 画面(screen!=="main"の分類) > セクション(mainの分類) > 既定(rise)。
+export function seasonTransitionKind({ screen, section, monthChanged }) {
+  if (monthChanged) return "month";
+  if (screen !== "main") {
+    if (SEASON_RACE_SCREENS.has(screen)) return "sweep";
+    if (SEASON_LIST_SCREENS.has(screen)) return "flow";
+    return "rise";
+  }
+  if (section == null) return "rise"; // BaseView（拠点）
+  if (SEASON_READ_SECTIONS.has(section)) return "none";
+  if (SEASON_LIST_SECTIONS.has(section)) return "flow";
+  return "rise";
+}

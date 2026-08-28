@@ -1,6 +1,6 @@
 # 第67弾：シーズンモードの遷移アニメーション
 
-**状態**：**設計確定（ユーザー合意済み・2026-08）→実装待ち（Sonnet）。**
+**状態**：**実装・検証完了（2026-08）。**
 
 ## ⚠️まず訂正：依頼の前提（私が第66弾の締めで書いた残件）が間違っていた
 
@@ -189,3 +189,47 @@ const wrap = makeWrap({ g, setG, transitionInfo: seasonTransitionInfo, ...modal 
 8. レース系（`startlist`→`race`→`result`）が`sweep`
 9. 既存回帰（w46〜52・w57〜60）全通過・`npx vite build`成功・`pageerror`ゼロ
 10. ⚠️実プレイのスクリーンショットで確認
+
+## 実装結果
+
+確定した設計どおりに実装。変更ファイルは`src/data/screenTransition.js`
+（`seasonTransitionKind`＋4つの`Set`を追加）・`src/main.jsx`（`seasonTransitionInfo`の
+算出とkindの凍結）・`src/components/chrome.jsx`（`makeWrap`が`transitionInfo`を受け取り、
+`SeasonHeader`が`monthPulse`を受け取る）の3ファイルのみ。設計からの逸脱はなし。
+
+### 実装中に踏んだ寄り道：Playwrightのクリックが効かないように見えた問題
+
+実装直後の検証で、メニューの葉ボタン（例：「選手一覧・練習指定」）への通常の
+`.click()`が何度か効かず（例外は出ないが画面内容が変化しない）、`{force:true}`
+でのみ成功する現象に遭遇した。⚠️実装のどこかにバグがあるかもしれないと疑い、
+`git stash`で第67弾の変更を退避し、同じテストをスタッシュ前（未実装）のコードへ
+実行して比較した——**スタッシュ前のコードでも同じ通常クリックは問題なく成功**した
+ため、いったんは「第67弾で入れたリマウント／アニメーションが原因では」という
+仮説を立てたが、`git stash pop`で実装を復元し同じテストを複数回（4回）再実行した
+ところ、**全て正常に成功**した。⚠️**結論：クリック失敗は第67弾の実装とは無関係の
+一過性の事象**（デバッグ中にHMRでファイルを編集し続けていた最中のReactの
+再マウント状態と、Playwrightのテストスクリプト自体に別の不具合があったことが
+複合した可能性が高い。詳細は`season_debug2.mjs`〜`season_debug5.mjs`参照）。
+実装そのものに問題はなかった。デバッグ用に`makeWrap`へ一時的に足していた
+`data-enterkey`属性は検証完了後に削除済み。
+
+### 検証結果（1〜10）
+
+1. ✅ `main:base:1-0`→`main:riders_list:1-0`→`main:records_career:1-0`と、
+   セクション移動のたびにenterKeyが変わることを確認（`[class^="ml-enter-"]`の
+   DOMノードidentityが変わる＝再アニメーションする）
+2. ✅ `help`は`enterKey="static"`（`kind:"none"`）で動かない
+3. ✅ `riders_list`は`ml-enter-flow`。スクリーンショットでも一覧が正しく表示
+4. ✅ 拠点は`ml-enter-rise`。スクリーンショット目視でアイソメ画面のカクつきなし
+   （`rise`のまま採用、`none`への変更は不要だった）
+5. ✅ 拠点の遷移divの高さは835px（950pxのビューポートからヘッダー・パディング分を
+   引いた妥当な値）＝`opts.fill`は壊れていない
+6. ✅ 「翌月へ進む」実行後、`enterKey`が`ml-enter-month`になりヘッダーの年月に
+   `.ml-year-pulse`が付与され「1年目 5月」を表示することを確認
+7. ✅ 同じセクションへ2度目に移動しても`main:riders_list:1-0`のまま
+   （kindの凍結が機能している）
+8. ✅ レースカレンダーから「このレースに出場」を押すと`ml-enter-sweep`が発火
+9. ✅ `npx vite build`成功。既存回帰（`w66_sweep.mjs`＝マイライフの全タブ＋世界／記録
+   配下）と、今回追加したシーズン全18セクション＋その他のスイープ（`w67_sweep.mjs`）
+   の両方で`pageerror`ゼロ
+10. ✅ スクリーンショットで拠点・選手一覧を目視確認（レイアウト崩れなし）
