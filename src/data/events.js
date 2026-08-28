@@ -133,22 +133,25 @@ export const EVENTS = [
     ] },
 ];
 
+// 第71弾(devlog/wave71.md): meritは元は物語調の前置き＋括弧書きの補足が二重に付いていた
+// （例：旧university「バランス型。初期人気+16（スポンサー収入が早い）＆…（25歳までの伸びが
+// 速い）」51字）。desc側で既に性格は説明済みのため、meritは具体的な数値効果だけに絞った。
 export const ML_BACKGROUNDS = {
   highschool: { label: "高校卒", age: 18, powerBase: 40, growth: "late", powDist: [0.16, 0.46, 0.80],
     desc: "能力はまだ粗削りだが伸びしろは最大級。長い目で育てる叩き上げタイプ",
     // v36(#4): 叩き上げ＝デビュー時に成長力が1段階上がる抽選（伸びしろの天井を狙える）
     perk: { growthLottery: 0.55 },
-    meritLabel: "叩き上げ", merit: "伸びしろ最大＆最長キャリア。デビュー時に55%で成長力が1段階アップ（才能の天井が高い）" },
+    meritLabel: "叩き上げ", merit: "デビュー時55%で成長力+1段" },
   university: { label: "大学卒", age: 22, powerBase: 50, growth: "normal", powDist: [0.08, 0.30, 0.65],
     desc: "能力・伸びしろのバランス型。安定した成長曲線が魅力",
     // v36(#4): 文武両道＝学生時代の実績で早くから注目される（人気→スポンサー収入）＋若き才「天才肌」
     perk: { popBonus: 16, startAbility: "genius_sp" },
-    meritLabel: "文武両道", merit: "バランス型。初期人気+16（スポンサー収入が早い）＆「天才肌」持ちでデビュー（25歳までの伸びが速い）" },
+    meritLabel: "文武両道", merit: "初期人気+16／「天才肌」持ち" },
   corporate: { label: "実業団卒", age: 25, powerBase: 58, growth: "early", powDist: [0.02, 0.12, 0.40],
     desc: "即戦力級の完成度を持つが、伸びしろは小さめ",
     // v36(#4): 即戦力＝実戦仕込みの完成度。高い初期評価で早くからエース起用・好条件移籍、支度金つき
     perk: { evalBonus: 12, moneyBonus: 100, startAbility: "engine" },
-    meritLabel: "即戦力", merit: "高い完成度で即通用。初期監督評価+12（早くからエース起用・好条件の移籍）＆支度金+100万＆「無尽蔵のエンジン」持ち" },
+    meritLabel: "即戦力", merit: "初期監督評価+12／支度金+100万／「無尽蔵のエンジン」持ち" },
 };
 
 // v36(#8): 取材・私生活イベントを有意義に。各選択が「人気（＝スポンサー収入）」「メンタル

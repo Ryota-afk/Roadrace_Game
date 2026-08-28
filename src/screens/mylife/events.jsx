@@ -19,7 +19,11 @@ const ResultText = ({ children }) => (
 
 // 第34弾: 車・家は階段式（買えるのは常に次の1段だけ）なので、全段を並べず
 // 「今の段階＋次の1段」だけの1枚パネルに畳む（devlog/wave34.md）。
-const TierPanel = ({ title, note, items, lv, money, onBuy }) => {
+// 第71弾(devlog/wave71.md): 旧`note`（固定の一般論。例「レースの疲労蓄積を軽減」）は
+// 直下のnext.descと常に同内容を言い換えているだけの重複だった（実測で判明）。
+// 所有中の効果はcur.descで具体的な数値付きに置き換え、未所有時（cur無し）は
+// next側の1行に効果が出るためここには何も出さない。
+const TierPanel = ({ title, items, lv, money, onBuy }) => {
   const cur = lv >= 0 ? items[lv] : null;
   const next = lv < items.length - 1 ? items[lv + 1] : null;
   return (
@@ -28,7 +32,7 @@ const TierPanel = ({ title, note, items, lv, money, onBuy }) => {
         <span style={{ fontSize: T.size.head }}>{title}</span>
         <span style={{ fontSize: T.size.body, color: cur ? T.color.accent : T.color.sub }}>{cur ? cur.label : "未所有"}</span>
       </div>
-      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{note}</div>
+      {cur && <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>{cur.desc}</div>}
       {next ? (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.sm, gap: T.space.sm }}>
           <span style={{ fontSize: T.size.caption, color: T.color.text }}>{next.label}　{next.desc}</span>
@@ -56,7 +60,16 @@ export function renderMyLifeEventScreens(ctx) {
               <span style={{ fontSize: T.size.head }}>所持金</span>
               <span style={{ fontSize: T.size.title, color: T.color.accent }}>{ml.money}万円</span>
             </div>
-            <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>年俸{ml.salary}万円/年（毎月{Math.round(ml.salary / 12)}万円が振り込まれます・生活費/税 -{mlLivingCost(ml)}万/月）</div>
+            {/* 第71弾(devlog/wave71.md): 「振り込まれる額・生活費/税」を別々に言う代わりに
+                差引済みの月収支を1つ出す（3タブ共通ヘッダで毎回38字を消費していた）。 */}
+            {(() => {
+              const net = Math.round(ml.salary / 12) - mlLivingCost(ml);
+              return (
+                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>
+                  毎月の収支 <span style={{ color: net >= 0 ? T.color.good : T.color.bad }}>{net >= 0 ? "+" : ""}{net}万</span>（年俸{ml.salary}万）
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", alignItems: "center", gap: T.space.sm, marginTop: T.space.sm }}>
               <span style={{ fontSize: T.size.caption, color: T.color.sub }}>疲労</span>
               <div style={{ width: 90 }}><FatigueBar v={r.fatigue} /></div>
@@ -74,9 +87,11 @@ export function renderMyLifeEventScreens(ctx) {
           {shopCat === "parts" && (() => {
             const tier2Count = Object.values(PARTS).filter(p => p.tier === 2).length;
             const tier3Count = Object.values(PARTS).filter(p => p.tier === 3).length;
+            // 第71弾(devlog/wave71.md): 「上位パーツは」「が解禁されます」の定型句を削り、
+            // 「クラス」も1箇所へ集約（元は各項目に付いていた）。
             const lockedTierMsgs = [];
-            if (ml.classIdx < 1) lockedTierMsgs.push(`${CLASSES[1].id}クラスで${tier2Count}点`);
-            if (ml.classIdx < 2) lockedTierMsgs.push(`${CLASSES[2].id}クラスで${tier3Count}点`);
+            if (ml.classIdx < 1) lockedTierMsgs.push(`${CLASSES[1].id}で${tier2Count}点`);
+            if (ml.classIdx < 2) lockedTierMsgs.push(`${CLASSES[2].id}で${tier3Count}点`);
             return (
               <>
                 {PART_SLOTS.map(slot => {
@@ -133,7 +148,7 @@ export function renderMyLifeEventScreens(ctx) {
                 })}
                 {lockedTierMsgs.length > 0 && (
                   <div style={{ fontSize: T.size.caption, color: T.color.sub, textAlign: "center", marginBottom: T.space.md }}>
-                    上位パーツは{lockedTierMsgs.join("・")}が解禁されます
+                    クラス{lockedTierMsgs.join("・")} 解禁
                   </div>
                 )}
               </>
@@ -257,9 +272,9 @@ export function renderMyLifeEventScreens(ctx) {
                 );
               })()}
 
-              <TierPanel title="車" note="レースの疲労蓄積を軽減" items={ML_CARS} lv={ml.carLv} money={ml.money} onBuy={mlBuyCar} />
+              <TierPanel title="車" items={ML_CARS} lv={ml.carLv} money={ml.money} onBuy={mlBuyCar} />
 
-              <TierPanel title="家" note="毎月の疲労回復を底上げ" items={ML_HOUSES} lv={ml.houseLv} money={ml.money} onBuy={mlBuyHouse} />
+              <TierPanel title="家" items={ML_HOUSES} lv={ml.houseLv} money={ml.money} onBuy={mlBuyHouse} />
 
               <Section title="才能開花プログラム" right="成長力を1段階アップ">
                 {mlGrowthPowRevealed(ml) ? (
@@ -268,7 +283,7 @@ export function renderMyLifeEventScreens(ctx) {
                     buyLabel={GROWTHPOW_ORDER.indexOf(r.growthPow) >= GROWTHPOW_ORDER.length - 1 ? null : `${ML_GROWTH_POW_UP_PRICE[r.growthPow]}万`}
                     buyDisabled={ml.money < ML_GROWTH_POW_UP_PRICE[r.growthPow]} onBuy={mlBuyGrowthPowUp} />
                 ) : (
-                  <Item first label="成長力" value="???" valueColor={T.color.sub} detail="デビュー3年目に成長力が判明してから購入できます" />
+                  <Item first label="成長力" value="???" valueColor={T.color.sub} detail="3年目に判明後" />
                 )}
               </Section>
 
@@ -280,7 +295,7 @@ export function renderMyLifeEventScreens(ctx) {
                   const affordable = ml.money >= ML_GROWTH_SHIFT_PRICE;
                   return (
                     <ShopRow first label="成長タイプ" countLabel="現在" count={GROWTH[r.growth]?.label ?? r.growth}
-                      detail="早熟寄り・晩成寄りのどちらか一方向のみ、キャリアで1回だけ選び直せる"
+                      detail="一方向のみ"
                       secondaryLabel={`早熟寄りへ（${ML_GROWTH_SHIFT_PRICE}万）`} onSecondary={() => mlBuyGrowthShift(-1)} secondaryDisabled={!affordable || gIdx <= 0}
                       buyLabel={`晩成寄りへ（${ML_GROWTH_SHIFT_PRICE}万）`} onBuy={() => mlBuyGrowthShift(1)} buyDisabled={!affordable || gIdx < 0 || gIdx >= GROWTH_ORDER.length - 1} />
                   );

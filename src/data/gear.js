@@ -1,11 +1,13 @@
 // マイライフの装備・住居・車の静的データ（Phase 4-1後の support.js から分離）。
 
+// 第71弾(devlog/wave71.md): descの「（恒常）」は削除——タブ名「恒久投資」自体が
+// 恒常であることを示しており、全項目に付けると重複になる（実測で判明）。
 export const ML_HOUSES = [
-  { label: "賃貸アパート", price: 80, fatigueBonus: 5, desc: "毎月の疲労回復+5（恒常）" },
-  { label: "分譲マンション", price: 220, fatigueBonus: 12, desc: "毎月の疲労回復+12（恒常）" },
-  { label: "郊外の一戸建て", price: 480, fatigueBonus: 22, desc: "毎月の疲労回復+22（恒常）" },
+  { label: "賃貸アパート", price: 80, fatigueBonus: 5, desc: "毎月の疲労回復+5" },
+  { label: "分譲マンション", price: 220, fatigueBonus: 12, desc: "毎月の疲労回復+12" },
+  { label: "郊外の一戸建て", price: 480, fatigueBonus: 22, desc: "毎月の疲労回復+22" },
   // v20: 稼いだ資金の使い道が尽きて余りがちだったため、終盤向けの最上位グレードを追加
-  { label: "都心の高級タワーマンション", price: 900, fatigueBonus: 30, desc: "毎月の疲労回復+30（恒常）" },
+  { label: "都心の高級タワーマンション", price: 900, fatigueBonus: 30, desc: "毎月の疲労回復+30" },
 ];
 
 export const ML_CARS = [
@@ -18,14 +20,14 @@ export const ML_CARS = [
 export const ML_AB_COACH_KEY = { flat: "flatCoach", climb: "climbCoach", sprint: "sprintCoach", stamina: "staminaCoach", solo: "soloCoach" };
 
 export const ML_GEAR = {
-  roller: { label: "自主トレ用スマートローラー", price: 90, desc: "練習の成長効果+15%（恒常）" },
-  monitor: { label: "パワーメーター一式", price: 70, desc: "狙った能力の伸びがさらに+10%（恒常）" },
-  chef: { label: "専属コンディショニングシェフ", price: 150, desc: "レース参加による疲労蓄積が10%軽減される（恒常）" },
-  flatCoach:    { label: "平坦専門コーチ", price: 100, desc: "平坦の練習効果+25%（恒常）" },
-  climbCoach:   { label: "登坂専門コーチ", price: 100, desc: "登坂の練習効果+25%（恒常）" },
-  sprintCoach:  { label: "スプリント専門コーチ", price: 100, desc: "スプリントの練習効果+25%（恒常）" },
-  staminaCoach: { label: "スタミナ専門コーチ", price: 100, desc: "スタミナの練習効果+25%（恒常）" },
-  soloCoach:    { label: "独走専門コーチ", price: 100, desc: "独走の練習効果+25%（恒常）" },
+  roller: { label: "自主トレ用スマートローラー", price: 90, desc: "練習の成長効果+15%" },
+  monitor: { label: "パワーメーター一式", price: 70, desc: "狙った能力の伸びがさらに+10%" },
+  chef: { label: "専属コンディショニングシェフ", price: 150, desc: "レース参加による疲労蓄積が10%軽減される" },
+  flatCoach:    { label: "平坦専門コーチ", price: 100, desc: "平坦の練習効果+25%" },
+  climbCoach:   { label: "登坂専門コーチ", price: 100, desc: "登坂の練習効果+25%" },
+  sprintCoach:  { label: "スプリント専門コーチ", price: 100, desc: "スプリントの練習効果+25%" },
+  staminaCoach: { label: "スタミナ専門コーチ", price: 100, desc: "スタミナの練習効果+25%" },
+  soloCoach:    { label: "独走専門コーチ", price: 100, desc: "独走の練習効果+25%" },
 };
 
 // 第36弾: 専門コーチの段階制。シーズンのスタッフ（STAFF_MAX_BY_CLASS/STAFF_SALARY_PER_LV）を
