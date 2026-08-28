@@ -13,10 +13,11 @@ import { rollWeather } from "../../sim/race.js";
 // 第43弾: 第4引数focus（climb/hill/sprint/solo/null）。通常月のみ、focusと同じ適性の
 // テンプレを1本先に確保してから残りを引く。focus=nullなら旧実装とバイト単位で同一の出力
 // （RNGの消費順を一切変えない・devlog/wave43.md）。看板レース月は無変更。
-// 第70弾(devlog/wave70.md): 第5引数focusSlots（CPショップm_plan2で1→2）。未指定/1なら
-// 第43弾の挙動とバイト単位で同一。2以上でも、宣言地形に合うテンプレが2種未満の場合は
-// 用意できる分だけ差し替える（例：TT系は個人TT/チームTTの2種のみ）。
-export function mlGenRaceCandidates(year, month, classIdx, focus, focusSlots) {
+// 第74弾(devlog/wave74.md・TODO#27-b): focusは文字列（1地形）または配列（複数地形）を
+// 受け付ける。マイライフは月1レースしか走れないため「同じ地形の2本目」には意味が無く、
+// CPショップm_plan2は「2本目」ではなく「2地形目」を買う商品に作り替えた（旧focusSlots引数は廃止）。
+// focusが文字列、または長さ1の配列のときはfocus指定の第43弾とバイト単位で同一の出力になる。
+export function mlGenRaceCandidates(year, month, classIdx, focus) {
   if (month === 5 && classIdx >= 1) {
     const wrng = mulberry(year * 401 + month * 7 + 501);
     return [{ id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) }];
@@ -43,14 +44,16 @@ export function mlGenRaceCandidates(year, month, classIdx, focus, focusSlots) {
   }
   let indices = order.slice(0, n);
   // 第43弾: focus指定時、通常月（n===3）は候補の先頭を宣言した適性のテンプレへ差し替える。
-  // 候補が複数あれば追加で1回rng()を消費して選ぶ（focus=null、またはfocusSlots未指定/1なら
+  // 候補が複数あれば追加で1回rng()を消費して選ぶ（focusが文字列、または長さ1の配列なら
   // この1本目の差し替えのみで、旧実装とバイト単位で同一の出力）。
-  if (focus && n === 3) {
-    const slots = Math.max(1, Math.min(focusSlots || 1, n));
+  // 第74弾: focusが配列のとき、2番目以降の要素は別枠（別の地形）を差し替える。
+  // 同じ地形を2回書いても2本目は増えない（used集合はテンプレindex単位で共有するため）。
+  const foci = (Array.isArray(focus) ? focus : [focus]).filter(Boolean);
+  if (foci.length && n === 3) {
     const usedMatchIdx = new Set();
-    for (let slot = 0; slot < slots; slot++) {
-      const matches = pool.map((t, i) => i).filter(i => (FAVORS_TO_DISCIPLINE[pool[i].favors] || "flat") === focus && !usedMatchIdx.has(i));
-      if (matches.length === 0) break;
+    for (let slot = 0; slot < Math.min(foci.length, n); slot++) {
+      const matches = pool.map((t, i) => i).filter(i => (FAVORS_TO_DISCIPLINE[pool[i].favors] || "flat") === foci[slot] && !usedMatchIdx.has(i));
+      if (matches.length === 0) continue;
       const focusIdx = matches.length === 1 ? matches[0] : matches[Math.floor(rng() * matches.length)];
       usedMatchIdx.add(focusIdx);
       if (!indices.includes(focusIdx)) indices = indices.map((idx, k) => k === slot ? focusIdx : idx);

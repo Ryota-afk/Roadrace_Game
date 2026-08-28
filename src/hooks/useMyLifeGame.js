@@ -155,7 +155,15 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   // 第43弾: 出走計画（climb/hill/sprint/solo/null）。宣言すると通常月の候補にその適性が
   // 必ず1本入る（devlog/wave43.md）。ホームの「レース作戦」と同じアコーディオンで
   // 選び直せる（mlSetFocusとは無関係の別概念——あちらは練習メニューの集中先）。
-  const mlSetRaceFocus = (focus) => setMl(s => ({ ...s, raceFocus: focus }));
+  // 第74弾(devlog/wave74.md): CPショップm_plan2所持時は2つまでトグル選択できる
+  // （「2本目」ではなく「2地形目」。同じ地形の2本目は月1レースの制約で意味が無いため）。
+  const mlSetRaceFocus = (key) => setMl(s => {
+    if (key === null) return { ...s, raceFocus: null, raceFocus2: null };
+    const max = s.cpFocus2 ? 2 : 1;
+    const cur = [s.raceFocus, s.raceFocus2].filter(Boolean);
+    const next = cur.includes(key) ? cur.filter(k => k !== key) : [...cur, key].slice(-max);
+    return { ...s, raceFocus: next[0] || null, raceFocus2: next[1] || null };
+  });
   const mlConfirmBadgeGoals = () => setMl(s => {
     // 第62弾(devlog/wave62.md): この画面は選手タブの「選び直す」からもキャリア途中で
     // 再訪できるようになった。まだ1戦も走っていない初月以外で候補を作り直すと、
@@ -164,10 +172,10 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     // （このコメントは元々あったが、以前は呼び出し口が作成フロー1つだけだったため
     // コード上のチェックが無くても常に真だった）。
     const hasRaced = ((s.player && s.player.raceLog) || []).length > 0;
-    if (!s.raceFocus || hasRaced) return { ...s, screen: "mylife_main" };
+    if ((!s.raceFocus && !s.raceFocus2) || hasRaced) return { ...s, screen: "mylife_main" };
     return {
       ...s, screen: "mylife_main",
-      races: mlGenRaceCandidates(s.year, s.month, s.classIdx, s.raceFocus, s.raceFocusSlots),
+      races: mlGenRaceCandidates(s.year, s.month, s.classIdx, [s.raceFocus, s.raceFocus2]),
       sel: { ...s.sel, raceId: null },
     };
   });

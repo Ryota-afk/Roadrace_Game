@@ -35,7 +35,7 @@ export function cpBalance(meta) { return Math.max(0, (meta.totalEarnedCP || 0) -
 // 購入式の恒久解禁カタログ（従来の自動ミルストーンとは別の"選んで買う"プレミアム枠）。
 // 第70弾(devlog/wave70.md): CPの役割を「開幕ブースト」中心から「今の周の選択肢」中心へ
 // 作り直した。season/mylifeの各fxは「強さ」（difficultyでCP_BOOST_DIFF_MULにより増減）と
-// 「選択肢」（難易度に関わらず常に効く：focusSlots/focusSlots2/growthReveal、および
+// 「選択肢」（難易度に関わらず常に効く：focusSlots/focus2/growthReveal、および
 // 既存の恒常上限拡張3件）の2種に分かれる——後者はcpShopSeasonPerks/cpShopMylifePerksが
 // mulを掛けない。s_equip/s_equip2（設備Lv）は削除——bumpEquipLvがequipMax(3)でクランプし
 // 常に無効化していたため（loadMeta()で既存購入者に返金済み）。
@@ -65,7 +65,11 @@ export const CP_SHOP = [
   // （新しい「宣言」UIは作らず、既存のスカウト・契約判断をそのままカレンダーへ反映する）。
   { id: "s_plan1", cost: 40, category: "シーズン", label: "出走計画", desc: "毎月、出走可能なレース1本がロースターの主力脚質に合うコースになる（恒常）", season: { focusSlots: 1 } },
   { id: "s_plan2", cost: 90, category: "シーズン", label: "出走計画（さらに）", desc: "上記がもう1本、計2本になる（恒常）", season: { focusSlots: 1 } },
-  { id: "m_plan2", cost: 50, category: "マイライフ", label: "出走計画（2本目）", desc: "宣言した地形のレースが、月の候補3件中2件になる（恒常。既定は1件）", mylife: { focusSlots2: 1 } },
+  // 第74弾(devlog/wave74.md・TODO#27-b): 「2本目」から「2地形目」へ作り替えた。
+  // マイライフは月1レースしか走れず、同じ地形の2本目には到達を速める効果が無かった
+  // （実測：4地形中3地形で効果ゼロ）。2つ目の地形を並行して狙えるようにする方が、
+  // 月1レースの制約と噛み合う。
+  { id: "m_plan2", cost: 50, category: "マイライフ", label: "出走計画（2地形目）", desc: "出走計画で地形を2つまで宣言できるようになる（恒常。既定は1つ）", mylife: { focus2: 1 } },
   { id: "m_growthreveal", cost: 30, category: "マイライフ", label: "成長力の早期判明", desc: "本来3年目に分かる成長力が、デビュー1年目から判明する（恒常）", mylife: { growthReveal: true } },
 ];
 export function cpOwned(meta, id) { return (meta.cpUnlocks || []).includes(id); }
@@ -95,7 +99,7 @@ export function cpShopSeasonPerks(meta, difficulty) {
 }
 export function cpShopMylifePerks(meta, difficulty) {
   const mul = CP_BOOST_DIFF_MUL[difficulty] ?? 1;
-  const acc = { debutGold: false, growthUp: false, money: 0, boonBonus: 0, statBoost: 0, partLvMaxBonus: 0, focusSlots2: 0, growthReveal: false };
+  const acc = { debutGold: false, growthUp: false, money: 0, boonBonus: 0, statBoost: 0, partLvMaxBonus: 0, focus2: 0, growthReveal: false };
   CP_SHOP.forEach(it => {
     if (!cpOwned(meta, it.id)) return;
     const m = it.mylife || {};
@@ -105,7 +109,7 @@ export function cpShopMylifePerks(meta, difficulty) {
     acc.boonBonus += (m.boonBonus || 0) * mul;
     acc.statBoost += Math.round((m.statBoost || 0) * mul);
     acc.partLvMaxBonus += m.partLvMaxBonus || 0;
-    acc.focusSlots2 += m.focusSlots2 || 0;
+    acc.focus2 += m.focus2 || 0;
     if (m.growthReveal) acc.growthReveal = true;
   });
   return acc;

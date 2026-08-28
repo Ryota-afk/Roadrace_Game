@@ -330,7 +330,8 @@ export function renderMyLifeCreateScreens(ctx) {
         return `${q.need}${q.unit}で解放`;
       };
       const focusOptions = DISCIPLINE_KEYS.filter(k => TEMPLATES.some(t => (FAVORS_TO_DISCIPLINE[t.favors] || "flat") === k));
-      const focus = ml.raceFocus || null;
+      const foci = [ml.raceFocus, ml.raceFocus2].filter(Boolean);
+      const focusMax = ml.cpFocus2 ? 2 : 1;
       // 第62弾(devlog/wave62.md): 選手タブの「選び直す」からキャリア途中でも再訪できるように
       // なったため、「この内容でキャリアを始める」という開始専用の文言は再訪時には誤りになる。
       const hasRaced = ((ml.player && ml.player.raceLog) || []).length > 0;
@@ -365,10 +366,14 @@ export function renderMyLifeCreateScreens(ctx) {
               );
             })}
           </div>
-          <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>出走計画</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: T.space.sm }}>
+            <span style={{ fontSize: T.size.caption, color: T.color.accent }}>出走計画</span>
+            {/* 第74弾(devlog/wave74.md): m_plan2所持時のみ「2つまで」を隅に添える（CLAUDE.md §7）。 */}
+            {focusMax > 1 && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>2つまで</span>}
+          </div>
           <div style={{ background: T.color.surface, marginBottom: T.space.md }}>
             {focusOptions.map((k, i) => {
-              const selected = focus === k;
+              const selected = foci.includes(k);
               return (
                 <button key={k} onClick={() => mlSetRaceFocus(k)} style={{
                   display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
@@ -384,17 +389,17 @@ export function renderMyLifeCreateScreens(ctx) {
             })}
             <button onClick={() => mlSetRaceFocus(null)} style={{
               display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
-              background: focus === null ? T.color.surfaceUp : "transparent", border: 0,
+              background: foci.length === 0 ? T.color.surfaceUp : "transparent", border: 0,
               borderTop: `1px solid ${T.color.rule}`,
-              color: focus === null ? T.color.action : T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.body,
+              color: foci.length === 0 ? T.color.action : T.color.sub, fontFamily: FONT_DOT, fontSize: T.size.body,
               padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
             }}>
               <span>特に決めない</span>
-              {focus === null && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+              {foci.length === 0 && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
             </button>
-            {focus && (
+            {foci.length > 0 && (
               <div style={{ fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>
-                毎月の候補に{DISCIPLINES[focus].label}のレースが必ず1本入る
+                毎月の候補に{foci.map(k => DISCIPLINES[k].label).join("・")}のレースが必ず入る
               </div>
             )}
           </div>

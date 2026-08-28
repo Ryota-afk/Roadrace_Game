@@ -359,21 +359,29 @@ export function renderMyLifeHubScreen(ctx) {
               変更は翌月の候補から効く（今見ている候補は入れ替わらない）。 */}
           {(() => {
             const focusOptions = DISCIPLINE_KEYS.filter(k => TEMPLATES.some(t => (FAVORS_TO_DISCIPLINE[t.favors] || "flat") === k));
-            const focus = ml.raceFocus || null;
-            const focusLabel = focus ? `${DISCIPLINES[focus].label}中心` : "特に決めない";
+            const foci = [ml.raceFocus, ml.raceFocus2].filter(Boolean);
+            const max = ml.cpFocus2 ? 2 : 1;
+            const focusLabel = foci.length ? `${foci.map(k => DISCIPLINES[k].label).join("・")}中心` : "特に決めない";
             return (
               <>
                 <PressRow label="出走計画" value={focusLabel}
                   onClick={() => setMl(s => ({ ...s, uiRaceFocusOpen: !s.uiRaceFocusOpen }))} />
                 {ml.uiRaceFocusOpen && (
                   <div style={{ background: T.color.surface }}>
+                    {/* 第74弾(devlog/wave74.md): m_plan2所持時のみ「2つまで」を隅に添える。
+                        説明文を1行足すのではなく、既存のリスト右上に控えめに置く（CLAUDE.md §7）。 */}
+                    {max > 1 && (
+                      <div style={{ display: "flex", justifyContent: "flex-end", fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.xs}px ${T.space.md}px` }}>
+                        2つまで
+                      </div>
+                    )}
                     {focusOptions.map((k, i) => {
-                      const on = focus === k;
+                      const on = foci.includes(k);
                       return (
                         <button key={k} onClick={() => mlSetRaceFocus(k)} style={{
                           display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
                           background: on ? T.color.surfaceUp : "none", border: 0,
-                          borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
+                          borderTop: i === 0 && max <= 1 ? "none" : `1px solid ${T.color.rule}`,
                           color: on ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
                           padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
                         }}>
@@ -384,16 +392,16 @@ export function renderMyLifeHubScreen(ctx) {
                     })}
                     <button onClick={() => mlSetRaceFocus(null)} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%",
-                      background: focus === null ? T.color.surfaceUp : "none", border: 0,
+                      background: foci.length === 0 ? T.color.surfaceUp : "none", border: 0,
                       borderTop: `1px solid ${T.color.rule}`,
-                      color: focus === null ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
+                      color: foci.length === 0 ? T.color.action : T.color.text, fontFamily: FONT_DOT, fontSize: T.size.body,
                       padding: `${T.space.sm}px ${T.space.md}px`, cursor: "pointer", textAlign: "left",
                     }}>
                       <span>特に決めない</span>
-                      {focus === null && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
+                      {foci.length === 0 && <span style={{ fontSize: T.size.caption, color: T.color.sub }}>選択中</span>}
                     </button>
                     <div style={{ fontSize: T.size.caption, color: T.color.sub, padding: `${T.space.sm}px ${T.space.md}px`, borderTop: `1px solid ${T.color.rule}`, lineHeight: 1.6 }}>
-                      {focus ? `毎月の候補に${DISCIPLINES[focus].label}のレースが必ず1本入る。変更は翌月の候補から効く` : "毎月の候補は成り行きで決まる"}
+                      {foci.length ? `毎月の候補に${foci.map(k => DISCIPLINES[k].label).join("・")}のレースが必ず入る。変更は翌月の候補から効く` : "毎月の候補は成り行きで決まる"}
                     </div>
                   </div>
                 )}

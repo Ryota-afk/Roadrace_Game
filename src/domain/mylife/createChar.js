@@ -276,9 +276,10 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
     managerEval: 30 + (perk.evalBonus || 0) + cpPerks.eval, salary: initialSalary, money: (perk.moneyBonus || 0) + cpPerks.money + cpShop.money,
     // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」
     partLvMaxBonus: cpShop.partLvMaxBonus,
-    // 第70弾(devlog/wave70.md): CPショップ「出走計画」(m_plan2)・「成長力の早期判明」
-    // (m_growthreveal)。前者は既定1（無購入でも第43弾の1本は無料）。
-    raceFocusSlots: 1 + (cpShop.focusSlots2 || 0),
+    // 第74弾(devlog/wave74.md): CPショップ「出走計画（2地形目）」(m_plan2)・
+    // 「成長力の早期判明」(m_growthreveal)。地形1つ目は無購入でも第43弾から無料。
+    raceFocus2: null,
+    cpFocus2: (cpShop.focus2 || 0) > 0,
     cpGrowthRevealEarly: !!cpShop.growthReveal,
     partsInv: {}, stock: { drink: 0, supp: 0, tune: 0 },
     gear: { roller: false, monitor: false, chef: false, flatCoach: false, climbCoach: false, sprintCoach: false, staminaCoach: false, soloCoach: false },

@@ -62,11 +62,13 @@ export const TEMPLATES = [
   // （チームTTのteamTTフラグと対になる形。squadMin===squadMax===1という魔法数字での
   // 判定はやめ、呼び出し側は明示的にこのフラグを見る）。
   { kind: "個人TT", favors: "TT", soloTT: true, squadMin: 1, squadMax: 1, segs: [["tt", 520, 22], ["tt", 520, 22]] },
-  // 第70弾(devlog/wave70.md): 旧UNLOCK_TEMPLATES（CP解禁式）を常駐化した3種。
-  // 解禁するほど狙ったコースが出にくくなる逆効果（希釈16.7%→11.1%）と、既存コースとの
-  // 脚質重複（ナイトクリテリウム=SPR/グラベル=PUN）が実測で判明したため、CPでの後出しをやめた。
-  { kind: "ナイトクリテリウム", favors: "SPR", squadMin: 1, squadMax: 5, laps: 8, segs: [["flat", 260, 16], ["flat", 240, 14], ["sprint", 90, 4]] },
-  { kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 420, 22], ["hill", 400, 16], ["climb", 300, 10], ["sprint", 120, 4]] },
+  // 第74弾(devlog/wave74.md・TODO#27-d): 決着をsprintからhillへ変更し、地形もhill優勢
+  // （hill63.5%/flat23.1%/climb13.5%）に組み直した。旧segsは実地形がflat
+  // （favors:"PUN"の宣言と食い違う＝出走計画m_plan2の実効が偶然この不整合の
+  // 埋め合わせだけになっていた）。丘陵ロード（平坦→丘2連→スプリント決着）とは
+  // 「丘→山→丘のままゴール」で差別化する。実測：PUNの平均順位16.9位→10.4位
+  // （n=80・scratchpad/w74_gravel.mjs）。
+  { kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 420, 12], ["hill", 400, 15], ["climb", 300, 7], ["hill", 380, 18]] },
   // v35(チームTT): チーム単位の合算タイム。squadMinを4に上げ「層の厚さ」を要求。teamTTフラグで専用エンジンへ分岐。
   { kind: "チームTT", favors: "TT", teamTT: true, squadMin: 4, squadMax: 6, segs: [["tt", 480, 22], ["flat", 300, 14], ["tt", 480, 22]] },
   // 第72弾(devlog/wave72.md): RUL（ルーラー）専用コース。5脚質中RULだけ専用コースが無く、
