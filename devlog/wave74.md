@@ -101,3 +101,138 @@ TODO #27-d（グラベルの`favors`不整合）を偶然埋め合わせてい�
 なので、候補の本数を増やす商品は原理的に価値が出ない。第70弾で`m_plan2`を作ったとき、
 シーズン側（月3〜5レース・複数出走可）の理屈をそのままマイライフへ写してしまったのが原因。
 **同じ機能名でも、モードごとに「1ヶ月に何回行使できるか」が違えば効果はまったく別物になる。**
+
+---
+
+# 第74弾-B：修正の設計図（ユーザー選択後・実装待ち）
+
+ユーザーの選択（2026-08）：①`m_plan2`は**宣言地形を2つ持てる商品に作り替える**／
+②グラベルは**segsを丘陵寄りに変えて宣言どおりhillにする**／③**クリテ系を減らして偏りを是正**。
+
+## ① `m_plan2`（50CP）→「出走計画（2地形目）」
+
+**なぜ「2本目」ではなく「2地形目」か**：マイライフは月1レース。同じ地形の2本目は走れないので
+価値が出ない（結果2）。⚠️**一方「2地形目」なら、山岳と独走のように別々のバッジを並行して
+狙えるようになり、月1レースの制約と噛み合う。**
+
+- **`state/meta.js`**：`m_plan2`の**idは据え置き**（購入済みプレイヤーの`cpUnlocks`を壊さない）。
+  - label`出走計画（2地形目）`／desc`出走計画で地形を2つまで宣言できるようになる（恒常。既定は1つ）`
+  - 効果キー`mylife: { focusSlots2: 1 }`→`mylife: { focus2: 1 }`。`cpShopMylifePerks`の
+    acc初期値と加算（`meta.js:98`・`meta.js:108`）も同じ名前へ。
+- **`state/mylifeState.js`**：`raceFocusSlots: 1`を削除、`raceFocus2: null`と`cpFocus2: false`を追加。
+  `ML_SAVE_FIELDS`の`"raceFocusSlots"`を`"raceFocus2", "cpFocus2"`へ差し替える。
+  ⚠️**`ML_SAVE_FIELDS`に無いキーは復元されないため、旧セーブの`raceFocusSlots`は自動的に
+  読み捨てられる＝移行コードは不要。**
+- **`domain/mylife/createChar.js:281`**：`raceFocusSlots: 1 + (cpShop.focusSlots2 || 0)`を
+  `raceFocus2: null, cpFocus2: (cpShop.focus2 || 0) > 0`へ（`cpGrowthRevealEarly`と同じ形）。
+- **`domain/mylife/race.js`**：第5引数`focusSlots`を廃止し、`focus`が文字列でも配列でも動くようにする。
+  ```js
+  const foci = (Array.isArray(focus) ? focus : [focus]).filter(Boolean);
+  if (foci.length && n === 3) {
+    const used = new Set();
+    for (let slot = 0; slot < Math.min(foci.length, n); slot++) {
+      const matches = pool.map((t, i) => i).filter(i => (FAVORS_TO_DISCIPLINE[pool[i].favors] || "flat") === foci[slot] && !used.has(i));
+      if (!matches.length) continue;   // ⚠️旧実装のbreakをcontinueへ。地形が違えば独立に判定する
+      const fi = matches.length === 1 ? matches[0] : matches[Math.floor(rng() * matches.length)];
+      used.add(fi);
+      if (!indices.includes(fi)) indices = indices.map((v, k) => k === slot ? fi : v);
+    }
+  }
+  ```
+  ⚠️**宣言が1つのときのrng消費と出力は現行とバイト単位で同一**（`matches.length===1`なら
+  消費なし・複数なら1回。順序も現行と同じ）。
+- **呼び出し側4箇所**（`controllers/mylife/career.js:43`／`month.js:463,474,528`）：
+  `s.raceFocus, s.raceFocusSlots` → `[s.raceFocus, s.raceFocus2]`。
+- **`hooks/useMyLifeGame.js:158`**：`mlSetRaceFocus`をトグル式にする。
+  ```js
+  const mlSetRaceFocus = (k) => setMl(s => {
+    const max = s.cpFocus2 ? 2 : 1;
+    const cur = [s.raceFocus, s.raceFocus2].filter(Boolean);
+    const next = k === null ? [] : cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k].slice(-max);
+    return { ...s, raceFocus: next[0] || null, raceFocus2: next[1] || null };
+  });
+  ```
+- **UI**（`screens/mylife/hub.jsx:362-390`／`screens/mylife/create.jsx:333-390`・同じ形が2箇所）：
+  - `PressRow`のvalue：宣言0→`特に決めない`／1つ→`山岳中心`／2つ→`山岳・独走中心`（`・`で連結）。
+  - 各行の選択中表示は現行どおり`T.color.surfaceUp`の背景。
+  - ⚠️**2つ選べる場合だけ**、リストの右上隅に`2つまで`を`T.color.sub`・`T.size.caption`で添える
+    （§7：説明文を1行足すのではなく、既存の要素の隅に置く）。未購入時の見た目は**現行と完全に同一**。
+  - `特に決めない`ボタンは現行どおり残す（`mlSetRaceFocus(null)`）。
+
+## ② グラベルレースのsegs改修（TODO #27-d）
+
+```js
+{ kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5,
+  segs: [["flat", 420, 12], ["hill", 400, 15], ["climb", 300, 7], ["hill", 380, 18]] },
+```
+
+- 地形は**hill 63.5%**／flat 23.1%／climb 13.5%。⚠️閾値0.5を明確に超えるので
+  `terrainOfMix`のフォールバックに頼らない。
+- **決着区間を`sprint`から`hill`へ**。`finishAbility`が`sp*0.45+cl*0.35+fl*0.20`（丘陵決着）になり、
+  純スプリント決着だった現行と別物になる。
+- 丘陵ロードとの差別化：丘陵ロード＝**長い平坦→丘2連→スプリント決着**／
+  グラベル＝**短い平坦→丘→山→丘のままゴール**。
+- ⚠️`base`列（420/400/300/380）はsimから読まれない死んだ値（TODO #27-c）。今回は既存の書式に合わせて残す。
+
+**実測（n=80・地力72・normal・クラスA・`scratchpad/w74_gravel.mjs`）**：
+
+| 脚質 | 旧・勝率 | 新・勝率 | 旧・平均順位 | 新・平均順位 |
+|---|---|---|---|---|
+| SPR | 25.0% | 18.8% | 8.36 | 8.01 |
+| **PUN** | 3.8% | **7.5%** | 16.88 | **10.40** |
+| CLM | 0.0% | 2.5% | 24.05 | 22.00 |
+| TT | 0.0% | 5.0% | 20.73 | 11.47 |
+| RUL | 0.0% | 10.0% | 25.38 | 9.40 |
+
+**PUNの平均順位が16.9→10.4と大きく改善し、SPRの一人勝ちが緩む。** 意図どおりの方向。
+
+## ③ ナイトクリテリウムの撤去
+
+- `TEMPLATES`の**index 6（ナイトクリテリウム）を削除**。クリテリウム（index 0）と
+  segsがほぼ同一（`flat/flat/sprint`・周回数8対6だけの違い）で、第70弾も「脚質重複」を指摘していた。
+- ⚠️**ハードコード添字は`TEMPLATES[0]〜[5]`だけ**（`GRAND_TOURS`の3行・世界選手権`[2]`・
+  オリンピック`[3]`・シーズンのチャンピオンシップ`[3]`）。index 6を消すと7〜9が6〜8へ繰り上がるが、
+  **7以降を指す添字はコード中に存在しない**（`raceStart.js`は`favors`検索）ので安全。
+- 撤去後（9種）：flat 3（クリテ／サーキット／平坦ロード）・hill 2（丘陵／グラベル）・
+  climb 2（山岳／ヒルクライム）・solo 2（個人TT／チームTT）。⚠️**flatの占有率が50%→33%へ。**
+- ⚠️**残る不一致**：「スプリント」宣言（クリテ／サーキット）も「平坦」宣言（平坦ロード）も、
+  バッジ軸では同じ`flat`を積む。`terrainOfMix`にsprint地形が無いためで、今回は解消しない
+  （ユーザー選択＝データの偏り是正のみ）。ただし平坦ロードだけが`tt`決着（独走決着）で
+  クリテ系のsprint決着とは別物なので、**勝ちやすさの面では宣言を分ける意味がある。**
+
+---
+
+# ⚠️第74弾-C：測定中に見つかった、より大きな問題（別弾で要調査）
+
+②の測定のため全コースで脚質別の勝率を測ったところ（`scratchpad/w74_control.mjs`）、
+**個人TTを除く全コースでスプリンターが最強**という結果になった。
+
+| コース | 決着 | SPR | PUN | CLM | TT | RUL | favors |
+|---|---|---|---|---|---|---|---|
+| クリテリウム | sprint | **25% /5.0** | 3% /9.5 | 0% /25.2 | 0% /18.9 | 0% /23.3 | SPR ✓ |
+| サーキットレース | sprint | **30% /5.1** | 5% /10.0 | 0% /25.0 | 0% /19.8 | 0% /25.3 | SPR ✓ |
+| 丘陵ロード | sprint | **22% /8.5** | 2% /20.5 | 2% /26.8 | 0% /22.9 | 0% /24.2 | ⚠️PUN |
+| 山岳ロード | mtn | **30% /7.9** | 12% /16.2 | 0% /24.8 | 2% /21.3 | 2% /19.9 | ⚠️CLM |
+| ヒルクライム | mtn | **20% /12.6** | 3% /22.6 | 0% /27.2 | 2% /23.8 | 5% /19.1 | ⚠️CLM |
+| 個人TT | tt | 12% /4.8 | 3% /5.9 | 2% /6.6 | **30% /3.0** | 7% /4.5 | TT ✓ |
+| グラベルレース | sprint | **28% /10.3** | 3% /19.1 | 0% /24.8 | 0% /20.7 | 0% /22.7 | ⚠️PUN |
+| 平坦ロード | tt | **20% /6.8** | 10% /6.9 | 2% /17.3 | 15% /8.9 | 2% /13.8 | ⚠️RUL |
+
+（勝率 / 平均順位。n=60・地力72・normal・クラスA）
+
+⚠️**クライマーは山岳コースで平均25位（35人中）。** 切り分け（`scratchpad/w74_why.mjs`）：
+
+- `accel`をSPR並(68)に上げても改善しない（24.7→23.4位）。
+- `climb`を110（終盤の専門家相当）に上げると**むしろ悪化**（24.7→27.3位）。
+- `stamina`を90に上げたときだけ、勝者との差が131.9秒→53.6秒に縮む。
+- 地力を上げても逆転しない（地力96でCLM 12.0位・SPR 9.1位）。
+
+⚠️**つまり決着計算（`mtn`＝`climb*0.75+sprint*0.25`）は正しいのに、そこへ到達する前の
+集団フェーズで脱落している。** 勝者と130秒差＝先頭クラスタに居ないので、
+`resolveFinishClusters`の決着計算そのものが一度も適用されていない。
+唯一クラスタ問題が起きない個人TT（`groupMode: "solo"`）ではCLMが6.6位と正常な位置にいる。
+
+⚠️**ただしこの測定はまだ「疑い」であって確定ではない。** 計測用の選手は装備なし・作戦は
+`balanced`固定・僚友の絆なし・`mental`は全脚質49の`newRider`素の値で、実プレイの条件とは違う。
+**第73弾の教訓（古い観察・偏った条件で結論を出さない）に従い、別弾で条件を揃えて再現を確認する。**
+DEVLOG本体のTODO #28として起票した。
