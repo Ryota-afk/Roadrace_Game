@@ -88,8 +88,17 @@ key={`${ml.screen}:${ml.year}-${ml.month}`}
 ### `prefers-reduced-motion`（⚠️必須・現状0件）
 
 `@media (prefers-reduced-motion: reduce)`で**全アニメーションを`.01s`へ潰す**。
-⚠️「アニメーションを消す」のではなく「一瞬で終わらせる」——`animation-fill-mode: both`の
-終了状態は必要なため、`animation: none`にすると`clip-path`が初期値のまま残り**中身が消える**。
+「アニメーションを消す」のではなく「一瞬で終わらせる」——`animation-fill-mode: both`の
+終了状態が確実に適用されるため、どのプロパティをanimateしていても最終状態になる。
+
+> ⚠️**訂正（Phase 2の事前検証で判明）**：設計時ここに
+> 「`animation: none`にすると`clip-path`が初期値のまま残り**中身が消える**」と書いていたが、
+> これは**誤り**。実測（`scratchpad/clip_probe.mjs`）では`animation: none`のとき
+> `clip-path`は**`none`（＝クリップなし・中身は見える）**になった。
+> `clip-path`の初期値は`inset(0 0 100% 0)`ではなく`none`である。
+> `.01s`方式を採る理由は「全プロパティで確実に終了状態になるから」であって、
+> `animation: none`が危険だからではない。⚠️**実装は正しく動いており修正不要**——
+> 誤っていたのは理由の説明だけ。
 
 ### シーズンモードの扱い（判断）
 
@@ -100,20 +109,56 @@ key={`${ml.screen}:${ml.year}-${ml.month}`}
 
 `makeMetaWrap`（モード選択・生涯評価・CP交換所）も同じく④を当てる。
 
-## Phase 2（Phase 1の実機確認後）：押した要素が育つ
+## Phase 2（Phase 1完了後・実装待ち）：押した要素が育つ
 
-⚠️**Phase 1が実プレイで確認できてから着手する。**
+**対象は`ホームのレース候補 → 出走表`の1経路のみ**（ユーザー合意）。
 
-- **対象は`ホームのレース候補 → 出走表`の1経路のみ**（ユーザー合意）。
-- 仕組みは**View Transitions API**。対になる要素に同じ`view-transition-name`を付け、
-  状態更新を`document.startViewTransition(() => flushSync(() => setMl(...)))`で包む。
-- ⚠️**他の6分類と根本的に仕組みが違う**：
-  - `startViewTransition`は**ページ全体の遷移を乗っ取る**。既定のルートのクロスフェードが
-    Phase 1のCSSアニメーションと**衝突する**ため、この経路だけ
-    `::view-transition-old(root)`/`::view-transition-new(root)`の既定演出を無効化する。
-  - React 18では`flushSync`が要る（`startViewTransition`のコールバック内を同期にするため）。
-  - ⚠️**この経路だけ呼び出し側に手が入る**（`hub.jsx`の出場ボタン）。
-- 非対応ブラウザでは何も起きない（Phase 1の④/⑤にフォールバック）＝実害なし。
+### ⚠️事前検証で確定したこと（`scratchpad/vt_probe2.mjs`）
+
+設計時「Phase 1のCSSアニメーションと衝突する」と**推測**で書いていたので、実物で測った。
+遷移中に実際に走るアニメーションを`document.getAnimations()`で数えた結果：
+
+| 条件 | 同時に走るアニメーション |
+|---|---|
+| **A. 何も抑制しない** | ⚠️**11本**（`sweep`＋ルートのクロスフェード4本＋名前付き要素6本） |
+| **B. ルートのクロスフェードだけ止める** | 7本（⚠️`sweep`がまだ残る） |
+| **C. ルート＋enterアニメの両方を止める** | **6本**（View Transitionsの機構のみ＝これが正解） |
+
+⚠️**推測は正しかったが、Bでは不十分**だった——ルートを止めても
+Phase 1のenterアニメ（`ml-enter-sweep`）が残って名前付き要素の変形と喧嘩する。
+**必ずCの組み合わせにすること。**
+
+### 実装の具体
+
+1. **ペアにする要素＝レース名**（`view-transition-name: ml-race-name`）
+   - 出発側：`hub.jsx`の選択中レース。⚠️ホームは**2レイアウトある**——候補3件の月は
+     候補行の`{c.name}`、看板レース月（候補1件）は単一カードの`{race.name}`。
+     **選択中のものだけ**に付ける（同じ`view-transition-name`が同時に2つ存在すると
+     View Transitionsは例外を投げる）。
+   - 到着側：`race.jsx:81`の`{raceMeta.name}`（`T.size.title`の見出し）。
+2. **抑制用クラス**：遷移開始前に`document.documentElement.classList.add("vt-active")`、
+   `transition.finished`で外す。CSSは`transitions.css`へ：
+   ```
+   .vt-active::view-transition-old(root),
+   .vt-active::view-transition-new(root) { animation: none; }
+   .vt-active [class^="ml-enter-"] { animation: none; }
+   ```
+   ⚠️`animation: none`で問題ないことは実測済み（上記の訂正を参照）。
+3. **React 18**：`document.startViewTransition(() => flushSync(() => mlStartRace()))`。
+   `flushSync`は`react-dom`からimportする。
+4. **フォールバック**：`document.startViewTransition`が無いブラウザでは
+   そのまま`mlStartRace()`を呼ぶだけ（Phase 1の`sweep`が効く）＝実害なし。
+5. ⚠️**この経路だけ呼び出し側に手が入る**（`hub.jsx`の出場ボタン）。他は無変更のまま。
+
+### ⚠️Phase 2で注意すべき既知の罠
+
+- ⚠️`prefers-reduced-motion`時はView Transitions自体を**使わない**
+  （`matchMedia("(prefers-reduced-motion: reduce)").matches`で分岐）。
+  `.01s`に潰す手はView Transitionsの擬似要素には効きにくく、
+  変形の途中状態が一瞬見えるより最初から使わない方が確実。
+- ⚠️`mlStartRace`は内部でレースsimを構築する（`buildMyLifeSim`）。`flushSync`の中で
+  重い同期処理が走ると変形の開始が遅れる可能性がある。実機で引っかかりが出たら
+  「先にsimを作ってから`startViewTransition`で画面だけ切り替える」順序に変える。
 
 ## やらないこと
 

@@ -21,8 +21,12 @@
 .ml-year-pulse { animation: ml-year-pulse .3s cubic-bezier(.2,.7,.3,1) both; }
 
 /* 第66弾: prefers-reduced-motion（devlog/wave66.md・実装前は0件だった）。
-   animation:noneにするとclip-pathが初期値のまま残り中身が消えるため、
-   「消す」のではなく「一瞬で終わらせる」（animation-fill-mode:bothの終了状態は残す）。 */
+   「消す」のではなく「一瞬で終わらせる」——animation-fill-mode:bothの終了状態を
+   明示的に適用させるため、どのプロパティを animate していても確実に最終状態になる。
+   ⚠️設計時は「animation:noneにするとclip-pathが初期値のまま残り中身が消える」と書いたが
+   これは誤り（実測で確認）。clip-pathの初期値はnone＝クリップなしなので中身は消えない。
+   duration方式は「全プロパティで確実に終了状態になる」点で選んでいるのであって、
+   animation:noneが危険だからではない。 */
 @media (prefers-reduced-motion: reduce) {
   .ml-enter-tabForward, .ml-enter-tabBack, .ml-enter-rise, .ml-enter-sweep,
   .ml-enter-flow, .ml-enter-month, .ml-year-pulse {
