@@ -76,7 +76,12 @@ export const TEMPLATES = [
   // 埋め合わせだけになっていた）。丘陵ロード（平坦→丘2連→スプリント決着）とは
   // 「丘→山→丘のままゴール」で差別化する。実測：PUNの平均順位16.9位→10.4位
   // （n=80・scratchpad/w74_gravel.mjs）。
-  { kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 420, 12], ["hill", 400, 15], ["climb", 300, 7], ["hill", 380, 18]] },
+  // 第80弾(devlog/wave75.md「第79・80弾」): climb区間を撤去しhillへ統合した。地形別
+  // ふるい落とし（TERRAIN_KEEP_TIGHTEN）導入後、たとえ距離比率が小さくてもclimb区間が
+  // あるとCLMが有利に生き残り続け、PUNが得意なはずのhill決着に辿り着く前にPUN/RUL/TTが
+  // 脱落してCLMが最上位になってしまっていた（実測：climb距離を7→3に半減させても
+  // CLM32%で変わらず）。climb区間を完全に無くすとPUNが最上位に戻る（実測28%・n=180で安定）。
+  { kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 420, 12], ["hill", 400, 15], ["hill", 300, 7], ["hill", 380, 18]] },
   // v35(チームTT): チーム単位の合算タイム。squadMinを4に上げ「層の厚さ」を要求。teamTTフラグで専用エンジンへ分岐。
   { kind: "チームTT", favors: "TT", teamTT: true, squadMin: 4, squadMax: 6, segs: [["tt", 480, 22], ["flat", 300, 14], ["tt", 480, 22]] },
   // 第72弾(devlog/wave72.md): RUL（ルーラー）専用コース。5脚質中RULだけ専用コースが無く、

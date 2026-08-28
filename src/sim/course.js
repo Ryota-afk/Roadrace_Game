@@ -59,8 +59,13 @@ export function generateCourse(raceMeta, dayTag) {
   };
 }
 
+// 第80弾(devlog/wave75.md「第79弾」・TODO#28): hillのbaseを0.4→0.6へ。旧値では
+// steepness1.05でも重みが0.42にしかならず、丘陵区間ですら能力の58%がflatで決まって
+// いた（実測：地力72平均でRUL79.7＞PUN79.6＝PUNには自分が最強になれる区間が1つも
+// 無かった）。0.6にすると重み0.63となり、PUN81.4＞CLM80.8＞RUL76.8でPUNが初めて
+// 丘陵区間で最強になる（scratchpad/w79_why.mjs）。
 export function climbWeightFor(segType, steepness) {
-  const base = { flat: 0, hill: 0.4, climb: 0.85, mtn: 0.9, sprint: 0, tt: 0 }[segType] || 0;
+  const base = { flat: 0, hill: 0.6, climb: 0.85, mtn: 0.9, sprint: 0, tt: 0 }[segType] || 0;
   return Math.min(1, base * steepness);
 }
 
