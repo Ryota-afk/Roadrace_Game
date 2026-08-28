@@ -289,7 +289,7 @@ export function renderMyLifeEventScreens(ctx) {
             </>
           )}
 
-          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>選手画面に戻る</QuietBtn>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 戻る</QuietBtn>
         </Screen>
       );
     }
@@ -334,7 +334,7 @@ export function renderMyLifeEventScreens(ctx) {
         <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>結果</div>
         <ResultText>{ml.eventResultText}</ResultText>
         {ml.eventAdvanced
-          ? <PrimaryBtn onClick={() => setMl(s => ({ ...s, eventAdvanced: false, screen: "mylife_main" }))}>戻る →</PrimaryBtn>
+          ? <PrimaryBtn onClick={() => setMl(s => ({ ...s, eventAdvanced: false, screen: "mylife_main" }))}>← 戻る</PrimaryBtn>
           : <PrimaryBtn onClick={() => mlAdvanceMonth("event")}>翌月へ進む →</PrimaryBtn>}
       </Screen>
     );

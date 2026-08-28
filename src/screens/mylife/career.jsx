@@ -337,7 +337,7 @@ export function renderMyLifeCareerScreens(ctx) {
             </div>
           </Section>
         )}
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>世界の画面に戻る</QuietBtn>
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>← 戻る</QuietBtn>
       </Screen>
     );
   }
@@ -408,7 +408,7 @@ export function renderMyLifeCareerScreens(ctx) {
             </div>
           ))}
         </Section>
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_rider" }))}>選手の画面に戻る</QuietBtn>
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_rider" }))}>← 戻る</QuietBtn>
       </Screen>
     );
   }
@@ -466,7 +466,7 @@ export function renderMyLifeCareerScreens(ctx) {
         {(board.rival2Rank != null && ml.rival2 && !board.top.some(e => e.isRival2) && !board.around.some(e => e.isRival2)) && (
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>好敵手 {ml.rival2.name}：世界{board.rival2Rank}位</div>
         )}
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>世界の画面に戻る</QuietBtn>
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>← 戻る</QuietBtn>
       </Screen>
     );
   }
@@ -475,13 +475,12 @@ export function renderMyLifeCareerScreens(ctx) {
   // 第33弾: 戻り先を開いた場所に追従させる（記録タブから直接開いた場合は記録へ。
   // 従来は殿堂固定→殿堂の戻るがタイトル側のキャリア作成へ飛ぶ二重の迷子だった）。
   const dexBackScreen = ml.dexBack || "mylife_legends";
-  const dexBackLabel = dexBackScreen === "mylife_archive" ? "← 記録に戻る" : "← 殿堂に戻る";
   if (ml.screen === "mylife_lineage") {
     const forest = mlLineageForest();
     const totalLeg = loadMlLegends().length;
     return mlWrap(
       <LineageForestView forest={forest} totalLeg={totalLeg} variant="mylife"
-        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: dexBackScreen }))}>{dexBackLabel}</QuietBtn>} />
+        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: dexBackScreen }))}>← 戻る</QuietBtn>} />
     );
   }
   if (ml.screen === "mylife_factors") {
@@ -489,7 +488,7 @@ export function renderMyLifeCareerScreens(ctx) {
     const totalLeg = loadMlLegends().length;
     return mlWrap(
       <FactorCollectionView cats={cats} totalLeg={totalLeg} variant="mylife"
-        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: dexBackScreen }))}>{dexBackLabel}</QuietBtn>} />
+        footer={<QuietBtn onClick={() => setMl(s => ({ ...s, screen: dexBackScreen }))}>← 戻る</QuietBtn>} />
     );
   }
 

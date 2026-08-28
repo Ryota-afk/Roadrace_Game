@@ -150,7 +150,7 @@ export function renderMyLifeHelpScreens(ctx) {
           </HelpRow>
 
           <div style={{ marginTop: T.space.md }}>
-            <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>選手画面に戻る</QuietBtn>
+            <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_main" }))}>← 戻る</QuietBtn>
           </div>
         </Screen>
       );

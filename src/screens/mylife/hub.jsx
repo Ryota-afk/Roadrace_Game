@@ -536,7 +536,7 @@ export function renderMyLifeHubScreen(ctx) {
                 detailColor={a.achieved ? T.color.accent : T.color.sub} />
             ))}
           </Section>
-          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>← 戻る</QuietBtn>
         </Screen>
       );
     }
@@ -544,7 +544,7 @@ export function renderMyLifeHubScreen(ctx) {
     if (ml.screen === "mylife_abilityfile") return mlWrap(
       <Screen>
         <AbilityFileList file={loadAbilityFile()} />
-        <div style={{ marginTop: T.space.md }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn></div>
+        <div style={{ marginTop: T.space.md }}><QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>← 戻る</QuietBtn></div>
       </Screen>
     );
 
@@ -566,7 +566,7 @@ export function renderMyLifeHubScreen(ctx) {
             {rows.length <= 1 && <Item first label="—" value="" detail="レースを重ねると、ライバルや仲間の成績がここに蓄積されます。" />}
           </Section>
           <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_worldstats" }))}>全チームの名鑑を見る</QuietBtn>
-          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>世界の画面に戻る</QuietBtn>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>← 戻る</QuietBtn>
         </Screen>
       );
     }
@@ -591,7 +591,7 @@ export function renderMyLifeHubScreen(ctx) {
             </Section>
           ))}
           <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_riderstats" }))}>選手成績を見る</QuietBtn>
-          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>世界の画面に戻る</QuietBtn>
+          <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_world" }))}>← 戻る</QuietBtn>
         </Screen>
       );
     }
@@ -600,7 +600,7 @@ export function renderMyLifeHubScreen(ctx) {
       <Screen>
         <div style={{ marginBottom: T.space.md }}><TitlesPanel /></div>
         <div style={{ marginBottom: T.space.md }}><CourseRecordsPanel /></div>
-        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>記録に戻る</QuietBtn>
+        <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_archive" }))}>← 戻る</QuietBtn>
       </Screen>
     );
 
