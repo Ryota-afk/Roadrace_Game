@@ -61,7 +61,10 @@ export const DISCIPLINES = {
 
 export const DISCIPLINE_KEYS = Object.keys(DISCIPLINES);
 
-export const FAVORS_TO_DISCIPLINE = { SPR: "sprint", CLM: "climb", PUN: "hill", TT: "solo" };
+// 第72弾(devlog/wave72.md): RULが欠落していた。平坦ロード新設に伴い"flat"を追加——
+// これで出走計画（第70弾）・キャラ作成の出走計画選択肢（create.jsxのfocusOptions）が
+// RULでも機能するようになる。
+export const FAVORS_TO_DISCIPLINE = { SPR: "sprint", CLM: "climb", PUN: "hill", TT: "solo", RUL: "flat" };
 
 // v43(マイライフ難易度調整Phase 1): 突破力・安定感を追加（新ステータス。生成はcore/core.jsのgenSubStats参照）
 export const SUB_STAT_LABEL = { accel: "加速力", build: "体格", mental: "メンタル", breakthrough: "突破力", stability: "安定感" };

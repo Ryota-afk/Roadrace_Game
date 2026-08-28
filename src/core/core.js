@@ -31,6 +31,12 @@ export function countRoleUses(r, pred) { return (r.raceLog || []).filter(pred).l
 // 第46弾: raceLogのsegMix（第40弾で記録済み・既存セーブのレース履歴にも遡って効く）から
 // レースの主要地形を1つに分類する。9種（岳人・鉄脚の巡航機関等）の取得条件が使う軸。
 // 実測（devlog/wave46.md）で全6テンプレートが例外なくいずれかに分類されることを確認済み。
+// 第72弾(devlog/wave72.md): 「全6テンプレート」は当時の話——後から追加されたコース
+// （UNLOCK_TEMPLATES→第70弾で常駐化）はこの閾値方式では分類できないものがあった
+// （グラベルレースがflat42%/hill31%/climb19%でどの閾値にも届かずnullになっていた）。
+// 閾値で決まらない場合は最大シェアの地形へ寄せるフォールバックを追加する。
+// sprintはTERRAINSに軸を持たないためflatへ畳む（既存の閾値判定を先に通すので、
+// 現在分類できているコースの結果は変わらない）。
 export const TERRAINS = ["climb", "flat", "hill", "solo"];
 export function terrainOfMix(mix) {
   if (!mix) return null;
@@ -38,7 +44,10 @@ export function terrainOfMix(mix) {
   if ((mix.climb || 0) + (mix.mtn || 0) >= 0.5) return "climb";
   if ((mix.hill || 0) >= 0.5) return "hill";
   if ((mix.flat || 0) >= 0.6) return "flat";
-  return null;
+  const share = { solo: mix.tt || 0, climb: (mix.climb || 0) + (mix.mtn || 0), hill: mix.hill || 0, flat: (mix.flat || 0) + (mix.sprint || 0) };
+  let best = null, bestV = 0;
+  TERRAINS.forEach(t => { if (share[t] > bestV) { bestV = share[t]; best = t; } });
+  return best;
 }
 // 第51弾: 区間タイプ(segType)から「その地形の専用バッジ」を引く軸。terrainOfMix（レース単位の
 // 事後分類）とは別に、tick中の現在区間そのものに対して使う（判断カードの専用枠・tempoの発動条件）。

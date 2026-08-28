@@ -1,6 +1,6 @@
 # 第72弾：初期に作ったまま触っていない要素の棚卸し
 
-**状態**：**棚卸し完了・着手対象の合意待ち（2026-08）。実装未着手。**
+**状態**：**実装・検証完了（2026-08）。**
 
 DEVLOG TODO #25。ユーザー明示「初期の頃触ったり作ったりしてそのまま長らく触ってない
 ものもアップデートしていきたい。コースの種類とかグランツールとかその他幅広く諸々」。
@@ -211,3 +211,47 @@ const tmplByType = Object.fromEntries(
   別弾で扱う。
 - グラベルレースの`favors: "PUN"`と実際の地形（flat優勢）の食い違い——
   segsを変えるとレースの手触りが変わるためバランス計測が要る。別途。
+
+---
+
+## 実装結果
+
+確定した設計どおりに実装した。設計からの逸脱なし。
+
+### 変更ファイル
+
+- `data/course.js`：`TEMPLATES`末尾に「平坦ロード」（RUL・`flat`2区間+`tt`1区間）を追加
+- `data/progression.js`：`FAVORS_TO_DISCIPLINE`に`RUL: "flat"`を追加
+- `controllers/mylife/raceStart.js`：`buildLastRaceMeta`の`tmplByType`を
+  ハードコード添字から`TEMPLATES.find(x => x.favors === t)`へ変更
+- `core/core.js`：`terrainOfMix`に最大シェアのフォールバックを追加
+- `domain/shared/segMix.js`：`segMixOf`・`segMixOfRace`の両方で`s[1]`→`s[2]`
+
+### 検証結果
+
+Node単体で全13コース（新設含む）の地形分類を実測：
+
+| コース | 分類 |
+|---|---|
+| クリテリウム／サーキット／ナイトクリテ | flat |
+| 丘陵ロード／丘陵クラシック | hill |
+| 山岳ロード／ヒルクライム／山岳クラシック | climb |
+| 個人TT／チームTT | solo |
+| 石畳クラシック | flat |
+| **グラベルレース** | **flat**（旧`null`から復旧） |
+| **平坦ロード（新設）** | **flat** |
+
+⚠️**既存12コース（新設除く）を旧ロジックと逐一比較し、変化したのはグラベルレースの
+1件のみ**であることをNode上で確認（設計時の予測どおり）。
+
+`buildLastRaceMeta`も実測：SPR/CLM/PUN/TTの4脚質は変更前と完全に同一の割り当て、
+RULだけが丘陵ロード→平坦ロードへ修正された。
+
+第70弾の出走計画（`FAVORS_TO_DISCIPLINE.RUL`依存）もNode単体・Playwright実機の両方で
+確認：RUL主体ロースターのシーズンで`seasonRaceFocus`が`"flat"`を返し出走可能枠が
+平坦ロードになること、マイライフでルーラーを作成し「平坦中心」の出走計画を選択すると
+実際に「富士平坦ロード」がレース候補・選択中の1本になることを確認。コースレコード画面
+（`panels.jsx`の`CourseRecordsPanel`）にも「平坦ロード」が10種目の一覧に正しく追加された。
+
+既存回帰（`w66_sweep.mjs`＝マイライフ全タブ、`w67_sweep.mjs`＝シーズン全18セクション）
+全通過・`pageerror`ゼロ・`npm run build`成功・配信物にも反映済み。

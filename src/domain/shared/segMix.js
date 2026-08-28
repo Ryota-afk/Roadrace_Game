@@ -2,12 +2,17 @@
 // raceLogの各エントリにこのレースの区間タイプ別距離割合を記録する（`segMixOf`）。
 // season/mylifeの両result.jsから呼ばれる純関数。この弾では記録するだけで、
 // 効果・UIへは一切接続しない（devlog/wave40.md参照）。
+// 第72弾(devlog/wave72.md): segsの要素は[type, base, dist]（sim/course.js:19の分解で確定）
+// だが、旧実装はs[1]（=base。simのどこからも読まれていない死んだ値）を距離として使っていた。
+// 正しい距離はs[2]。⚠️core.jsのterrainOfMixに最大シェアのフォールバックを同時に入れる必要が
+// ある——このindex修正だけを単独で入れると、山岳クラシックがclimb46.0%/flat34.9%となり
+// 閾値(0.5)を満たさずnullに落ちる退行が起きる（実測確認済み）。
 export function segMixOf(tmpl) {
   if (!tmpl || !tmpl.segs || !tmpl.segs.length) return undefined;
-  const total = tmpl.segs.reduce((a, s) => a + s[1], 0);
+  const total = tmpl.segs.reduce((a, s) => a + s[2], 0);
   if (total <= 0) return undefined;
   const mix = {};
-  tmpl.segs.forEach(([segType, dist]) => { mix[segType] = (mix[segType] || 0) + dist / total; });
+  tmpl.segs.forEach(([segType, , dist]) => { mix[segType] = (mix[segType] || 0) + dist / total; });
   return mix;
 }
 
@@ -21,7 +26,7 @@ export function segMixOfRace(race) {
     const totals = {};
     let grand = 0;
     race.stageTmpls.forEach(t => {
-      (t?.segs || []).forEach(([segType, dist]) => { totals[segType] = (totals[segType] || 0) + dist; grand += dist; });
+      (t?.segs || []).forEach(([segType, , dist]) => { totals[segType] = (totals[segType] || 0) + dist; grand += dist; });
     });
     if (grand <= 0) return undefined;
     const mix = {};

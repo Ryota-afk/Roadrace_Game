@@ -69,6 +69,12 @@ export const TEMPLATES = [
   { kind: "グラベルレース", favors: "PUN", squadMin: 1, squadMax: 5, segs: [["flat", 420, 22], ["hill", 400, 16], ["climb", 300, 10], ["sprint", 120, 4]] },
   // v35(チームTT): チーム単位の合算タイム。squadMinを4に上げ「層の厚さ」を要求。teamTTフラグで専用エンジンへ分岐。
   { kind: "チームTT", favors: "TT", teamTT: true, squadMin: 4, squadMax: 6, segs: [["tt", 480, 22], ["flat", 300, 14], ["tt", 480, 22]] },
+  // 第72弾(devlog/wave72.md): RUL（ルーラー）専用コース。5脚質中RULだけ専用コースが無く、
+  // controllers/mylife/raceStart.jsのラストレースでPUNと同じ丘陵ロードを割り当てられる
+  // 機能的な欠落だった。最終区間をtt（独走）にすることで、finish.jsの決着計算が
+  // solo*0.6+flat*0.4（独走決着）になり、SPR系コースのsprint決着（純スプリント力）と
+  // 明確に差別化される＝「平坦を高速で押し切る」というルーラーの定義がそのまま形になる。
+  { kind: "平坦ロード", favors: "RUL", squadMin: 1, squadMax: 5, segs: [["flat", 520, 30], ["flat", 480, 26], ["tt", 420, 18]] },
 ];
 
 export const ML_MONUMENTS = [
