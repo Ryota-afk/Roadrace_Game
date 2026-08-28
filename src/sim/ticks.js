@@ -3,6 +3,7 @@
 import { badgeTier, hasAbility, hasTerrainBadge, tierValue } from "../core/core.js";
 import { segmentAbility } from "./effects.js";
 import { terrainSpeedMul } from "./course.js";
+import { TYPES } from "../data/abilities.js";
 
 export const TICK_SEC = 1;
 const GROUP_GAP_DIST = 0.22;      // これ以内の位置差なら同一グループ
@@ -121,6 +122,12 @@ export function groupShelterMul(n) {
 }
 
 export const ENERGY_REGEN_BASE = 0.5; // 集団後方（牽引順が回ってこない位置）での基礎回復量/tick
+// 第76弾(devlog/wave75.md「原因B」): 回復カーブの下限と飽和点。REGEN_FRONT_FLOORは
+// 先頭(backRatio=0)でも受け取れる回復の下限比率、REGEN_SATURATIONはその比率から満額(1.0)へ
+// 達するbackRatioの値（これより後ろは全員ほぼ同じ回復を受ける＝現実の集団も先頭数人だけが
+// 風を受け、それより後ろは同程度に守られる）。
+export const REGEN_FRONT_FLOOR = 0.35;
+export const REGEN_SATURATION = 0.25;
 // v35(バランス): 勝負を賭けた逃げ（committedBreak）が単独で先頭に立っている間だけ、
 // 選抜地形で消耗が軽減される（brk係数）。登坂・山岳で最も効き（集団が組織的に追えず、
 // 登りでは集団のドラフト優位も縮む）、丘で中程度、平坦・スプリントでは軽め＝それでも吸収される。
@@ -190,9 +197,15 @@ export function assignAIRoles(members, squadN) {
     // スプリントがその選手の武器か弱点かを、他能力のピークとの差で測る。
     // sprintGap=0 → スプリントが最強（集団ゴール向き・ほぼ逃げない）
     // sprintGap大 → スプリントが弱点（集団ゴールで不利・早逃げに出やすい）
+    // 第76弾(devlog/wave75.md「原因A」・第75弾-D仕様): 旧係数(上限0.65・傾き0.022)は
+    // sprintGapが最も大きいCLM(平均23.2)を53%の確率で逃げ役に送り込んでいた。逃げ役の
+    // 平均着順は25.3位（役割別着順の実測）で、勝てないと分かっている戦術への送り込みが
+    // 脚質と強く相関する結果になっていた（相関-0.899）。「スプリントが弱いほど逃げやすい」
+    // という発想自体は残しつつ、上限0.65→0.30・傾き0.022→0.007へ緩和する
+    // （実測：CLM 53%→22%・TT/RUL 39%→17%・SPR/PUNはほぼ不変。scratchpad/w76_A_calib.mjs）。
     const peak = Math.max(r.flat, r.climb, r.sprint, r.stamina, r.solo);
     const sprintGap = peak - r.sprint;
-    const breakawayChance = Math.min(0.65, 0.06 + sprintGap * 0.022);
+    const breakawayChance = Math.min(0.30, 0.06 + sprintGap * 0.007);
     if (roll < breakawayChance) { roles[r.id] = "breakaway"; return; }
     // 逃げないなら地形・脚質に応じた集団内の役割（ゴールスプリントに残る）
     if (r.type === "CLM") roles[r.id] = "mountain";
@@ -305,14 +318,60 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       // 攻撃した本人だけがソロで前に出る（＝集団を1人ずつ抜けさせて隊列を伸ばす）。集団本体の消耗は
       // 増やさない＝プレイヤーが不当にふるい落とされて大敗するのを避けつつ、動きのあるレースにする。
       members.forEach(en => {
-        if (en.isPlayerChar || en.isAce || en.attackLeft > 0 || en.committedBreak || en.mode === "solo" || en.energy < 42) return;
+        if (en.isPlayerChar || en.isAce || en.attackLeft > 0 || en.committedBreak || en.mode === "solo" || en.energy < 42 || en.breakawayRolled) return;
         const peak = Math.max(en.flat || 0, en.climb || 0, en.sprint || 0, en.stamina || 0, en.solo || 0);
         const sprintGap = peak - (en.sprint || 0); // スプリントが弱いほど大きい＝集団ゴールで不利
         if (sprintGap < 8) return; // スプリント型は集団ゴールを待つ
+        // 第76弾(devlog/wave75.md「原因A」): この一手は毎tick再抽選されるため、条件を満たす
+        // 選手（sprintGap>=8）は窓（レース進行40〜86%・約200tick）の中でいずれ発火する確率が
+        // 係数の大小によらずほぼ100%に張り付いていた（実測：係数を1/3にしても累積発火率は不変。
+        // group.length項だけで既に上限0.06に達するため）。⚠️これは§88〜89が禁じる
+        // 「アタック発動後の強さ・持続」ではなく「発動するかどうかの確率」の話だが、tickごとの
+        // 再抽選という設計自体がsprintGapを無意味化していたため、一生に一度だけ判定する形に直す
+        // （攻撃した後の強さ・持続時間は一切変更しない）。
+        en.breakawayRolled = true;
         // 丘では飛び出しが決まりやすい（消耗軽減）ので発動率を上げ、登り適性のある選手が仕掛ける
         const climbEdge = onHill ? Math.max(0, ((en.climb || 0) - (en.sprint || 0))) / 200 : 0;
-        const chance = Math.min(0.06, 0.008 + (members.length - 6) * 0.0012 + (sprintGap - 8) * 0.0009 + (onHill ? 0.012 : 0) + climbEdge);
+        const chance = Math.min(0.35, 0.05 + (sprintGap - 8) * 0.010 + (onHill ? 0.05 : 0) + climbEdge);
         if (Math.random() < chance) { en.attackLeft = BREAKAWAY_ATTACK_TICKS; en.committedBreak = true; }
+      });
+    });
+    // 第76弾(devlog/wave75.md「仕様3」・第75弾-D): AIチームは、自チームのエースの得意地形の
+    // 区間でチームメイトが能動的にペースを上げて後続を削る。
+    // ⚠️当初はプレイヤー専用の「ふるいにかける」(tempo)とtempoLeftを共有する形で実装したが、
+    // その効果(tempoTighten)は「発動者がその区間の地形バッジを持つ」場合しか効かない設計
+    // （raceDecisions.jsのterrainカードも同じ条件でのみ提示される）。AI選手が特定の地形
+    // バッジを持つ確率は5〜7%しかなく、そこへ「エースと同チーム」「高エネルギー」の条件が
+    // 重なると実測で1467人中19人（1.3%）しか対象にならず、狙いどおりに機能していなかった
+    // （scratchpad/w76_check_phase3.mjs）。バッジ保有というプレイヤー専用カードの前提を
+    // AIの一般的な戦術に流用したのが誤りだったため、⚠️独立したフィールド(aiTempoLeft)と
+    // 独立したkeepThresh項(aiTempoTighten・下記)を新設し、プレイヤーの`tempo`カードには
+    // 一切触れない形に直した（強さの大きさ＝TEMPO_KEEP_TIGHTENは同じ値を踏襲）。
+    // 発動は「同じ区間で1チーム1回まで」に制限する（原因Aの教訓：毎tick再抽選は窓が長いと
+    // 累積でほぼ確実に発火してしまう）。狙いは、削られる順序を「前にいる者から」ではなく
+    // 「エースの得意地形に弱い者から」へ寄せること。
+    Object.values(groups).forEach(members => {
+      if (members.length < 6) return;
+      const segInfo0 = course.segTypeAt(members[0].pos);
+      if (segInfo0.idx === course.finalIdx) return;
+      const prog0 = members[0].pos / course.length;
+      if (prog0 < 0.15 || prog0 > 0.90) return;
+      const byTeam = {};
+      members.forEach(en => { (byTeam[en.team] = byTeam[en.team] || []).push(en); });
+      Object.values(byTeam).forEach(teamMembers => {
+        const ace = teamMembers.find(en => en.isAce);
+        if (!ace || ace.isPlayerChar) return; // プレイヤーのエースは自分の判断に従う（対象外）
+        const aff = (TYPES[ace.type] && TYPES[ace.type].affinity) || {};
+        if (!aff[segInfo0.type]) return; // エースの得意地形の区間でなければ発動しない
+        const helper = teamMembers.find(en =>
+          !en.isAce && !en.isPlayerChar && en.energy >= 55 && (en.aiTempoLeft || 0) <= 0 &&
+          en.tempoAiSegIdx !== segInfo0.idx);
+        if (!helper) return;
+        helper.tempoAiSegIdx = segInfo0.idx; // 同じ区間では以後判定しない
+        if (Math.random() >= 0.5) return; // 発動頻度の上限（判定に乗っても毎回は発動しない）
+        const g = legsLeft01(helper);
+        helper.aiTempoLeft = Math.round(TEMPO_MIN_TICKS + (TEMPO_MAX_TICKS - TEMPO_MIN_TICKS) * g);
+        helper.energy -= TEMPO_ENERGY_COST;
       });
     });
     Object.values(groups).forEach(members => {
@@ -544,12 +603,16 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         // 第51弾: 「ふるいにかける」＝発動者以外のkeepThreshを厳しくする（集団を削る一手）。
         // 発動者自身の得意地形の区間にいる間だけ効く（devlog/wave51.md）。
         const tempoTighten = members.some(m => m !== en && m.tempoLeft > 0 && hasTerrainBadge(m, segType)) ? TEMPO_KEEP_TIGHTEN : 0;
+        // 第76弾(devlog/wave75.md「仕様3」): AIチームの能動的な絞り（上のaiTempoLeft）は
+        // プレイヤー専用のtempoTighten（地形バッジ必須）とは独立の経路。バッジ非依存で、
+        // 強さは同じTEMPO_KEEP_TIGHTENを踏襲する。
+        const aiTempoTighten = members.some(m => m !== en && (m.aiTempoLeft || 0) > 0) ? TEMPO_KEEP_TIGHTEN : 0;
         // v47(第8弾Phase4): hangOnのkeepThresh緩和を0.05→HANGON_KEEPTHRESH_RELIEF(0.12)へ強化
         // （詳細は定数コメント参照）。
         // 第59弾(devlog/wave59.md): 吸収された逃げの復帰猶予。残りtickに比例して線形に減衰
         // させる（崖にしない）。既存のHANGON_KEEPTHRESH_RELIEF・grinder緩和と同じ型。
         const rejoinRelief = en.rejoinLeft > 0 ? REJOIN_KEEPTHRESH_RELIEF * (en.rejoinLeft / REJOIN_TICKS) : 0;
-        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight + tempoTighten - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief - rejoinRelief;
+        const keepThresh = (windActive ? 0.80 : 0.9) + finaleTight + selectiveTight + positionTight + tempoTighten + aiTempoTighten - (hasAbility(en, "grinder") ? tierValue(0.04, 0.06, badgeTier(en, "grinder")) : 0) - (en.holdOn > 0 ? HANGON_KEEPTHRESH_RELIEF : 0) - teamKeepRelief - rejoinRelief;
         if (ownCapable >= groupDist * keepThresh) {
           // v12バグ修正: ゴールスプリント区間で集団のドラフト勢が全員groupDistと完全に
           // 同一の距離だけ進む仕様だと、同じ集団の選手が毎ティック寸分違わず横並びになり、
@@ -614,7 +677,15 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
         const sheltered = en.mode === "draft";
         const shelterMul = sheltered ? groupShelterMul(members.length) : 1;
         const backRatio = sheltered ? Math.min(1, (en.slot || 0) / totalDraft) : 0;
-        const regen = sheltered ? ENERGY_REGEN_BASE * backRatio * (windActive ? 0.5 : 1) : 0;
+        // 第76弾(devlog/wave75.md「原因B」・第75弾-D仕様): 旧式は回復が位置に完全比例
+        // （先頭slot=0は回復ゼロ）だったため、slot決定(frontStrength、その区間で強い順)と
+        // 組み合わさって「その地形で一番強い選手が最前列に置かれ回復をほぼ受け取れない」
+        // 状態になっていた（実測：山岳ロードでclimb63→110の集団内収支が-0.0017→+0.0508、
+        // 1レースで約82ポイントの赤字）。REGEN_FRONT_FLOORを下限に持つ飽和カーブへ変更し、
+        // 先頭寄りでも最低限は回復できるようにする（実測でCLM等の最上位到達率が改善する
+        // 唯一の候補だった。scratchpad/w75_acct2.mjs, w75_patch.py v_Bregen）。
+        const shelterCurve = REGEN_FRONT_FLOOR + (1 - REGEN_FRONT_FLOOR) * Math.min(1, backRatio / REGEN_SATURATION);
+        const regen = sheltered ? ENERGY_REGEN_BASE * shelterCurve * (windActive ? 0.5 : 1) : 0;
         const teamShelterMul = sheltered
           ? Math.max(TEAM_SHELTER_FLOOR, 1 - teamAhead * TEAM_SHELTER_PER_MATE - (pullerIsMate ? TEAM_SHELTER_PULL_BONUS : 0))
           : 1;
@@ -644,6 +715,7 @@ export function simulateTicks(course, riders, fromTick, directive, noGroup, onRe
       if (en.conserveLeft > 0) en.conserveLeft--; // v39(A案): 温存の残りtickを消化
       if (en.holdOn > 0) en.holdOn--;             // v39(A案): 食らいつく残りtickを消化
       if (en.tempoLeft > 0) en.tempoLeft--;       // 第51弾: ふるいにかけるの残りtickを消化
+      if (en.aiTempoLeft > 0) en.aiTempoLeft--;   // 第76弾: AIチームの能動的な絞りの残りtickを消化
       if (en.rejoinLeft > 0) en.rejoinLeft--;     // 第59弾: 復帰猶予の残りtickを消化
       en.posHist[tick] = en.pos; en.energyHist[tick] = en.energy;
       en.modeHist[tick] = en.mode; en.groupHist[tick] = en.groupId; en.slotHist[tick] = en.slot || 0;

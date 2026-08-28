@@ -1,7 +1,7 @@
 // レースの決着処理（判断カードの再計算・フィニッシュクラスタ・チームTT・順位確定）。
 // sim/race.jsから分離（第16弾D）。
 import { RACE_MOVES, TICK_SEC, capExcessiveGaps, simulateTicks } from "./ticks.js";
-import { badgeSegmentBonus } from "./effects.js";
+import { badgeSegmentBonus, typeAffinityBonus } from "./effects.js";
 
 // 第50弾: 決着（finishAbility）にバッジの区間ボーナスを合流させる際の重み。
 // 実測（devlog/wave49.md・wave50.md）で、同じ量のボーナスでも区間限定で与えると
@@ -62,17 +62,25 @@ export function resumeSim(sim, fromTick, focusId, moveId) {
 // 従来は地形を問わず常にスプリント力で並べ替えていたため、山頂フィニッシュでも
 // 強スプリンターが強クライマーを差す不自然な結果になり、脚質（登坂型）が着順に
 // 反映されにくかった。フィニッシュ区間の地形に応じた「決め所の力」で決着させる。
+// 第76弾(devlog/wave75.md「第75弾-D」・仕様の指針): 決着区間ごとに専門家の優位
+// （1位と2位の差）がバラバラだった——sprint決着は+6.80だがmtn決着はわずか+1.13
+// （山頂決着climb*0.75+sprint*0.25では、CLM(86/63)=80.25に対しPUN(79/79)=79.00で
+// 万能型が専門家を打ち消せる重み付けになっていた）。全決着区間で専門家の優位が
+// 概ね+6〜7に揃うよう、地力72の平均能力で決定論的に較正した（scratchpad/w76_finish_calib.mjs）。
+// mtn/hill/ttは混合率を登坂・独走側へ寄せ、typeAffinityBonus（脚質相性。segmentAbilityには
+// 入っているがfinishAbilityには入っていなかった＝第50弾がバッジについて塞いだのと同じ穴）を
+// 合流させた。sprintは元々+6.80で目標水準にあったため変更していない。
 export function finishAbility(en, segType) {
   const sp = en.sprint || 0, cl = en.climb || 0, fl = en.flat || 0, so = en.solo || 0;
-  let base;
-  if (segType === "climb" || segType === "mtn") base = cl * 0.75 + sp * 0.25; // 山頂決着＝登坂主体
-  else if (segType === "hill") base = sp * 0.45 + cl * 0.35 + fl * 0.20;      // 丘のパンチ力
-  else if (segType === "tt") base = so * 0.6 + fl * 0.4;                     // 独走決着
-  else base = sp; // 平坦・スプリント区間の集団ゴール＝従来どおりスプリント
+  let base, affCoef;
+  if (segType === "climb" || segType === "mtn") { base = cl * 0.85 + sp * 0.15; affCoef = 0.6; }  // 山頂決着＝登坂主体
+  else if (segType === "hill") { base = cl * 0.55 + sp * 0.30 + fl * 0.15; affCoef = 1.0; }        // 丘のパンチ力
+  else if (segType === "tt") { base = so * 0.62 + fl * 0.38; affCoef = 0.25; }                     // 独走決着
+  else { base = sp; affCoef = 0; } // 平坦・スプリント区間の集団ゴール＝従来どおりスプリント
   // 第50弾: バッジ由来の区間ボーナスを決着にも合流させる（devlog/wave50.md）。
   // 従来はここでbadgeSegmentBonusが一切参照されておらず、僅差ゴール集団
   // （実測で約半分のレース）ではバッジが無かったことになっていた。
-  return base + badgeSegmentBonus(segType, en) * FINISH_BADGE_K;
+  return base + typeAffinityBonus(en.type, segType) * affCoef + badgeSegmentBonus(segType, en) * FINISH_BADGE_K;
 }
 
 export function resolveFinishClusters(entrants, finishSegType) {
