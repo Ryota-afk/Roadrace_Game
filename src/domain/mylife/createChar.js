@@ -58,18 +58,18 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
       const goodId = (player.abilities || []).find(id => ABILITIES[id] && !ABILITIES[id].bad && !(player.goldAbilities || []).includes(id));
       if (goodId) {
         player.goldAbilities = [...(player.goldAbilities || []), goodId];
-        debutBoon = { label: "🌟 天啓", note: `ひらめきを得て「${ABILITIES[goodId].label}」が金の状態で開花している` };
+        debutBoon = { label: "天啓", note: `ひらめきを得て「${ABILITIES[goodId].label}」が金の状態で開花している` };
       }
     } else if (br < 0.13 + bb && goodPool.length && (player.abilities || []).length < 4) {
       const id = goodPool[Math.floor(rng() * goodPool.length)];
       player.abilities = [...(player.abilities || []), id];
-      debutBoon = { label: "✨ 天賦の才", note: `生まれ持った才能で特殊能力「${ABILITIES[id].label}」を余分に宿している` };
+      debutBoon = { label: "天賦の才", note: `生まれ持った才能で特殊能力「${ABILITIES[id].label}」を余分に宿している` };
     } else if (br < 0.26) {
       const before = player.growthPow;
       player.growthPow = bumpGrowthPow(player.growthPow, 1);
       // v43(成長力マスク化との整合): 成長力は3年目まで🔒???表示のため、この一言も
       // before→afterの具体的な等級を書いてはいけない（デビュー画面で実質バレてしまう）。
-      if (player.growthPow !== before) debutBoon = { label: "🌱 才能の片鱗", note: "秘めた伸びしろを感じさせる（成長力が上がった。詳細は3年目に判明する）" };
+      if (player.growthPow !== before) debutBoon = { label: "才能の片鱗", note: "秘めた伸びしろを感じさせる（成長力が上がった。詳細は3年目に判明する）" };
     }
   }
   if (debutBoon) player.debutBoon = debutBoon;

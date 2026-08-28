@@ -20,13 +20,21 @@ export function renderSeasonIntroScreens(ctx) {
     const saved = hasSaveGame();
     return metaWrap(
       <div style={{ display: "grid", gap: T.space.lg }}>
-        <Section padded title="シーズンモード">
-          <div style={{ fontSize: T.size.title, color: T.color.text }}>B1からPROの頂点へ</div>
+        {/* 第63弾(devlog/wave63.md): 旧文言は3行に未定義の固有名詞7つ（B1/PRO/チャンピオンシップ/
+            グランツール/グランファイナル/全戦制覇/クリア）を詰め込み、しかも「毎月何をするか」より
+            先に勝利条件を説明していた。ここでは「まず1行で何をするか」→「毎月やること」の順に
+            並べ替え、固有名詞は初回は出さない（クラス名は開始後すぐヘッダーで実際に目にする）。 */}
+        <Section padded title="チームを率いる">
+          <div style={{ fontSize: T.size.title, color: T.color.text }}>3部リーグの底から、頂点へ</div>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, lineHeight: 1.8, marginTop: T.space.xs }}>
-            1年＝1シーズン、出場は月1回。3月のチャンピオンシップ3位以内で昇格。PROクラスのみ年3戦のグランツール
-            （春・夏・秋）が開催され、その全戦制覇がグランファイナルへの出場条件。グランファイナル優勝でクリア。
+            監督として選手を集め、毎月1戦を選んで戦います。1年戦って上位に入れば、ひとつ上のクラスへ。
           </div>
         </Section>
+        <div style={{ background: T.color.surface, padding: `0 ${T.space.md}px` }}>
+          <Item first label="毎月やること" value="レースを1つ選んで出る" />
+          <Item label="1年の区切り" value="3月の大一番で昇格が決まる" />
+          <Item label="最後の目標" value="最上位クラスで年間王者になる" />
+        </div>
         {saved && (() => {
           const info = saveGameInfo();
           return (

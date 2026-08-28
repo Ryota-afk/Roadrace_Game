@@ -1,11 +1,18 @@
 // 静的データ（Phase 1で src/main.jsx から分離）。純粋な定数のみ。
 
+// 第63弾(devlog/wave63.md): tagline/descはキャラ作成画面（脚質選択）専用。「初見が5択の
+// 意味を読める」ことが目的なので、既存のaffinity（数値のみ）とは別に文章を持たせた。
 export const TYPES = {
-  SPR: { label: "スプリンター", color: "#35c07e", affinity: { sprint: 5 } },
-  CLM: { label: "クライマー", color: "#e8544f", affinity: { climb: 5, mtn: 5 } },
-  RUL: { label: "ルーラー", color: "#4f8fe8", affinity: { flat: 4 } },
-  PUN: { label: "パンチャー", color: "#c98bf0", affinity: { hill: 5 } },
-  TT:  { label: "独走屋（TT）", color: "#e8a13c", affinity: { tt: 6 } },
+  SPR: { label: "スプリンター", color: "#35c07e", affinity: { sprint: 5 },
+    tagline: "ゴール前の一瞬に賭ける", desc: "集団スプリントに強い。ゴール直前の切れ味で勝負する" },
+  CLM: { label: "クライマー", color: "#e8544f", affinity: { climb: 5, mtn: 5 },
+    tagline: "山で仕掛けて突き放す", desc: "山岳・山頂フィニッシュに強い。登りで敵を千切る" },
+  RUL: { label: "ルーラー", color: "#4f8fe8", affinity: { flat: 4 },
+    tagline: "平坦を高速で押し切る", desc: "平坦なコースに強い。どの地形もそこそこ走れる万能型" },
+  PUN: { label: "パンチャー", color: "#c98bf0", affinity: { hill: 5 },
+    tagline: "短く激しい丘で勝負する", desc: "丘陵コースに強い。短い登りを繰り返す展開が得意" },
+  TT:  { label: "独走屋（TT）", color: "#e8a13c", affinity: { tt: 6 },
+    tagline: "独りで押し切るタイムレース", desc: "TT区間に強い。集団に頼らず自分のペースで走り切る" },
 };
 
 export const TYPE_ROLE_FIT = {

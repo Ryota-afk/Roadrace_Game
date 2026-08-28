@@ -22,7 +22,10 @@ function renderModeSelect(ctx) {
   // 第32弾（第2次UI改革・案A）: リード文を削除し、モードカードは押せる面（surfaceUp）＋
   // 右端「はじめる ›」で構成する。生涯評価/CPはaccent色の値＋「›」で押せることを明示する
   // （旧デザインは背景色だけで押せる手掛かりが無かった。devlog/wave32.md参照）。
-  const modeCard = (title, sub, color, onClick) => (
+  // 第63弾(devlog/wave63.md): sub文言を2行に拡張——「シーズンモード」「マイライフモード」
+  // という開発上の呼び名だけでは2モードの違いが初見に伝わらないため、「何をするか」
+  // ＋「どう終わるか」を短く添える。開発語彙（モード名）自体は見出しから外した。
+  const modeCard = (title, sub1, sub2, color, onClick) => (
     <button onClick={onClick} style={{
       display: "block", width: "100%", textAlign: "left", cursor: "pointer",
       background: T.color.surfaceUp, border: "none", fontFamily: FONT_DOT,
@@ -31,7 +34,7 @@ function renderModeSelect(ctx) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: T.space.sm }}>
         <div>
           <div style={{ fontSize: T.size.title, color: T.color.text }}>{title}</div>
-          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 4 }}>{sub}</div>
+          <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 4, lineHeight: 1.6 }}>{sub1}<br />{sub2}</div>
         </div>
         <div style={{ fontSize: T.size.head, color, flex: "none" }}>はじめる ›</div>
       </div>
@@ -57,8 +60,9 @@ function renderModeSelect(ctx) {
         <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.25 }}>ロードレース</div>
         <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.25 }}>シミュレーション</div>
       </div>
-      {modeCard("チーム運営", "シーズンモード", T.color.accent, () => setSuperMode("season"))}
-      {modeCard("選手キャリア", "マイライフモード", T.color.action, () => setSuperMode("mylife"))}
+      <div style={{ fontSize: T.size.body, color: T.color.text, marginBottom: T.space.xs }}>どちらで遊びますか？</div>
+      {modeCard("選手を育てる", "ひとりの選手の、デビューから引退まで", "毎月ひとつ選んで進める", T.color.action, () => setSuperMode("mylife"))}
+      {modeCard("チームを率いる", "監督として選手を集め、勝てるチームを作る", "1年＝12か月で昇格を目指す", T.color.accent, () => setSuperMode("season"))}
       {showAux && (
         <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.xs }}>
           {auxCard("生涯評価", p.score.toLocaleString(), () => setSuperMode("prestige"))}

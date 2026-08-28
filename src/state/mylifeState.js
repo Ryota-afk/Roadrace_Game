@@ -149,7 +149,11 @@ export function initMyLife() {
     // 第43弾: 出走計画。climb/hill/sprint/solo/null（未指定）。宣言すると通常月の候補に
     // その適性のレースが必ず1本入る（devlog/wave43.md）
     raceFocus: null,
-    difficulty: "easy", mlDiffChoice: "easy", // v38(#6): 難易度
+    // 第63弾(devlog/wave63.md): 既定をeasy→normalへ。初見が難易度の意味を理解しないまま
+    // 「とりあえずデビュー」した場合、他チームが控えめすぎる易よりノーマルの方が本来の
+    // バランスに近い（easyはmylife側にCP必要数のロックが無く常に選べるため、変更しても
+    // 誰かの選択肢を奪わない）。
+    difficulty: "normal", mlDiffChoice: "normal",
     // v51(第12弾12-C): CP交換所「パーツ強化の上限+2」。デビュー時にcpShopMylifePerks()から
     // 一度だけ適用される（既定は無購入＝0）。
     partLvMaxBonus: 0,

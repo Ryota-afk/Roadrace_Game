@@ -44,7 +44,7 @@ export function renderMyLifeCreateScreens(ctx) {
       const bgOpts = Object.entries(ML_BACKGROUNDS);
       const curType = TYPES[ml.typeChoice];
       const curBg = ML_BACKGROUNDS[ml.bgChoice];
-      const curDiff = DIFFICULTIES.find(d => d.id === (ml.mlDiffChoice || "easy")) || DIFFICULTIES[0];
+      const curDiff = DIFFICULTIES.find(d => d.id === (ml.mlDiffChoice || "normal")) || DIFFICULTIES[1];
       return mlWrap(
         <Screen>
           <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>選手をつくる</div>
@@ -59,11 +59,16 @@ export function renderMyLifeCreateScreens(ctx) {
             );
           })()}
 
-          <PickHead>脚質</PickHead>
+          {/* 第63弾(devlog/wave63.md): 見出し「脚質」→「得意な走り」。旧版はaffinityの数値
+              （例「平坦 +4」）だけが出ており、5択が何を意味するのか初見には伝わらなかった。
+              各選択肢にtagline（見出し）＋desc（1行説明）を追加し、数値は補足の位置に落とす。 */}
+          <PickHead>得意な走り</PickHead>
           <PickRow items={typeOpts.map(([k, t]) => ({ key: k, label: t.label }))} value={ml.typeChoice} onPick={k => setMl(s => ({ ...s, typeChoice: k }))} />
           {curType && (
             <PickNote>
-              <div style={{ fontSize: T.size.body, color: T.color.text }}>
+              <div style={{ fontSize: T.size.body, color: T.color.text }}>{curType.tagline}</div>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>{curType.desc}</div>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.xs }}>
                 {Object.entries(curType.affinity).map(([seg, v]) => `${SEG_LABEL[seg]} +${v}`).join("／")}
               </div>
             </PickNote>
@@ -84,7 +89,7 @@ export function renderMyLifeCreateScreens(ctx) {
           )}
 
           <PickHead>難易度</PickHead>
-          <PickRow items={DIFFICULTIES.map(d => ({ key: d.id, label: d.label }))} value={ml.mlDiffChoice || "easy"} onPick={k => setMl(s => ({ ...s, mlDiffChoice: k }))} />
+          <PickRow items={DIFFICULTIES.map(d => ({ key: d.id, label: d.label }))} value={ml.mlDiffChoice || "normal"} onPick={k => setMl(s => ({ ...s, mlDiffChoice: k }))} />
           {curDiff && (() => {
             const cpMul = MLCP_DIFF_MUL[curDiff.id] ?? 1;
             return (
@@ -93,7 +98,10 @@ export function renderMyLifeCreateScreens(ctx) {
                   <span style={{ fontSize: T.size.body, color: T.color.text }}>{curDiff.desc}</span>
                   <span style={{ fontSize: T.size.head, color: cpMul > 1 ? T.color.good : T.color.sub, flex: "none", marginLeft: T.space.sm }}>×{cpMul}</span>
                 </div>
-                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>クリアポイント倍率</div>
+                {/* 第63弾(devlog/wave63.md): 未プレイの初見に「クリアポイント」が説明ゼロで
+                    初出していた（引退時に貯まり次のキャリアを有利にする周回ボーナス）。
+                    用語自体はhelp.jsxで詳しく説明されるためここでは1句だけ添える。 */}
+                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>クリアポイント倍率（引退時に貯まり、次のキャリアを有利にする）</div>
               </PickNote>
             );
           })()}
@@ -240,13 +248,27 @@ export function renderMyLifeCreateScreens(ctx) {
       const powRevealed = mlGrowthPowRevealed(ml);
       const tr = mlTalentRank(r, powRevealed);
       const persLabel = tr.parts?.persLabel || "普通";
+      // 第63弾(devlog/wave63.md): 5段階のうち現在のランクが何段目かを示す目盛り。
+      // 「B」という文字だけでは良し悪しの尺度が伝わらないため追加した。
+      const RANK_SCALE = ["C", "B", "A", "S", "SS"];
+      const rankIdx = RANK_SCALE.indexOf(tr.rank);
       return mlWrap(
         <Screen>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>素質診断 — スカウトの評価</div>
+          {/* 第63弾: この画面が何を求めているのかが書かれておらず、名簿とボタンだけが出ていた。
+              1行で画面の目的を伝える。 */}
+          <div style={{ fontSize: T.size.body, color: T.color.text, lineHeight: 1.7, marginBottom: T.space.md }}>
+            この選手でデビューします。気に入らなければ、何度でも引き直せます。
+          </div>
           <div style={{ display: "flex", gap: T.space.md, alignItems: "center", background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
             <div style={{ textAlign: "center", flex: "none" }}>
               <div style={{ fontSize: T.size.caption, color: T.color.sub }}>素質</div>
               <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1 }}>{tr.rank}</div>
+              <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
+                {RANK_SCALE.map((s, i) => (
+                  <div key={s} style={{ width: 9, height: 3, background: i === rankIdx ? T.color.accent : T.color.rule }} />
+                ))}
+              </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: T.size.title, lineHeight: 1.1 }}>{r.name}</div>
@@ -277,10 +299,13 @@ export function renderMyLifeCreateScreens(ctx) {
             <AbilityGrid r={r} />
           </Section>
 
-          <PrimaryBtn onClick={mlConfirmCandidate}>この素質でデビュー →</PrimaryBtn>
-          <QuietBtn onClick={mlRerollCandidate}>素質を引き直す（リセマラ）</QuietBtn>
+          {/* 第63弾: 「この素質で」→「この選手で」（主語を診断結果ではなく選手本人に戻す）。
+              「リセマラ」（ソシャゲスラング・CLAUDE.md §7）を削除——「引き直す」だけで意味は通る。
+              末尾の注記も「稀に〜を持って生まれます」の事前予告を削り、要点2つだけに圧縮した。 */}
+          <PrimaryBtn onClick={mlConfirmCandidate}>この選手でデビュー →</PrimaryBtn>
+          <QuietBtn onClick={mlRerollCandidate}>引き直す</QuietBtn>
           <div style={{ fontSize: T.size.caption, color: T.color.sub, textAlign: "center", lineHeight: 1.6, marginTop: T.space.sm }}>
-            性格・特殊能力・素質ランクは引き直すたびに変わります。<br />稀に「天啓」「天賦の才」「才能の片鱗」を持って生まれます。確定するまで保存されません。
+            引き直すと、素質・性格・特殊能力が変わります。<br />まだ保存されていません。
           </div>
         </Screen>
       );
