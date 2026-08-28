@@ -33,3 +33,14 @@
     animation-duration: .01s !important;
   }
 }
+
+/* 第66弾 Phase 2（devlog/wave66.md）: ホームのレース候補→出走表の1経路だけ、
+   押したカードが育って次の画面になる（View Transitions API）。hub.jsxの
+   mlWithRaceCardTransitionが遷移中だけdocument.documentElementへ.vt-activeを付ける。
+   ⚠️事前検証(scratchpad/vt_probe2.mjs)で判明：ルートのクロスフェードだけ止めても
+   Phase1のenterアニメ(ml-enter-*)が残って"ml-race-name"の変形と喧嘩する
+   （抑制なし=11本・ルートのみ抑制=7本・両方抑制=6本=View Transitionsの機構のみ）。
+   必ず両方を同時に止めること。 */
+.vt-active::view-transition-old(root),
+.vt-active::view-transition-new(root) { animation: none; }
+.vt-active [class^="ml-enter-"] { animation: none; }

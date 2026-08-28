@@ -78,7 +78,9 @@ export function renderMyLifeRaceScreens(ctx) {
       <Screen>
         <div style={{ marginBottom: T.space.lg }}>
           <div style={{ fontSize: T.size.caption, color: T.color.sub }}>出走表</div>
-          <div style={{ fontSize: T.size.title, marginTop: T.space.xs, lineHeight: 1.3 }}>{raceMeta.name}</div>
+          {/* 第66弾Phase2(devlog/wave66.md): hub.jsxの選択中レース名とview-transition-nameを
+              揃え、ホームのカードがここへ育つ演出にする（対応するのはmlStartRaceの1経路のみ）。 */}
+          <div style={{ fontSize: T.size.title, marginTop: T.space.xs, lineHeight: 1.3, viewTransitionName: "ml-race-name" }}>{raceMeta.name}</div>
           <div style={{ display: "flex", alignItems: "center", gap: T.space.xs, marginTop: T.space.sm }}>
             <span style={{ fontSize: T.size.caption, color: T.color.sub }}>{"★".repeat(raceMeta.grade)}</span>
             <TypeChip type={raceMeta.tmpl.favors} label={`${TYPES[raceMeta.tmpl.favors].label}有利`} />

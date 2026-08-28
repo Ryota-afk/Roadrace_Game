@@ -1,6 +1,6 @@
 # 第66弾：画面遷移アニメーション（DEVLOG TODO #21）
 
-**状態**：**Phase 1 実装・検証完了**（2026-08）。Phase 2は未着手。
+**状態**：**Phase 1・Phase 2とも実装・検証完了**（2026-08）。
 
 ## 発端と、設計を1度作り直したこと
 
@@ -250,3 +250,38 @@ Playwrightで実プレイ確認（`w66_verify.mjs`・`w66_verify2.mjs`・`w66_sw
 9. 既存回帰（w46〜52・w57〜60）全通過・`npx vite build`成功
 10. 広く画面を巡回（タブ5・世界サブ2・記録サブ2・遊び方・月送り・出走表）して
     `pageerror`ゼロを確認（`w66_sweep.mjs`のスクリーンショット14枚）
+
+## Phase 2 実装結果（Sonnet）
+
+### 変更ファイル
+
+- **`src/screens/mylife/hub.jsx`**：
+  - 新規関数`mlWithRaceCardTransition(action)`。`prefers-reduced-motion`または
+    `document.startViewTransition`非対応なら`action()`をそのまま呼ぶだけ。対応環境では
+    `document.documentElement`に`vt-active`を付け、
+    `document.startViewTransition(() => flushSync(action))`で包み、
+    `transition.finished.finally()`で`vt-active`を外す。
+  - 候補3件の月：選択中の候補行の`{c.name}`にだけ`viewTransitionName: "ml-race-name"`
+    （`selected`のときのみ——非選択の候補行には付けない）。
+  - 看板レース月（候補1件）：単一カードの`{race.name}`に常に`viewTransitionName`。
+  - 主ボタンの`onClick`を`mlStartRace`から`() => mlWithRaceCardTransition(mlStartRace)`へ。
+  - `import { flushSync } from "react-dom"`を追加。
+- **`src/screens/mylife/race.jsx`**：出走表画面（`mylife_startlist`）の
+  `{raceMeta.name}`見出しに同じ`viewTransitionName: "ml-race-name"`を追加。
+- **`src/styles/transitions.css`**：`.vt-active`時にルートのクロスフェードと
+  `ml-enter-*`の両方を`animation: none`にする2行を追加（事前検証で確定した組み合わせ）。
+
+### 検証結果
+
+Playwrightで実プレイ確認（`w66p2_verify.mjs`・`w66p2_verify_single.mjs`）：
+
+1. 候補3件の月で遷移前に`ml-race-name`を持つ要素が1つだけ（選択中の候補のみ）
+2. 遷移実行中は`document.documentElement`に`vt-active`が付き、完了後は外れる
+3. 出走表へ正しく到達し、到着後も`ml-race-name`を持つ要素は1つ（重複していない）
+4. ⚠️看板レース月（候補1件・単一カード）でも同様に動作し、例外が発生しない
+   （2レイアウトのどちらでも`view-transition-name`の重複が起きないことを確認）
+5. 既存回帰（w46〜52・w57〜60）全通過・`npx vite build`成功・`pageerror`ゼロ
+
+事前検証（`vt_probe2.mjs`）で確定した「ルート＋enterアニメの両方を抑制」の組み合わせを
+そのまま実装し、実機でも例外・pageerrorなく動作した。設計時の推測（衝突する）と
+事前検証（何が足りないか）の両方が実装段階で裏切られることなく成立した。

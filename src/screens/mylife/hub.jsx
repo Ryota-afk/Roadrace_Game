@@ -4,6 +4,7 @@
 // ライバル・詳細な能力値）はユーザー合意により「その他」の折りたたみへ仮置きし、旧トークン(C系)の
 // ままにしてある——Phase3で選手/世界タブ等の行き先が決まってから本格的に作り直す（devlog/wave13.md参照）。
 import React from "react";
+import { flushSync } from "react-dom";
 import { AbilityFileList, CourseRecordsPanel, DisciplineGrid, PersonaLine, ScoutBadge, TitlesPanel, TraitLine } from "../../components/panels.jsx";
 import { AbilitySoshitsuRadarPair } from "../../components/RadarChart.jsx";
 import { CourseProfile } from "../../components/CourseProfile.jsx";
@@ -18,6 +19,23 @@ import { Item, PrimaryBtn, Prose, PressRow, QuietBtn, Screen, Section, Tag, Type
 import { ACQUIRE_REQS, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, disciplineScore, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { PART_SLOTS, PARTS } from "../../data/parts.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
+
+// 第66弾Phase2(devlog/wave66.md): ホームで選んだレースのカードが出走表(race.jsx)へ
+// 育つ演出。対になる要素（選択中のレース名）に同じview-transition-nameを付け、
+// この関数でView Transitions APIを使う。
+// ⚠️事前検証(scratchpad/vt_probe2.mjs)で「ルートのクロスフェードだけ止めても
+// Phase1のenterアニメ(ml-enter-*)が残って喧嘩する」と判明したため、documentに
+// 付けた.vt-active（transitions.css参照）で両方を同時に止める。
+// ⚠️prefers-reduced-motion時はView Transitions自体を使わない（.01sに潰す手は
+// 擬似要素に効きにくく、変形の途中状態が一瞬見えるより最初から使わない方が確実）。
+// 非対応ブラウザ・reduced-motion時はactionをそのまま呼ぶだけ＝Phase1のsweepにフォールバックする。
+function mlWithRaceCardTransition(action) {
+  const reduceMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion || typeof document.startViewTransition !== "function") { action(); return; }
+  document.documentElement.classList.add("vt-active");
+  const t = document.startViewTransition(() => flushSync(action));
+  t.finished.finally(() => document.documentElement.classList.remove("vt-active"));
+}
 
 // 選手成績・全チーム名鑑で共通の行（第13弾Phase3-D-0・可読性ルールR2）：
 // 「今季／通算／最高」を可変幅のspace-betweenで並べると行ごとに位置がずれるため、
@@ -179,7 +197,7 @@ export function renderMyLifeHubScreen(ctx) {
                         borderTop: i === 0 ? "none" : `1px solid ${T.color.rule}`,
                       }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                          <span style={{ fontSize: T.size.body, color: selected ? T.color.action : T.color.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                          <span style={{ fontSize: T.size.body, color: selected ? T.color.action : T.color.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...(selected ? { viewTransitionName: "ml-race-name" } : null) }}>{c.name}</span>
                           <span style={{ fontSize: T.size.caption, color: T.color.accent, flex: "none", marginLeft: T.space.sm }}>{"★".repeat(c.grade)}</span>
                         </div>
                         <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>
@@ -195,7 +213,7 @@ export function renderMyLifeHubScreen(ctx) {
               ) : (
                 <div style={{ background: T.color.surface, padding: T.space.md, marginTop: T.space.sm }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: T.space.sm }}>
-                    <span style={{ fontSize: T.size.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{race.name}</span>
+                    <span style={{ fontSize: T.size.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", viewTransitionName: "ml-race-name" }}>{race.name}</span>
                     <span style={{ fontSize: T.size.caption, color: T.color.sub, flex: "none", marginLeft: T.space.sm }}>{raceTotalKm}km</span>
                   </div>
                   <div style={{ marginBottom: T.space.sm }}><CourseProfile segs={race.tmpl.segs} height={40} /></div>
@@ -210,7 +228,7 @@ export function renderMyLifeHubScreen(ctx) {
                   )}
                 </div>
               )}
-              <div style={{ marginTop: T.space.sm }}><PrimaryBtn onClick={mlStartRace}>{race.name}に出場する ▸</PrimaryBtn></div>
+              <div style={{ marginTop: T.space.sm }}><PrimaryBtn onClick={() => mlWithRaceCardTransition(mlStartRace)}>{race.name}に出場する ▸</PrimaryBtn></div>
             </div>
 
             {(() => {
