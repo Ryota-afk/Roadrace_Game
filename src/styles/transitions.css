@@ -1,0 +1,31 @@
+/* 第66弾 Phase 1（devlog/wave66.md）: 画面遷移アニメーション。
+   分類ごとに動きを割り当てる。呼び出し側（画面遷移を起こす約100箇所）には一切触れず、
+   components/chrome.jsxの3つのwrapのラッパー1箇所ずつだけに適用する。 */
+
+@keyframes ml-fade-tabfwd  { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes ml-fade-tabback { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes ml-fade-rise    { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes ml-fade-sweep   { from { opacity: 0; transform: translateX(52px); } to { opacity: 1; transform: none; } }
+@keyframes ml-wipe-flow    { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes ml-year-pulse   { from { opacity: .25; transform: translateY(-4px); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+
+.ml-enter-tabForward { animation: ml-fade-tabfwd .2s cubic-bezier(.2,.7,.3,1) both; }
+.ml-enter-tabBack    { animation: ml-fade-tabback .2s cubic-bezier(.2,.7,.3,1) both; }
+.ml-enter-rise       { animation: ml-fade-rise .18s cubic-bezier(.2,.7,.3,1) both; }
+.ml-enter-sweep      { animation: ml-fade-sweep .3s cubic-bezier(.16,.8,.25,1) both; }
+.ml-enter-flow       { animation: ml-wipe-flow .3s cubic-bezier(.25,.7,.3,1) both; }
+.ml-enter-month      { animation: ml-wipe-flow .3s cubic-bezier(.25,.7,.3,1) both; }
+.ml-enter-none       { }
+
+/* 第66弾「⑥月が進む」: ヘッダーの年月だけに付ける（本文側はml-enter-monthのclip-pathで満ちる）。 */
+.ml-year-pulse { animation: ml-year-pulse .3s cubic-bezier(.2,.7,.3,1) both; }
+
+/* 第66弾: prefers-reduced-motion（devlog/wave66.md・実装前は0件だった）。
+   animation:noneにするとclip-pathが初期値のまま残り中身が消えるため、
+   「消す」のではなく「一瞬で終わらせる」（animation-fill-mode:bothの終了状態は残す）。 */
+@media (prefers-reduced-motion: reduce) {
+  .ml-enter-tabForward, .ml-enter-tabBack, .ml-enter-rise, .ml-enter-sweep,
+  .ml-enter-flow, .ml-enter-month, .ml-year-pulse {
+    animation-duration: .01s !important;
+  }
+}

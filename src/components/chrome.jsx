@@ -92,6 +92,9 @@ export function ConfirmDialog({ confirmDialog, setConfirmDialog }) {
 // Step13第4弾で旧5タブNavを撤去して以降 withNav を渡す呼び出し元は無くなったため、
 // Wave D2で SeasonNav ごと削除し、第2引数をこのオプションに作り替えた。
 // 通常の画面は従来どおり wrap(children) だけで呼べる（既存の呼び出しは全て無変更）。
+// 第66弾Phase1(devlog/wave66.md): シーズン・モード選択は分類を持たないため既定の
+// 「持ち上がり」だけを当てる（片方のモードだけ動いて片方が静止していると不具合に見えるため）。
+// keyは画面IDのみ——同じ画面内でのUI操作（アコーディオン開閉等）では再アニメしない。
 export function makeWrap({ g, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
   const cls = CLASSES[g.classIdx];
   return (children, opts = {}) => (
@@ -102,7 +105,7 @@ export function makeWrap({ g, renameState, setRenameState, confirmDialog, setCon
         ...(opts.fill ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : null),
       }}>
         <SeasonHeader g={g} cls={cls} />
-        {children}
+        <div key={g.screen} className="ml-enter-rise" style={opts.fill ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : undefined}>{children}</div>
       </div>
       <RenameModal renameState={renameState} setRenameState={setRenameState} />
       <ConfirmDialog confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
@@ -115,11 +118,14 @@ export function makeWrap({ g, renameState, setRenameState, confirmDialog, setCon
 // makeWrap()を共用していたため、まだモードを選んでいない起動一発目の画面にまで
 // シーズンの自チーム情報（クラスB1・あなたのチーム・予算等）が意図せず表示されていた。
 // SeasonHeaderを持たない専用のwrapを新設し、renderMetaScreens側だけに配線する。
-export function makeMetaWrap({ renameState, setRenameState, confirmDialog, setConfirmDialog }) {
+// 第66弾Phase1(devlog/wave66.md): メタ画面（モード選択・生涯評価・系譜・因子・CPショップ）も
+// 分類を持たないため既定の「持ち上がり」のみ。keyはsuperMode自体が画面識別子になっている
+// （renderMetaScreensの分岐がそのままsuperModeの値）。
+export function makeMetaWrap({ superMode, renameState, setRenameState, confirmDialog, setConfirmDialog }) {
   return (children) => (
     <div style={{ minHeight: "100svh", background: T.color.bg, fontFamily: FONT_DOT }}>
       <div style={{ maxWidth: 560, margin: "0 auto", width: "100%", boxSizing: "border-box", padding: "6px 14px 40px" }}>
-        {children}
+        <div key={String(superMode)} className="ml-enter-rise">{children}</div>
       </div>
       <RenameModal renameState={renameState} setRenameState={setRenameState} />
       <ConfirmDialog confirmDialog={confirmDialog} setConfirmDialog={setConfirmDialog} />
@@ -139,7 +145,17 @@ const TAB_HIDDEN_SCREENS = new Set([
   "mylife_contract", "mylife_retire_advice", "mylife_retired",
 ]);
 
-export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, setConfirmDialog, setMl }) {
+// 第66弾Phase1(devlog/wave66.md): マイライフ6分類の遷移アニメーション。
+// transitionInfo={ enterKey, kind }はmain.jsx側で確定済みの値（呼び出し側＝画面遷移を
+// 起こす約100箇所は一切関知しない）。⚠️kindは「enterKeyが変わった瞬間」にだけ再計算し、
+// 以降そのenterKeyが続く間は固定する——ここchrome.jsx側で毎レンダー計算し直すと、
+// 「月が進んだ直後の次のレンダー」でmonthChangedがfalseに戻ってkindが"month"→"rise"に
+// ドリフトし、アコーディオン開閉などの無関係な操作のたびに本文が再アニメする実測バグが
+// あった（同じenterKeyのままclassNameだけ変わるとCSSアニメーションは再発火する）。
+// ⚠️ヘッダーとBottomTabsは{children}の外にあるため、本文だけが動きタブは静止する
+// （構造上そうなっている＝正しい挙動）。
+export function makeMlWrap({ ml, transitionInfo, renameState, setRenameState, confirmDialog, setConfirmDialog, setMl }) {
+  const { enterKey, kind } = transitionInfo || { enterKey: "static", kind: "none" };
   return (children) => (
     <div style={{ minHeight: "100vh", background: T.color.bg, fontFamily: FONT_B }}>
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "6px 14px 40px" }}>
@@ -152,7 +168,7 @@ export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, set
                 <span style={{ flex: "none", marginLeft: T.space.sm, color: ml.points >= need ? T.color.accent : T.color.sub }}>昇格まで {ml.points} / {need}pt</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: T.space.xs }}>
-                <span style={{ fontSize: T.size.head, color: T.color.text }}>{ml.year}年目 {MONTHS[ml.month]}</span>
+                <span key={kind === "month" ? `${ml.year}-${ml.month}` : "static"} className={kind === "month" ? "ml-year-pulse" : undefined} style={{ fontSize: T.size.head, color: T.color.text }}>{ml.year}年目 {MONTHS[ml.month]}</span>
                 <span style={{ fontSize: T.size.head, color: ml.money < 0 ? T.color.bad : T.color.accent, flex: "none", marginLeft: T.space.sm }}>
                   {ml.money}<span style={{ fontSize: T.size.caption, color: T.color.sub }}>万円</span>
                 </span>
@@ -160,7 +176,7 @@ export function makeMlWrap({ ml, renameState, setRenameState, confirmDialog, set
             </div>
           );
         })()}
-        {children}
+        <div key={enterKey} className={`ml-enter-${kind}`}>{children}</div>
         {ml.player && setMl && !TAB_HIDDEN_SCREENS.has(ml.screen) && (
           <BottomTabs screen={ml.screen} onSelect={(key) => setMl(s => ({ ...s, screen: key }))} />
         )}

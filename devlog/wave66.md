@@ -1,6 +1,6 @@
 # 第66弾：画面遷移アニメーション（DEVLOG TODO #21）
 
-**状態**：**設計確定（ユーザー合意済み・2026-08）→Phase 1の実装待ち（Sonnet）。**
+**状態**：**Phase 1 実装・検証完了**（2026-08）。Phase 2は未着手。
 
 ## 発端と、設計を1度作り直したこと
 
@@ -141,3 +141,67 @@ key={`${ml.screen}:${ml.year}-${ml.month}`}
 11. ホームで選んだレースのカードが出走表へ育つ
 12. ⚠️その経路でルートのクロスフェードが二重に走っていない
 13. 他の遷移がPhase 1のまま壊れていない
+
+## Phase 1 実装結果（Sonnet）
+
+### 新規ファイル
+
+- **`src/data/screenTransition.js`**：設計どおりの純データ＋述語関数。
+  `ML_TABS_ORDER`・`LIST_SCREENS`・`READ_SCREENS`・`RACE_FLOW_SCREENS`の4つの静的集合と、
+  `mlScreenCategory(screen)`・`mlTransitionKind({ prevScreen, nextScreen, monthChanged })`の
+  2関数のみ。JSXなし。
+- **`src/styles/transitions.css`**：6種のkeyframesと`.ml-enter-*`クラス、
+  `prefers-reduced-motion`の`@media`ブロック。`main.jsx`から`fonts.css`と同じ形でimport。
+
+### 変更ファイル
+
+- **`src/components/chrome.jsx`**：
+  - `makeWrap`（シーズン）・`makeMetaWrap`（モード選択等）は`opts`不要の既定
+    `ml-enter-rise`のみ。`makeWrap`は`key={g.screen}`、`makeMetaWrap`は`key={String(superMode)}`
+    （`superMode`の値そのものがrenderMetaScreensの分岐と一致するため画面識別子として使える）。
+  - ⚠️`makeWrap`の`opts.fill`（拠点のアイソメ画面が使う縦フレックス）を壊さないよう、
+    追加した遷移用`<div>`にも`opts.fill`時は`flex:1, minHeight:0`を伝播させた
+    （素朴に挟むとBaseViewの残り高さ確保が崩れるところだった）。
+  - `makeMlWrap`は`transitionInfo={ enterKey, kind }`を**そのまま受け取るだけ**にした
+    （後述の理由でkind算出はmain.jsx側に移した）。ヘッダーの年月`<span>`にも
+    `kind==="month"`のときだけ`ml-year-pulse`と`key={year-month}`を付けた。
+- **`src/main.jsx`**：`mlTransitionKind`をimportし、`App()`内で`useRef`により
+  「直前の画面・年月・確定済みenterKey・確定済みkind」を追跡。
+
+### ⚠️実装中に見つけた設計時未検討のバグ（重要）
+
+設計時点では「kindはchrome.jsx側で毎レンダー`mlTransitionKind()`を呼んで求める」
+つもりだったが、実装して実プレイで確かめたところ、⚠️**月が進んだ直後、画面遷移を
+伴わない無関係な操作（例：ホーム末尾のアコーディオン開閉）をしただけで本文がもう一度
+再アニメする**バグを実測で発見した。
+
+原因：`monthChanged`は「直前の年月」と「現在の年月」を比較して求めるが、比較に使う
+「直前の年月」を保持するrefは**毎レンダー最新値に更新される**。そのため月送り成功直後の
+「次のレンダー」では、直前の年月も現在の年月も既に更新後の同じ値になっており
+`monthChanged`が`false`に戻る。結果、`kind`の算出結果が同じ`enterKey`のまま
+`"month"`→`"rise"`に**ドリフト**し、`className`だけが変わることでCSSアニメーションが
+再発火していた。
+
+**修正**：`kind`の算出と確定を**main.jsx側の同じrefで一括管理**し、
+「`enterKey`が前回と同じ値である間は、前回確定した`kind`をそのまま使い続ける」よう
+固定した（`chrome.jsx`側では一切算出しない・受け取るだけにした）。
+`w66_verify.mjs`の「同一画面内のUI操作で再アニメしないこと」検証で、
+このバグの再現と修正の両方を確認済み。
+
+### 検証結果
+
+Playwrightで実プレイ確認（`w66_verify.mjs`・`w66_verify2.mjs`・`w66_sweep.mjs`）：
+
+1. タブ間：ホーム→選手＝`tabForward`、選手→ホーム＝`tabBack`（`ML_TABS_ORDER`のindex差どおり）
+2. 長い一覧：世界→世界ランキング＝`flow`
+3. 読むための画面：ホーム→遊び方＝`none`
+4. ⚠️月が進む：`完全休養する`実行後、ヘッダーの年月に`ml-year-pulse`が付き
+   本文は`ml-enter-month`（＝`flow`と同じclip-path）
+5. ⚠️同一画面内のUI操作（アコーディオン開閉）でmlWrapの`<div>`のkey・classNameが
+   変わらないこと（＝上記バグ修正後、再アニメしないこと）を確認
+6. `prefers-reduced-motion: reduce`のコンテキストで`animation-duration`が`.01s`
+7. レースの流れ：ホーム→出走表・出走表→レース中とも`sweep`
+8. シーズン・モード選択：既定の`rise`のみが効いている
+9. 既存回帰（w46〜52・w57〜60）全通過・`npx vite build`成功
+10. 広く画面を巡回（タブ5・世界サブ2・記録サブ2・遊び方・月送り・出走表）して
+    `pageerror`ゼロを確認（`w66_sweep.mjs`のスクリーンショット14枚）
