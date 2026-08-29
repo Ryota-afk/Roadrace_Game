@@ -18,9 +18,18 @@ import { rollWeather } from "../../sim/race.js";
 // CPショップm_plan2は「2本目」ではなく「2地形目」を買う商品に作り替えた（旧focusSlots引数は廃止）。
 // focusが文字列、または長さ1の配列のときはfocus指定の第43弾とバイト単位で同一の出力になる。
 export function mlGenRaceCandidates(year, month, classIdx, focus) {
+  // 第81弾(devlog/wave75.md「第81弾」・TODO#26/27-e/28): 旧実装は全年で丘陵ロード(PUN)
+  // 固定だった。8月のアルデンヌ(PUN)と役割が重複するうえ、看板レース（候補1本の月）が
+  // 報いる脚質にSPR・TTが1つも無かった（CLM3・PUN2・RUL1・SPR0・TT0）。⚠️月を消費せず
+  // TTに見せ場を与える代案として、サーキットレース(SPR)と個人TT(TT)の2択にする——
+  // これ1つでSPRとTTの両方に看板レースができ、候補1本の月は6/12→5/12へ減る。
   if (month === 5 && classIdx >= 1) {
     const wrng = mulberry(year * 401 + month * 7 + 501);
-    return [{ id: `ml-worlds-${year}`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[2], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, rival2Present: true, weather: rollWeather(wrng) }];
+    const weather = rollWeather(wrng);
+    return [
+      { id: `ml-worlds-${year}-road`, name: `${year}年目 世界選手権ロードレース`, tmpl: TEMPLATES[1], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, rival2Present: true, weather },
+      { id: `ml-worlds-${year}-tt`, name: `${year}年目 世界選手権 個人TT`, tmpl: TEMPLATES[5], grade: 4, cls: classIdx, milestone: "worlds", rivalPresent: true, rival2Present: true, weather },
+    ];
   }
   if (month === 3 && classIdx >= 2 && (year - 1) % 4 === 0) {
     const wrng = mulberry(year * 401 + month * 7 + 502);

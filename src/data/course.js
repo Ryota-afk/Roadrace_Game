@@ -86,10 +86,21 @@ export const TEMPLATES = [
   { kind: "チームTT", favors: "TT", teamTT: true, squadMin: 4, squadMax: 6, segs: [["tt", 480, 22], ["flat", 300, 14], ["tt", 480, 22]] },
   // 第72弾(devlog/wave72.md): RUL（ルーラー）専用コース。5脚質中RULだけ専用コースが無く、
   // controllers/mylife/raceStart.jsのラストレースでPUNと同じ丘陵ロードを割り当てられる
-  // 機能的な欠落だった。最終区間をtt（独走）にすることで、finish.jsの決着計算が
-  // solo*0.6+flat*0.4（独走決着）になり、SPR系コースのsprint決着（純スプリント力）と
-  // 明確に差別化される＝「平坦を高速で押し切る」というルーラーの定義がそのまま形になる。
-  { kind: "平坦ロード", favors: "RUL", squadMin: 1, squadMax: 5, segs: [["flat", 520, 30], ["flat", 480, 26], ["tt", 420, 18]] },
+  // 機能的な欠落だった。
+  // 第81弾(devlog/wave75.md「第81弾」・TODO#28): 当初は最終区間をtt（独走）にしていたが、
+  // ⚠️これは誤りだった——tt決着はsolo（独走力）を重視する式で、RULはflatが高いだけで
+  // soloは並みのため、tt決着では常にTT型に負けていた（実測：RUL21.1%＜TT37.9%）。
+  // ⚠️さらにfinishAbilityにはflatの決着分岐が存在せずelse→sprintに落ちていたため、
+  // 決着をflatに変えるだけでは純スプリント勝負になりRULは依然勝てなかった（finish.js側で
+  // flat決着(fl*0.6+sp*0.4)を新設し対応済み）。最終区間をtt→flatへ変更し、
+  // 「平坦を高速で押し切る」というルーラーの定義を決着式の新設とセットで実現する。
+  { kind: "平坦ロード", favors: "RUL", squadMin: 1, squadMax: 5, segs: [["flat", 520, 30], ["flat", 480, 26], ["flat", 420, 18]] },
+  // 第81弾(devlog/wave75.md「第81弾」・TODO#26): グランツール専用のTTステージ。
+  // ⚠️個人TT（`soloTT: true`）はステージに使えない——soloTTはraceMeta.tmpl（1日目）しか
+  // 参照されず途中日に置いても集団走のままになり、さらにグランツールはsquad4〜6で走るため
+  // groupModeForが常に"full"を返す。soloTTを付けない新テンプレとして、tt区間で独走力を
+  // 問う形にする（実測：全steepnessでTTが最速・RULが2位。scratchpad/w81_ttstage.mjs）。
+  { kind: "TTステージ", favors: "TT", squadMin: 1, squadMax: 5, segs: [["flat", 200, 5], ["tt", 560, 20], ["tt", 560, 20]] },
 ];
 
 export const ML_MONUMENTS = [
@@ -112,10 +123,15 @@ export const HOME_ABILITY_BONUS = 3;
 
 export const OVERSEAS_VENUES = ["アルプス", "ピレネー", "ドロミテ", "フランドル", "ロンバルディア", "アンダルシア", "トスカーナ", "プロヴァンス"];
 
+// 第81弾(devlog/wave75.md「第81弾」・TODO#26): 旧構成はCLM4/SPR3/PUN2/TT0/RUL0という
+// ステージ配分で、⚠️「総合タイム」を掲げながらtt区間が3戦9ステージ中0%、死蔵コース
+// （平坦ロード・グラベルレース）が一度も出ないという欠落があった。3戦それぞれに性格を持たせ
+// （春＝平坦と丘・夏＝山岳・秋＝総合力）、TTは9ステージ中1つだけに絞って過剰にしない
+// （新配分：SPR2/RUL1/PUN2/CLM3/TT1）。
 export const GRAND_TOURS = [
-  { month: 1, season: "春季", stageTmpls: [TEMPLATES[0], TEMPLATES[1], TEMPLATES[2]] },
-  { month: 3, season: "夏季", stageTmpls: [TEMPLATES[2], TEMPLATES[3], TEMPLATES[4]] },
-  { month: 5, season: "秋季", stageTmpls: [TEMPLATES[3], TEMPLATES[4], TEMPLATES[1]] },
+  { month: 1, season: "春季", stageTmpls: [TEMPLATES[0], TEMPLATES[8], TEMPLATES[2]] },
+  { month: 3, season: "夏季", stageTmpls: [TEMPLATES[6], TEMPLATES[3], TEMPLATES[4]] },
+  { month: 5, season: "秋季", stageTmpls: [TEMPLATES[9], TEMPLATES[1], TEMPLATES[3]] },
 ];
 
 export const SEG_LABEL = { flat: "平坦", hill: "丘陵", climb: "山岳", sprint: "ゴールスプリント", mtn: "山頂フィニッシュ", tt: "TT区間" };

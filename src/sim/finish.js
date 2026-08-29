@@ -76,7 +76,12 @@ export function finishAbility(en, segType) {
   if (segType === "climb" || segType === "mtn") { base = cl * 0.85 + sp * 0.15; affCoef = 0.6; }  // 山頂決着＝登坂主体
   else if (segType === "hill") { base = cl * 0.55 + sp * 0.30 + fl * 0.15; affCoef = 1.0; }        // 丘のパンチ力
   else if (segType === "tt") { base = so * 0.62 + fl * 0.38; affCoef = 0.25; }                     // 独走決着
-  else { base = sp; affCoef = 0; } // 平坦・スプリント区間の集団ゴール＝従来どおりスプリント
+  // 第81弾(devlog/wave75.md「第81弾」・TODO#26/27-e/28): flatの決着分岐が存在せず
+  // else→sprintに落ちていたため、flatで終わる全コース（旧・平坦ロード等）が純スプリント
+  // 勝負になり、想定脚質のRULが自分の決着区間でも勝てない構造だった（実測：flat*0.6+sp*0.4
+  // でRUL+6.78＝他決着の専門家優位+6〜7と同水準に揃う。scratchpad/w81_flatfinish.mjs）。
+  else if (segType === "flat") { base = fl * 0.6 + sp * 0.4; affCoef = 1.0; }                      // 平坦の押し切り
+  else { base = sp; affCoef = 0; } // スプリント区間の集団ゴール＝従来どおりスプリント
   // 第50弾: バッジ由来の区間ボーナスを決着にも合流させる（devlog/wave50.md）。
   // 従来はここでbadgeSegmentBonusが一切参照されておらず、僅差ゴール集団
   // （実測で約半分のレース）ではバッジが無かったことになっていた。
