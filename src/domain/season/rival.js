@@ -43,10 +43,16 @@ export function rivalDrama({ beat, gapSec, rivalName, rivalRank, myRank, heatBef
   const photo = g < 1, close = g < 4;
   // 第60弾(devlog/wave60.md): 表示側（RivalBlock）が既に見出しでライバル名を出しているため、
   // 本文でも名前を繰り返すと二重表示になる。全分岐で本文から名前を落とす。
+  // 第83弾(devlog/wave83.md): ⚠️myRankを引数で受け取りながら一度も使っておらず、勝敗と
+  // タイム差だけで文言を決めていた。そのため48人中27位でも「完勝。今日は完全にあなたの
+  // 一日だった」と出る（実機プレイで発見）。ライバルに勝っても自分が上位でなければ
+  // 「二人の戦い」に留める文言へ分岐させる。
+  const lowPlacing = myRank != null && myRank > 10;
   let line;
   if (beat) {
     if (photo) line = `写真判定にもつれ込む死闘。わずか${gTxt}、競り落とした。`;
     else if (close) line = `最後まで並走する接戦を、${gTxt}振り切って制した。視線が背中に刺さる。`;
+    else if (lowPlacing) line = `${gTxt}先着。上位には届かなかったが、この一戦は譲らなかった。`;
     else line = `${gTxt}突き放す完勝。今日は完全にあなたの一日だった。`;
   } else {
     if (photo) line = `写真判定の末、わずか${gTxt}。刺し返された。この悔しさは忘れない。`;

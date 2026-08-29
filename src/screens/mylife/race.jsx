@@ -122,11 +122,18 @@ export function renderMyLifeRaceScreens(ctx) {
         <Section title="この一戦の成果">
           <Item first label="獲得ポイント" value={`+${pts}pt`} valueColor={T.color.accent} />
           <Item label="賞金" value={`+${prize}万円`} valueColor={T.color.accent} />
-          {worldRank != null && (
-            <Item label="世界ランキング" value={`${worldRank}位`} valueColor={worldRank < worldRankPrev ? T.color.good : T.color.text}
-              detail={`${worldRankPrev}位から${worldRank < worldRankPrev ? "上昇" : "後退"}——ランキングpt +${wpGain}`}
-              detailColor={worldRank < worldRankPrev ? T.color.good : T.color.sub} />
-          )}
+          {worldRank != null && (() => {
+            // 第83弾(devlog/wave83.md): 第60弾が直した「初掲載時に『null位から後退』と出る」
+            // 不具合が、⚠️チームTTの結果画面にだけ残っていた（同じファイル内に同じ表示が
+            // 2箇所あり、通常レース側だけ修正されていた取りこぼし）。実機プレイで発見。
+            const up = worldRankPrev != null && worldRank < worldRankPrev;
+            return (
+              <Item label="世界ランキング" value={`${worldRank}位`} valueColor={up ? T.color.good : T.color.text}
+                detail={worldRankPrev == null ? `初めてランキングに載った——ランキングpt +${wpGain}`
+                  : `${worldRankPrev}位から${up ? "上昇" : "後退"}——ランキングpt +${wpGain}`}
+                detailColor={up ? T.color.good : T.color.sub} />
+            );
+          })()}
         </Section>
         <Section title="チーム順位表">
           {teamStandings.map((t, i) => (
