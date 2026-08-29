@@ -34,7 +34,7 @@ export function renderRidersTeamSection(ctx) {
           {g.obCoach && <Item first={hired.length === 0} label="OBコーチ" value={`${g.obCoach.name}コーチ`} valueColor={T.color.accent} />}
         </Section>
       )}
-      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>主将より2歳以上若い選手は練習効果+10%。任命は各選手カードの「くわしく見る」から。</div>
+      <div style={{ fontSize: T.size.caption, color: T.color.sub, marginBottom: T.space.sm }}>主将より3歳以上若い選手は練習効果+10%。任命は各選手カードの「くわしく見る」から。</div>
       {g.inv.camp > 0 && !g.camp && <QuietBtn color={T.color.action} onClick={() => askConfirm("キャンプを実施しますか？今月の練習効果が×2になりますが、選手全員の疲労が+25されます（連発すると故障リスクが高まります）。", useCamp)}>キャンプ券を使う（今月の練習効果×2・全員疲労+25）</QuietBtn>}
       {g.camp && <div style={{ fontSize: T.size.body, color: T.color.accent }}>今月はトレーニングキャンプ実施中（練習効果×2）</div>}
     </>

@@ -37,7 +37,11 @@ export function monthlyUpdate(state, raceInfo) {
   const stageFatigueMul = (raceInfo && raceInfo.grandTour) ? 1 + ((raceInfo.stageCount || 3) - 1) / 3 : 1;
   // v13: 難易度別の成長ソフトキャップ閾値（易しいほど高い閾値まで伸びる）
   const growthCap = (DIFFICULTIES.find(d => d.id === state.difficulty) || DIFFICULTIES[0]).growthCap;
-  // v17: キャプテン制度。主将より2歳以上若い選手は、主将の指導を受けて練習効果+10%になる。
+  // v17: キャプテン制度。主将より3歳以上若い選手は、主将の指導を受けて練習効果+10%になる。
+  // 第85弾(devlog/wave85.md): ⚠️このコメントは元々「2歳以上若い」と書かれていたが、下の実装は
+  // `n.age < captain.age - 2`＝3歳以上若い場合のみ。UI2箇所（season/hub/help.jsx・
+  // hub/riders/team.jsx）がこの誤ったコメントを写しており、誤りの発生源だった。
+  // ⚠️説明文を直すときは、その値を説明しているコード側のコメントも必ず突き合わせること。
   // v18バランス調整: 指導に時間を割く分、主将自身の練習効果はわずかに落ちる（-5%）ようにし、
   // 「誰でも無条件に任命した方が得」にならないよう小さなトレードオフを持たせた
   const captain = state.roster.find(r => r.id === state.captainId);
