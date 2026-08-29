@@ -25,7 +25,13 @@ export function worldPointsForFinish(rank, grade, classMul = 1) {
 // v51(第11弾Phase2・2-B): grade・classMulを渡すと、着順に応じたworldPointsForFinish()の
 // 値もcur.wpへ積む（世界ランキングの実データ化）。省略時（grade未指定）はwpを積まない＝
 // 既存の呼び出し（成績集計だけが目的の箇所）は無変更で動く。
-export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year, grade, classMul) {
+// 第84弾: opts.teamResult=trueのとき（チームTT）は races・wp・byYear.races だけ積み、
+// wins/podiums/top10/bestRank/byYear.wins/byYear.podiumsは積まない。チームTTは1チーム
+// 4〜7名の「チーム順位」を全員が共有するため、通常どおり積むと1レースで複数人が
+// 「優勝」扱いになり通算勝利数が水増しされる。一方wpを積まないと世界ptがプレイヤー側にだけ
+// 入り続ける片務になる（devlog/wave83.md 発見3・wave84.md参照）ため、wpだけは全員に配る。
+export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year, grade, classMul, opts = {}) {
+  const { teamResult = false } = opts;
   const next = { ...(prev || {}) };
   (rankedEntrants || []).forEach(e => {
     if (e.isPlayerChar) return; // 自分は raceLog で別管理
@@ -43,13 +49,16 @@ export function mlUpdateRiderStats(prev, rankedEntrants, teammateIds, year, grad
     const r = e.rank;
     cur.name = e.name; cur.team = e.teamName || e.team || cur.team;
     cur.races += 1;
-    if (r === 1) cur.wins += 1;
-    if (r <= 3) cur.podiums += 1;
-    if (r <= 10) cur.top10 += 1;
-    cur.bestRank = Math.min(cur.bestRank, r);
+    if (!teamResult) {
+      if (r === 1) cur.wins += 1;
+      if (r <= 3) cur.podiums += 1;
+      if (r <= 10) cur.top10 += 1;
+      cur.bestRank = Math.min(cur.bestRank, r);
+    }
     if (grade != null) cur.wp = (cur.wp || 0) + worldPointsForFinish(r, grade, classMul || 1);
     const y = cur.byYear[year] ? { ...cur.byYear[year] } : { races: 0, wins: 0, podiums: 0 };
-    y.races += 1; if (r === 1) y.wins += 1; if (r <= 3) y.podiums += 1;
+    y.races += 1;
+    if (!teamResult) { if (r === 1) y.wins += 1; if (r <= 3) y.podiums += 1; }
     cur.byYear[year] = y;
     next[e.id] = cur;
   });

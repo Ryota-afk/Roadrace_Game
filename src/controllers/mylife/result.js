@@ -10,11 +10,12 @@ import { MONTHS } from "../../data/course.js";
 import { CLASSES } from "../../data/progression.js";
 import { ML_TACTICS, buildMyLifeSim, mlAmbitionCleared } from "../../state/state.js";
 import {
-  GRADE_MUL, MANAGER_DIRECTIVES, POP_MILESTONES, PRIZES, PTS, applyAmbitionReward, computeWorldRank,
+  GRADE_MUL, MANAGER_DIRECTIVES, PRIZES, PTS, applyAmbitionReward, computeWorldRank,
   mlCurrentAmbition, mlNewspaper, mlUpdateRiderStats, peekCourseRecord, raceForecast, rivalDialogue,
   rivalDrama, rivalMeetingHeat, rivalScene, worldPointsForFinish,
 } from "../../logic/support.js";
 import { mlBondsAfterRace } from "../../domain/mylife/bonds.js";
+import { applyPopGain } from "../../domain/mylife/popularity.js";
 import { segMixOfRace } from "../../domain/shared/segMix.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
 
@@ -72,18 +73,12 @@ export function mlRaceFinish(s) {
   // v25: 個人スポンサー・メディア人気度。着順が良いほど、また規模の大きいレースほど伸びる
   // v28: 代表の役割を全うすれば名声（人気度）が上乗せされる
   const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade] + natPopBonus;
-  const popMilestones = s.player.popMilestones || [];
-  const newPopularity = Math.max(0, Math.min(100, (s.player.popularity || 0) + popGain));
-  let popBonus = 0;
-  const newlyHit = [];
-  POP_MILESTONES.forEach(m => {
-    if (newPopularity >= m.th && !popMilestones.includes(m.th)) { popBonus += m.bonus; newlyHit.push(m.th); }
-  });
+  const { popularity: newPopularity, popMilestones, popBonus, newlyHit } = applyPopGain(s.player, popGain);
   const player = {
     ...s.player,
     raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: me.rank, role, monument: race.monument || undefined, segMix: segMixOfRace(race) }],
     popularity: newPopularity,
-    popMilestones: [...popMilestones, ...newlyHit],
+    popMilestones,
   };
   let rivalRecord = s.rivalRecord;
   let rivalOutcome = null;
@@ -215,6 +210,9 @@ export function mlRaceFinish(s) {
 }
 
 // v37: マイライフのチームTTは「チームの順位」で結果を出す（個人simへ落とさない）。
+// 第84弾: 通常レースにあってチームTTに無かったレース後処理（人気度・絆・成績台帳・
+// アンビション判定）を追加した。監督評価(managerEval)・careerWins系・月間ログ・号外は
+// スコープ外（devlog/wave84.md参照。指示カードの文言が個人順位前提／個人の勝利ではないため）。
 export function mlFinishTeamTT(s, sim, race) {
   const teams = sim.teamTT;
   const playerTeam = teams.find(t => t.isPlayer);
@@ -228,16 +226,50 @@ export function mlFinishTeamTT(s, sim, race) {
     time: t.time, gap: t.time - baseTime,
     riders: (t.riders || []).map(r => r.name),
   }));
-  const player = { ...s.player, raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt", segMix: segMixOfRace(race) }] };
-  const wpGain = worldPointsForFinish(teamRank, race.grade, CLASSES[s.classIdx].prizeMul);
+  // 第84弾: 人気度。母集団がチーム単位（実測9チーム）で通常レース（48〜60名中の順位）より
+  // 希少性が高いため、同じ係数を当てず通常レースの半分の係数にする（devlog/wave84.md参照）。
+  const popGain = (teamRank === 1 ? 1.5 : teamRank <= 3 ? 0.8 : teamRank <= 5 ? 0.3 : 0.1) * GRADE_MUL[race.grade];
+  const { popularity, popMilestones, popBonus, newlyHit } = applyPopGain(s.player, popGain);
+  let player = {
+    ...s.player,
+    raceLog: [...(s.player.raceLog || []), { year: s.year, month: s.month, name: race.name, rank: teamRank, role: "tt", segMix: segMixOfRace(race) }],
+    popularity, popMilestones,
+  };
+  const log = newlyHit.length > 0
+    ? [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】人気度が${newlyHit.join("・")}に到達し、個人スポンサー契約で+${popBonus}万円`]
+    : s.log;
+  // 第84弾: チームTTのsimはranked/entrantsに各選手のrankを個人の着順として持たないため、
+  // チーム順位をteamResult:trueで全員分の擬似entrantsとして渡す（wins/podiumsは積まない）。
+  const classMul = CLASSES[s.classIdx].prizeMul;
+  const teammateIdSet = new Set([...(s.teammates || []).map(t => t.id), ...(s.protege ? [s.protege.id] : [])]);
+  const ttEntrants = teams.flatMap(t => t.riders.map(r => ({ ...r, rank: t.rank })));
+  const riderStats = mlUpdateRiderStats(s.riderStats, ttEntrants, teammateIdSet, s.year, race.grade, classMul, { teamResult: true });
+  const wpGain = worldPointsForFinish(teamRank, race.grade, classMul);
   const worldPoints = (s.worldPoints || 0) + wpGain;
-  const worldRank = computeWorldRank(s.riderStats, worldPoints);
+  const worldRank = computeWorldRank(riderStats, worldPoints);
   const worldRankBest = s.worldRankBest == null ? worldRank : Math.min(s.worldRankBest, worldRank);
   const careerPodiums = (s.careerPodiums || 0) + (teamRank <= 3 ? 1 : 0);
+  // 第18弾の絆更新をチームTTにも適用（チーム4人で走る唯一の種目なのに絆が育たなかった不具合）
+  const bonds = mlBondsAfterRace(s.bonds, s, sim, { podium: teamRank <= 3, assist: false });
+  let ambitionIdx = s.ambitionIdx || 0;
+  let ambitionDone = s.ambitionDone || [];
+  let ambitionCleared = null;
+  let ambMoney = 0;
+  const progressedMl = { ...s, player, worldRank, careerPodiums };
+  const curAmb = mlCurrentAmbition(progressedMl);
+  if (curAmb && mlAmbitionCleared(progressedMl, curAmb)) {
+    const rw = applyAmbitionReward(curAmb.reward, player, 0);
+    ambMoney = rw.money;
+    ambitionCleared = { label: curAmb.label, rewardText: rw.text };
+    ambitionIdx = ambitionIdx + 1;
+    ambitionDone = [...ambitionDone, curAmb.key];
+  }
   return {
-    ...s, player, points: s.points + pts, money: s.money + prize,
-    worldPoints, worldRank, worldRankBest, careerPodiums,
-    resultInfo: { race, teamTT: true, teamRank, totalTeams, pts, prize, teamStandings, wpGain, worldRank, worldRankPrev: s.worldRank },
+    ...s, player, points: s.points + pts, log,
+    money: s.money + prize + popBonus + ambMoney,
+    worldPoints, worldRank, worldRankBest, careerPodiums, riderStats, bonds,
+    ambitionIdx, ambitionDone,
+    resultInfo: { race, teamTT: true, teamRank, totalTeams, pts, prize, teamStandings, wpGain, worldRank, worldRankPrev: s.worldRank, popGain: Math.round(popGain * 10) / 10, popBonus, ambitionCleared },
     screen: "mylife_result",
   };
 }

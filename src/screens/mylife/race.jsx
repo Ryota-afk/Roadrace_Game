@@ -112,7 +112,7 @@ export function renderMyLifeRaceScreens(ctx) {
 
   // ---- 結果：チームタイムトライアル ----
   if (ml.screen === "mylife_result" && ml.resultInfo && ml.resultInfo.teamTT) {
-    const { race, totalTeams, pts, prize, teamStandings, wpGain, worldRank, worldRankPrev } = ml.resultInfo;
+    const { race, totalTeams, pts, prize, teamStandings, wpGain, worldRank, worldRankPrev, popGain, popBonus } = ml.resultInfo;
     const myTeam = teamStandings.find(t => t.isPlayer);
     const rank = myTeam ? myTeam.rank : 1;
     const timeStr = myTeam ? (myTeam.rank === 1 ? fmtTime(myTeam.time) : `+${fmtTime(myTeam.gap)}`) : null;
@@ -122,6 +122,12 @@ export function renderMyLifeRaceScreens(ctx) {
         <Section title="この一戦の成果">
           <Item first label="獲得ポイント" value={`+${pts}pt`} valueColor={T.color.accent} />
           <Item label="賞金" value={`+${prize}万円`} valueColor={T.color.accent} />
+          {popGain > 0 && (
+            // 第84弾(devlog/wave84.md): チームTTだけ人気度が一切上がらなかった欠落を埋めた。
+            // JSXは通常レース側（本ファイル内の「人気度」Itemブロック）と同一の見せ方に揃える。
+            <Item label="人気度" value={`+${popGain}`} valueColor={T.color.accent}
+              detail={popBonus > 0 ? `個人スポンサー契約ボーナス +${popBonus}万円` : null} detailColor={T.color.accent} />
+          )}
           {worldRank != null && (() => {
             // 第83弾(devlog/wave83.md): 第60弾が直した「初掲載時に『null位から後退』と出る」
             // 不具合が、⚠️チームTTの結果画面にだけ残っていた（同じファイル内に同じ表示が

@@ -34,9 +34,11 @@ export function bondValueFor(bonds, protege, id) {
 
 // sim.ranked（レース参加者）のうち、現在のチームメイトと一致するidの配列。
 // 弟子は含めない（弟子の絆は指導イベントでのみ育つ・既存の育成はそのまま）。
+// 第84弾: チームTTのsimにはrankedが無く(sim.teamTTのみ)、代わりにentrantsを持つため
+// フォールバックする。entrantsは自チームの僚友もteam==="PLAYER"で含んでいるので結果は同じ。
 export function mlCoRacedIds(sim, s) {
   const rosterIds = new Set((s.teammates || []).map(t => t.id));
-  return sim.ranked.filter(e => rosterIds.has(e.id)).map(e => e.id);
+  return (sim.ranked || sim.entrants).filter(e => rosterIds.has(e.id)).map(e => e.id);
 }
 
 // レース確定時に絆を更新する。共闘したチームメイトがいなければ無変更で返す。

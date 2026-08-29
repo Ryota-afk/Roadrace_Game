@@ -74,6 +74,11 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // 差し替えのたびにnewRider()で新idを振っていたため世界スター自身の通算成績が
   // 一切積まれない不具合があった（devlog/wave11.md Phase2参照）。
   let assistedAceRef = null; // v33.8: アシスト宣言時に献身で押し上げた自チームのエース
+  // 第84弾: チームTT(computeTeamTT)は自チームのchemMulをループ外から参照する必要があるため、
+  // ループ内(isMyTeam時)で確定した値をここへ巻き上げる。従来はcomputeTeamTT(sim, 1)と
+  // ハードコードされており、マイライフのチームTTだけ絆(結束)が結果に一切反映されていなかった
+  // （シーズン側のbuildSim.jsはchemTier.mulを渡している。devlog/wave84.md参照）。
+  let playerChemMul = 1;
   // v46(#23): 出走人数の下限を3へ引き上げ（従来1〜5でチームごとに大きく揺れていた）。
   // squadMin===squadMaxのレース（個人TT=1名固定・チームTT=4〜6名）はこの下限の対象外。
   const aiMinFloor = squadMin === squadMax ? squadMin : Math.min(squadMax, Math.max(squadMin, 3));
@@ -146,6 +151,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
     // 第18弾: 実際に出走する僚友（チームメイト＋弟子）の絆の平均から結束を算出
     // （自チームのみ・絆0なら1=無効果。弟子はprotege.bond＝既存の指導で育つ絆を一本化して使う）
     const chemMul = isMyTeam ? 1 - (avgBondFor(bonds, coRacedIds, protege) / 100) * 0.08 : 1;
+    if (isMyTeam) playerChemMul = chemMul;
     const teamEntrants = members.map((r, i) => {
       // v29: マイライフのAI相手もeffAbilitiesを通し、体格・調子・大舞台・加速力・メンタルを反映
       // v48(第10弾続き): 土台の能力値はid+年で固定した分、当日の調子（form）は毎レース振り直す。
@@ -244,7 +250,7 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // v37: チームTTはペロトンではなくチーム単位の合算タイム。マイライフでも「個人の順位」ではなく
   // 「チームの順位」で結果を出す（従来は teamTT 未対応で個人simへ落ちて個人リザルトになっていた）。
   if (raceMeta.tmpl && raceMeta.tmpl.teamTT) {
-    computeTeamTT(sim, 1);
+    computeTeamTT(sim, playerChemMul);
     sim.hadBreak = false;
     return sim;
   }
