@@ -5,11 +5,12 @@ import { ABILITIES, AB_KEYS, AB_LABEL, POW } from "../../data/abilities.js";
 import { CLASSES } from "../../data/progression.js";
 import { MONTHS, SEG_AB } from "../../data/course.js";
 import { ML_CARS, ML_HOUSES } from "../../data/gear.js";
-import { PARTS } from "../../data/parts.js";
+import { resolvePart } from "../../data/parts.js";
 import { badgeTier, mulberry, overall, hasAbility, tierValue } from "../../core/core.js";
 import { MYLIFE_TEAMS, ageWorldRosters, mlTeammatesFromRoster } from "../../state/state.js";
 import {
-  GRADE_MUL, ML_AB_COACH_KEY, ML_COACH_MUL, ML_COACH_SALARY, ML_PROTEGE_EVENTS, ML_SPECIAL_TRAINING, addAb, ageRival, computeWorldRank,
+  GRADE_MUL, ML_AB_COACH_KEY, ML_COACH_MUL, ML_COACH_SALARY, ML_POP_DECAY, ML_PROTEGE_EVENTS, ML_SALARY_CAP, ML_SALARY_FLOOR,
+  ML_SPECIAL_TRAINING, addAb, ageRival, computeWorldRank,
   decayRiderStatsWp, growSub, growthPhase, mlBuildWorldNews, mlGenDirective, mlGrowthCapFor, mlLivingCost, mlTeamTier,
   mlUpdateRiderStats, mlWorldRaceLite, persMul, pickMlEvent, protegeMilestoneNews, rollCondDir, upgradeGoldAbilities,
 } from "../../logic/support.js";
@@ -66,7 +67,7 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     const raceWeather = ctx && ctx.raceWeather;
     // 第17弾: 冷感ボトルセット（栄養スロット）は猛暑の疲労加算をキャンセルする
     const nuPid = player.parts && player.parts.nutrition;
-    const nuPart = nuPid && PARTS[nuPid];
+    const nuPart = nuPid && resolvePart(player.customParts, nuPid);
     const heatCancelled = raceWeather === "heat" && nuPart && nuPart.heat && nuPart.heat.fatigueCancel;
     const heatMul = (raceWeather === "heat" && !heatCancelled) ? 1.15 : 1;
     // v28: 役割を縮小して現役続行を選んだベテランは、レース負荷が軽くなり疲労蓄積が減る
@@ -95,7 +96,7 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
     // 第17弾: 雨天用タイヤ（タイヤスロット）は落車率を半減させる
     const tiPid = player.parts && player.parts.tire;
-    const tiPart = tiPid && PARTS[tiPid];
+    const tiPart = tiPid && resolvePart(player.customParts, tiPid);
     const rainCrashHalf = tiPart && tiPart.rain && tiPart.rain.crashHalf;
     const rainCrashChance = (hasAbility(player, "rain_sp") ? 0.02 : 0.06) * (rainCrashHalf ? 0.5 : 1);
     if (raceWeather === "rain" && Math.random() < rainCrashChance) {
@@ -389,6 +390,12 @@ export function mlAdvanceMonth(s, mode) {
       // v51(第11弾Phase2・2-D): 世界ニュースをこの年度末に1回だけ生成して保存する
       // （mlWorldStarsForYearの「毎回1年目から再計算」に代わり、実際に起きたイベント
       // ＝ageWorldRosters()のretired/debutedをそのまま文章化する）。
+      // 第87弾(devlog/wave87.md): 人気度の年次減衰。世界ptのdecayedWPと同じ「年度末に減衰」の
+      // 思想で揃える（年10%減。世界ptの0.72より緩やか）。第86弾の通しプレイで人気度が6年目に
+      // 上限100へ張り付き以後40年間動かなくなることが判明したための対処。worldRank/
+      // decayedRiderStatsと同じく、retireChoice時のトップレベルplayer（即時表示用）には
+      // 適用せず、nextState側（pendingOffseason経由でオフシーズン後に反映）にのみ適用する。
+      const decayedPlayer = { ...nextState.player, popularity: Math.max(0, (nextState.player.popularity || 0) * ML_POP_DECAY) };
       const leaderEntry = Object.values(decayedRiderStats).sort((a, b) => (b.wp || 0) - (a.wp || 0))[0] || null;
       // 第16弾B-1: 王者交代・エース交代・ライバル引退後継・節目の勝利数を加えて最大7行へ拡充
       const rivalRetirements = [
@@ -403,7 +410,7 @@ export function mlAdvanceMonth(s, mode) {
       // v32（キャリアグラフ）：この年の到達値を年次記録に積む（OVR・世界ランク・通算成績の推移）
       const histEntry = { year: s.year, ovr: overall(player), worldRank: s.worldRank, worldBest: s.worldRankBest, wins: s.careerWins || 0, podiums: s.careerPodiums || 0 };
       nextState = {
-        ...nextState, worldPoints: decayedWP, worldRank, riderStats: decayedRiderStats, worldNews,
+        ...nextState, player: decayedPlayer, worldPoints: decayedWP, worldRank, riderStats: decayedRiderStats, worldNews,
         worldLeaderId: leaderEntry ? leaderEntry.id : null,
         careerHistory: [...(s.careerHistory || []), histEntry],
       };
@@ -427,12 +434,21 @@ export function mlAdvanceMonth(s, mode) {
     // 第44弾: バッジ枠は最高到達クラスで決まる。降格しても枠を減らさないためclassIdxBestを更新する
     const classIdxBest = Math.max(s.classIdxBest ?? s.classIdx, classIdx);
     // v14.3: 年俸改定。その年のポイント・勝利・表彰台に応じて年俸が上がる
+    // 第87弾(devlog/wave87.md): 旧式は加算のみで減額・上限が無く、通しプレイ(第86弾)で
+    // 46年目に年俸が青天井（資金559,409万円）になることが判明した。実績に見合わない分が
+    // 毎年1割ずつ剥がれる形（salary*0.9 + perf、平衡点は10×perf）へ変え、クラス別の
+    // 上限・下限（ML_SALARY_CAP/FLOOR）を設けた。世界ptの0.72減衰と同じ思想。
     const yearRaces = (player.raceLog || []).filter(e => e.year === s.year);
     const yearWins = yearRaces.filter(e => e.rank === 1).length;
     const yearPodiums = yearRaces.filter(e => e.rank <= 3).length;
-    const salaryGain = Math.round(s.points * 2.2 + yearWins * 18 + yearPodiums * 7);
-    const salary = s.salary + salaryGain;
-    if (salaryGain > 0) log.push(`【${s.year}年目 3月】戦績が評価され年俸+${salaryGain}万円（年俸${salary}万円に）`);
+    const perf = s.points * 2.2 + yearWins * 18 + yearPodiums * 7;
+    const prevSalary = s.salary;
+    const salary = Math.round(Math.min(
+      ML_SALARY_CAP[classIdx],
+      Math.max(ML_SALARY_FLOOR[classIdx], prevSalary * 0.9 + perf)
+    ));
+    const salaryDelta = salary - prevSalary;
+    if (salaryDelta !== 0) log.push(`【${s.year}年目 3月】年俸${salary}万円で契約更改（${salaryDelta > 0 ? "+" : ""}${salaryDelta}万円）`);
     // v14: 好成績を残すと移籍オファーが来る（簡易な移籍システム）
     // v15: オファーはチーム名だけでなく、年俸倍率・契約金・エース確約の有無が
     // チームごとに異なる。残留オファーは条件を上乗せしない基準線として提示し、

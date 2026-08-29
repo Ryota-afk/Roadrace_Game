@@ -104,3 +104,18 @@ export function mlLivingCost(s) {
 export function mlPrivateCampCost(s) {
   return 120 + Math.max(0, (s.year || 1) - 1) * 40 + (s.classIdx || 0) * 60;
 }
+
+// 第88弾(devlog/wave88.md): 進行中プロジェクトの経過月数・成功率。shop.js（実際の判定）と
+// events.jsx（表示）の両方から呼び、式が2箇所でずれないようにする。
+export function mlProjectMonthsElapsed(project, year, month) {
+  return (year - project.startYear) * 12 + (month - project.startMonth);
+}
+
+export function mlDevProjectSuccessRate(project, cfg) {
+  const rate = Math.min(cfg.successCap, cfg.successBase + project.invested * cfg.successPerMoney);
+  return project.policy === "sharp" ? Math.max(0, rate - cfg.sharpPenalty) : rate;
+}
+
+export function mlSciProjectSuccessRate(project, cfg) {
+  return Math.min(cfg.successCap, cfg.successBase + project.invested * cfg.successPerMoney);
+}

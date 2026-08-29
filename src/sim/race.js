@@ -3,7 +3,7 @@
 // sim/ticks.js（tickシミュレーション本体）、sim/finish.js（決着処理）。
 // 依存は data/parts → sim/effects/course → sim/ticks → sim/finish の一方向。
 // 外部の呼び出し側（19ファイル）は本ファイル経由のimportのまま無改修で動く。
-export { PART_SLOTS, PARTS } from "../data/parts.js";
+export { PART_SLOTS, PARTS, resolvePart } from "../data/parts.js";
 export { rollWeather, rainMul, MONUMENT_ABILITY, monumentMul, effAbilities, typeAffinityBonus, segmentAbility } from "./effects.js";
 export { generateCourse, climbWeightFor, terrainSpeedMul } from "./course.js";
 export {

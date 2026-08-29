@@ -17,6 +17,9 @@ import {
   mlSetFocus as mshSetFocus, mlBuyGrowthPowUp as mshBuyGrowthPowUp, mlBuyGrowthShift as mshBuyGrowthShift,
   mlHireCoach as mshHireCoach, mlDismissCoach as mshDismissCoach, mlAcquireBadge as mshAcquireBadge,
   mlUnequipBadge as mshUnequipBadge, mlEquipBloodBadge as mshEquipBloodBadge,
+  mlStartDevProject as mshStartDevProject, mlAddDevProject as mshAddDevProject, mlFinishDevProject as mshFinishDevProject,
+  mlStartSciProject as mshStartSciProject, mlAddSciProject as mshAddSciProject, mlFinishSciProject as mshFinishSciProject,
+  mlSciConfirmSwap as mshSciConfirmSwap,
 } from "../controllers/mylife/shop.js";
 import {
   mlBecomeMentor as mcBecomeMentor, mlChooseTeam as mcChooseTeam,
@@ -287,6 +290,14 @@ export function useMyLifeGame({ superMode, askConfirm }) {
   const mlAcquireBadge = (id, swapOutId) => setMl(s => mshAcquireBadge(s, id, swapOutId));
   const mlUnequipBadge = (id) => setMl(s => mshUnequipBadge(s, id));
   const mlEquipBlood = (id) => setMl(s => mshEquipBloodBadge(s, id));
+  // 第88弾(devlog/wave88.md): ワンオフ機材の開発／科学トレーニング
+  const mlStartDevProject = (slot, policy) => setMl(s => mshStartDevProject(s, slot, policy));
+  const mlAddDevProject = (amount) => setMl(s => mshAddDevProject(s, amount));
+  const mlFinishDevProject = () => setMl(mshFinishDevProject);
+  const mlStartSciProject = () => setMl(mshStartSciProject);
+  const mlAddSciProject = (amount) => setMl(s => mshAddSciProject(s, amount));
+  const mlFinishSciProject = () => setMl(mshFinishSciProject);
+  const mlSciConfirmSwap = (swapOutId) => setMl(s => mshSciConfirmSwap(s, swapOutId));
 
   return {
     ml, setMl, mlCreateArgsRef, ML_MILESTONE_LABEL,
@@ -299,5 +310,6 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     mlTriggerSponsorGig, mlResolveEvent,
     mlBuyPart, mlSetPart, mlUpgradePart, mlBuyGear, mlBuyStock, mlUseStock, mlUseStockConfirm,
     mlPrivateCamp, mlBuyCar, mlBuyHouse, mlBuyGrowthPowUp, mlBuyGrowthShift, mlHireCoach, mlDismissCoach, mlAcquireBadge, mlUnequipBadge, mlEquipBlood, mlGenRace,
+    mlStartDevProject, mlAddDevProject, mlFinishDevProject, mlStartSciProject, mlAddSciProject, mlFinishSciProject, mlSciConfirmSwap,
   };
 }

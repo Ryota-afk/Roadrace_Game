@@ -195,6 +195,9 @@ const ML_SAVE_FIELDS = [
   "raceFocus", // 第43弾: 出走計画（宣言した適性が通常月の候補に必ず1本入る）
   "raceFocus2", "cpFocus2", // 第74弾: 出走計画の2地形目（旧raceFocusSlotsから作り替え）
   "cpGrowthRevealEarly", // 第70弾: CPショップの成長力早期判明
+  "devProject", // 第88弾: ワンオフ機材の開発（進行中プロジェクト）
+  "sciProject", // 第88弾: 科学トレーニング（進行中プロジェクト）
+  "sciPendingId", // 第88弾: 科学トレーニング成功・枠満杯で手放す1つを選ぶまでの保留中の報酬id
 ];
 
 export function saveMyLife(ml) {

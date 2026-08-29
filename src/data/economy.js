@@ -68,6 +68,15 @@ export const PTS = [10, 7, 5, 3, 3, 1, 1, 1, 1, 1];
 
 export const GRADE_MUL = { 1: 1, 2: 1.5, 3: 2, 4: 2.6 };
 
+// 第87弾(devlog/wave87.md): 年俸が加算のみで減額・上限が無く、通しプレイで青天井に
+// なることが判明したため、クラス別の上限・下限を設けた（B1/A/PRO）。
+export const ML_SALARY_CAP = [1200, 3000, 8000];
+export const ML_SALARY_FLOOR = [180, 400, 900];
+
+// 第87弾: 人気度の年次減衰。世界ptのdecayedWP(×0.72)と同じ「年度末に減衰」の
+// 思想で揃える（世界ptより緩やかな年10%減）。
+export const ML_POP_DECAY = 0.9;
+
 export const WEATHER = {
   clear: { label: "晴れ", icon: "☀️" },
   rain: { label: "雨", icon: "🌧" },

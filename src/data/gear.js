@@ -74,6 +74,31 @@ export const ML_PART_UPGRADE_COST = [30, 55, 90, 150, 240, 385, 615]; // Lv0→1
 export const ML_PART_LV_MAX = 5; // CP未購入時の上限（購入後の実効上限は+partLvMaxBonus）
 export const ML_PART_LV_MUL = 0.12; // 1Lvあたり+12% → Lv5で1.6倍・Lv7で1.84倍
 
+// 第88弾(devlog/wave88.md): 資金の使い道2種。「時間がかかる・結果が不確定・
+// 終わったら何かが残る（失う）」プロジェクトの形をとる（却下された案の理由と
+// 満たすべき基準はdevlog/wave87.md参照）。
+export const ML_DEV_PROJECT = {
+  initCost: 400, addCosts: [200, 500], minMonths: 3,
+  successBase: 0.30, successPerMoney: 1 / 4000, successCap: 0.85,
+  sharpPenalty: 0.10, bigSuccessChance: 0.25,
+};
+export const ML_SCI_PROJECT = {
+  initCost: 500, addCosts: [300, 800], minMonths: 4,
+  successBase: 0.25, successPerMoney: 1 / 5000, successCap: 0.80,
+  goldChance: 0.15,
+};
+// 科学トレーニング成功時の報酬プール。ACQUIRE_REQS(domain/mylife/cp.js)の24種のうち、
+// 脚質限定（mount/puncheur/flatlander/sprinter_sp/soloist）とモニュメント限定
+// （pave_sp/ardennes_sp/autumn_sp）を除いた、誰でも自然に受け取れる16種に絞った。
+export const ML_SCI_GOOD_POOL = [
+  "closer", "escape", "domestique", "iron", "big", "finisher", "engine",
+  "allrounder_sp", "kicker", "climbengine", "rouleur", "grinder", "sponge",
+  "allclimber", "bigheart", "diesel",
+];
+// 失敗時の悪特性プール（data/abilities.jsのbad:true全6種）。バッジ枠を消費しない
+// （createChar.js「呪いは通常枠と別枠で背負う」の前例に倣う）。
+export const ML_SCI_BAD_POOL = ["choke", "nervous", "heavy", "glass", "moody", "lazy_sp"];
+
 export const ML_SPECIAL_TRAINING = {
   altitude: { label: "高地合宿", keys: ["stamina", "solo"], gainMul: 1.7, fatigue: 24, cond: 0, desc: "スタミナ・独走を集中的に鍛える（疲労大）" },
   sprintcamp: { label: "スプリント特訓", keys: ["sprint", "flat"], gainMul: 1.7, fatigue: 20, cond: 0, desc: "スプリント・平坦＋加速力を集中的に鍛える" },

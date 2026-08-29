@@ -2,9 +2,15 @@
 // 元はmlFinishRace内にベタ書きされていたロジック（挙動は完全に同一）。
 import { POP_MILESTONES } from "../../data/economy.js";
 
+// 第87弾(devlog/wave87.md): 獲得量に逓減を掛ける（人気度が高いほど上がりにくい）。
+// 通常レース(mlFinishRace)・チームTT(mlFinishTeamTT)の両方がこの関数を通る唯一の
+// 合流点のため、ここ1箇所の変更で両方に効く。第86弾の通しプレイで6年目に人気度が
+// 上限100へ張り付き以後40年間動かなくなることが判明したための対処。
 export function applyPopGain(player, popGain) {
   const done = player.popMilestones || [];
-  const popularity = Math.max(0, Math.min(100, (player.popularity || 0) + popGain));
+  const cur = player.popularity || 0;
+  const effective = popGain * (1 - cur / 100);
+  const popularity = Math.max(0, Math.min(100, cur + effective));
   let popBonus = 0;
   const newlyHit = [];
   POP_MILESTONES.forEach(m => {

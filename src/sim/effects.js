@@ -2,7 +2,7 @@
 import { AB_KEYS, TYPES } from "../data/abilities.js";
 import { badgeTier, condMul, hasAbility, hasGoldAbility, tierValue } from "../core/core.js";
 import { ML_PART_LV_MUL } from "../data/gear.js";
-import { PART_SLOTS, PARTS } from "../data/parts.js";
+import { PART_SLOTS, resolvePart } from "../data/parts.js";
 import { climbWeightFor } from "./course.js";
 
 export function rollWeather(rng) {
@@ -40,8 +40,8 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   if (r.parts) {
     PART_SLOTS.forEach(slot => {
       const pid = r.parts[slot];
-      if (!pid || !PARTS[pid]) return;
-      const p = PARTS[pid];
+      const p = pid && resolvePart(r.customParts, pid);
+      if (!p) return;
       // v51(第12弾12-B): マイライフ限定のパーツ強化Lv（Season選手はr.partLvが存在せず常に0＝無影響）
       const lv = (r.partLv && r.partLv[slot]) || 0;
       const mul = 1 + ML_PART_LV_MUL * lv;
@@ -67,7 +67,8 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
   if (weather === "rain") {
     let shift = 0;
     const tirePid = r.parts && r.parts.tire;
-    if (tirePid && PARTS[tirePid] && PARTS[tirePid].rain) shift += PARTS[tirePid].rain.mulShift;
+    const tirePart = tirePid && resolvePart(r.customParts, tirePid);
+    if (tirePart && tirePart.rain) shift += tirePart.rain.mulShift;
     if (itemBoost && itemBoost.setup === "rain") shift += 0.04;
     if (shift > 0) wMul = Math.min(0.99, wMul + shift);
   }

@@ -17,7 +17,7 @@ import { DISCIPLINES } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { Item, PrimaryBtn, Prose, PressRow, QuietBtn, Screen, Section, Tag, TypeChip } from "../../components/kit.jsx";
 import { ACQUIRE_REQS, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, disciplineScore, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
-import { PART_SLOTS, PARTS } from "../../data/parts.js";
+import { PART_SLOTS, resolvePart } from "../../data/parts.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
 
 // 第66弾Phase2(devlog/wave66.md): ホームで選んだレースのカードが出走表(race.jsx)へ
@@ -301,7 +301,7 @@ export function renderMyLifeHubScreen(ctx) {
           {/* 第17弾B: 機材付け替え（案3・適合表示付き）。1つも装着していなければ出さない（§7：迷ったら消す） */}
           {PART_SLOTS.some(slot => r.parts && r.parts[slot]) && (() => {
             const fitHint = mlGearFitHint(r, race);
-            const equipped = PART_SLOTS.filter(slot => r.parts[slot]).map(slot => PARTS[r.parts[slot]]?.label).filter(Boolean);
+            const equipped = PART_SLOTS.filter(slot => r.parts[slot]).map(slot => resolvePart(r.customParts, r.parts[slot])?.label).filter(Boolean);
             return (
               <>
                 <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: T.space.sm }}>機材</div>

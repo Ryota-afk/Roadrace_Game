@@ -43,6 +43,15 @@ export const PARTS = {
   },
 };
 
+// 第88弾(devlog/wave88.md): ワンオフ機材の開発で作られる一点物パーツの解決。選手ごとに
+// 一意なid（custom_<slot>_...）を持ち静的なPARTSには存在しないため、選手の
+// customParts（player.customParts）を先に見てから静的PARTSへフォールバックする。
+// 全てのPARTS[pid]参照箇所（sim/effects.js・screens/mylife/*・controllers/mylife/month.js）
+// はこの関数を経由すること。
+export function resolvePart(customParts, pid) {
+  return (customParts && customParts[pid]) || PARTS[pid];
+}
+
 // パーツの効果を表示用の文字列断片配列にする（ショップ・強化画面・レース前UIで共有）。
 // abMulはab（常時効果）にのみ掛ける強化倍率（呼び出し側がpartLvから算出して渡す。
 // 条件付き効果には掛けない、上のコメント参照）。abLabelは能力キー→日本語ラベルの対応表

@@ -111,6 +111,18 @@ export function mlAcquireAbility(r, id, swapOutId, maxSlots = 3) {
   return { ...r, abilities: [...abilities.filter(a => a !== swapOutId), id] };
 }
 
+// 第88弾(devlog/wave88.md): 科学トレーニングの成功報酬専用。mlAcquireAbilityと同じ
+// 枠管理（満杯なら入れ替え・体質は入れ替え対象外）を使うが、ACQUIRE_CONDITIONSのゲートを
+// 通さない——実績を満たしていない特殊能力を金とリスクで先取りする、という
+// プロジェクトの意味そのものがこの「ゲート無し」に表れている。
+export function mlGrantAbilityDirect(r, id, swapOutId, maxSlots = 3) {
+  const abilities = r.abilities || [];
+  if (abilities.includes(id)) return r;
+  if (mlSlotUsed(r) < maxSlots) return { ...r, abilities: [...abilities, id] };
+  if (!swapOutId || !abilities.includes(swapOutId) || mlBadgeKind(swapOutId) === "taishitsu") return r;
+  return { ...r, abilities: [...abilities.filter(a => a !== swapOutId), id] };
+}
+
 // 第44弾: バッジを外す（＝装備を解く）。ACQUIRE_CONDITIONSは累積実績を見るため、外しても
 // 条件を満たしたままなら「付ける」でいつでも戻せる（goldAbilitiesの実績も無条件で保持される。
 // hasAbility/hasGoldAbilityは常にabilities側をゲートに使うため、外している間は効果も発火しない）。

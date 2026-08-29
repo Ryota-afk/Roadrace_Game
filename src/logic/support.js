@@ -8,7 +8,7 @@
 // 機能ごとに src/domain/・src/state/・src/sim/ 配下へ再配置した（分割方針・対応表はdevlog/wave13.md
 // 参照）。本ファイル自体は37箇所の既存import文（"./logic/support.js"）を無変更で動かすための
 // 互換シムとして残す。呼び出し側を直接importへ揃えるのは後日の別タスク。
-import { EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_META, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER } from "../data/economy.js";
+import { EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, ML_POP_DECAY, ML_SALARY_CAP, ML_SALARY_FLOOR, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS, SCOUT_POLICIES, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_META, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER } from "../data/economy.js";
 import { EVENTS, ML_BACKGROUNDS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_SPONSOR_GIGS } from "../data/events.js";
 import { MANAGER_DIRECTIVES, SEASON_OBJECTIVES } from "../data/directives.js";
 import { ML_AB_COACH_KEY, ML_CARS, ML_COACH_MAX_BY_CLASS, ML_COACH_MUL, ML_COACH_SALARY, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_GEAR, ML_HOUSES, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS } from "../data/gear.js";
@@ -24,7 +24,7 @@ import { teamsForClass } from "../state/state.js";
 
 // data/* ・ view/* ・ domain/* へ移送した定数・関数の再エクスポート（呼び出し側の import 文を変更しないための互換シム）
 export {
-  EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS,
+  EVENT_CHANCE, GRADE_MUL, MLCP_DIFF_MUL, ML_CP_MILESTONES, ML_POP_DECAY, ML_SALARY_CAP, ML_SALARY_FLOOR, OB_COACH_SALARY, POP_MILESTONES, PRIZES, PTS,
   SCOUT_POLICIES, SLOT_LABEL, STAFF_MAX_BY_CLASS, STAFF_META, STAFF_ROLES, STAFF_SALARY_PER_LV, TYPE_COACH_ABILITY, WEATHER,
   EVENTS, ML_BACKGROUNDS, ML_EVENTS, ML_PERSONALITY_EVENTS, ML_SPONSOR_GIGS,
   MANAGER_DIRECTIVES, SEASON_OBJECTIVES,
@@ -43,7 +43,7 @@ export {
 // v52(第13弾Phase0): 以下、旧本ファイルの実装（成長計算・CP・血統・スタッフ・ライバル演出・実績・
 // 世界ランク・キャリア年表・野望・セーブ入出力・buildSim等）を分割先から再エクスポートする。
 export {
-  upgradeGoldAbilities, ACQUIRE_CONDITIONS, ACQUIRE_REQS, acquireNewAbility, mlAcquireAbility, mlUnequipAbility, mlEquipBlood, mlBadgeSlots, mlBadgeKind, mlSlotUsed, ABILITY_FILE_KEY,
+  upgradeGoldAbilities, ACQUIRE_CONDITIONS, ACQUIRE_REQS, acquireNewAbility, mlAcquireAbility, mlGrantAbilityDirect, mlUnequipAbility, mlEquipBlood, mlBadgeSlots, mlBadgeKind, mlSlotUsed, ABILITY_FILE_KEY,
   loadAbilityFile, saveAbilityFile, noteAbilityDiscovery, bumpRosterAbAll, addProdigyRookie,
   CP_MILESTONES, applyCpMilestones, mlCpPerks, computeClearPoints, computeMyLifeClearPoints, cpUnlockRows,
   cpMilestoneSummary,
@@ -84,6 +84,7 @@ export {
 
 export {
   mlAchievementBonus, mlGrowthCap, mlGrowthCapFor, ML_TYPE_CAP_OFFSET, weightedPick, pickMlEvent, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost,
+  mlProjectMonthsElapsed, mlDevProjectSuccessRate, mlSciProjectSuccessRate,
 } from "../domain/mylife/growthCap.js";
 
 export {
