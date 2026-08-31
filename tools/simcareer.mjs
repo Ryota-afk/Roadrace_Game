@@ -42,12 +42,11 @@ const {
 const { mlSelectedRace } = await import(`${R}/domain/mylife/race.js`);
 const { resolveNationalRole } = await import(`${R}/controllers/mylife/raceStart.js`);
 const { buildMyLifeSim } = await import(`${R}/sim/buildMyLifeSim.js`);
-const { protegeState, mlBadgeKind, mlGrowthCapFor } = await import(`${R}/logic/support.js`);
+const { protegeState, mlBadgeKind } = await import(`${R}/logic/support.js`);
 const { mlProjectMonthsElapsed } = await import(`${R}/domain/mylife/growthCap.js`);
 const { ML_DEV_PROJECT, ML_SCI_PROJECT } = await import(`${R}/data/gear.js`);
 const { PART_SLOTS } = await import(`${R}/data/parts.js`);
 const { ML_SALARY_CAP } = await import(`${R}/data/economy.js`);
-const { AB_KEYS } = await import(`${R}/data/abilities.js`);
 
 // ---------------------------------------------------------------------------
 // 引数
@@ -160,19 +159,16 @@ function checkInvariants(s, violations, careerId) {
   } else {
     s.__negMoneyStreak = 0;
   }
-  // A4: 成長キャップ超過（能力値がmlGrowthCapForの上限を超えていないか）
-  if (s.player) {
-    AB_KEYS.forEach(k => {
-      const cap = mlGrowthCapFor(s.year, s.player, s, k);
-      // ⚠️許容差0.5：実測でclimb=86.1/cap=86.0のような0.1前後の超過が常時発生する
-      // （addAbの丸め方とmlGrowthCapForの評価タイミングのズレによる浮動小数の余り、
-      // 第33・36弾の早期カンスト系＝数十点単位の実質的な上限崩壊とは性質が異なる）。
-      // 0.01のままだと本物の崩壊がノイズに埋もれるため、意味のある超過だけを拾う値に緩めた。
-      if ((s.player[k] || 0) > cap + 0.5) {
-        violations.push(`[career${careerId}] ${when} A4違反: ${k}=${s.player[k].toFixed(1)} > cap=${cap.toFixed(1)}`);
-      }
-    });
-  }
+  // ⚠️A4（成長キャップ超過）は削除した。実測でclimb/flatが常時cap超過（時にはcapの
+  // 1.3倍近く）していたので不具合を疑ったが、domain/mylife/growthCap.js:49-50に
+  // 明文の設計意図があった：「上限を下げても既存キャラの能力値は下がらない（addAbは
+  // 超過分の伸びが急減衰するだけでクランプはしないため）」。つまりcapは減速する
+  // ソフトな目安であり、player[k] > cap は常態としてあり得る——ハード上限ではない。
+  // A4は存在しない不変条件をチェックしていた（n=20実測でA1〜A3=0件に対しA4だけ
+  // 5,252件を検出し、この設計上の誤りが発覚した）。第33・36弾の「早期カンスト」は
+  // 「capの計算式自体が積み増しで際限なく伸びる」問題であり、性質が異なる別の
+  // チェックが要る（cap算出式の構成要素の増え方を見る等）。今回は実装しない
+  // ——DEVLOG「次のアクション」から#28を撤回し、この節に経緯を残す。
 }
 
 // ---------------------------------------------------------------------------
