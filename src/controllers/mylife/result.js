@@ -15,7 +15,7 @@ import {
   rivalDrama, rivalMeetingHeat, rivalScene, worldPointsForFinish,
 } from "../../logic/support.js";
 import { mlBondsAfterRace } from "../../domain/mylife/bonds.js";
-import { applyPopGain } from "../../domain/mylife/popularity.js";
+import { applyPopGain, popAdd } from "../../domain/mylife/popularity.js";
 import { segMixOfRace } from "../../domain/shared/segMix.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
 
@@ -188,7 +188,8 @@ export function mlRaceFinish(s) {
       log = [...log, `【${s.year}年目 ${MONTHS[s.month]}】🤝 エース${sim.assistedAce.name}を最後まで牽引したが${ar}位。報われない走りになった`];
     }
   }
-  if (assistPop) player.popularity = Math.max(0, Math.min(100, player.popularity + assistPop));
+  // 第90弾(devlog/wave90.md): popAdd経由に統一
+  if (assistPop) player.popularity = popAdd(player.popularity, assistPop);
   // v36(#7): 大勝・連勝を「号外」として演出（値するときだけnon-null）
   const newspaper = mlNewspaper({ player, race, rank: me.rank, careerWins, worldRank, year: s.year, month: s.month });
   return {

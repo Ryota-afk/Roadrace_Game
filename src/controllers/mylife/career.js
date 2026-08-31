@@ -6,7 +6,7 @@ import { CLASSES } from "../../data/progression.js";
 import { MANAGER_DIRECTIVES } from "../../data/directives.js";
 import { mulberry, overall, pickRiderName, ridState, rollAbilities } from "../../core/core.js";
 import { mlTeammatesFromRoster } from "../../state/state.js";
-import { ML_CROSSROADS, ML_OFFSEASON_CHOICES, abilityDeltaSummary, mlGenDirective, mlRollCrossroads } from "../../logic/support.js";
+import { ML_CROSSROADS, ML_OFFSEASON_CHOICES, ML_SALARY_CAP, abilityDeltaSummary, mlGenDirective, mlRollCrossroads } from "../../logic/support.js";
 import { mlGenRaceCandidates } from "../../domain/mylife/race.js";
 
 // v18: シーズンモードのキャプテン制度に対応するマイライフ側の役割。30歳以降、
@@ -36,9 +36,13 @@ export function mlBecomeMentor(s) {
 // v16: 移籍先チームのtierがそのままプレイヤーの新classIdxになる（機材解放条件に直結）。
 // classIdxが変わる場合はそのtierに合わせてrace/directiveも生成し直す
 export function mlChooseTeam(s, offer) {
-  const salary = Math.round(s.salary * offer.salaryMul);
-  const money = s.money + offer.bonus;
   const classIdx = offer.tier != null ? offer.tier : s.classIdx;
+  // 第90弾(devlog/wave90.md): 年度末の改定(controllers/mylife/month.js)にはクラス別上限を
+  // 入れたが、移籍の年俸倍率(1.05〜1.6)には入れ忘れていた。B1(上限1200万)なのに移籍直後は
+  // 年俸3300万、という上限を超えた状態が翌年度末まで続く不具合があった。下限は掛けない
+  // （移籍は上振れの機会であり、年度末の改定とは意味が違う）。
+  const salary = Math.min(ML_SALARY_CAP[classIdx], Math.round(s.salary * offer.salaryMul));
+  const money = s.money + offer.bonus;
   const classChanged = classIdx !== s.classIdx;
   const races = classChanged ? mlGenRaceCandidates(s.year, s.month, classIdx, [s.raceFocus, s.raceFocus2]) : s.races;
   const managerEval = s.managerEval;

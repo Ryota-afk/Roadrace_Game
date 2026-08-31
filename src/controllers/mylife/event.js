@@ -4,6 +4,7 @@
 import { AB_KEYS, AB_LABEL } from "../../data/abilities.js";
 import { ML_SPONSOR_GIGS } from "../../data/events.js";
 import { addAb, bumpGrowthPow, growSub, mlGrowthCapFor, weightedPick } from "../../logic/support.js";
+import { popAdd } from "../../domain/mylife/popularity.js";
 import { mlAdvanceMonth } from "./month.js";
 
 // v14.2: 私生活・取材イベント（練習/休養以外の月次アクション）
@@ -27,7 +28,8 @@ export function mlApplyEventEffects(player0, effects, ml) {
     });
   }
   // v27: 個人スポンサー依頼イベント用。人気度も増減させられるようにする
-  if (effects.popularityDelta) player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + effects.popularityDelta));
+  // 第90弾(devlog/wave90.md): popAdd経由に統一（増加時のみ逓減がかかる）
+  if (effects.popularityDelta) player.popularity = popAdd(player.popularity, effects.popularityDelta);
   // v36(#8): 私生活イベントを有意義に。メンタル（フォーム安定・大舞台に効く副ステータス）を育てられる
   if (effects.mentalDelta) growSub(player, "mental", effects.mentalDelta);
   // v36(#8): フォーム（当日の仕上がり）を直接動かせる（気分転換で調子が上向く等）
@@ -154,7 +156,8 @@ export function mlResolveRivalScene(s, choiceIdx) {
   const eff = resp.effects || {};
   let player = { ...s.player };
   if (eff.mentalDelta) growSub(player, "mental", eff.mentalDelta);
-  if (eff.popularityDelta) player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + eff.popularityDelta));
+  // 第90弾(devlog/wave90.md): popAdd経由に統一
+  if (eff.popularityDelta) player.popularity = popAdd(player.popularity, eff.popularityDelta);
   let rivalRecord = s.rivalRecord;
   if (eff.heatDelta) rivalRecord = { ...rivalRecord, heat: (rivalRecord && rivalRecord.heat || 0) + eff.heatDelta };
   return { ...s, player, rivalRecord, rivalSceneReply: resp };

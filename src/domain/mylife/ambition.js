@@ -3,6 +3,7 @@ import { AB_KEYS } from "../../data/abilities.js";
 import { GROWTH_POW_LADDER } from "../../data/progression.js";
 import { ML_AMBITION_PATHS, mlAmbitionMetricValue } from "../../state/state.js";
 import { addAb } from "../shared/growth.js";
+import { popAdd } from "./popularity.js";
 
 export function mlAmbitionPath(ml) { return ML_AMBITION_PATHS[ml.ambitionPath] || ML_AMBITION_PATHS.victory; }
 
@@ -28,7 +29,8 @@ export function applyAmbitionReward(reward, player, money) {
   const parts = [];
   let newMoney = money;
   if (reward.money) { newMoney += reward.money; parts.push(`資金+${reward.money}万円`); }
-  if (reward.pop) { player.popularity = Math.max(0, Math.min(100, (player.popularity || 0) + reward.pop)); parts.push(`人気+${reward.pop}`); }
+  // 第90弾(devlog/wave90.md): popAdd経由に統一（アンビション報酬は最大+25で最も大きい）
+  if (reward.pop) { player.popularity = popAdd(player.popularity, reward.pop); parts.push(`人気+${reward.pop}`); }
   if (reward.ab) { AB_KEYS.forEach(k => addAb(player, k, reward.ab, 130)); parts.push(`全能力+${reward.ab}`); }
   if (reward.growth) { player.growthPow = bumpGrowthPow(player.growthPow, reward.growth); parts.push(`成長力→${player.growthPow}`); }
   return { money: newMoney, text: parts.join("・") };
