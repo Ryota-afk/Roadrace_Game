@@ -38,14 +38,18 @@ const {
 const {
   mlStartDevProject, mlAddDevProject, mlFinishDevProject,
   mlStartSciProject, mlAddSciProject, mlFinishSciProject, mlSciConfirmSwap,
+  mlBuyHouse, mlBuyCar, mlBuyGear, mlHireCoach, mlBuyPart, mlSetPart, mlUpgradePart,
 } = await import(`${R}/controllers/mylife/shop.js`);
 const { mlSelectedRace } = await import(`${R}/domain/mylife/race.js`);
 const { resolveNationalRole } = await import(`${R}/controllers/mylife/raceStart.js`);
 const { buildMyLifeSim } = await import(`${R}/sim/buildMyLifeSim.js`);
 const { protegeState, mlBadgeKind } = await import(`${R}/logic/support.js`);
 const { mlProjectMonthsElapsed } = await import(`${R}/domain/mylife/growthCap.js`);
-const { ML_DEV_PROJECT, ML_SCI_PROJECT } = await import(`${R}/data/gear.js`);
-const { PART_SLOTS } = await import(`${R}/data/parts.js`);
+const {
+  ML_DEV_PROJECT, ML_SCI_PROJECT, ML_HOUSES, ML_CARS, ML_GEAR, ML_AB_COACH_KEY,
+  ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_COACH_SIGNING, ML_COACH_MAX_BY_CLASS,
+} = await import(`${R}/data/gear.js`);
+const { PART_SLOTS, PARTS } = await import(`${R}/data/parts.js`);
 const { ML_SALARY_CAP } = await import(`${R}/data/economy.js`);
 
 // ---------------------------------------------------------------------------
@@ -120,9 +124,38 @@ function spenderSinks(s, rng) {
   return s;
 }
 
+// 第94弾(devlog/wave94.md P2): 恒久的なもの（住居・車・練習用品・コーチ・パーツ本体・
+// パーツ強化）を買えるだけ買う方策。⚠️既存のfrugal/spenderはパーツも住居もコーチも
+// 一度も買わないため、「恒久的な使い道が何年目に尽きるか」を実挙動として測れなかった
+// （第93弾の11,720万はdata/から機械的に合計した値で、実際に買う挙動は未計測だった）。
+function builderSinks(s) {
+  if (s.houseLv + 1 < ML_HOUSES.length && s.money >= ML_HOUSES[s.houseLv + 1].price) s = mlBuyHouse(s);
+  if (s.carLv + 1 < ML_CARS.length && s.money >= ML_CARS[s.carLv + 1].price) s = mlBuyCar(s);
+  ["roller", "monitor", "chef"].forEach(k => {
+    if (!s.gear[k] && s.money >= ML_GEAR[k].price) s = mlBuyGear(s, k);
+  });
+  // 同時雇用枠（クラス別1/2/3）の範囲で契約金を払い、既に雇用中のコーチは毎月無料でLv上昇する
+  Object.keys(ML_AB_COACH_KEY).forEach(key => { s = mlHireCoach(s, key); });
+  // パーツ：各スロット未装着なら買えるうち最上位tierを購入・装着し、装着中は上限まで強化する
+  PART_SLOTS.forEach(slot => {
+    if (!s.player.parts?.[slot]) {
+      const cands = Object.entries(PARTS).filter(([, p]) => p.slot === slot && p.tier <= s.classIdx + 1);
+      if (cands.length) {
+        const [pid, part] = cands.reduce((a, b) => (b[1].tier > a[1].tier ? b : a));
+        if (s.money >= part.price) { s = mlBuyPart(s, pid); s = mlSetPart(s, slot, pid); }
+      }
+    }
+    const lv = s.player.partLv?.[slot] || 0;
+    const maxLv = ML_PART_LV_MAX + (s.partLvMaxBonus || 0);
+    if (s.player.parts?.[slot] && lv < maxLv && s.money >= ML_PART_UPGRADE_COST[lv]) s = mlUpgradePart(s, slot);
+  });
+  return s;
+}
+
 const POLICIES = {
   frugal: { maintainSinks: frugalSinks },
   spender: { maintainSinks: spenderSinks },
+  builder: { maintainSinks: builderSinks },
 };
 
 // 決定的な乱数（シンクのスロット選択・開発方針の抽選にのみ使う。第92弾時点ではキャリア
@@ -220,6 +253,36 @@ function step(s, policy, rng) {
   }
 }
 
+// 第94弾P2(devlog/wave94.md): 恒久的な使い道に使った総額を最終状態から逆算する。
+// 毎月の差分を追わなくても、最終Lv・所持状態から一意に決まる（各段階の価格は
+// 累進的に確定しているため）。第93弾の11,720万＝data/から機械計算した「理論上の
+// 総額」に対し、こちらは方策が実際に買った額の実測値（tools/money_demand.mjsと対）。
+function finiteSpend(s) {
+  let total = 0;
+  for (let i = 0; i <= s.houseLv; i++) total += ML_HOUSES[i].price;
+  for (let i = 0; i <= s.carLv; i++) total += ML_CARS[i].price;
+  ["roller", "monitor", "chef"].forEach(k => { if (s.gear[k]) total += ML_GEAR[k].price; });
+  Object.keys(ML_AB_COACH_KEY).forEach(key => { if ((s.coaches?.[key] || 0) > 0) total += ML_COACH_SIGNING; });
+  PART_SLOTS.forEach(slot => {
+    const pid = s.player?.parts?.[slot];
+    if (pid && PARTS[pid]) total += PARTS[pid].price; // 一点物はprice無し＝加算されない
+    const lv = s.player?.partLv?.[slot] || 0;
+    for (let i = 0; i < lv; i++) total += ML_PART_UPGRADE_COST[i] || 0;
+  });
+  return total;
+}
+
+// 恒久的な使い道をすべて買い切ったか（住居・車・練習用品・コーチ・パーツ強化が
+// すべて上限）。「買うものが無くなって資金が余り始める年」を実挙動で特定するために使う。
+function isFiniteSaturated(s) {
+  const maxLv = ML_PART_LV_MAX + (s.partLvMaxBonus || 0);
+  const partsMaxed = PART_SLOTS.every(slot => (s.player?.partLv?.[slot] || 0) >= maxLv && s.player?.parts?.[slot]);
+  const gearDone = ["roller", "monitor", "chef"].every(k => s.gear[k]);
+  const coachMax = ML_COACH_MAX_BY_CLASS[s.classIdx] ?? 0;
+  const coachDone = Object.keys(ML_AB_COACH_KEY).every(key => (s.coaches?.[key] || 0) >= coachMax);
+  return s.houseLv >= ML_HOUSES.length - 1 && s.carLv >= ML_CARS.length - 1 && gearDone && coachDone && partsMaxed;
+}
+
 // ---------------------------------------------------------------------------
 function runOneCareer(policyName, careerId, seed) {
   const rng = mulberry32(seed);
@@ -230,11 +293,13 @@ function runOneCareer(policyName, careerId, seed) {
   const yearly = []; // {year, pop, money, salary, classIdx, worldRank}
   let lastYear = s.year;
   let steps = 0;
+  let saturatedYear = null; // 恒久的な使い道をすべて買い切った最初の年（第94弾P2）
   for (; steps < MAX_STEPS; steps++) {
     // SIM_DEBUG=1で進捗を可視化できる（1キャリアが数十秒〜数分かかるため、固まったのか
     // 実行中なのか外から見分けられないと困る。tools/autoplay.mjsのログ全部書きと同じ理由）。
     if (process.env.SIM_DEBUG && steps % 50 === 0) console.error(`t=${Date.now()} step=${steps} screen=${s.screen} year=${s.year}`);
     checkInvariants(s, violations, careerId);
+    if (saturatedYear == null && isFiniteSaturated(s)) saturatedYear = s.year;
     if (s.year !== lastYear) {
       yearly.push({ year: lastYear, pop: s.player?.popularity ?? 0, money: s.money, salary: s.salary, classIdx: s.classIdx, worldRank: s.worldRank, age: s.player?.age });
       lastYear = s.year;
@@ -252,7 +317,10 @@ function runOneCareer(policyName, careerId, seed) {
   // ⚠️stepsがMAX_STEPSの安全弁に達したのに指定年数へ届いていない＝月送りが異常に
   // 足踏みしている可能性がある（本来は毎月レースに出るだけなので数ステップ/月のはず）
   const stoppedBy = s.__stoppedBy || (steps >= MAX_STEPS ? "steps" : "unknown");
-  return { policyName, careerId, steps, stoppedBy, violations, yearly, finalYear: s.year, finalAge: s.player?.age };
+  return {
+    policyName, careerId, steps, stoppedBy, violations, yearly, finalYear: s.year, finalAge: s.player?.age,
+    saturatedYear, finiteSpendTotal: finiteSpend(s),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -286,7 +354,16 @@ function summarizePolicy(results) {
   const allMonths = results.flatMap(r => r.yearly);
   const pinned = allMonths.filter(y => y.pop >= 100).length;
   const pinnedRate = allMonths.length ? (pinned / allMonths.length * 100) : 0;
-  return { careers: results.length, stepsExhausted, violationCount: allViolations.length, violations: allViolations, yearRows, pinnedRate, monthCount: allMonths.length };
+  // 第94弾P2: 恒久的な使い道の実測（builder方策の基準値取り用。他方策でも一応出す）
+  const satYears = results.map(r => r.saturatedYear).filter(y => y != null);
+  const saturatedMedianYear = satYears.length ? median(satYears) : null;
+  const saturatedRate = results.length ? (satYears.length / results.length * 100) : 0;
+  const finiteSpendMedian = median(results.map(r => r.finiteSpendTotal));
+  return {
+    careers: results.length, stepsExhausted, violationCount: allViolations.length, violations: allViolations,
+    yearRows, pinnedRate, monthCount: allMonths.length,
+    saturatedMedianYear, saturatedRate, finiteSpendMedian,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +397,10 @@ for (const p of policyNames) {
   md += `| 年目 | サンプル数 | 人気度(中央値) | 資金(中央値) | 年俸(中央値) |\n|---|---|---|---|---|\n`;
   r.yearRows.forEach(y => { md += `| ${y.year} | ${y.n} | ${y.popMedian} | ${y.moneyMedian}万 | ${y.salaryMedian}万 |\n`; });
   md += `\n`;
+  // 第94弾P2: 恒久的な使い道の実測
+  md += `恒久的な使い道（住居・車・練習用品・コーチ・パーツ本体・パーツ強化）を買い切った本数: `
+    + `${r.saturatedRate.toFixed(0)}%（${r.saturatedMedianYear != null ? `到達した本の中央値=${r.saturatedMedianYear}年目` : "指定年数内に到達なし"}）\n\n`;
+  md += `実際に使った額の中央値（最終時点）: ${r.finiteSpendMedian != null ? r.finiteSpendMedian.toLocaleString() : "—"}万\n\n`;
 }
 md += `## 不変条件違反の一覧\n\n`;
 const allV = policyNames.flatMap(p => report[p].violations);
