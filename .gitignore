@@ -13,6 +13,10 @@
 !DEVLOG.md
 # --- 生きたアーキテクチャ参照（DEVLOG.mdの§3を分離したもの・第38弾）---
 !ARCHITECTURE.md
+# --- ゲーム開発の指針（外部知見の収蔵庫）。本体は薄い索引、全文はdesign/配下 ---
+!DESIGN_PRINCIPLES.md
+!design/
+!design/**
 # --- 弾（wave）ごとの詳細記録。DEVLOG.mdは短い索引のみを持ち、全文はこちらに置く ---
 !devlog/
 !devlog/**
