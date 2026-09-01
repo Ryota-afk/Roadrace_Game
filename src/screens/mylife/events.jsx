@@ -16,7 +16,7 @@ import {
   mlBadgeKind, mlBadgeSlots, mlDevProjectSuccessRate, mlGrowthPowRevealed, mlLivingCost, mlPrivateCampCost,
   mlProjectMonthsElapsed, mlSciProjectSuccessRate, mlSlotUsed,
 } from "../../logic/support.js";
-import { PARTS, PART_SLOTS, partEffectParts } from "../../data/parts.js";
+import { PARTS, PART_SLOTS, partEffectParts, resolvePart } from "../../data/parts.js";
 
 // mlEventResultText等は複数行の生成テキスト（\n区切り）を含むため、Proseではなく
 // whiteSpace:pre-wrapを明示したこの専用ブロックで改行を保持する。
@@ -109,13 +109,37 @@ export function renderMyLifeEventScreens(ctx) {
                 {PART_SLOTS.map(slot => {
                   const pid = r.parts[slot];
                   // 第88弾: ワンオフ機材（custom_で始まるid）は静的PARTSに存在しないため
-                  // r.customPartsを先に見る（data/parts.jsのresolvePart参照）
-                  const p = pid ? ((r.customParts && r.customParts[pid]) || PARTS[pid]) : null;
-                  const isCustom = pid && r.customParts && r.customParts[pid];
+                  // resolvePart経由でr.customPartsを先に見る（data/parts.js参照）
+                  const p = pid ? resolvePart(r.customParts, pid) : null;
                   const lv = (r.partLv && r.partLv[slot]) || 0;
                   const isOpen = ml.shopSlot === slot;
                   const avail = Object.entries(PARTS).filter(([, pp]) => pp.slot === slot && pp.tier <= ml.classIdx + 1);
                   const minPrice = avail.length ? Math.min(...avail.map(([, pp]) => pp.price)) : null;
+                  // 第94弾(devlog/wave94.md): 一点物（customParts）は静的PARTSに無いため
+                  // avail一覧に一度も現れず、強化ボタンが出ない・履き替えると二度と
+                  // 装着できなくなっていた。所持しているもの（一点物＋所持中の静的パーツ）と
+                  // カタログ（未所持）の2グループに分け、一覧へ一点物も並べる。
+                  const customForSlot = Object.entries(r.customParts || {}).filter(([, cp]) => cp.slot === slot);
+                  const entries = [
+                    ...avail.map(([apid, ap]) => ({ id: apid, part: ap, isCustom: false })),
+                    ...customForSlot.map(([cpid, cp]) => ({ id: cpid, part: cp, isCustom: true })),
+                  ];
+                  // プラス合計（マイナスは無視）。装着中の行だけ現在のLv倍率をかける
+                  // （partLvはスロット単位のため、装着していない手持ちには効いていない＝
+                  // 現行のsim/effects.jsの挙動と一致させる）。
+                  const sortKey = (part, isEquipped) => {
+                    const mul = isEquipped ? 1 + ML_PART_LV_MUL * lv : 1;
+                    return Object.values(part.ab || {}).reduce((a, v) => a + Math.max(0, v), 0) * mul;
+                  };
+                  entries.forEach(e => { e.owned = e.isCustom || e.id === pid || availPartsMl(e.id) > 0; });
+                  const ordered = [
+                    ...entries.filter(e => e.owned).sort((a, b) => {
+                      if (a.id === pid) return -1;
+                      if (b.id === pid) return 1;
+                      return sortKey(b.part, false) - sortKey(a.part, false);
+                    }),
+                    ...entries.filter(e => !e.owned).sort((a, b) => sortKey(b.part, false) - sortKey(a.part, false)),
+                  ];
                   return (
                     <div key={slot} style={{ marginBottom: T.space.sm }}>
                       <button onClick={() => setMl(x => ({ ...x, shopSlot: isOpen ? null : slot }))} style={{
@@ -136,7 +160,7 @@ export function renderMyLifeEventScreens(ctx) {
                       </button>
                       {isOpen && (
                         <div style={{ marginTop: T.space.xs }}>
-                          {avail.map(([apid, ap], i) => {
+                          {ordered.map(({ id: apid, part: ap, owned }, i) => {
                             if (apid === pid) {
                               const maxed = lv >= maxLv;
                               const cost = maxed ? null : ML_PART_UPGRADE_COST[lv];
@@ -147,7 +171,6 @@ export function renderMyLifeEventScreens(ctx) {
                                   buyLabel={maxed ? null : `強化 ${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
                               );
                             }
-                            const owned = availPartsMl(apid) > 0;
                             return (
                               <ShopRow key={apid} first={i === 0} label={ap.label}
                                 detail={partEffectParts(ap, 1, AB_LABEL).join(" / ")}
