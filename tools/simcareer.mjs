@@ -47,7 +47,7 @@ const { protegeState, mlBadgeKind } = await import(`${R}/logic/support.js`);
 const { mlProjectMonthsElapsed } = await import(`${R}/domain/mylife/growthCap.js`);
 const {
   ML_DEV_PROJECT, ML_SCI_PROJECT, ML_HOUSES, ML_CARS, ML_GEAR, ML_AB_COACH_KEY,
-  ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_COACH_SIGNING, ML_COACH_MAX_BY_CLASS,
+  ML_PART_UPGRADE_COST, ML_PART_LV_MAX, ML_COACH_SIGNING, ML_COACH_MAX_BY_CLASS, ML_COACH_SLOTS_BY_CLASS,
 } = await import(`${R}/data/gear.js`);
 const { PART_SLOTS, PARTS } = await import(`${R}/data/parts.js`);
 const { ML_SALARY_CAP } = await import(`${R}/data/economy.js`);
@@ -278,8 +278,15 @@ function isFiniteSaturated(s) {
   const maxLv = ML_PART_LV_MAX + (s.partLvMaxBonus || 0);
   const partsMaxed = PART_SLOTS.every(slot => (s.player?.partLv?.[slot] || 0) >= maxLv && s.player?.parts?.[slot]);
   const gearDone = ["roller", "monitor", "chef"].every(k => s.gear[k]);
+  // ⚠️修正前は「5種のコーチ全員がcoachMaxに到達」を要求しており、常にfalseになる
+  // バグだった。ML_COACH_SLOTS_BY_CLASS（同時雇用枠1/2/3）は5種のうち最大3人しか
+  // 雇えないため、この条件は絶対に成立しない（20年・n=5の実測で全キャリア0%＝
+  // 未到達だったのはこのバグが原因。実際にプレイして到達できない条件を「未達成」の
+  // まま集計していた）。正しくは「雇用枠の人数だけ雇い、雇った分は全員上限まで」。
   const coachMax = ML_COACH_MAX_BY_CLASS[s.classIdx] ?? 0;
-  const coachDone = Object.keys(ML_AB_COACH_KEY).every(key => (s.coaches?.[key] || 0) >= coachMax);
+  const coachSlots = ML_COACH_SLOTS_BY_CLASS[s.classIdx] ?? 0;
+  const hiredKeys = Object.keys(ML_AB_COACH_KEY).filter(key => (s.coaches?.[key] || 0) > 0);
+  const coachDone = hiredKeys.length >= coachSlots && hiredKeys.every(key => (s.coaches[key] || 0) >= coachMax);
   return s.houseLv >= ML_HOUSES.length - 1 && s.carLv >= ML_CARS.length - 1 && gearDone && coachDone && partsMaxed;
 }
 
