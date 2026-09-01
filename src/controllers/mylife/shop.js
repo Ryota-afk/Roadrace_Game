@@ -3,16 +3,17 @@
 import { MONTHS } from "../../data/course.js";
 import { AB_KEYS, AB_LABEL, ABILITIES } from "../../data/abilities.js";
 import {
-  ML_AB_COACH_KEY, ML_CARS, ML_COACH_MAX_BY_CLASS, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_DEV_PROJECT, ML_GEAR,
+  ML_AB_COACH_KEY, ML_CARS, ML_COACH_MAX_BY_CLASS, ML_COACH_SIGNING, ML_COACH_SLOTS_BY_CLASS, ML_DEV_PROJECT, ML_DEV_QUALITY, ML_GEAR,
   ML_HOUSES, ML_SCI_BAD_POOL, ML_SCI_GOOD_POOL, ML_SCI_PROJECT, ML_STOCK_ITEMS, ML_GROWTH_POW_UP_PRICE, ML_GROWTH_SHIFT_PRICE,
   ML_PART_UPGRADE_COST, ML_PART_LV_MAX,
 } from "../../data/gear.js";
 import { SLOT_LABEL } from "../../data/economy.js";
 import { GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import { PART_SLOTS, PARTS } from "../../sim/race.js";
+import { TIER_LABEL } from "../../core/core.js";
 import {
   addAb, mlAcquireAbility, mlBadgeSlots, mlDevProjectSuccessRate, mlEquipBlood, mlGrantAbilityDirect, mlGrowthCapFor,
-  mlPrivateCampCost, mlProjectMonthsElapsed, mlSciProjectSuccessRate, mlSlotUsed, mlUnequipAbility,
+  mlPrivateCampCost, mlProjectMonthsElapsed, mlSciProjectSuccessRate, mlSlotUsed, mlUnequipAbility, weightedPick,
 } from "../../logic/support.js";
 
 export function mlBuyPart(s, pid) {
@@ -121,20 +122,22 @@ const DEV_SLOT_STAT_KEYS = {
 };
 const DEV_TIER3_AB_SUM = { frame: 15, tire: 12, wheels: 12, nutrition: 10 };
 
-function buildCustomPartAb(slot, policy, bigSuccess) {
+// 第94弾P4(devlog/wave94.md): 品質倍率（qualityMul）は開発方針で決まった形に
+// 事後で掛ける（マイナスにも掛ける＝尖らせた形を崩さない）。方針そのものの分岐は
+// 従来のまま（銀=等倍のときに元の第88弾の数値と一致するよう据え置いた）。
+function buildCustomPartAb(slot, policy, qualityMul) {
   const keys = [...DEV_SLOT_STAT_KEYS[slot]].sort(() => Math.random() - 0.5);
   const base = DEV_TIER3_AB_SUM[slot];
-  const ab = {};
-  if (bigSuccess) {
-    const per = Math.round((base * 1.5) / keys.length);
-    keys.forEach(k => { ab[k] = per; });
-  } else if (policy === "broad") {
+  const raw = {};
+  if (policy === "broad") {
     const per = Math.round((base * 1.15) / keys.length);
-    keys.forEach(k => { ab[k] = per; });
+    keys.forEach(k => { raw[k] = per; });
   } else {
-    ab[keys[0]] = Math.round(base * 1.3);
-    ab[keys[1]] = -Math.round(base * 0.5);
+    raw[keys[0]] = Math.round(base * 1.3);
+    raw[keys[1]] = -Math.round(base * 0.5);
   }
+  const ab = {};
+  Object.entries(raw).forEach(([k, v]) => { ab[k] = Math.round(v * qualityMul); });
   return ab;
 }
 
@@ -163,19 +166,21 @@ export function mlFinishDevProject(s) {
       log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】試作は形にならなかった。${p.invested}万円を投じたが、狙った性能は出せなかった`],
     };
   }
-  const bigSuccess = Math.random() < ML_DEV_PROJECT.bigSuccessChance;
+  // 第94弾P4(devlog/wave94.md): 成功後に「品質」（銅/銀/金/虹）を1回抽選する。
+  // 旧来のbigSuccess（方針を無視して均等配分になる分岐）を置き換えた。
+  const quality = weightedPick(ML_DEV_QUALITY);
   const label = `${s.player.name}専用${SLOT_LABEL[p.slot]}`;
   const partId = `custom_${p.slot}_${s.year}_${s.month}_${Math.floor(Math.random() * 1000)}`;
-  const ab = buildCustomPartAb(p.slot, p.policy, bigSuccess);
+  const ab = buildCustomPartAb(p.slot, p.policy, quality.mul);
   // 完成した一点物は即座に装着する（screens/mylife/events.jsxのパーツ装備UIは静的PARTSしか
   // 一覧しないため、ここで装着しないと選手が二度と身に着ける手段が無くなる）
   const player = {
     ...s.player, parts: { ...s.player.parts, [p.slot]: partId },
-    customParts: { ...(s.player.customParts || {}), [partId]: { slot: p.slot, tier: 4, label, ab } },
+    customParts: { ...(s.player.customParts || {}), [partId]: { slot: p.slot, tier: 4, label, ab, quality: quality.tier, year: s.year } },
   };
   return {
     ...s, player, devProject: null,
-    log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】完成した——「${label}」（${p.invested}万円を投じて${bigSuccess ? "大成功" : "成功"}）`],
+    log: [...s.log, `【${s.year}年目 ${MONTHS[s.month]}】${TIER_LABEL[quality.tier]}の一点物が仕上がった——「${label}」（${p.invested}万円投資）`],
   };
 }
 

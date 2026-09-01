@@ -3,7 +3,7 @@
 // season側と共有のため中身は据え置き（Phase3-D-3担当）。
 import React from "react";
 import { FatigueBar } from "../../components/panels.jsx";
-import { ChipRow, Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopBtn, ShopRow, TypeChip } from "../../components/kit.jsx";
+import { BadgeTierMark, ChipRow, Item, PrimaryBtn, Prose, QuietBtn, Screen, Section, ShopBtn, ShopRow, TypeChip } from "../../components/kit.jsx";
 import { ABILITIES, AB_LABEL, GROWTH, TYPES } from "../../data/abilities.js";
 import { CLASSES, GROWTHPOW_ORDER, GROWTH_ORDER } from "../../data/progression.js";
 import {
@@ -165,11 +165,18 @@ export function renderMyLifeEventScreens(ctx) {
                       {isOpen && (
                         <div style={{ marginTop: T.space.xs }}>
                           {ordered.map(({ id: apid, part: ap, owned }, i) => {
+                            // 第94弾P4(devlog/wave94.md): ワンオフ機材の品質（銅/銀/金/虹）を
+                            // バッジと同じBadgeTierMarkで示す。段階の名前は一覧には出さない
+                            // （行が既に密でマークと二重になるため。完成時のログでだけ言葉にする）。
+                            // カタログの静的パーツには品質という概念が無いのでマークを付けない。
+                            const rowLabel = ap.quality
+                              ? <><BadgeTierMark tier={ap.quality} />{" "}{ap.label}</>
+                              : ap.label;
                             if (apid === pid) {
                               const maxed = lv >= maxLv;
                               const cost = maxed ? null : ML_PART_UPGRADE_COST[lv];
                               return (
-                                <ShopRow key={apid} first={i === 0} label={ap.label} badge={`装着中 Lv${lv}`}
+                                <ShopRow key={apid} first={i === 0} label={rowLabel} badge={`装着中 Lv${lv}`}
                                   detail={partEffectParts(ap, 1 + ML_PART_LV_MUL * lv, AB_LABEL).join(" / ")}
                                   locked={maxed ? `Lv${maxLv} 最大` : null}
                                   buyLabel={maxed ? null : `強化 ${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
@@ -179,7 +186,7 @@ export function renderMyLifeEventScreens(ctx) {
                             // その分だけ効果を上乗せして表示する（Lv0のものは従来どおり素の値）。
                             const rowLv = lvOf(apid);
                             return (
-                              <ShopRow key={apid} first={i === 0} label={ap.label} badge={rowLv > 0 ? `Lv${rowLv}` : null}
+                              <ShopRow key={apid} first={i === 0} label={rowLabel} badge={rowLv > 0 ? `Lv${rowLv}` : null}
                                 detail={partEffectParts(ap, 1 + ML_PART_LV_MUL * rowLv, AB_LABEL).join(" / ")}
                                 buyLabel={owned ? "装着する" : `${ap.price}万`}
                                 buyDisabled={owned ? false : ml.money < ap.price}

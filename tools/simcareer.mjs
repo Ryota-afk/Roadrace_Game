@@ -339,7 +339,23 @@ function runOneCareer(policyName, careerId, seed) {
   return {
     policyName, careerId, steps, stoppedBy, violations, yearly, finalYear: s.year, finalAge: s.player?.age,
     saturatedYear, finiteSpendTotal: spend.total, partUpgradeSpend: spend.partUpgradeSpend, partBodySpend: spend.partBodySpend,
+    customParts: customPartsSummary(s),
   };
+}
+
+// 第94弾P4(devlog/wave94.md): 一点物の品質分布と、装着中パーツのab合計（強さの目安）。
+// 「引きの当たり外れ」で平均的な強さが上がったか（期待値1.10なので上がるはず）を見る。
+function customPartsSummary(s) {
+  const cps = Object.values(s.player?.customParts || {});
+  const byQuality = { bronze: 0, silver: 0, gold: 0, rainbow: 0, unknown: 0 };
+  cps.forEach(cp => { byQuality[cp.quality && byQuality[cp.quality] != null ? cp.quality : "unknown"]++; });
+  const equippedAbSum = PART_SLOTS.reduce((sum, slot) => {
+    const pid = s.player?.parts?.[slot];
+    const p = pid && (s.player.customParts?.[pid] || PARTS[pid]);
+    if (!p) return sum;
+    return sum + Object.values(p.ab || {}).reduce((a, v) => a + v, 0);
+  }, 0);
+  return { count: cps.length, byQuality, equippedAbSum };
 }
 
 // ---------------------------------------------------------------------------
@@ -380,10 +396,16 @@ function summarizePolicy(results) {
   const finiteSpendMedian = median(results.map(r => r.finiteSpendTotal));
   const partUpgradeSpendMedian = median(results.map(r => r.partUpgradeSpend));
   const partBodySpendMedian = median(results.map(r => r.partBodySpend));
+  // 第94弾P4: 一点物の品質分布・装着中パーツの平均的な強さ
+  const customCountMedian = median(results.map(r => r.customParts.count));
+  const equippedAbSumMedian = median(results.map(r => r.customParts.equippedAbSum));
+  const qualityTotals = { bronze: 0, silver: 0, gold: 0, rainbow: 0, unknown: 0 };
+  results.forEach(r => { Object.entries(r.customParts.byQuality).forEach(([k, v]) => { qualityTotals[k] += v; }); });
   return {
     careers: results.length, stepsExhausted, violationCount: allViolations.length, violations: allViolations,
     yearRows, pinnedRate, monthCount: allMonths.length,
     saturatedMedianYear, saturatedRate, finiteSpendMedian, partUpgradeSpendMedian, partBodySpendMedian,
+    customCountMedian, equippedAbSumMedian, qualityTotals,
   };
 }
 
@@ -423,6 +445,11 @@ for (const p of policyNames) {
     + `${r.saturatedRate.toFixed(0)}%（${r.saturatedMedianYear != null ? `到達した本の中央値=${r.saturatedMedianYear}年目` : "指定年数内に到達なし"}）\n\n`;
   md += `実際に使った額の中央値（最終時点・合計）: ${r.finiteSpendMedian != null ? r.finiteSpendMedian.toLocaleString() : "—"}万`
     + `（うちパーツ本体 ${r.partBodySpendMedian?.toLocaleString() ?? "—"}万・⚠️パーツ強化 ${r.partUpgradeSpendMedian?.toLocaleString() ?? "—"}万）\n\n`;
+  // 第94弾P4: 一点物の品質分布・装着中パーツの平均的な強さ
+  const qt = r.qualityTotals, qn = qt.bronze + qt.silver + qt.gold + qt.rainbow + qt.unknown;
+  md += `一点物：作った本数の中央値 ${r.customCountMedian ?? "—"}本／キャリア`
+    + `（品質分布 銅${qt.bronze}・銀${qt.silver}・金${qt.gold}・虹${qt.rainbow}${qt.unknown ? `・不明${qt.unknown}` : ""}／全${qn}本）\n\n`;
+  md += `装着中パーツのab合計（強さの目安）の中央値: ${r.equippedAbSumMedian ?? "—"}\n\n`;
 }
 md += `## 不変条件違反の一覧\n\n`;
 const allV = policyNames.flatMap(p => report[p].violations);

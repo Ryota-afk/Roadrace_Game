@@ -80,8 +80,19 @@ export const ML_PART_LV_MUL = 0.12; // 1Lvあたり+12% → Lv5で1.6倍・Lv7�
 export const ML_DEV_PROJECT = {
   initCost: 400, addCosts: [200, 500], minMonths: 3,
   successBase: 0.30, successPerMoney: 1 / 4000, successCap: 0.85,
-  sharpPenalty: 0.10, bigSuccessChance: 0.25,
+  sharpPenalty: 0.10,
 };
+// 第94弾P4(devlog/wave94.md): 成功後の「品質」抽選。第44・45弾のバッジと同じ
+// 銅/銀/金/虹の階梯を再利用する（新しい色・概念を足さない）。倍率はできあがった
+// ab全体（マイナスも含む）にかける。旧来のbigSuccessChance（方針を無視して
+// 均等配分になる分岐）はこれに置き換えて廃止した——「尖らせる」で開発したのに
+// 大成功で「まとめる」の形が出てくる矛盾があったため。
+export const ML_DEV_QUALITY = [
+  { tier: "bronze", mul: 0.85, weight: 30 },
+  { tier: "silver", mul: 1.00, weight: 35 },
+  { tier: "gold", mul: 1.30, weight: 25 },
+  { tier: "rainbow", mul: 1.70, weight: 10 },
+];
 export const ML_SCI_PROJECT = {
   initCost: 500, addCosts: [300, 800], minMonths: 4,
   successBase: 0.25, successPerMoney: 1 / 5000, successCap: 0.80,
