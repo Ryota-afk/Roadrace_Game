@@ -224,6 +224,40 @@ B〜D群の要否と優先度が全て実データで決まる。`TODO.md` #31-A
   （レースに出る一択になっていないか）を測る」**へ読み替える。
 - 副次発見（軽微）：`hub.jsx:95`の`recWhy`は**どこからも参照されていないデッドコード**。
 
+## 4.7 #31-A 実装：人間の通しプレイ用テレメトリ（2026-09・本弾で実施）
+
+`src/dev/telemetry.js`を新設。**既定OFF**（`localStorage.roadrace_telemetry_on`をユーザーが
+devtoolsコンソールで立てない限り一切動かない＝本番プレイヤー・配信物への影響ゼロ）。
+
+### 記録するイベントと配線先
+- `screen_enter`（`src/main.jsx`）：`ml.screen`が実際に切り替わった時、または`ml.year`/
+  `ml.month`が進んだ時。⚠️**後者が無いと月次ループの滞在時間が測れない**——`month.js`の
+  train/rest/peakはいずれも`screen:"mylife_main"`のまま月だけ進めるため（コード確認済み）、
+  依存配列に`ml.screen`だけを入れると同じ画面に何ヶ月も居続けた扱いになる。
+- `month_action`（`src/screens/mylife/hub.jsx`）：「今月、どうする？」の4択（race/train/rest/peak）
+  のクリック位置に配線。
+- `decision_shown` / `decision_choice`（`src/components/RaceView.jsx`）：判断カードの提示位置
+  （`setDecision`直後）と選択確定位置（`resolveDecision`冒頭）。
+
+### 集計（`__telemetry.summary()`）
+画面ごとの訪問回数・滞在時間、`SCREEN_KIND`マップでの種別集計（hub/race/race_prep/shop/
+reading/menu/setup/other）、レース時間の全体に対する比率、月次アクションの内訳、判断カードの
+表示回数・選択回数・一手の内訳。使い方は`TODO.md` #31-Aに集約。
+
+### 検証（Playwright・`tools/autoplay.mjs`を一時複製して計測用に改造・repoには入れていない）
+60ステップ・1年分（9ヶ月）を自動プレイして確認：
+```
+raceTimeShare: 31.7%
+byKind: { setup:0.02, menu:0.01, hub:0.15, shop:0.06, race_prep:0.27, reading:0.13, race:0.29 }（分）
+monthActionCounts: { race: 9 }（このハーネスは常に主ボタン＝レース出場を選ぶ設計のため）
+decisionShown: 0, decisionChosen: 0
+```
+`screen_enter`・`month_action`は正しく発火し種別集計も意図通り。⚠️`decisionShown/decisionChosen`
+が0なのは配線の不具合ではなく仕様：**判断カードはスキップ再生中は発火しない**
+（`RaceView.jsx`の`!skipRef.current`条件）。このハーネスは実況を毎回スキップするため、
+判断カードは人間の非スキッププレイでしか記録できない——#31-Aの主目的（人間の通しプレイ）
+そのものが必要な理由が、検証中に実地で裏付けられた形になった。
+
 ## 5. 本弾で行った運用変更
 
 1. **「次のアクション」をDEVLOG.mdから`TODO.md`（ルート）へ分離。** 理由：Read切り捨ては

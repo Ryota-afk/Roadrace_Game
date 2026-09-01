@@ -7,6 +7,7 @@ import "./styles/fonts.css";
 import "./styles/transitions.css";
 
 import { initGame } from "./state/state.js";
+import { logEvent } from "./dev/telemetry.js";
 import { makeWrap, makeMlWrap, makeMetaWrap } from "./components/chrome.jsx";
 import { mlTransitionKind, seasonTransitionKind } from "./data/screenTransition.js";
 import { renderMetaScreens } from "./screens/meta.jsx";
@@ -74,6 +75,13 @@ function App() {
     kind: sameAsBefore ? prevMlTransition.kind : candidateKind,
   };
   mlTransitionRef.current = { screen: ml.screen, year: ml.year, month: ml.month, enterKey: mlTransitionInfo.enterKey, kind: mlTransitionInfo.kind };
+  // 第95弾 #31-A: 画面が切り替わった時、または月が進んだ時に記録する（既定OFF・src/dev/telemetry.js参照）。
+  // ⚠️月送りのほとんどは`screen`が"mylife_main"のまま変化しない（train/rest/peakはmonth.jsが
+  // 毎回screen:"mylife_main"を返す）ため、依存をml.screenだけにすると同じ画面に何ヶ月も
+  // 滞在した扱いになり、月ごとの滞在時間が測れなくなる。year/monthも依存に含めて月替わりを拾う。
+  React.useEffect(() => {
+    if (superMode === "mylife") logEvent("screen_enter", { screen: ml.screen, year: ml.year, month: ml.month });
+  }, [ml.screen, ml.year, ml.month, superMode]);
   // 第13弾Phase3-A: 下部タブ（chrome.jsxのBottomTabs）が画面遷移するためsetMlを渡す
   const mlWrap = makeMlWrap({ ml, transitionInfo: mlTransitionInfo, setMl: mylife.setMl, ...modal });
   const metaWrap = makeMetaWrap({ superMode, ...modal });

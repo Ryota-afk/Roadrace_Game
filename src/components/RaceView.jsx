@@ -12,6 +12,7 @@ import { TICK_SEC, riderHash01, resumeSim } from "../sim/race.js";
 import { smoothRaceCamera } from "../domain/shared/raceCamera.js";
 import { viewWander } from "../domain/shared/viewHash.js";
 import { buildDecisions, composeCard } from "../domain/shared/raceDecisions.js";
+import { logEvent } from "../dev/telemetry.js";
 import { groupAt, interpFrac, modeAt, modeStreakAt, nextPullerAt, slotAt, tagAt } from "../domain/shared/raceViewModel.js";
 import {
   ATTACK_EXAGGERATION, ATTACK_VISUAL_TICKS, CINEMATIC_TIME_RATIO, DROP_EXTRA_DX_RATIO, DROP_EXTRA_LANE,
@@ -104,6 +105,7 @@ export function RaceView({ sim, onFinish }) {
   const resolveDecision = (moveId) => {
     const d = decisionRef.current;
     if (!d) return;
+    logEvent("decision_choice", { kind: d.kind, move: moveId });
     setResimBusy(true);
     // 再計算はやや重いので、カードのボタン押下→UI反映を挟んでから実行する
     setTimeout(() => {
@@ -349,9 +351,10 @@ export function RaceView({ sim, onFinish }) {
             firedRef.current.add(d.id);
             const card = composeCard(d.kind, focusR.e, ctx);
             // v46(#27): 一手の威力が残脚で決まるようになったため、判断の material として残脚を渡す
-            decisionRef.current = { id: d.id, fromTick, energy: ctx.energy, ...card };
+            decisionRef.current = { id: d.id, kind: d.kind, fromTick, energy: ctx.energy, ...card };
             pausedRef.current = true;
             setDecision(decisionRef.current);
+            logEvent("decision_shown", { kind: d.kind, choices: card.choices.map(c => c.move) });
             return; // このフレームは凍結（カメラ/HUD更新もスキップ）
           }
         }

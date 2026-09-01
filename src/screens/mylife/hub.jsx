@@ -19,6 +19,7 @@ import { Item, PrimaryBtn, Prose, PressRow, QuietBtn, Screen, Section, Tag, Type
 import { ACQUIRE_REQS, DISCIPLINE_KEYS, FAVORS_TO_DISCIPLINE, ML_AMBITION_PATH_KEYS, ML_SPECIAL_TRAINING, ML_STOCK_ITEMS, SLOT_LABEL, WEATHER, clearMyLifeSave, disciplineScore, formatAchievementReward, growthPhase, loadAbilityFile, managerEvalTier, mlAmbitionPath, mlAmbitionProgressText, mlCurrentAmbition, mlGearFitHint, mlGrowthCapFor, mlGrowthPowRevealed, mlMediaHeadline, mlRiderStatsRows, mlWorldTeamStats, potentialHint, protegeState, riderFlavorText, rivalHeatTier, worldRankTier } from "../../logic/support.js";
 import { PART_SLOTS, resolvePart } from "../../data/parts.js";
 import { ML_ACHIEVEMENTS, ML_AMBITION_PATHS, ML_TACTICS, computeAchievements, initMyLife, mlFirstUnmetRung, riderNickname } from "../../state/state.js";
+import { logEvent } from "../../dev/telemetry.js";
 
 // 第66弾Phase2(devlog/wave66.md): ホームで選んだレースのカードが出走表(race.jsx)へ
 // 育つ演出。対になる要素（選択中のレース名）に同じview-transition-nameを付け、
@@ -228,15 +229,15 @@ export function renderMyLifeHubScreen(ctx) {
                   )}
                 </div>
               )}
-              <div style={{ marginTop: T.space.sm }}><PrimaryBtn onClick={() => mlWithRaceCardTransition(mlStartRace)}>{race.name}に出場する ▸</PrimaryBtn></div>
+              <div style={{ marginTop: T.space.sm }}><PrimaryBtn onClick={() => { logEvent("month_action", { action: "race" }); mlWithRaceCardTransition(mlStartRace); }}>{race.name}に出場する ▸</PrimaryBtn></div>
             </div>
 
             {(() => {
               const trainValue = plannedSp ? `${plannedSp.label}・今月のみ` : `${AB_LABEL[focusKey]} ${Math.round(r[focusKey] || 0)} +${roomOf(focusKey)}`;
               const rows = [
-                { key: "train", label: "練習する", value: trainValue, onClick: ACTION_HANDLER.train },
-                { key: "rest", label: "完全休養する", value: "疲労を大きく回復", onClick: ACTION_HANDLER.rest },
-                { key: "peak", label: "ピーキング調整", value: "フォームを上げる", onClick: ACTION_HANDLER.peak },
+                { key: "train", label: "練習する", value: trainValue, onClick: () => { logEvent("month_action", { action: "train" }); ACTION_HANDLER.train(); } },
+                { key: "rest", label: "完全休養する", value: "疲労を大きく回復", onClick: () => { logEvent("month_action", { action: "rest" }); ACTION_HANDLER.rest(); } },
+                { key: "peak", label: "ピーキング調整", value: "フォームを上げる", onClick: () => { logEvent("month_action", { action: "peak" }); ACTION_HANDLER.peak(); } },
               ];
               return rows.map((row) => (
                 <button key={row.key} onClick={row.onClick} style={{
