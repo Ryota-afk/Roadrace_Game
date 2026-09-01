@@ -258,18 +258,22 @@ function step(s, policy, rng) {
 // 累進的に確定しているため）。第93弾の11,720万＝data/から機械計算した「理論上の
 // 総額」に対し、こちらは方策が実際に買った額の実測値（tools/money_demand.mjsと対）。
 function finiteSpend(s) {
-  let total = 0;
+  let total = 0, partUpgradeSpend = 0, partBodySpend = 0;
   for (let i = 0; i <= s.houseLv; i++) total += ML_HOUSES[i].price;
   for (let i = 0; i <= s.carLv; i++) total += ML_CARS[i].price;
   ["roller", "monitor", "chef"].forEach(k => { if (s.gear[k]) total += ML_GEAR[k].price; });
   Object.keys(ML_AB_COACH_KEY).forEach(key => { if ((s.coaches?.[key] || 0) > 0) total += ML_COACH_SIGNING; });
   PART_SLOTS.forEach(slot => {
     const pid = s.player?.parts?.[slot];
-    if (pid && PARTS[pid]) total += PARTS[pid].price; // 一点物はprice無し＝加算されない
+    if (pid && PARTS[pid]) partBodySpend += PARTS[pid].price; // 一点物はprice無し＝加算されない
     const lv = s.player?.partLv?.[slot] || 0;
-    for (let i = 0; i < lv; i++) total += ML_PART_UPGRADE_COST[i] || 0;
+    for (let i = 0; i < lv; i++) partUpgradeSpend += ML_PART_UPGRADE_COST[i] || 0;
   });
-  return total;
+  total += partUpgradeSpend + partBodySpend;
+  // ⚠️partUpgradeSpendを分けて返す：devlog/wave94.md P2の測定対象は「強化に使った総額」
+  // （P3でLvがスロット単位→パーツ単位に変わる前後を比較する数値）であり、住居・車等を
+  // 混ぜた合計ではP3の効果が薄まって見えなくなる。
+  return { total, partUpgradeSpend, partBodySpend };
 }
 
 // 恒久的な使い道をすべて買い切ったか（住居・車・練習用品・コーチ・パーツ強化が
@@ -324,9 +328,10 @@ function runOneCareer(policyName, careerId, seed) {
   // ⚠️stepsがMAX_STEPSの安全弁に達したのに指定年数へ届いていない＝月送りが異常に
   // 足踏みしている可能性がある（本来は毎月レースに出るだけなので数ステップ/月のはず）
   const stoppedBy = s.__stoppedBy || (steps >= MAX_STEPS ? "steps" : "unknown");
+  const spend = finiteSpend(s);
   return {
     policyName, careerId, steps, stoppedBy, violations, yearly, finalYear: s.year, finalAge: s.player?.age,
-    saturatedYear, finiteSpendTotal: finiteSpend(s),
+    saturatedYear, finiteSpendTotal: spend.total, partUpgradeSpend: spend.partUpgradeSpend, partBodySpend: spend.partBodySpend,
   };
 }
 
@@ -366,10 +371,12 @@ function summarizePolicy(results) {
   const saturatedMedianYear = satYears.length ? median(satYears) : null;
   const saturatedRate = results.length ? (satYears.length / results.length * 100) : 0;
   const finiteSpendMedian = median(results.map(r => r.finiteSpendTotal));
+  const partUpgradeSpendMedian = median(results.map(r => r.partUpgradeSpend));
+  const partBodySpendMedian = median(results.map(r => r.partBodySpend));
   return {
     careers: results.length, stepsExhausted, violationCount: allViolations.length, violations: allViolations,
     yearRows, pinnedRate, monthCount: allMonths.length,
-    saturatedMedianYear, saturatedRate, finiteSpendMedian,
+    saturatedMedianYear, saturatedRate, finiteSpendMedian, partUpgradeSpendMedian, partBodySpendMedian,
   };
 }
 
@@ -407,7 +414,8 @@ for (const p of policyNames) {
   // 第94弾P2: 恒久的な使い道の実測
   md += `恒久的な使い道（住居・車・練習用品・コーチ・パーツ本体・パーツ強化）を買い切った本数: `
     + `${r.saturatedRate.toFixed(0)}%（${r.saturatedMedianYear != null ? `到達した本の中央値=${r.saturatedMedianYear}年目` : "指定年数内に到達なし"}）\n\n`;
-  md += `実際に使った額の中央値（最終時点）: ${r.finiteSpendMedian != null ? r.finiteSpendMedian.toLocaleString() : "—"}万\n\n`;
+  md += `実際に使った額の中央値（最終時点・合計）: ${r.finiteSpendMedian != null ? r.finiteSpendMedian.toLocaleString() : "—"}万`
+    + `（うちパーツ本体 ${r.partBodySpendMedian?.toLocaleString() ?? "—"}万・⚠️パーツ強化 ${r.partUpgradeSpendMedian?.toLocaleString() ?? "—"}万）\n\n`;
 }
 md += `## 不変条件違反の一覧\n\n`;
 const allV = policyNames.flatMap(p => report[p].violations);
