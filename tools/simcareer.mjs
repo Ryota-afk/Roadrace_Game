@@ -145,9 +145,11 @@ function builderSinks(s) {
         if (s.money >= part.price) { s = mlBuyPart(s, pid); s = mlSetPart(s, slot, pid); }
       }
     }
-    const lv = s.player.partLv?.[slot] || 0;
+    // 第94弾P3(devlog/wave94.md): partLvはスロットではなくパーツid（pid）単位
+    const equippedPid = s.player.parts?.[slot];
+    const lv = (equippedPid && s.player.partLv?.[equippedPid]) || 0;
     const maxLv = ML_PART_LV_MAX + (s.partLvMaxBonus || 0);
-    if (s.player.parts?.[slot] && lv < maxLv && s.money >= ML_PART_UPGRADE_COST[lv]) s = mlUpgradePart(s, slot);
+    if (equippedPid && lv < maxLv && s.money >= ML_PART_UPGRADE_COST[lv]) s = mlUpgradePart(s, slot);
   });
   return s;
 }
@@ -263,10 +265,11 @@ function finiteSpend(s) {
   for (let i = 0; i <= s.carLv; i++) total += ML_CARS[i].price;
   ["roller", "monitor", "chef"].forEach(k => { if (s.gear[k]) total += ML_GEAR[k].price; });
   Object.keys(ML_AB_COACH_KEY).forEach(key => { if ((s.coaches?.[key] || 0) > 0) total += ML_COACH_SIGNING; });
+  // 第94弾P3(devlog/wave94.md): partLvはスロットではなくパーツid（pid）単位
   PART_SLOTS.forEach(slot => {
     const pid = s.player?.parts?.[slot];
     if (pid && PARTS[pid]) partBodySpend += PARTS[pid].price; // 一点物はprice無し＝加算されない
-    const lv = s.player?.partLv?.[slot] || 0;
+    const lv = (pid && s.player?.partLv?.[pid]) || 0;
     for (let i = 0; i < lv; i++) partUpgradeSpend += ML_PART_UPGRADE_COST[i] || 0;
   });
   total += partUpgradeSpend + partBodySpend;
@@ -280,7 +283,11 @@ function finiteSpend(s) {
 // すべて上限）。「買うものが無くなって資金が余り始める年」を実挙動で特定するために使う。
 function isFiniteSaturated(s) {
   const maxLv = ML_PART_LV_MAX + (s.partLvMaxBonus || 0);
-  const partsMaxed = PART_SLOTS.every(slot => (s.player?.partLv?.[slot] || 0) >= maxLv && s.player?.parts?.[slot]);
+  // 第94弾P3(devlog/wave94.md): partLvはスロットではなくパーツid（pid）単位
+  const partsMaxed = PART_SLOTS.every(slot => {
+    const pid = s.player?.parts?.[slot];
+    return !!pid && (s.player?.partLv?.[pid] || 0) >= maxLv;
+  });
   const gearDone = ["roller", "monitor", "chef"].every(k => s.gear[k]);
   // ⚠️修正前は「5種のコーチ全員がcoachMaxに到達」を要求しており、常にfalseになる
   // バグだった。ML_COACH_SLOTS_BY_CLASS（同時雇用枠1/2/3）は5種のうち最大3人しか

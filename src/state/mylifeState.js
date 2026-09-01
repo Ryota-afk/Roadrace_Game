@@ -3,6 +3,7 @@
 import { ABILITIES, TYPES } from "../data/abilities.js";
 import { CLASSES } from "../data/progression.js";
 import { WORLD_ROSTER_SIZE } from "../data/teams.js";
+import { PART_SLOTS } from "../data/parts.js";
 import { mulberry, pickRiderName, ridState, rollAbilities } from "../core/core.js";
 
 export const ML_AMBITION_PATHS = {
@@ -266,6 +267,22 @@ export function loadMyLifeGame() {
     if (merged.player && !Array.isArray(merged.player.bloodAbilities)) {
       const blood = (merged.player.abilities || []).filter(id => ABILITIES[id] && ABILITIES[id].breedOnly);
       merged.player = { ...merged.player, bloodAbilities: blood };
+    }
+    // 第94弾P3(devlog/wave94.md): パーツ強化Lvはスロット単位（{frame:3}）から
+    // パーツid単位（{fr_ult:3}）へ移行した。旧セーブはそのスロットに今装着中のpidへ
+    // 値を移す（装着中のパーツが無いスロットの値は載せる先が無いため破棄する——
+    // 未装着スロットに残っていたLvだけが失われ、装着中の投資は必ず引き継がれる）。
+    if (merged.player && merged.player.partLv) {
+      const oldLv = merged.player.partLv;
+      if (Object.keys(oldLv).some(k => PART_SLOTS.includes(k))) {
+        const newLv = {};
+        PART_SLOTS.forEach(slot => {
+          const lv = oldLv[slot];
+          const pid = merged.player.parts && merged.player.parts[slot];
+          if (lv && pid) newLv[pid] = lv;
+        });
+        merged.player = { ...merged.player, partLv: newLv };
+      }
     }
     return merged;
   } catch (e) { return null; }

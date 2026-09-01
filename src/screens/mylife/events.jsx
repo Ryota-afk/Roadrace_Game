@@ -111,7 +111,11 @@ export function renderMyLifeEventScreens(ctx) {
                   // 第88弾: ワンオフ機材（custom_で始まるid）は静的PARTSに存在しないため
                   // resolvePart経由でr.customPartsを先に見る（data/parts.js参照）
                   const p = pid ? resolvePart(r.customParts, pid) : null;
-                  const lv = (r.partLv && r.partLv[slot]) || 0;
+                  // 第94弾P3(devlog/wave94.md): Lvはスロットではなくパーツid単位。
+                  // 履き替えて戻すと、そのパーツ自身が育てたLvから続きを強化できる
+                  // （以前はスロット単位だったため、履き替えるとLvの意味が変わってしまっていた）。
+                  const lvOf = (id) => (r.partLv && r.partLv[id]) || 0;
+                  const lv = lvOf(pid);
                   const isOpen = ml.shopSlot === slot;
                   const avail = Object.entries(PARTS).filter(([, pp]) => pp.slot === slot && pp.tier <= ml.classIdx + 1);
                   const minPrice = avail.length ? Math.min(...avail.map(([, pp]) => pp.price)) : null;
@@ -124,11 +128,11 @@ export function renderMyLifeEventScreens(ctx) {
                     ...avail.map(([apid, ap]) => ({ id: apid, part: ap, isCustom: false })),
                     ...customForSlot.map(([cpid, cp]) => ({ id: cpid, part: cp, isCustom: true })),
                   ];
-                  // プラス合計（マイナスは無視）。装着中の行だけ現在のLv倍率をかける
-                  // （partLvはスロット単位のため、装着していない手持ちには効いていない＝
-                  // 現行のsim/effects.jsの挙動と一致させる）。
-                  const sortKey = (part, isEquipped) => {
-                    const mul = isEquipped ? 1 + ML_PART_LV_MUL * lv : 1;
+                  // プラス合計（マイナスは無視）。第94弾P3からはLvがパーツid単位になった
+                  // ため、装着中かどうかに関わらずそのパーツ自身のLvを倍率にかける
+                  // （育てて外した手持ちが、外した後もその強さのまま一覧の上位に来る）。
+                  const sortKey = (part, id) => {
+                    const mul = 1 + ML_PART_LV_MUL * lvOf(id);
                     return Object.values(part.ab || {}).reduce((a, v) => a + Math.max(0, v), 0) * mul;
                   };
                   entries.forEach(e => { e.owned = e.isCustom || e.id === pid || availPartsMl(e.id) > 0; });
@@ -136,9 +140,9 @@ export function renderMyLifeEventScreens(ctx) {
                     ...entries.filter(e => e.owned).sort((a, b) => {
                       if (a.id === pid) return -1;
                       if (b.id === pid) return 1;
-                      return sortKey(b.part, false) - sortKey(a.part, false);
+                      return sortKey(b.part, b.id) - sortKey(a.part, a.id);
                     }),
-                    ...entries.filter(e => !e.owned).sort((a, b) => sortKey(b.part, false) - sortKey(a.part, false)),
+                    ...entries.filter(e => !e.owned).sort((a, b) => sortKey(b.part, b.id) - sortKey(a.part, a.id)),
                   ];
                   return (
                     <div key={slot} style={{ marginBottom: T.space.sm }}>
@@ -171,9 +175,12 @@ export function renderMyLifeEventScreens(ctx) {
                                   buyLabel={maxed ? null : `強化 ${cost}万`} buyDisabled={ml.money < cost} onBuy={() => mlUpgradePart(slot)} />
                               );
                             }
+                            // 第94弾P3: 外した手持ちも自分のLvを保ったままなので、育てていれば
+                            // その分だけ効果を上乗せして表示する（Lv0のものは従来どおり素の値）。
+                            const rowLv = lvOf(apid);
                             return (
-                              <ShopRow key={apid} first={i === 0} label={ap.label}
-                                detail={partEffectParts(ap, 1, AB_LABEL).join(" / ")}
+                              <ShopRow key={apid} first={i === 0} label={ap.label} badge={rowLv > 0 ? `Lv${rowLv}` : null}
+                                detail={partEffectParts(ap, 1 + ML_PART_LV_MUL * rowLv, AB_LABEL).join(" / ")}
                                 buyLabel={owned ? "装着する" : `${ap.price}万`}
                                 buyDisabled={owned ? false : ml.money < ap.price}
                                 onBuy={() => owned ? mlSetPart(slot, apid) : mlBuyPart(apid)} />

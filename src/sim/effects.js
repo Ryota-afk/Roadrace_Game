@@ -43,7 +43,8 @@ export function effAbilities(r, equip, itemBoost, grade, weather, monument) {
       const p = pid && resolvePart(r.customParts, pid);
       if (!p) return;
       // v51(第12弾12-B): マイライフ限定のパーツ強化Lv（Season選手はr.partLvが存在せず常に0＝無影響）
-      const lv = (r.partLv && r.partLv[slot]) || 0;
+      // 第94弾P3(devlog/wave94.md): キーはスロットではなくパーツid（pid）単位
+      const lv = (r.partLv && r.partLv[pid]) || 0;
       const mul = 1 + ML_PART_LV_MUL * lv;
       Object.entries(p.ab).forEach(([k, v]) => { e[k] += v * mul; });
       // 第17弾：天候・地形の条件付き効果（強化Lvはかけない＝マイナスが深くなるのを防ぐ）

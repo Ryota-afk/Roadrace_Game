@@ -28,17 +28,21 @@ export function mlSetPart(s, slot, pid) {
 // 第12弾(12-B): 装着中のパーツを強化する（買い切り・段階制、Lv0〜実効上限）。
 // 未装着スロットや上限到達済みスロットは対象外。実効上限はCP交換所「パーツ強化の上限+2」
 // （第12弾12-C・s.partLvMaxBonus）を加算した値。
+// 第94弾P3(devlog/wave94.md): Lvはスロット単位ではなくパーツ単位（partLv[pid]）で持つ。
+// 履き替えても投資が消えない・戻せば続きから育てられるようにするため
+// （一点物パーツを履き替えると強化Lvごと失われていた不具合の是正）。
 export function mlUpgradePart(s, slot) {
   const player = s.player;
-  if (!player.parts || !player.parts[slot]) return s;
-  const lv = (player.partLv && player.partLv[slot]) || 0;
+  const pid = player.parts && player.parts[slot];
+  if (!pid) return s;
+  const lv = (player.partLv && player.partLv[pid]) || 0;
   const maxLv = ML_PART_LV_MAX + (s.partLvMaxBonus || 0);
   if (lv >= maxLv) return s;
   const cost = ML_PART_UPGRADE_COST[lv];
   if (s.money < cost) return s;
   return {
     ...s, money: s.money - cost,
-    player: { ...player, partLv: { ...player.partLv, [slot]: lv + 1 } },
+    player: { ...player, partLv: { ...player.partLv, [pid]: lv + 1 } },
   };
 }
 
