@@ -160,28 +160,33 @@ export function composeCard(kind, focus, ctx) {
   // finale
   // 第95弾#31-D-2(devlog/wave95.md §4.5c/d): 旧実装はkickBig/sprintWait/kickを排他で
   // 出しており、常に「安全な一手1つ＋劣位のsend＋hold」の実質1択だった（実測600レース）。
-  // ここからは「安全に差す(kick)」と「賭けて振り切る(kickBig)」を全員に必ず両方提示し、
-  // 脚の残り（LegsBar）を見て選ばせる。バッジは選択肢を差し替えるのではなく、
-  // 同じ選択肢の効き目を底上げする役割に統一する（ticks.jsのfinishKick加算で実現済み）。
+  // 「安全に差す(kick)」と「賭けて振り切る(kickBig)」を両方提示する形に改めたが、
+  // 第96弾§7.9〜§7.11(devlog/wave96.md)の実測（isPlayerCharで正しく計測し直した結果）で
+  // kick/kickBig/sprintWaitはsim側で同じ関数（finaleSendのスカラー値違いのみ・ticks.js）
+  // であり、実質「強弱1本」で対立軸を持たないと判明した。⚠️唯一sendだけがattackLeft
+  // （独走の持続）を立てる別機構で、実測でも位置によって正解が入れ替わる本物の非支配
+  // （後方にいるほどsendが勝率を伸ばす代わりに着順を損なう＝「平均では損だが決まれば勝てる」）
+  // だった。kickBigをsendに置き換え、脚の残り（LegsBar）を見て選ばせる。
   const climbKicker = onClimb && (t === "CLM" || A("mount") || A("allclimber"));
   const sprLike = t === "SPR" || A("sprinter_sp");
   const finisherLike = A("kicker") || A("finisher") || A("closer");
   title = "勝負所の判断";
-  sub = "ゴールが近い。どこまで踏むか";
+  sub = "ゴールが近い。どこで動くか";
   if (finisherLike) {
-    choices.push({ move: "kick", label: "会心の差し脚", desc: "豪脚の切れ味で差し切る（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "渾身の一撃", desc: "豪脚の全てを解き放つ（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "あえて先に出る", desc: "早駆けで抜け出す（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "会心の差し脚", desc: "豪脚の切れ味で差し切る（脚を使う）" });
   } else if (climbKicker) {
-    choices.push({ move: "kick", label: "じわりと詰める", desc: "登りでじわじわ食らいつく（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "登りで振り切る", desc: "最後の登りで一気に踏んで独走へ（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "登りで先に出る", desc: "最後の登りで一気に踏んで独走へ（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "じわりと詰める", desc: "登りでじわじわ食らいつく（脚を使う）" });
   } else if (sprLike) {
-    choices.push({ move: "kick", label: "番手から差す", desc: "番手をキープして差しにかける（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "早めに踏み切る", desc: "集団の前で早めに仕掛ける（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "早めに踏み切る", desc: "集団の前で早めに仕掛ける（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "番手から差す", desc: "番手をキープして差しにかける（脚を使う）" });
   } else {
-    choices.push({ move: "kick", label: "差す", desc: "手堅く差しにかける（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "振り切る", desc: "全てを賭けて抜け出す（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "早駆け", desc: "早めに抜け出して踏み切る（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "差す", desc: "手堅く差しにかける（脚を使う）" });
   }
+  // 第96弾§7.9〜§7.11: conserveはfinaleでは`kick`/`send`に両軸で支配される罠の選択肢
+  // だった（実測）ため廃止。非アシスト時は差す/早駆けの2択のみになる。
   if (isAssist) choices.push({ move: "assistLaunch", label: "エースを射出", desc: "最終局面、エースのスプリントを援護する" });
-  else choices.push({ move: "conserve", label: "脚を溜める", desc: "無理をせず脚を残し、流れに乗る" });
   return { title, sub, choices: choices.slice(0, 4) };
 }
