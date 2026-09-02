@@ -39,6 +39,7 @@ const { buildMyLifeSim } = await import(`${R}/sim/buildMyLifeSim.js`);
 const { resumeSim } = await import(`${R}/sim/race.js`);
 const { buildDecisions, composeCard } = await import(`${R}/domain/shared/raceDecisions.js`);
 const { AB_KEYS } = await import(`${R}/data/abilities.js`);
+const { careerRaces, defaultYearFor } = await import("./_shared.mjs");
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);
@@ -54,9 +55,18 @@ const CHARS = Number(arg("--chars", "40"));
 //   --ability 100 --class 2   … 円熟期（能力平均100）をクラスPROで
 const ABILITY = arg("--ability", null) != null ? Number(arg("--ability", null)) : null;
 const CLASSIDX = arg("--class", null) != null ? Number(arg("--class", null)) : null;
+// ⚠️第97弾§4.13: 出走するレースは`mlGenRaceCandidates`から年間日程を組む。
+// 旧実装は`s.races`（その月の候補3件）を使っており、⚠️クラスや能力を変えても
+// 走るコースは新人1年目の2〜3本のままだった（山岳ロードを一度も走っていなかった）。
+// --year を省くとクラスに対応する年次を使う（B1→1年目 / A→5年目 / PRO→9年目）。
+const YEAR = arg("--year", null) != null ? Number(arg("--year", null)) : null;
 const VERBOSE = process.argv.includes("--verbose");
 const OUT = arg("--out", null);
 if (OUT) fs.mkdirSync(OUT, { recursive: true });
+
+const EFF_CLASS = CLASSIDX ?? 0;
+const EFF_YEAR = YEAR ?? defaultYearFor(EFF_CLASS);
+const RACE_LIST = await careerRaces(R, EFF_YEAR, EFF_CLASS);
 
 function segTypeAt(course, frac) {
   for (let i = 0; i < course.segs.length; i++) if (frac <= course.cumFrac[i]) return course.segs[i].type;
@@ -96,10 +106,12 @@ function measure(type, diff, nChars) {
   let races = 0;
   for (let c = 0; c < nChars; c++) {
     const s = newChar(type);
-    const list = s.races.filter(r => !(r.tmpl && (r.tmpl.teamTT || r.tmpl.soloTT)));
-    for (const race of list) {
-      const sim = buildMyLifeSim(race, s.player, s.team, CLASSIDX ?? s.classIdx, diff, undefined, null,
-        s.rival, s.year, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
+    // ⚠️第97弾§4.13: 旧実装は`s.races`（＝その月の候補3件）を使っており、
+    // キャリア1年目の2〜3レースだけを繰り返し測っていた。実際の年間日程を使う。
+    for (const race of RACE_LIST) {
+      // ⚠️第97弾§4.13: クラスと年次も日程に揃える（s.classIdx/s.yearは常に1年目のB1）。
+      const sim = buildMyLifeSim(race, s.player, s.team, EFF_CLASS, diff, undefined, null,
+        s.rival, EFF_YEAR, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
       if (!sim.entrants) continue;
       // ⚠️第96弾: ここは長らく `find(e => e.isPlayer) || sim.entrants[0]` だった。
       // entrant側の実フィールドは isPlayerChar（buildMyLifeSim.js）で isPlayer は存在せず、

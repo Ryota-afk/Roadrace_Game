@@ -28,6 +28,7 @@ const { initMyLife } = await import(`${R}/state/mylifeState.js`);
 const { mlCreateChar } = await import(`${R}/domain/mylife/createChar.js`);
 const { buildMyLifeSim } = await import(`${R}/sim/buildMyLifeSim.js`);
 const { AB_KEYS } = await import(`${R}/data/abilities.js`);
+const { careerRaces, defaultYearFor } = await import("./_shared.mjs");
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);
@@ -37,6 +38,10 @@ const TYPES = arg("--types", "RUL").split(",");
 const CHARS = Number(arg("--chars", "30"));
 const ABILITY = Number(arg("--ability", "100"));
 const CLASSIDX = Number(arg("--class", "2"));
+// ⚠️第97弾§4.13: 出走レースは年間日程から組む。旧実装は`s.races`（その月の候補3件）を
+// 使っており、クラスを変えても走るコースは新人1年目の2〜3本のままだった。
+const YEAR = arg("--year", null) != null ? Number(arg("--year", null)) : defaultYearFor(CLASSIDX);
+const RACE_LIST = await careerRaces(R, YEAR, CLASSIDX);
 const DIFFS = ["easy", "normal", "hard", "oni"];
 
 // 能力の平均を目標値へ揃える（難易度以外の条件を固定するため）
@@ -53,12 +58,11 @@ function measure(type) {
     const s = mlCreateChar(initMyLife(), type, "university", null, null,
       { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
     scaleTo(s.player, ABILITY);
-    const list = s.races.filter(r => !(r.tmpl && (r.tmpl.teamTT || r.tmpl.soloTT)));
-    for (const race of list) {
+    for (const race of RACE_LIST) {
       // ⚠️同一キャラ・同一レースを4難易度へ（対応のある標本）
       for (const diff of DIFFS) {
         const sim = buildMyLifeSim(race, s.player, s.team, CLASSIDX, diff, undefined, null,
-          s.rival, s.year, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
+          s.rival, YEAR, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
         if (!sim.entrants) continue;
         const me = sim.entrants.find(e => e.isPlayerChar); // ⚠️フォールバックを置かない
         if (!me || !me.posHist || me.posHist.length < 60) continue;
