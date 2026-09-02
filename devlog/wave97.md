@@ -444,3 +444,28 @@ resolveDecision で moveId === "attack" のとき
 §4.1〜§4.6で特定した「terrainカードは不成立圏でしか出ていなかった」という診断は、
 実装後の計測で円熟期について確認された。⚠️**#32-jはここで解決とする。**
 残る新人側の問題（攻めの手が能力不足で構造的に成立しない）は#35の本体として持ち越す。
+
+## 4.10 #35本体の実装完了（Sonnet）
+
+§4.9の設計図どおり実装した。
+
+### 実装内容
+1. `src/domain/shared/raceDecisions.js`——`attack`の`desc` 5箇所（mid×4分岐＋terrain×1）を
+   「以後、脚を緩められない」に統一。ラベルは無変更。「次の勝負所まで」とは書いていない。
+2. `src/components/RaceView.jsx`——`committedRef`を追加し、`resolveDecision`で
+   `moveId === "attack"`のとき`{ fired: false }`をセット（他の手を選んだ場合は`null`に戻す）。
+   既存の動的実況ループに専用ブロックを追加し、`riders`から注目選手の`mode`を毎tick確認して
+   `draft`/`pull`に戻った瞬間（＝吸収された瞬間）に3種の実況からランダムに1つを表示する。
+   ⚠️`ticks.js`（sim）は無変更——`r.e.committedBreak`は再生時にはシム終了後の値のため
+   使わず、プレイヤーの選択そのものを追跡する設計どおりに実装した。
+
+### 検証
+- `composeCard`を直接呼び、mid4分岐・terrain1分岐すべてで新しい`desc`が出ることを確認。
+- `npx vite build`が成功することを確認。
+- ⚠️**§10の確認**：文言・演出のみの変更で数値を動かさないはずのため、
+  `tools/decisioncard_ev.mjs`で`mid/attack`・`terrain/attack`のΔ着順・勝率を再計測し、
+  §4.7の実測（円熟/easy mid/attack Δ-1.83〜-2.27等）とサンプル分散内で一致することを確認した。
+  ⚠️数値は動いていない。
+
+これで第97弾のA（terrainカードの配置）・B（材料と因果の伝達）が完了した。
+残るC（#32-i・不活性区間の扱い）は別途着手する。

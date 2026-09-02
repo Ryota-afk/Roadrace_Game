@@ -131,7 +131,8 @@ export function composeCard(kind, focus, ctx) {
     sub = "自分の得意地形——ここでどう動く？";
     choices = [
       { move: "tempo", label: "ふるいにかける", desc: "ペースを上げて後続を千切る。脚を大きく使う" },
-      { move: "attack", label: "仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" },
+      // 第97弾(devlog/wave97.md §4.9): 代償の表記をmidと統一（詳細は上のmid分岐参照）。
+      { move: "attack", label: "仕掛ける", desc: "単独で飛び出す。以後、脚を緩められない" },
       { move: "hold", label: "流れに任せる", desc: "展開に乗って様子を見る" },
     ];
     return { title, sub, choices };
@@ -154,14 +155,19 @@ export function composeCard(kind, focus, ctx) {
     title = "中盤の判断";
     sub = onClimb ? "登りが牙を剥く。ここが勝負の分かれ目だ" : onHill ? "うねる丘で隊列が動き出した" : "隊列が動き出した。ここでどう動く？";
     // 攻めの一手（地形×脚質×特性で味付け）
+    // 第97弾(devlog/wave97.md §4.9): attackの本当のコストは「独走の持続」ではなく
+    // 「次に別の手を選ぶまで脚を緩められない」こと（committedBreakは自動では解除されず、
+    // canPullの回復ヒステリシスをスキップし続ける）。旧descはこの代償に一言も触れていな
+    // かったため、脚質別4分岐すべてに追記する。「次の勝負所まで」とは書かない——
+    // カードの配置という開発側の都合が漏れるため。
     if (onClimb && (t === "CLM" || A("mount") || A("allclimber") || A("climbengine") || A("autumn_sp")))
-      choices.push({ move: "attack", label: "登りで抜け出す", desc: "登坂適性を武器に単独で飛び出す" });
+      choices.push({ move: "attack", label: "登りで抜け出す", desc: "登坂適性を武器に飛び出す。以後、脚を緩められない" });
     else if (onHill && (t === "PUN" || A("puncheur") || A("ardennes_sp")))
-      choices.push({ move: "attack", label: "丘でアタック", desc: "丘の申し子、パンチ力で抜け出す" });
+      choices.push({ move: "attack", label: "丘でアタック", desc: "丘の申し子、パンチ力で抜け出す。以後、脚を緩められない" });
     else if (A("escape"))
-      choices.push({ move: "attack", label: "得意の逃げに持ち込む", desc: "逃げ屋の脚で集団を突き放す" });
+      choices.push({ move: "attack", label: "得意の逃げに持ち込む", desc: "逃げ屋の脚で集団を突き放す。以後、脚を緩められない" });
     else
-      choices.push({ move: "attack", label: "仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" });
+      choices.push({ move: "attack", label: "仕掛ける", desc: "単独で飛び出す。以後、脚を緩められない" });
     if (A("grinder")) choices.push({ move: "hangOn", label: "食らいついて粘る", desc: "食らいつく脚で集団に残り、脚を温存する" });
     choices.push({ move: "conserve", label: "脚を溜める", desc: "集団後方で温存し、勝負所に備える" });
     if (isAssist) choices.push({ move: "assistLaunch", label: "エースの前で牽く", desc: "自分の脚を使ってエースを勝負所へ運ぶ" });
