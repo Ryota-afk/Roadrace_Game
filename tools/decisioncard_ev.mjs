@@ -83,7 +83,12 @@ function measure(type, diff, nChars) {
       const sim = buildMyLifeSim(race, s.player, s.team, s.classIdx, diff, undefined, null,
         s.rival, s.year, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
       if (!sim.entrants) continue;
-      const me = sim.entrants.find(e => e.isPlayer) || sim.entrants[0];
+      // ⚠️第96弾: ここは長らく `find(e => e.isPlayer) || sim.entrants[0]` だった。
+      // entrant側の実フィールドは isPlayerChar（buildMyLifeSim.js）で isPlayer は存在せず、
+      // find は常に失敗して sim.entrants[0]＝AI選手（プレイヤーは添字30前後）を掴んでいた。
+      // ＝第95弾のEV計測はすべて「AI選手に、プレイヤーの手を適用した」結果だった。
+      const me = sim.entrants.find(e => e.isPlayerChar);
+      if (!me) continue;
       if (!me.posHist || me.posHist.length < 60) continue;
       const base = me.rank;
       baseRanks.push(base);
