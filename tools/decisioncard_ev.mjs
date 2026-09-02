@@ -20,6 +20,14 @@
 // 第一次はRUL・キャリア開始時のみだった。本ツールは脚質を選べるようにした恒久版。
 // ⚠️キャリア中盤/後半（バッジ所持後）の再測定は別課題（TODO #31-D残作業②）——
 // mlAdvanceMonth等で月を進める土台がもう1段要るため、本ツールのスコープ外のまま残す。
+//
+// 【#31-D-2（devlog/wave95.md §4.5c/d）の是正後の検証で追加】
+// finaleカードは「脚が十分なら踏む・苦しければ溜める」判断になった（kick/kickBigに
+// KICK_ENERGY_COST/KICKBIG_ENERGY_COSTを課し、3択目をhold→conserveへ）。
+// 判断時点の実エネルギー（me.energyHist、RaceView.jsxのctx.energy算出と同じ読み方）を
+// DecisionCard.jsxのlegsTierと同じ4段階で層別し、finaleカードだけ段階別の表を出す。
+// 合格条件：①脚「十分」層でkick/kickBigがconserveを上回る ②「苦しい/限界」層で
+// conserveがkick/kickBigを上回る ③どの層でも両軸を支配する一手が無い。
 import path from "node:path";
 import fs from "node:fs";
 
@@ -46,6 +54,12 @@ function segTypeAt(course, frac) {
   return course.segs[course.segs.length - 1].type;
 }
 
+// DecisionCard.jsxのlegsTierと同じ境界（十分/やや消耗/苦しい/限界）。
+function legsTier(energy) {
+  const e = Math.max(-100, Math.min(100, energy ?? 100));
+  return e >= 40 ? "十分" : e >= 0 ? "やや消耗" : e >= -60 ? "苦しい" : "限界";
+}
+
 function newChar(type) {
   return mlCreateChar(initMyLife(), type, "university", null, null, { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
 }
@@ -54,10 +68,11 @@ function newChar(type) {
 function measure(type, diff, nChars) {
   const baseRanks = [];
   const acc = {}; // "kind/move" -> {n, dsum, wins, top3}
-  const rec = (kind, move, delta, rank) => {
+  const tierAcc = {}; // finaleのみ: "tier/move" -> {n, dsum, wins, top3}
+  const rec = (bucket, kind, move, delta, rank) => {
     const k = `${kind}/${move}`;
-    acc[k] = acc[k] || { n: 0, dsum: 0, wins: 0, top3: 0 };
-    const a = acc[k];
+    bucket[k] = bucket[k] || { n: 0, dsum: 0, wins: 0, top3: 0 };
+    const a = bucket[k];
     a.n++; a.dsum += delta; if (rank === 1) a.wins++; if (rank <= 3) a.top3++;
   };
   let races = 0;
@@ -76,13 +91,17 @@ function measure(type, diff, nChars) {
       for (const dec of decs) {
         const frac = dec.at;
         const fromTick = Math.floor(frac * me.posHist.length);
-        const ctx = { manager: false, segType: segTypeAt(sim.course, frac), frac, energy: 60, mates: 2, inBreak: false };
+        // RaceView.jsxのctx.energy算出と同じ読み方（判断直前tickの実エネルギー）
+        const realEnergy = me.energyHist[Math.min(fromTick - 1, me.energyHist.length - 1)] ?? 100;
+        const ctx = { manager: false, segType: segTypeAt(sim.course, frac), frac, energy: realEnergy, mates: 2, inBreak: false };
         const card = composeCard(dec.kind, me, ctx);
+        const tier = legsTier(realEnergy);
         for (const ch of card.choices) {
           const forked = { ...sim, entrants: sim.entrants.map(e => structuredClone(e)) };
           resumeSim(forked, fromTick, me.id, ch.move);
           const r = forked.entrants.find(e => e.id === me.id).rank;
-          rec(dec.kind, ch.move, r - base, r);
+          rec(acc, dec.kind, ch.move, r - base, r);
+          if (dec.kind === "finale") rec(tierAcc, tier, ch.move, r - base, r);
         }
       }
       races++;
@@ -95,11 +114,9 @@ function measure(type, diff, nChars) {
     winPct: +(100 * baseRanks.filter(r => r === 1).length / n).toFixed(0),
     podiumPct: +(100 * baseRanks.filter(r => r <= 3).length / n).toFixed(0),
   } : null;
-  const cards = {};
-  Object.entries(acc).forEach(([k, a]) => {
-    cards[k] = { n: a.n, meanDelta: +(a.dsum / a.n).toFixed(2), winPct: +(100 * a.wins / a.n).toFixed(0), podiumPct: +(100 * a.top3 / a.n).toFixed(0) };
-  });
-  return { races, baseline, cards };
+  const fmt = (bucket) => Object.fromEntries(Object.entries(bucket).map(([k, a]) =>
+    [k, { n: a.n, meanDelta: +(a.dsum / a.n).toFixed(2), winPct: +(100 * a.wins / a.n).toFixed(0), podiumPct: +(100 * a.top3 / a.n).toFixed(0) }]));
+  return { races, baseline, cards: fmt(acc), finaleByLegs: fmt(tierAcc) };
 }
 
 const report = {};
@@ -120,6 +137,18 @@ for (const type of TYPES) {
     rows.forEach(([k, a]) => {
       console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
     });
+    const legTiers = ["十分", "やや消耗", "苦しい", "限界"];
+    const legRows = Object.entries(result.finaleByLegs);
+    if (legRows.length) {
+      console.log("  --- finale：脚の残り別 ---");
+      legTiers.forEach(tier => {
+        const rowsForTier = legRows.filter(([k]) => k.startsWith(`${tier}/`));
+        if (!rowsForTier.length) return;
+        rowsForTier.sort((a, b) => a[0].localeCompare(b[0])).forEach(([k, a]) => {
+          console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
+        });
+      });
+    }
     if (VERBOSE) console.log(JSON.stringify(result, null, 2));
   }
 }

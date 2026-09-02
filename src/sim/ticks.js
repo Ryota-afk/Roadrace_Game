@@ -799,6 +799,13 @@ const BRIDGE_MAX = 2;
 const KICK_MIN = 0.03, KICK_MAX = 0.11;
 const KICKBIG_MIN = 0.05, KICKBIG_MAX = 0.17;
 const SPRINTWAIT_MIN = 0.04, SPRINTWAIT_MAX = 0.13;
+// 第95弾#31-D-2(devlog/wave95.md §4.5c): kick/kickBigは無代償だったため、finaleカードの
+// 3択目(旧hold)が両軸で支配される問題があった（実測600レース：hold Δ+0.22/勝3% vs
+// kick Δ-2.64/勝21%）。3択目をconserve（脚を溜める）へ差し替えると同時に、kick/kickBigへ
+// 他の判断（hangOn3/attack9/tempo14/send17）と同じ並びの代償を課し、
+// 「脚が十分なら踏む・苦しければ溜める」という脚の残り(LegsBar)を見た判断にする。
+export const KICK_ENERGY_COST = 8;
+export const KICKBIG_ENERGY_COST = 12;
 // v47(第8弾Phase4): conserveの持続はA案（位置取り）導入前にkeepThresh一律の時代の値
 // （§35で80→500）。A案で後方ほど千切れやすくなった今は効きすぎ（Phase 3実測で中盤・格下の
 // 勝率95%）だったため、位置取りとの相互作用込みで再較正する。
@@ -902,9 +909,9 @@ export const RACE_MOVES = {
   // ⏳ 差しにかける：最終直線まで脚を溜め、そこで鋭く伸びる（最終区間の追い込みを上乗せ）
   // v47(第8弾Phase4): 固定値0.09→残脚比例。脚を使い切っているほど差し脚も鈍る
   // （下限KICK_MINまでで、ゼロにはならない。詳細は定数コメント参照）。
-  kick: (r) => { const g = legsLeft01(r); r.finaleSend = KICK_MIN + (KICK_MAX - KICK_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  kick: (r) => { const g = legsLeft01(r); r.finaleSend = KICK_MIN + (KICK_MAX - KICK_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; r.energy -= KICK_ENERGY_COST; },
   // 🗡 会心の差し脚：差し脚・豪脚型が最終直線で最大の切れ味を出す（追い込み最大）
-  kickBig: (r) => { const g = legsLeft01(r); r.finaleSend = KICKBIG_MIN + (KICKBIG_MAX - KICKBIG_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
+  kickBig: (r) => { const g = legsLeft01(r); r.finaleSend = KICKBIG_MIN + (KICKBIG_MAX - KICKBIG_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; r.energy -= KICKBIG_ENERGY_COST; },
   // 🏁 スプリント勝負：集団のゴールスプリントに合わせ、番手をキープして最後に爆発させる
   sprintWait: (r) => { const g = legsLeft01(r); r.finaleSend = SPRINTWAIT_MIN + (SPRINTWAIT_MAX - SPRINTWAIT_MIN) * g; r.attackLeft = 0; r.committedBreak = false; r.conserveLeft = 0; },
   // v39.22(シーズン): 監督指示＝チーム全体を動かす一手。focusはエース、riders経由で僚友を働かせる。

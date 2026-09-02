@@ -15,12 +15,16 @@ import { legsLeft01 } from "../../sim/race.js";
 // v48(第9弾): attackLeftを付与し「単独で先頭に残る」状態を作る一手は、決まれば集団から
 // 抜け出せるが、外せば独走の消耗（ドラフト保護なし）を集団に吸収されるまで払い続ける＝
 // 大きく落ちるリスクを負う。sendは自分自身、teamChaseは僚友にattackLeftを付与する
-// （RACE_MOVES参照）。この3手だけが「落ちる」構造を持つため虹に分類する。
-const RISK_MOVES = new Set(["attack", "send", "teamChase"]);
+// （RACE_MOVES参照）。
+// 第95弾(devlog/wave95.md §4.5d): kickBigも同じ構造を持つと実測で判明した。finaleSendの
+// 上乗せが大きいほど最終区間のグループ再編で集団から弾かれ、ドラフト無しの単独走に
+// 落ちやすくなる（実測n=400：holdより最終tickでsolo判定になった割合が明確に高い）。
+// 「速く走るボタン」ではなく「賭けて集団を抜け出すボタン」なので虹に分類する。
+const RISK_MOVES = new Set(["attack", "send", "teamChase", "kickBig"]);
 
 // 集団に残ったまま消耗を抑える／確実に上乗せを得る一手＝手堅い（金）。
 // 第51弾: tempo（ふるいにかける）も自分は速くならない手堅い性質の一手として金に分類する。
-const STEADY_MOVES = new Set(["conserve", "hangOn", "kick", "kickBig", "sprintWait", "teamShelter", "assistLaunch", "tempo"]);
+const STEADY_MOVES = new Set(["conserve", "hangOn", "kick", "sprintWait", "teamShelter", "assistLaunch", "tempo"]);
 
 // legsLeft01（残脚）に比例して効果が決まる一手。脚が減るほど鈍るが、0にはならない。
 export const LEGS_SCALED_MOVES = new Set(["attack", "send", "kick", "kickBig", "sprintWait", "tempo"]);

@@ -158,21 +158,30 @@ export function composeCard(kind, focus, ctx) {
     return { title, sub, choices: choices.slice(0, 4) };
   }
   // finale
+  // 第95弾#31-D-2(devlog/wave95.md §4.5c/d): 旧実装はkickBig/sprintWait/kickを排他で
+  // 出しており、常に「安全な一手1つ＋劣位のsend＋hold」の実質1択だった（実測600レース）。
+  // ここからは「安全に差す(kick)」と「賭けて振り切る(kickBig)」を全員に必ず両方提示し、
+  // 脚の残り（LegsBar）を見て選ばせる。バッジは選択肢を差し替えるのではなく、
+  // 同じ選択肢の効き目を底上げする役割に統一する（ticks.jsのfinishKick加算で実現済み）。
+  const climbKicker = onClimb && (t === "CLM" || A("mount") || A("allclimber"));
+  const sprLike = t === "SPR" || A("sprinter_sp");
+  const finisherLike = A("kicker") || A("finisher") || A("closer");
   title = "勝負所の判断";
-  sub = "ゴールが近い。ここが仕掛けどころだ";
-  if (A("kicker") || A("finisher") || A("closer"))
-    choices.push({ move: "kickBig", label: "会心の差し脚", desc: "最終直線、豪脚の切れ味で差し切る" });
-  else if (t === "SPR" || A("sprinter_sp"))
-    choices.push({ move: "sprintWait", label: "スプリント勝負", desc: "番手をキープし、集団スプリントで爆発させる" });
-  else
-    choices.push({ move: "kick", label: "差しにかける", desc: "ギリギリまで待ち、最終直線で鋭く伸びる" });
-  if (onClimb && (t === "CLM" || A("mount") || A("allclimber")))
-    choices.push({ move: "send", label: "登りで抜け出す", desc: "最後の登りで一気に踏んで独走へ" });
-  else if (A("escape"))
-    choices.push({ move: "send", label: "早駆け", desc: "一気に抜け出してゴールまで踏み切る" });
-  else
-    choices.push({ move: "send", label: "一気に踏む", desc: "ここから踏み倒して抜け出す" });
+  sub = "ゴールが近い。どこまで踏むか";
+  if (finisherLike) {
+    choices.push({ move: "kick", label: "会心の差し脚", desc: "豪脚の切れ味で差し切る（脚を大きく使う）" });
+    choices.push({ move: "kickBig", label: "渾身の一撃", desc: "豪脚の全てを解き放つ（脚を大きく使う・飲まれると大きく失う）" });
+  } else if (climbKicker) {
+    choices.push({ move: "kick", label: "じわりと詰める", desc: "登りでじわじわ食らいつく（脚を大きく使う）" });
+    choices.push({ move: "kickBig", label: "登りで振り切る", desc: "最後の登りで一気に踏んで独走へ（脚を大きく使う・飲まれると大きく失う）" });
+  } else if (sprLike) {
+    choices.push({ move: "kick", label: "番手から差す", desc: "番手をキープして差しにかける（脚を大きく使う）" });
+    choices.push({ move: "kickBig", label: "早めに踏み切る", desc: "集団の前で早めに仕掛ける（脚を大きく使う・飲まれると大きく失う）" });
+  } else {
+    choices.push({ move: "kick", label: "差す", desc: "手堅く差しにかける（脚を大きく使う）" });
+    choices.push({ move: "kickBig", label: "振り切る", desc: "全てを賭けて抜け出す（脚を大きく使う・飲まれると大きく失う）" });
+  }
   if (isAssist) choices.push({ move: "assistLaunch", label: "エースを射出", desc: "最終局面、エースのスプリントを援護する" });
-  else choices.push({ move: "hold", label: "集団で勝負", desc: "無理せず集団の決着に合わせる" });
+  else choices.push({ move: "conserve", label: "脚を溜める", desc: "無理をせず脚を残し、流れに乗る" });
   return { title, sub, choices: choices.slice(0, 4) };
 }
