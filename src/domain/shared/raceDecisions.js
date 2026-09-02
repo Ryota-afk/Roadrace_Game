@@ -18,6 +18,13 @@ function bestTerrainTier(ent) {
 // 銅・銀・金＝1回／虹＝2回。未所持は0回（専用カードは出ない）。
 function terrainCardCap(tier) { return tier === "rainbow" ? 2 : tier ? 1 : 0; }
 
+// 第97弾(devlog/wave97.md §4.6): terrainカードの「仕掛ける」は進捗0.40未満では
+// 実測で明確に不利（committedBreakが次の判断まで解除されず、脚が尽きるまで牽き続ける
+// ため）。区間の入口(segStart)がそれより前でも、進捗0.40まで発火を遅らせて成立圏で
+// 出す（区間そのものが0.40より前で完結する場合のみ、その区間のカードは出ない）。
+// 閾値0.40は§4.1でattack/holdをフォーク比較し符号が反転する境界として実測した値。
+const TERRAIN_MIN_FRAC = 0.40;
+
 // v39(A案): レース中の「判断カード」スロット定義。注目選手のコース進捗(frac)が at を越えた／
 // 状況条件 cond を満たした瞬間に再生を止め、その時点の状況(ctx)に応じて composeCard で選択肢を
 // 組み立てて提示する。選んだ move は resumeSim でその地点から結果へ反映される。teamTT等の履歴が
@@ -47,7 +54,11 @@ export function buildDecisions(course, focusEnt, manager) {
       course.segs.forEach((seg, idx) => {
         if (fired >= cap || idx === course.finalIdx || !hasTerrainBadge(focusEnt, seg.type)) return;
         const segStart = idx === 0 ? 0 : course.cumFrac[idx - 1];
-        const at = segStart + 0.01;
+        const segEnd = course.cumFrac[idx];
+        // 第97弾: 区間が0.40より前で完結する場合はここで打ち切る（=カードを出さない）。
+        // またぐ区間は0.40まで発火を遅らせる（区間との対応は保ったまま成立圏へ寄せる）。
+        const at = Math.max(segStart + 0.01, TERRAIN_MIN_FRAC);
+        if (at >= segEnd) return;
         if (at >= atFin - 0.03) return; // 勝負所の一手と被らないよう、その手前で打ち切る
         decisions.push({ id: `terrain-${idx}`, at, kind: "terrain", segType: seg.type });
         fired++;
