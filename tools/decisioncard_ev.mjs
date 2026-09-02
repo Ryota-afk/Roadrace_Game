@@ -15,6 +15,7 @@
 //   node tools/decisioncard_ev.mjs                          # 既定=5脚質×easy/hard×40人
 //   node tools/decisioncard_ev.mjs --types RUL --diffs easy --chars 40 --verbose
 //   node tools/decisioncard_ev.mjs --out /tmp/ev
+//   node tools/decisioncard_ev.mjs --ability 100 --class 2  # 円熟期（能力100・PRO）
 //
 // 【第一次計測（devlog/wave95.md §4.5）との違い】
 // 第一次はRUL・キャリア開始時のみだった。本ツールは脚質を選べるようにした恒久版。
@@ -37,6 +38,7 @@ const { mlCreateChar } = await import(`${R}/domain/mylife/createChar.js`);
 const { buildMyLifeSim } = await import(`${R}/sim/buildMyLifeSim.js`);
 const { resumeSim } = await import(`${R}/sim/race.js`);
 const { buildDecisions, composeCard } = await import(`${R}/domain/shared/raceDecisions.js`);
+const { AB_KEYS } = await import(`${R}/data/abilities.js`);
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);
@@ -45,6 +47,13 @@ const arg = (name, dflt) => {
 const TYPES = arg("--types", "RUL,SPR,CLM,PUN,TT").split(",");
 const DIFFS = arg("--diffs", "easy,hard").split(",");
 const CHARS = Number(arg("--chars", "40"));
+// 第96弾§7.8(TODO #32-f): キャリア時期を選べるようにする。既定は従来どおり
+// 「新人のまま・そのキャラのクラス」＝キャリア開始時。
+// ⚠️finaleカードの設計意図（脚が残っていれば踏む）が効くのは能力が育った後であり、
+// 既定値だけでは最も肝心な円熟期を測れない（第95弾のEV計測はここを測っていなかった）。
+//   --ability 100 --class 2   … 円熟期（能力平均100）をクラスPROで
+const ABILITY = arg("--ability", null) != null ? Number(arg("--ability", null)) : null;
+const CLASSIDX = arg("--class", null) != null ? Number(arg("--class", null)) : null;
 const VERBOSE = process.argv.includes("--verbose");
 const OUT = arg("--out", null);
 if (OUT) fs.mkdirSync(OUT, { recursive: true });
@@ -60,8 +69,17 @@ function legsTier(energy) {
   return e >= 40 ? "十分" : e >= 0 ? "やや消耗" : e >= -60 ? "苦しい" : "限界";
 }
 
+// 能力の平均を目標値へ揃える（tools/difficulty_check.mjsと同じ手法）。
+function scaleTo(p, t) {
+  const cur = AB_KEYS.reduce((a, k) => a + (p[k] || 0), 0) / AB_KEYS.length;
+  AB_KEYS.forEach(k => { p[k] = (p[k] || 0) * (t / cur); });
+  return p;
+}
+
 function newChar(type) {
-  return mlCreateChar(initMyLife(), type, "university", null, null, { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
+  const s = mlCreateChar(initMyLife(), type, "university", null, null, { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
+  if (ABILITY != null) scaleTo(s.player, ABILITY);
+  return s;
 }
 
 // 1脚質×1難易度ぶんを計測する。戻り値: { baseline: {n,meanRank,winPct,podiumPct}, cards: {kind/move: {...}} }
@@ -80,7 +98,7 @@ function measure(type, diff, nChars) {
     const s = newChar(type);
     const list = s.races.filter(r => !(r.tmpl && (r.tmpl.teamTT || r.tmpl.soloTT)));
     for (const race of list) {
-      const sim = buildMyLifeSim(race, s.player, s.team, s.classIdx, diff, undefined, null,
+      const sim = buildMyLifeSim(race, s.player, s.team, CLASSIDX ?? s.classIdx, diff, undefined, null,
         s.rival, s.year, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
       if (!sim.entrants) continue;
       // ⚠️第96弾: ここは長らく `find(e => e.isPlayer) || sim.entrants[0]` だった。
