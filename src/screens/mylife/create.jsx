@@ -95,7 +95,9 @@ export function renderMyLifeCreateScreens(ctx) {
             return (
               <PickNote>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontSize: T.size.body, color: T.color.text }}>{curDiff.desc}</span>
+                  {/* 第99弾(TODO #32-b): descはシーズン用（成長上限が上がる、と書いてある）。
+                      マイライフは逆に難易度が上がるほど伸びしろが広がりにくいため、mlDescを使う。 */}
+                  <span style={{ fontSize: T.size.body, color: T.color.text }}>{curDiff.mlDesc || curDiff.desc}</span>
                   <span style={{ fontSize: T.size.head, color: cpMul > 1 ? T.color.good : T.color.sub, flex: "none", marginLeft: T.space.sm }}>×{cpMul}</span>
                 </div>
                 {/* 第63弾(devlog/wave63.md): 未プレイの初見に「クリアポイント」が説明ゼロで
