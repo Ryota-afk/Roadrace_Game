@@ -11,6 +11,14 @@
 //   共有し、entrants だけ深クローンする：{ ...sim, entrants: sim.entrants.map(structuredClone) }。
 //   これで元のsimを一切汚さず何度でも同じ地点からフォークできる（乱数の再現性は不要）。
 //
+// 【⚠️必ず守ること：成果指標の飽和（第98弾§4.2）】
+// ⚠️着順だけで「判断が効いたか」を測ってはいけない。勝てる選手（能力100/PRO等）は
+// 多くのレースで1着になり、⚠️1着は1着より上が無いのでどの手を選んでもΔ着順が0になる。
+// 第97弾はこれを「健全な場面の36%で判断が結果を動かさない」と誤読し、3つの節
+// （§4.11・§4.12・§4.15）を丸ごと撤回する羽目になった（実際はタイムが15〜41秒違っていた）。
+// ⇒ 本ツールは⚠️**Δ秒（ゴールタイムの差）を必ず併記**し、勝率が高いときは⚠️警告を出す。
+// ⚠️離散量（着順）で差を測るときは、必ず連続量（タイム）と並べて確認すること。
+//
 // 【使い方】
 //   node tools/decisioncard_ev.mjs                          # 既定=5脚質×easy/hard×40人
 //   node tools/decisioncard_ev.mjs --types RUL --diffs easy --chars 40 --verbose
@@ -95,13 +103,16 @@ function newChar(type) {
 // 1脚質×1難易度ぶんを計測する。戻り値: { baseline: {n,meanRank,winPct,podiumPct}, cards: {kind/move: {...}} }
 function measure(type, diff, nChars) {
   const baseRanks = [];
-  const acc = {}; // "kind/move" -> {n, dsum, wins, top3}
-  const tierAcc = {}; // finaleのみ: "tier/move" -> {n, dsum, wins, top3}
-  const rec = (bucket, kind, move, delta, rank) => {
+  const acc = {}; // "kind/move" -> {n, dsum, wins, top3, tsum}
+  const tierAcc = {}; // finaleのみ: "tier/move" -> 同上
+  // ⚠️第98弾§4.2: Δタイムも必ず記録する。着順だけで測ると、勝てる選手では
+  // 「どの手を選んでも1着」で差が消え、⚠️判断が効いていないように見える（実際は
+  // タイムが15〜41秒違っていた）。⚠️離散量（着順）は連続量（タイム）と並べて見ること。
+  const rec = (bucket, kind, move, delta, rank, dtime) => {
     const k = `${kind}/${move}`;
-    bucket[k] = bucket[k] || { n: 0, dsum: 0, wins: 0, top3: 0 };
+    bucket[k] = bucket[k] || { n: 0, dsum: 0, wins: 0, top3: 0, tsum: 0 };
     const a = bucket[k];
-    a.n++; a.dsum += delta; if (rank === 1) a.wins++; if (rank <= 3) a.top3++;
+    a.n++; a.dsum += delta; a.tsum += dtime; if (rank === 1) a.wins++; if (rank <= 3) a.top3++;
   };
   let races = 0;
   for (let c = 0; c < nChars; c++) {
@@ -121,6 +132,7 @@ function measure(type, diff, nChars) {
       if (!me) continue;
       if (!me.posHist || me.posHist.length < 60) continue;
       const base = me.rank;
+      const baseTime = me.finishTime;   // ⚠️第98弾§4.2: 着順が飽和しても差が見える連続量
       baseRanks.push(base);
       const decs = buildDecisions(sim.course, me, false).filter(d => d.at != null);
       for (const dec of decs) {
@@ -134,9 +146,11 @@ function measure(type, diff, nChars) {
         for (const ch of card.choices) {
           const forked = { ...sim, entrants: sim.entrants.map(e => structuredClone(e)) };
           resumeSim(forked, fromTick, me.id, ch.move);
-          const r = forked.entrants.find(e => e.id === me.id).rank;
-          rec(acc, dec.kind, ch.move, r - base, r);
-          if (dec.kind === "finale") rec(tierAcc, tier, ch.move, r - base, r);
+          const fm = forked.entrants.find(e => e.id === me.id);
+          const r = fm.rank;
+          const dt = (fm.finishTime ?? baseTime) - baseTime;
+          rec(acc, dec.kind, ch.move, r - base, r, dt);
+          if (dec.kind === "finale") rec(tierAcc, tier, ch.move, r - base, r, dt);
         }
       }
       races++;
@@ -150,7 +164,11 @@ function measure(type, diff, nChars) {
     podiumPct: +(100 * baseRanks.filter(r => r <= 3).length / n).toFixed(0),
   } : null;
   const fmt = (bucket) => Object.fromEntries(Object.entries(bucket).map(([k, a]) =>
-    [k, { n: a.n, meanDelta: +(a.dsum / a.n).toFixed(2), winPct: +(100 * a.wins / a.n).toFixed(0), podiumPct: +(100 * a.top3 / a.n).toFixed(0) }]));
+    [k, {
+      n: a.n, meanDelta: +(a.dsum / a.n).toFixed(2),
+      meanDtime: +(a.tsum / a.n).toFixed(1),   // ⚠️第98弾§4.2: 着順が飽和しても差が見える
+      winPct: +(100 * a.wins / a.n).toFixed(0), podiumPct: +(100 * a.top3 / a.n).toFixed(0),
+    }]));
   return { races, baseline, cards: fmt(acc), finaleByLegs: fmt(tierAcc) };
 }
 
@@ -165,12 +183,19 @@ for (const type of TYPES) {
     console.log(`\n=== ${type} / ${diff} （${result.races}レース・${ms}ms） ===`);
     if (result.baseline) {
       console.log(`無入力基準: n=${result.baseline.n} 平均${result.baseline.meanRank}着 勝率${result.baseline.winPct}% 表彰台${result.baseline.podiumPct}%`);
+      // ⚠️第98弾§4.2: 着順という尺度の飽和を自動で警告する。勝率が高いと「どの手を選んでも
+      // 1着」で着順の差が消え、⚠️判断が効いていないように見える（実際はタイムが15〜41秒違う）。
+      // この罠に3度落ちているので（第96弾§7・第97弾§4.13・第98弾§4.2）ツール側で検知する。
+      if (result.baseline.winPct >= 40) {
+        console.log(`  ⚠️注意: 無入力でも勝率${result.baseline.winPct}%＝着順が天井に張り付いており、`);
+        console.log(`     ⚠️「Δ着順≒0」は判断が効いていない証拠にならない。Δ秒で判定すること。`);
+      }
     } else {
       console.log("無入力基準: データ不足（レースが取れなかった）");
     }
     const rows = Object.entries(result.cards).sort((a, b) => a[0].localeCompare(b[0]));
     rows.forEach(([k, a]) => {
-      console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
+      console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  Δ秒=${a.meanDtime.toFixed(1).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
     });
     const legTiers = ["十分", "やや消耗", "苦しい", "限界"];
     const legRows = Object.entries(result.finaleByLegs);
@@ -180,7 +205,7 @@ for (const type of TYPES) {
         const rowsForTier = legRows.filter(([k]) => k.startsWith(`${tier}/`));
         if (!rowsForTier.length) return;
         rowsForTier.sort((a, b) => a[0].localeCompare(b[0])).forEach(([k, a]) => {
-          console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
+          console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  Δ秒=${a.meanDtime.toFixed(1).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
         });
       });
     }
