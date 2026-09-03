@@ -7,15 +7,16 @@
 // 代わりに残量の小さなバーを添え、鈍っているが押せることを示す。
 import React from "react";
 import { FONT_DOT, RAINBOW_STOPS, T } from "../data/theme.js";
-import { moveEdge } from "../domain/shared/moveEdge.js";
+import { moveEdge, LEGS_SPENT_ENERGY } from "../domain/shared/moveEdge.js";
 
 // 「脚の残り」の4段階（十分／やや消耗／苦しい／限界）。LegsBarと選択肢の残量バーの
 // 両方が使うため、ここに1箇所だけ定義する（CLAUDE.md §5・色段階の二重管理を避ける）。
+// 「限界」の境界はLEGS_SPENT_ENERGYと同じ値（moveEdge.js参照・第98弾）。
 function legsTier(energy) {
   const raw = Math.max(-100, Math.min(100, energy ?? 100));
   return raw >= 40 ? { t: "十分", c: T.color.good }
     : raw >= 0 ? { t: "やや消耗", c: T.color.accent }
-      : raw >= -60 ? { t: "苦しい", c: "#e8a13c" }
+      : raw >= LEGS_SPENT_ENERGY ? { t: "苦しい", c: "#e8a13c" }
         : { t: "限界", c: T.color.bad };
 }
 

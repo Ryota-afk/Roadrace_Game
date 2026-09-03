@@ -12,6 +12,7 @@ import { TICK_SEC, riderHash01, resumeSim } from "../sim/race.js";
 import { smoothRaceCamera } from "../domain/shared/raceCamera.js";
 import { viewWander } from "../domain/shared/viewHash.js";
 import { buildDecisions, composeCard } from "../domain/shared/raceDecisions.js";
+import { LEGS_SPENT_ENERGY } from "../domain/shared/moveEdge.js";
 import { logEvent } from "../dev/telemetry.js";
 import { groupAt, interpFrac, modeAt, modeStreakAt, nextPullerAt, slotAt, tagAt } from "../domain/shared/raceViewModel.js";
 import {
@@ -357,6 +358,18 @@ export function RaceView({ sim, onFinish }) {
           const d = decisions.find(dc => !firedRef.current.has(dc.id) && (dc.allowFinal || !finalSegRef.current) && (dc.at != null ? focusR.frac >= dc.at : (dc.cond && dc.cond(ctx))));
           if (d) {
             firedRef.current.add(d.id);
+            // 第98弾(devlog/wave98.md §5): 脚が尽きた選手はどの選択肢もΔ着順・Δ秒とも
+            // 厳密に0.00（実測）——判断の形をしたものを出してレースを止めるだけで、
+            // 意味のある判断にならない（CLAUDE.md §0-1）。カードを出さず実況だけ返し、
+            // レースは止めない。sim（ticks.js）・raceDecisions.jsは無変更。
+            if (ctx.energy < LEGS_SPENT_ENERGY) {
+              liveRef.current = {
+                text: pick([`${focusName}、脚が尽きた——ここからは意地だけだ`, `${focusName}、もう応える脚が無い。それでもペダルを回す`, `${focusName}は限界を越えている。完走だけを見つめる`]),
+                until: now + 2800,
+              };
+              logEvent("decision_skipped", { kind: d.kind, energy: ctx.energy });
+              return;
+            }
             const card = composeCard(d.kind, focusR.e, ctx);
             // v46(#27): 一手の威力が残脚で決まるようになったため、判断の material として残脚を渡す
             decisionRef.current = { id: d.id, kind: d.kind, fromTick, energy: ctx.energy, ...card };

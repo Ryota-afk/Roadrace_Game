@@ -217,3 +217,41 @@
 ⚠️**CLAUDE.md §0-1「正解が表示される選択・分散ゼロの購入は判断ではない」に真正面から
 反する。** そして⚠️**レースを止めてカードを出す**ので、
 `DESIGN_PRINCIPLES.md`要点6「遅さは罪。プレイヤーの時間はコスト」にも反する。
+
+## 6. 実装（Sonnet）
+
+§5の設計どおり実装した。
+
+### 変更内容
+1. `src/domain/shared/moveEdge.js`——`LEGS_SPENT_ENERGY = -60`を新規export。
+   `DecisionCard.jsx`の`legsTier`「限界」境界と同じ値を1箇所で共有する
+   （CLAUDE.md §5・色段階の二重管理を避ける）。
+2. `src/components/DecisionCard.jsx`——`legsTier`のハードコード`-60`を
+   `LEGS_SPENT_ENERGY`参照に置き換え（表示は無変更）。
+3. `src/components/RaceView.jsx`——判断カード発火ブロックに1条件を追加。
+   `ctx.energy < LEGS_SPENT_ENERGY`なら`firedRef`には記録する（再発火防止）が
+   `pausedRef`は立てず、`composeCard`も呼ばず、既存の`liveRef`実況機構で
+   3種のテキストから`pick()`する。⚠️`ticks.js`（sim）・`raceDecisions.js`は無変更。
+
+実況文（開発語彙を避け、選手の状態として語る）：
+```
+「◯◯、脚が尽きた——ここからは意地だけだ」
+「◯◯、もう応える脚が無い。それでもペダルを回す」
+「◯◯は限界を越えている。完走だけを見つめる」
+```
+
+テレメトリに`decision_skipped`イベントを追加（第95弾のテレメトリ基盤を利用）。
+
+### 検証
+- `npx vite build`成功。
+- 実際のゲームプレイデータ（`buildMyLifeSim`→`buildDecisions`）で条件の発火率を確認：
+  - 新人/oni：⚠️**判断の99%がスキップ対象**（149/150）——§1.1の推定（96%）と整合。
+  - 円熟/PRO（4難易度プール）：10%がスキップ対象（主にhard/oni分）。
+- `tools/decisioncard_ev.mjs`はRaceViewの発火ロジックを経由しないため影響を受けない
+  （引き続き全選択肢のEVを測れる）。
+
+### この実装で直らないこと（意図的）
+- ⚠️**脚が尽きる原因そのものは直さない**（能力不足の難易度で走ればどのみち千切れる。
+  第97弾§4.16で「攻めの手が能力不足で構造的に成立しない」ことは仕様として正しいと
+  ユーザー合意済み）。
+- 2（別の目標に切り替える）は不採用・TODOにも記録しない（ユーザー判断）。
