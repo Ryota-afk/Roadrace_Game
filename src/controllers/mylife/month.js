@@ -17,6 +17,7 @@ import {
 import { mlGenRace, mlGenRaceCandidates } from "../../domain/mylife/race.js";
 import { loadMlLegends } from "../../breeding/breeding.js";
 import { pruneBonds } from "../../domain/mylife/bonds.js";
+import { INTENSITY_GROWTH_MUL, INTENSITY_VIT } from "../../domain/mylife/intensity.js";
 
 // v14.2: 月次アクションを「レース／練習」の2択から拡張。練習・休養・イベントで
 // 選手への効果を出し分ける（順位・ポイント・賞金は既にmlRaceFinish側で反映済みのため
@@ -84,13 +85,18 @@ export function mlApplyMonthEffect(player0, mode, ctx) {
     // 存在しなかったため、他の消耗軽減系（鉄の心肺93→88等）と同程度の上げ幅で暫定的に
     // 金1.35を置き、銀・虹はtierValueの式でそこから機械的に算出した（要バランス見直し）。
     const spongeMul = hasAbility(player, "sponge") ? tierValue(1.25, 1.35, badgeTier(player, "sponge")) : 1;
+    // 第99弾(devlog/wave99.md): 「本気度」に成功した回だけ出走経験の成長にINTENSITY_GROWTH_MULを掛ける
+    // （失敗・賭けなしは通常どおり×1）。
+    const betGrowthMul = (ctx && ctx.betSuccess) ? (INTENSITY_GROWTH_MUL[ctx.intensity] || 1) : 1;
     const mentorMul = (flags.mentorActive ? 1.15 : 1) * (hasAbility(player, "genius_sp") && player.age <= 25 ? 1.15 : 1)
       * spongeMul // v37: 吸収の天才＝出走経験の伸び+25%（第45弾で4段階化）
-      * vitMul; // v38(#9 B-2): 活力が低いと出走経験の伸びも鈍る
+      * vitMul // v38(#9 B-2): 活力が低いと出走経験の伸びも鈍る
+      * betGrowthMul;
     const ph = growthPhase(player);
     raceExpKeys.forEach(k => addAb(player, k, 1.0 * raceGradeMul * mentorMul * Math.max(0.2, ph.gain) * POW[player.growthPow].mul * persMul(player, k), capFor(k)));
-    // v38(#9 B-2): レースで活力を消耗（格上ほど大きい）。走らせすぎると伸びの芯が細る
-    player.vitality = Math.max(0, player.vitality - (5 + (ctx && ctx.raceGrade ? ctx.raceGrade : 1) * 2));
+    // v38(#9 B-2): レースで活力を消耗（格上ほど大きい）
+    // 第99弾: 本気度で賭けた活力は成否によらず消費する（走らせすぎると伸びの芯が細る、と同じ理屈）
+    player.vitality = Math.max(0, player.vitality - (5 + (ctx && ctx.raceGrade ? ctx.raceGrade : 1) * 2) - ((ctx && ctx.intensity) ? (INTENSITY_VIT[ctx.intensity] || 0) : 0));
     // v29: メンタルは「大舞台の経験」で育つ。格上のレースほど大きく伸びる
     growSub(player, "mental", 0.35 * raceGradeMul * Math.max(0.25, ph.gain));
     // v25: 雨天レースは悪天候巧者を持たない選手に落車リスク（疲労急増＋わずかな能力の目減り）を上乗せする
@@ -226,7 +232,11 @@ export function mlAdvanceMonth(s, mode) {
     ? [...new Set(s.result.course.segs.map(seg => SEG_AB[seg.type]))] : [];
   const raceGrade = (mode === "race" && s.resultInfo) ? s.resultInfo.race.grade : null;
   const raceWeather = (mode === "race" && s.resultInfo) ? s.resultInfo.race.weather : null;
-  const ctx = { gear: s.gear, coaches: s.coaches, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather, mlState: s };
+  // 第99弾(devlog/wave99.md): 「本気度」の答え合わせ（controllers/mylife/result.jsが
+  // resultInfo.betへ格納）を月次アクションへ引き継ぐ。賭けた段（intensity）は成否によらず
+  // 活力コストに使い、成長のボーナスは成功時（betSuccess）だけ効かせる。
+  const bet = (mode === "race" && s.resultInfo) ? s.resultInfo.bet : null;
+  const ctx = { gear: s.gear, coaches: s.coaches, houseLv: s.houseLv, carLv: s.carLv, flags: s.flags, year: s.year, difficulty: s.difficulty, raceExpKeys, raceGrade, raceWeather, mlState: s, intensity: bet ? bet.level : 0, betSuccess: bet ? bet.success : false };
   // v38(改善:育成の手応え): 月次アクション前の能力・OVR・活力を控えておき、後で「今月の成長」を可視化する
   const _preAb = {}; AB_KEYS.forEach(k => { _preAb[k] = s.player[k] || 0; });
   const _preSub = { accel: s.player.accel || 0, mental: s.player.mental || 0 };

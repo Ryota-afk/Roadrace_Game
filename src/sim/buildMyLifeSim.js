@@ -10,6 +10,7 @@ import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, 
 import { aiPowerFor, mlAiCapFor } from "../domain/shared/scouting.js";
 import { loadMlLegends } from "../breeding/breeding.js";
 import { avgBondFor } from "../domain/mylife/bonds.js";
+import { INTENSITY_AIMUL } from "../domain/mylife/intensity.js";
 
 // 第16弾A: ライバルの強さは年齢の山なりで変化する（世界のロースターと同じ「全盛期が最も強い」
 // 発想）。従来は生成時の年齢によらず常にpower+6の固定強度だったため、世界の300名が世代交代する
@@ -24,9 +25,12 @@ function rivalPowerBonus(rival) {
   return 1;                      // 最晩年：それでも並のAIよりは強い
 }
 
-export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege, bonds) {
+export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege, bonds, intensity, seed) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
-  const diffAiMul = diffDef.aiMul;
+  // 第99弾(devlog/wave99.md): 「本気度」——このレースだけ相手チームを本気にさせるつまみ。
+  // aiMulにだけ加算し、abilCap（AI能力の上限）は変えない＝「同じ顔ぶれが本気を出す」という
+  // 意味論を保つ（上限まで変えると「もっと強い集団と差し替える」になり別の意味になる）。
+  const diffAiMul = diffDef.aiMul + (INTENSITY_AIMUL[intensity] || 0);
   // v38(#6): マイライフのAI能力上限を難易度で引き上げる。従来は easy/normal/hard がどれも94上限で
   // 実質同強度になり、能力を極めた終盤（100超）に対して hard でも相手が頭打ちで無双できた。
   // hard=102/oni=112 まで許容し、極まった選手にも歯応えが残るようにする（season側のDIFFICULTIESは不変）。
@@ -37,7 +41,14 @@ export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficult
   // そのまま共有し、cap がかかる全ての生成に一律で適用する（伝説選手はfinalAbilitiesで
   // 上書きされるため対象外。詳細はdevlog/wave31.md）。
   const course = generateCourse(raceMeta, dayTag);
-  const rng = mulberry(Date.now() % 999983);
+  // 第99弾(devlog/wave99.md): 「本気度」を選び直すとintensityだけ変えてこの関数を呼び直す
+  // （useMyLifeGame.jsのmlSetIntensity）。既定はDate.now()由来の非決定論的な乱数列だが、
+  // その都度サイコロを振り直すと出走者の顔ぶれ（人数・チーム構成・当日の調子）まで
+  // 毎回入れ替わってしまい、「同じ顔ぶれが本気を出す」というUIの前提が崩れる
+  // （実測で確認済み：newRider内のrng消費量はpower＝本気度に依存しないため、seedさえ
+  // 揃えれば顔ぶれ・年齢・成長タイプ・当日の調子の乱数列は完全に一致し、能力の基準値
+  // （power）だけが動く）。seed省略時（通常のレース開始）は従来どおりDate.now()を使う。
+  const rng = mulberry((seed != null ? seed : Date.now()) % 999983);
   // v47(第7弾C): yearBonus（経過年数だけでAIの地力を底上げする一律ボーナス、最大+24）を廃止した。
   // 「新世代の台頭」という同じ役割は既にageWorldRosters()が本物として実装済み（各選手が加齢し、
   // ピークまで伸び、その後衰え、33〜38歳で引退してルーキーに置き換わる）。yearBonusはこれと同じ

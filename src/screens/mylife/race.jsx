@@ -7,7 +7,10 @@ import { StartListPanel } from "../../components/panels.jsx";
 import { fmtTime } from "../../core/core.js";
 import { TYPES } from "../../data/abilities.js";
 import { FONT_DOT, T } from "../../data/theme.js";
-import { Item, PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
+import { Item, PickHead, PickNote, PickRow, PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
+import {
+  INTENSITY_LABEL, INTENSITY_VIT, mlIntensityCanAfford, mlIntensityStake, mlIntensityTargetLabel,
+} from "../../domain/mylife/intensity.js";
 
 function resultTitle(rank) {
   return rank === 1 ? "優勝" : rank <= 3 ? "表彰台" : rank <= 10 ? "上位入賞" : "フィニッシュ";
@@ -67,13 +70,20 @@ const RivalBlock = ({ outcome, introText, playerName }) => {
 };
 
 export function renderMyLifeRaceScreens(ctx) {
-  const { ML_MILESTONE_LABEL, ml, mlAdvanceMonth, mlLastRaceFinish, mlRaceFinish, mlResolveRivalScene, mlRivalSceneContinue, mlWrap, setMl } = ctx;
+  const { ML_MILESTONE_LABEL, ml, mlAdvanceMonth, mlLastRaceFinish, mlRaceFinish, mlResolveRivalScene, mlRivalSceneContinue, mlSetIntensity, mlWrap, setMl } = ctx;
 
   // ---- 出走表 ----
   if (ml.screen === "mylife_startlist" && ml.result) {
     const { raceMeta } = ml.result;
     const skipWatch = ml.result.teamTT || raceMeta.tmpl.soloTT;
     const startLabel = ml.result.teamTT ? "チームタイムトライアルに挑む" : skipWatch ? "個人タイムトライアルに挑む" : "レースを始める";
+    // 第99弾(devlog/wave99.md): 「本気度」——このレースだけ相手を本気にさせ、金と活力を
+    // 賭けて目標（B1=入賞・A/PRO=表彰台）を狙う。⚠️チームTTは対象外（sim.teamTTは
+    // Math.random()ジッターを使い、raceSeedを揃えても顔ぶれ・結果を再現できないため
+    // 「同じ顔ぶれが本気を出す」という前提が成立しない。個人TT（soloTT）は通常レースと
+    // 同じsim.entrants経路なので対象に含む）。
+    const intensityEnabled = !ml.result.teamTT;
+    const intensity = ml.intensity || 0;
     return mlWrap(
       <Screen>
         <div style={{ marginBottom: T.space.lg }}>
@@ -86,6 +96,24 @@ export function renderMyLifeRaceScreens(ctx) {
             <TypeChip type={raceMeta.tmpl.favors} label={`${TYPES[raceMeta.tmpl.favors].label}有利`} />
           </div>
         </div>
+        {intensityEnabled && (
+          <div style={{ marginBottom: T.space.lg }}>
+            <PickHead>どこまで賭けるか</PickHead>
+            <PickRow
+              items={INTENSITY_LABEL.map((label, lv) => ({ key: lv, label, disabled: !mlIntensityCanAfford(ml, lv) }))}
+              value={intensity}
+              onPick={lv => mlSetIntensity(lv)}
+            />
+            {intensity > 0 && (
+              <PickNote>
+                <span style={{ fontSize: T.size.body, color: T.color.text }}>
+                  {mlIntensityStake(ml.year, ml.classIdx, intensity)}万円・活力{INTENSITY_VIT[intensity]}
+                </span>
+                <span style={{ fontSize: T.size.body, color: T.color.sub }}> ／ {mlIntensityTargetLabel(ml.classIdx)}を狙う</span>
+              </PickNote>
+            )}
+          </div>
+        )}
         <StartListPanel entrants={ml.result.entrants} favors={raceMeta.tmpl.favors} />
         <div style={{ marginTop: T.space.md }}>
           <PrimaryBtn onClick={() => { if (skipWatch) { mlRaceFinish(); } else setMl(s => ({ ...s, screen: "mylife_race" })); }}>{startLabel}</PrimaryBtn>
@@ -164,7 +192,7 @@ export function renderMyLifeRaceScreens(ctx) {
   if (ml.screen === "mylife_result" && ml.resultInfo) {
     const { race, rank, total, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain, popBonus,
       courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev, ambitionCleared, assistOutcome, finishTime, gapSec,
-      forecast, newspaper, standings } = ml.resultInfo;
+      forecast, bet, newspaper, standings } = ml.resultInfo;
     const eyebrow = race.milestone ? ML_MILESTONE_LABEL[race.milestone].eyebrow : race.monument ? "モニュメント" : null;
     const timeStr = finishTime != null ? (rank === 1 ? fmtTime(finishTime) : `トップ +${fmtTime(gapSec)}`) : null;
     const beatForecast = forecast && rank < forecast.rank - 1;
@@ -183,6 +211,15 @@ export function renderMyLifeRaceScreens(ctx) {
             <Item label="事前予想" value={`${forecast.rank}番手`}
               detail={`実際は${rank}位${beatForecast ? "——予想を上回る快走" : rank > forecast.rank ? "——予想に届かず" : ""}`}
               detailColor={beatForecast ? T.color.good : rank > forecast.rank ? T.color.bad : T.color.sub} />
+          )}
+          {bet && (
+            // 第99弾(devlog/wave99.md): 「本気度」の答え合わせ。賭け金は成否によらず既に引かれている
+            // （moneyへ反映済み）ので、ここでは結果とその額だけを一文で示す。
+            <Item label="本気度" value={bet.success ? "成功" : "届かず"} valueColor={bet.success ? T.color.good : T.color.bad}
+              detail={bet.success
+                ? `${bet.targetLabel}を懸けた走りが実った——名声と経験が大きく伸びた（−${bet.stake}万円）`
+                : `懸けた走りは届かなかった（−${bet.stake}万円）`}
+              detailColor={bet.success ? T.color.good : T.color.sub} />
           )}
           {popGain > 0 && (
             <Item label="人気度" value={`+${popGain}`} valueColor={T.color.accent}
