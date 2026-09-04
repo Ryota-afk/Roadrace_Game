@@ -49,15 +49,31 @@ function scaleTo(p, t) {
   return p;
 }
 
+// ⚠️段階ごとに mlCreateChar を引き直すと、⚠️**キャラの引きの差が段階差に化ける**。
+// 実際、同一条件（PRO/15年目/能力144）が別々の実行で段1達成率14%と31%になった
+// ——n=10でも±17ポイントぶれる。段階間を比べるなら⚠️**キャラ集団は1度だけ作り、
+// 各段階へは能力だけスケールした複製を流す**（段階間で対応のある標本にする）。
+// player以外（rival/teammates/worldRosters/bonds）は参照のまま共有してよい——
+// scaleToが触るのはplayerだけなので副作用が無い。
+const BASE_CHARS = [];
+for (let c = 0; c < CHARS; c++) {
+  BASE_CHARS.push(mlCreateChar(initMyLife(), TYPE, "university", null, null,
+    { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] }));
+}
+
+// ⚠️このプローブの限界（結果を読む人へ）：worldRostersはmlCreateCharが返す
+// **1年目のまま**渡しており、ageWorldRosters()によるAIの経年成長を再現していない。
+// つまり「15年目」は⚠️**15年目のレース日程と乱数シード**であって
+// **15年目のAIの強さではない**。段階間の差はクラス（対戦プール・出走人数）と
+// レース構成の差であり、AI自身の成長は含まれない。
 for (const stage of STAGES) {
   const races = await careerRaces(R, stage.year, stage.classIdx);
   const st = {};
   let ovrSum = 0, ovrN = 0;
   LEVELS.forEach(lv => st[lv] = { n: 0, rank: 0, win: 0, top3: 0, top10: 0, hitTarget: 0, time: 0 });
   for (let c = 0; c < CHARS; c++) {
-    const s = mlCreateChar(initMyLife(), TYPE, "university", null, null,
-      { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
-    scaleTo(s.player, stage.ability);
+    const base = BASE_CHARS[c];
+    const s = { ...base, player: scaleTo({ ...base.player }, stage.ability) };
     ovrSum += overall(s.player); ovrN++;
     for (const race of races) {
       for (const lv of LEVELS) {
