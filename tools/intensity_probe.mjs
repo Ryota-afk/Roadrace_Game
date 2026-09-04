@@ -20,25 +20,44 @@ const { buildMyLifeSim } = await import(`${R}/sim/buildMyLifeSim.js`);
 const { AB_KEYS } = await import(`${R}/data/abilities.js`);
 const { DIFFICULTIES } = await import(`${R}/data/progression.js`);
 const { careerRaces } = await import("/home/user/Roadrace_Game/tools/_shared.mjs");
+const { overall } = await import(`${R}/core/core.js`);
 
 // 本気度のつまみ位置を「normalのaiMulに対する加算」として仮想的に作る。
 // ⚠️src は一切変更しない——計測のためにDIFFICULTIESへ一時的な行を足すだけ。
 // abilCap は normal と同じ96相当（mlAiCapFor経由）に保ち、aiMulだけを動かす
 // ＝「同じ顔ぶれが本気を出す」という本気度の意味論に合わせる。
-const STEPS = [0, 0.15, 0.30, 0.45, 0.60];
+// 第99弾の較正やり直し（キャリブレーション計測が不合格だったため）：
+// ⚠️旧版は能力60/80/92しか測っていなかったが、実キャリアは4〜5年目にそこを追い越し
+// 15年目に総合力144へ達する（tools/simcareer.mjsの実測）。⚠️**測っていない強さで
+// キャリアの大半が走っていた**のが達成率80%の原因。能力・つまみ幅・aiCapを
+// 引数で振れるようにして、実キャリアの帯（100〜145）を測れるようにする。
+const arg = (name, dflt) => {
+  const i = process.argv.indexOf(name);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
+};
+const STEPS = arg("--steps", "0,0.15,0.30,0.45,0.60").split(",").map(Number);
+// ⚠️--aicap を渡すとAI能力の上限も一緒に動かす（既定はnormalのまま＝mlAiCapFor経由の96）。
+// 本気度の設計は「abilCapは触らない＝同じ顔ぶれが本気を出す」だが、その前提で
+// つまみが効き続けるのかを確かめるために、上限を動かした場合との対照が要る。
+// ⚠️注意：mlAiCapFor()は難易度id（easy/normal/hard/oni）で引くため、probe用の独自idは
+// 表に無く`diffDef.abilCap`（normal行の94）へフォールバックする。実ゲームのnormalは96なので、
+// 何もしないとprobeだけ2ポイント緩い集団を測ることになる。既定を96に揃える。
+const AICAP = Number(arg("--aicap", "96"));
 const normal = DIFFICULTIES.find(d => d.id === "normal");
 STEPS.forEach(dv => {
-  if (dv === 0) return;
-  DIFFICULTIES.push({ ...normal, id: `probe${dv}`, aiMul: normal.aiMul + dv });
+  DIFFICULTIES.push({ ...normal, id: `probe${dv}`, aiMul: normal.aiMul + dv, abilCap: AICAP });
 });
-const idFor = dv => (dv === 0 ? "normal" : `probe${dv}`);
+const idFor = dv => `probe${dv}`;
 
-const STAGES = [
-  { label: "新人 B1/1年目 能力60", classIdx: 0, year: 1, ability: 60 },
-  { label: "中堅 A/5年目 能力80", classIdx: 1, year: 5, ability: 80 },
-  { label: "円熟 PRO/9年目 能力92", classIdx: 2, year: 9, ability: 92 },
-];
-const CHARS = Number(process.argv[process.argv.indexOf("--chars") + 1] || 12);
+const ABILITIES = arg("--abilities", null);
+const STAGES = ABILITIES
+  ? ABILITIES.split(",").map(Number).map(a => ({ label: `PRO/${arg("--year", "15")}年目 能力${a}`, classIdx: Number(arg("--class", "2")), year: Number(arg("--year", "15")), ability: a }))
+  : [
+    { label: "新人 B1/1年目 能力60", classIdx: 0, year: 1, ability: 60 },
+    { label: "中堅 A/5年目 能力80", classIdx: 1, year: 5, ability: 80 },
+    { label: "円熟 PRO/9年目 能力92", classIdx: 2, year: 9, ability: 92 },
+  ];
+const CHARS = Number(arg("--chars", "12"));
 const TYPE = "RUL";
 
 function scaleTo(p, t) {
@@ -50,11 +69,15 @@ function scaleTo(p, t) {
 for (const stage of STAGES) {
   const races = await careerRaces(R, stage.year, stage.classIdx);
   const st = {};
+  let ovrSum = 0, ovrN = 0;
   STEPS.forEach(dv => st[dv] = { n: 0, rank: 0, win: 0, top3: 0, top10: 0, time: 0 });
   for (let c = 0; c < CHARS; c++) {
     const s = mlCreateChar(initMyLife(), TYPE, "university", null, null,
       { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
     scaleTo(s.player, stage.ability);
+    // 「能力の平均」と「総合力(overall)」は別尺度。tools/simcareer.mjsが報告するのは
+    // 後者なので、両方を出して対応が取れるようにする（較正の帯を実キャリアと突き合わせるため）。
+    ovrSum += overall(s.player); ovrN++;
     for (const race of races) {
       for (const dv of STEPS) {
         const sim = buildMyLifeSim(race, s.player, s.team, stage.classIdx, idFor(dv), undefined, null,
@@ -70,7 +93,8 @@ for (const stage of STAGES) {
       }
     }
   }
-  console.log(`\n=== ${stage.label} / ${TYPE} / ${CHARS}キャラ×${races.length}レース（対応のある標本） ===`);
+  const ovrSample = ovrN ? ovrSum / ovrN : 0;
+  console.log(`\n=== ${stage.label} / 総合力${ovrSample.toFixed(0)} / AI上限${AICAP} / ${TYPE} / ${CHARS}キャラ×${races.length}レース（対応のある標本） ===`);
   const base = st[0];
   console.log("aiMul差   n     平均着順   勝率   3位以内  10位以内  Δ秒(vs据置)");
   for (const dv of STEPS) {
