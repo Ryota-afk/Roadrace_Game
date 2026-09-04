@@ -433,6 +433,10 @@ function summarizePolicy(results) {
         popMedian: median(rows.map(r => r.pop)).toFixed(1),
         moneyMedian: median(rows.map(r => r.money)),
         salaryMedian: median(rows.map(r => r.salary)),
+        // 第99弾: 総合力と活力の推移。⚠️本気度の閾値は能力60/80/92で較正したが、
+        // 実際のキャリアが何年目にそこを追い越すかを見ないと較正が空振りする。
+        ovrMedian: median(rows.map(r => r.ovr ?? 0)).toFixed(1),
+        vitMedian: median(rows.map(r => r.vit ?? 100)).toFixed(0),
       };
     });
   // 人気度100張り付き率（統計的な不変条件A2の本体。devlog/wave92.md参照）
@@ -504,8 +508,8 @@ for (const p of policyNames) {
   md += `## 方策: ${p}\n\n`;
   md += `${r.careers}本中、指定年数(${MAX_YEARS}年)まで到達 ${r.careers - r.stepsExhausted}本 / ステップ上限で打ち切り ${r.stepsExhausted}本 / 不変条件違反 ${r.violationCount}件\n\n`;
   md += `⚠️人気度が100に張り付いた月の割合: **${r.pinnedRate.toFixed(1)}%**（全${r.monthCount}ヶ月中）\n\n`;
-  md += `| 年目 | サンプル数 | 人気度(中央値) | 資金(中央値) | 年俸(中央値) |\n|---|---|---|---|---|\n`;
-  r.yearRows.forEach(y => { md += `| ${y.year} | ${y.n} | ${y.popMedian} | ${y.moneyMedian}万 | ${y.salaryMedian}万 |\n`; });
+  md += `| 年目 | サンプル数 | 人気度(中央値) | 資金(中央値) | 年俸(中央値) | 総合力(中央値) | 活力(中央値) |\n|---|---|---|---|---|---|---|\n`;
+  r.yearRows.forEach(y => { md += `| ${y.year} | ${y.n} | ${y.popMedian} | ${y.moneyMedian}万 | ${y.salaryMedian}万 | ${y.ovrMedian} | ${y.vitMedian} |\n`; });
   md += `\n`;
   // 第94弾P2: 恒久的な使い道の実測
   md += `恒久的な使い道（住居・車・練習用品・コーチ・パーツ本体・パーツ強化）を買い切った本数: `
