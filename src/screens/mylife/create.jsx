@@ -7,7 +7,7 @@ import React from "react";
 import { loadMlLegends, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { bestBloodRecipeProgress, bloodRecipeProgress, deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
 import { AbilityGrid, TraitLine } from "../../components/panels.jsx";
-import { PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
+import { PickHead, PickNote, PickRow, PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
 import { fmtRelTime, overall } from "../../core/core.js";
 import { ABILITIES, AB_LABEL, TYPES } from "../../data/abilities.js";
 import { SEG_LABEL, TEMPLATES } from "../../data/course.js";
@@ -15,27 +15,6 @@ import { DIFFICULTIES, DISCIPLINE_KEYS, DISCIPLINES, FAVORS_TO_DISCIPLINE } from
 import { FONT_DOT, T } from "../../data/theme.js";
 import { ACQUIRE_REQS, MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGrowthPowRevealed, mlTalentRank } from "../../logic/support.js";
 import { loadMyLifeGame, myLifeSaveInfo } from "../../state/state.js";
-
-// 第34弾: 選択肢は名前だけを横に並べ、説明は選んでいる1件だけを下の面に出す。
-// 「3件分の説明を読み比べる人はいない」という実態に合わせた形（devlog/wave34.md）。
-const PickHead = ({ children }) => (
-  <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>{children}</div>
-);
-const PickRow = ({ items, value, onPick }) => (
-  <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginBottom: T.space.sm }}>
-    {items.map(it => (
-      <button key={it.key} onClick={() => onPick(it.key)} style={{
-        border: "none", cursor: "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
-        padding: `${T.space.sm}px ${T.space.md}px`,
-        background: value === it.key ? T.color.action : T.color.surfaceUp,
-        color: value === it.key ? T.color.ink : T.color.sub,
-      }}>{it.label}{it.sub && <span style={{ fontSize: T.size.caption, marginLeft: 4 }}>{it.sub}</span>}</button>
-    ))}
-  </div>
-);
-const PickNote = ({ children }) => (
-  <div style={{ background: T.color.surface, padding: `10px ${T.space.md}px`, marginBottom: T.space.md }}>{children}</div>
-);
 
 export function renderMyLifeCreateScreens(ctx) {
   const { askConfirm, ml, mlConfirmBadgeGoals, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlSetRaceFocus, mlToggleBadgeGoal, mlWrap, setMl, setSuperMode } = ctx;
@@ -95,7 +74,9 @@ export function renderMyLifeCreateScreens(ctx) {
             return (
               <PickNote>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontSize: T.size.body, color: T.color.text }}>{curDiff.desc}</span>
+                  {/* 第99弾(TODO #32-b): descはシーズン用（成長上限が上がる、と書いてある）。
+                      マイライフは逆に難易度が上がるほど伸びしろが広がりにくいため、mlDescを使う。 */}
+                  <span style={{ fontSize: T.size.body, color: T.color.text }}>{curDiff.mlDesc || curDiff.desc}</span>
                   <span style={{ fontSize: T.size.head, color: cpMul > 1 ? T.color.good : T.color.sub, flex: "none", marginLeft: T.space.sm }}>×{cpMul}</span>
                 </div>
                 {/* 第63弾(devlog/wave63.md): 未プレイの初見に「クリアポイント」が説明ゼロで

@@ -205,7 +205,12 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     const selectedRace = mlSelectedRace(ml);
     const { race, directiveKey } = resolveNationalRole(selectedRace, ml.managerEval, baseDirectiveKey);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
-    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, ml.worldRosters, protegeForRace, ml.bonds);
+    // 第99弾(devlog/wave99.md): 「本気度」を出走表で選び直すたびにbuildMyLifeSimを呼び直す
+    // （mlSetIntensity）ため、乱数seedをここで一度だけ確定して持ち回る。同じseedを渡す限り
+    // 出走者の顔ぶれ・当日の調子は完全に再現され、intensityで変わるのは能力の基準値だけになる
+    // （実測で確認済み・詳細はbuildMyLifeSim.jsのコメント参照）。
+    const raceSeed = Date.now();
+    const sim = buildMyLifeSim(race, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, ml.worldRosters, protegeForRace, ml.bonds, 0, raceSeed);
     // v29: 出走表を挟んでからレース本番へ（顔ぶれを確認できる）
     // 第41弾: 複数候補から選んだレース（selectedRace）をresolveNationalRoleで解決した結果を
     // 該当idの位置へ書き戻す。sel.raceIdも明示的に固定し、以降の結果確定側（mlSelectedRace）が
@@ -215,16 +220,32 @@ export function useMyLifeGame({ superMode, askConfirm }) {
       races: race !== selectedRace ? s.races.map(r => r.id === selectedRace.id ? race : r) : s.races,
       sel: { ...s.sel, raceId: race.id },
       result: sim, screen: "mylife_startlist",
+      intensity: 0, raceSeed,
     }));
   }
   // 第41弾: 通常月の3候補から選ぶ。特別月（候補1本）では使われない。
   const mlSelectRace = (raceId) => setMl(s => ({ ...s, sel: { ...s.sel, raceId } }));
+  // 第99弾(devlog/wave99.md): 出走表で「本気度」を選び直す。同じレース・同じraceSeedのまま
+  // intensityだけ変えてsimを作り直す（RaceViewのresimBusyと同じ「選び直すと作り直す」形）。
+  // ⚠️ラストレース（mlStartLastRace）はraceSeedを持たないため、この関数の対象外
+  // （screens/mylife/race.jsx側もラストレースでは本気度UIそのものを出さない）。
+  function mlSetIntensity(level) {
+    if (ml.screen !== "mylife_startlist" || !ml.result || ml.raceSeed == null) return;
+    const raceMeta = ml.result.raceMeta;
+    const baseDirectiveKey = ml.directive ? ml.directive.key : null;
+    const { directiveKey } = resolveNationalRole(raceMeta, ml.managerEval, baseDirectiveKey);
+    const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
+    const sim = buildMyLifeSim(raceMeta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, directiveKey, ml.rival, ml.year, ml.rival2, ml.teammates, ml.tactic, ml.worldRosters, protegeForRace, ml.bonds, level, ml.raceSeed);
+    setMl(s => s.screen !== "mylife_startlist" ? s : ({ ...s, result: sim, intensity: level }));
+  }
   function mlStartLastRace() {
     if (ml.screen !== "mylife_main") return;
     const meta = buildLastRaceMeta(ml.player, ml.year, ml.classIdx);
     const protegeForRace = ml.protege ? { ...ml.protege, curOvr: protegeState(ml.protege, ml.year).ovr } : null;
     const sim = buildMyLifeSim(meta, ml.player, ml.team, ml.classIdx, ml.difficulty || "easy", undefined, "ace", ml.rival, ml.year, ml.rival2, ml.teammates, "aggressive", ml.worldRosters, protegeForRace, ml.bonds);
-    setMl(s => s.screen !== "mylife_main" ? s : ({ ...s, result: sim, inLastRace: true, screen: "mylife_race" }));
+    // ⚠️ラストレースは本気度UIを出さない（引退後の資金は無意味で賭けが無コストになり支配される。
+    // devlog/wave99.md）。intensityは0のまま・raceSeedも持たせない。
+    setMl(s => s.screen !== "mylife_main" ? s : ({ ...s, result: sim, inLastRace: true, screen: "mylife_race", intensity: 0, raceSeed: null }));
   }
   // v41(§Step7第3弾): マイライフのレース結果確定は controllers/mylife/result.js の純関数に集約。
   // mlLastRaceFinish内のmlRecordLegend、mlRaceFinish内のrecordTitle(race.milestone)は呼ばず、
@@ -304,7 +325,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     mlCreateChar, mlRerollCandidate, mlConfirmCandidate, mlSetFocus,
     mlToggleBadgeGoal, mlConfirmBadgeGoals, mlSelectRace, mlSetRaceFocus,
     mlBecomeMentor, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue,
-    mlStartRace, mlStartLastRace, mlLastRaceFinish, mlRaceFinish, mlAdvanceMonth,
+    mlStartRace, mlSetIntensity, mlStartLastRace, mlLastRaceFinish, mlRaceFinish, mlAdvanceMonth,
     mlRetireAdviceContinue, mlRetireAdviceReduceRole, mlRetireAdviceAccept,
     mlChooseTeam, mlResolveOffseason, mlContinueAfterOffseason, mlResolveCrossroads, mlContinueAfterCrossroads,
     mlTriggerSponsorGig, mlResolveEvent,

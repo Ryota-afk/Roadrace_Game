@@ -200,3 +200,28 @@ export const ChipRow = ({ options, value, onChange }) => (
     })}
   </div>
 );
+
+// 第34弾: 選択肢は名前だけを横に並べ、説明は選んでいる1件だけを下の面に出す。
+// 「3件分の説明を読み比べる人はいない」という実態に合わせた形（devlog/wave34.md）。
+// ChipRowより文字が大きく（body基準）、選び直すたびに下のPickNoteが差し替わる主要な決断
+// （経歴・難易度等）向け。第99弾(devlog/wave99.md)でscreens/mylife/create.jsxから
+// ここへ移設（本気度ピッカーでも同じ見た目を使うため。CLAUDE.md §5・二重定義を避ける）。
+export const PickHead = ({ children }) => (
+  <div style={{ fontSize: T.size.caption, color: T.color.accent, marginBottom: T.space.sm }}>{children}</div>
+);
+export const PickRow = ({ items, value, onPick }) => (
+  <div style={{ display: "flex", gap: T.space.xs, flexWrap: "wrap", marginBottom: T.space.sm }}>
+    {items.map(it => (
+      <button key={it.key} disabled={it.disabled} onClick={() => onPick(it.key)} style={{
+        border: "none", cursor: it.disabled ? "default" : "pointer", fontFamily: FONT_DOT, fontSize: T.size.body,
+        padding: `${T.space.sm}px ${T.space.md}px`,
+        background: value === it.key ? T.color.action : T.color.surfaceUp,
+        color: it.disabled ? T.color.rule : value === it.key ? T.color.ink : T.color.sub,
+        opacity: it.disabled ? 0.6 : 1,
+      }}>{it.label}{it.sub && <span style={{ fontSize: T.size.caption, marginLeft: 4 }}>{it.sub}</span>}</button>
+    ))}
+  </div>
+);
+export const PickNote = ({ children }) => (
+  <div style={{ background: T.color.surface, padding: `10px ${T.space.md}px`, marginBottom: T.space.md }}>{children}</div>
+);

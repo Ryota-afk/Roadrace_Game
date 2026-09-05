@@ -12,6 +12,13 @@
 // 残量バーを添えて「鈍っているが0ではない」ことを示す。
 import { legsLeft01 } from "../../sim/race.js";
 
+// 第98弾(devlog/wave98.md §5): 脚が尽きた選手に判断カードを出しても、実測で
+// energy<-60（DecisionCard.jsxのlegsTier「限界」と同じ境界）ではΔ着順もΔ秒も
+// 厳密に0.00——選択肢が何であっても結果を1ミリも動かさない（CLAUDE.md §0-1に反する）。
+// RaceView.jsxはこの閾値でカードを出さず実況だけ返す。legsTierと二重管理しないため
+// ここに1箇所だけ定義する（CLAUDE.md §5）。
+export const LEGS_SPENT_ENERGY = -60;
+
 // v48(第9弾): attackLeftを付与し「単独で先頭に残る」状態を作る一手は、決まれば集団から
 // 抜け出せるが、外せば独走の消耗（ドラフト保護なし）を集団に吸収されるまで払い続ける＝
 // 大きく落ちるリスクを負う。sendは自分自身、teamChaseは僚友にattackLeftを付与する

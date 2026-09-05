@@ -18,6 +18,13 @@ function bestTerrainTier(ent) {
 // 銅・銀・金＝1回／虹＝2回。未所持は0回（専用カードは出ない）。
 function terrainCardCap(tier) { return tier === "rainbow" ? 2 : tier ? 1 : 0; }
 
+// 第97弾(devlog/wave97.md §4.6): terrainカードの「仕掛ける」は進捗0.40未満では
+// 実測で明確に不利（committedBreakが次の判断まで解除されず、脚が尽きるまで牽き続ける
+// ため）。区間の入口(segStart)がそれより前でも、進捗0.40まで発火を遅らせて成立圏で
+// 出す（区間そのものが0.40より前で完結する場合のみ、その区間のカードは出ない）。
+// 閾値0.40は§4.1でattack/holdをフォーク比較し符号が反転する境界として実測した値。
+const TERRAIN_MIN_FRAC = 0.40;
+
 // v39(A案): レース中の「判断カード」スロット定義。注目選手のコース進捗(frac)が at を越えた／
 // 状況条件 cond を満たした瞬間に再生を止め、その時点の状況(ctx)に応じて composeCard で選択肢を
 // 組み立てて提示する。選んだ move は resumeSim でその地点から結果へ反映される。teamTT等の履歴が
@@ -47,7 +54,11 @@ export function buildDecisions(course, focusEnt, manager) {
       course.segs.forEach((seg, idx) => {
         if (fired >= cap || idx === course.finalIdx || !hasTerrainBadge(focusEnt, seg.type)) return;
         const segStart = idx === 0 ? 0 : course.cumFrac[idx - 1];
-        const at = segStart + 0.01;
+        const segEnd = course.cumFrac[idx];
+        // 第97弾: 区間が0.40より前で完結する場合はここで打ち切る（=カードを出さない）。
+        // またぐ区間は0.40まで発火を遅らせる（区間との対応は保ったまま成立圏へ寄せる）。
+        const at = Math.max(segStart + 0.01, TERRAIN_MIN_FRAC);
+        if (at >= segEnd) return;
         if (at >= atFin - 0.03) return; // 勝負所の一手と被らないよう、その手前で打ち切る
         decisions.push({ id: `terrain-${idx}`, at, kind: "terrain", segType: seg.type });
         fired++;
@@ -120,7 +131,8 @@ export function composeCard(kind, focus, ctx) {
     sub = "自分の得意地形——ここでどう動く？";
     choices = [
       { move: "tempo", label: "ふるいにかける", desc: "ペースを上げて後続を千切る。脚を大きく使う" },
-      { move: "attack", label: "仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" },
+      // 第97弾(devlog/wave97.md §4.9): 代償の表記をmidと統一（詳細は上のmid分岐参照）。
+      { move: "attack", label: "仕掛ける", desc: "単独で飛び出す。以後、脚を緩められない" },
       { move: "hold", label: "流れに任せる", desc: "展開に乗って様子を見る" },
     ];
     return { title, sub, choices };
@@ -143,14 +155,19 @@ export function composeCard(kind, focus, ctx) {
     title = "中盤の判断";
     sub = onClimb ? "登りが牙を剥く。ここが勝負の分かれ目だ" : onHill ? "うねる丘で隊列が動き出した" : "隊列が動き出した。ここでどう動く？";
     // 攻めの一手（地形×脚質×特性で味付け）
+    // 第97弾(devlog/wave97.md §4.9): attackの本当のコストは「独走の持続」ではなく
+    // 「次に別の手を選ぶまで脚を緩められない」こと（committedBreakは自動では解除されず、
+    // canPullの回復ヒステリシスをスキップし続ける）。旧descはこの代償に一言も触れていな
+    // かったため、脚質別4分岐すべてに追記する。「次の勝負所まで」とは書かない——
+    // カードの配置という開発側の都合が漏れるため。
     if (onClimb && (t === "CLM" || A("mount") || A("allclimber") || A("climbengine") || A("autumn_sp")))
-      choices.push({ move: "attack", label: "登りで抜け出す", desc: "登坂適性を武器に単独で飛び出す" });
+      choices.push({ move: "attack", label: "登りで抜け出す", desc: "登坂適性を武器に飛び出す。以後、脚を緩められない" });
     else if (onHill && (t === "PUN" || A("puncheur") || A("ardennes_sp")))
-      choices.push({ move: "attack", label: "丘でアタック", desc: "丘の申し子、パンチ力で抜け出す" });
+      choices.push({ move: "attack", label: "丘でアタック", desc: "丘の申し子、パンチ力で抜け出す。以後、脚を緩められない" });
     else if (A("escape"))
-      choices.push({ move: "attack", label: "得意の逃げに持ち込む", desc: "逃げ屋の脚で集団を突き放す" });
+      choices.push({ move: "attack", label: "得意の逃げに持ち込む", desc: "逃げ屋の脚で集団を突き放す。以後、脚を緩められない" });
     else
-      choices.push({ move: "attack", label: "仕掛ける", desc: "単独で飛び出す。決まれば独走、脚を使い切れば失速も" });
+      choices.push({ move: "attack", label: "仕掛ける", desc: "単独で飛び出す。以後、脚を緩められない" });
     if (A("grinder")) choices.push({ move: "hangOn", label: "食らいついて粘る", desc: "食らいつく脚で集団に残り、脚を温存する" });
     choices.push({ move: "conserve", label: "脚を溜める", desc: "集団後方で温存し、勝負所に備える" });
     if (isAssist) choices.push({ move: "assistLaunch", label: "エースの前で牽く", desc: "自分の脚を使ってエースを勝負所へ運ぶ" });
@@ -160,28 +177,33 @@ export function composeCard(kind, focus, ctx) {
   // finale
   // 第95弾#31-D-2(devlog/wave95.md §4.5c/d): 旧実装はkickBig/sprintWait/kickを排他で
   // 出しており、常に「安全な一手1つ＋劣位のsend＋hold」の実質1択だった（実測600レース）。
-  // ここからは「安全に差す(kick)」と「賭けて振り切る(kickBig)」を全員に必ず両方提示し、
-  // 脚の残り（LegsBar）を見て選ばせる。バッジは選択肢を差し替えるのではなく、
-  // 同じ選択肢の効き目を底上げする役割に統一する（ticks.jsのfinishKick加算で実現済み）。
+  // 「安全に差す(kick)」と「賭けて振り切る(kickBig)」を両方提示する形に改めたが、
+  // 第96弾§7.9〜§7.11(devlog/wave96.md)の実測（isPlayerCharで正しく計測し直した結果）で
+  // kick/kickBig/sprintWaitはsim側で同じ関数（finaleSendのスカラー値違いのみ・ticks.js）
+  // であり、実質「強弱1本」で対立軸を持たないと判明した。⚠️唯一sendだけがattackLeft
+  // （独走の持続）を立てる別機構で、実測でも位置によって正解が入れ替わる本物の非支配
+  // （後方にいるほどsendが勝率を伸ばす代わりに着順を損なう＝「平均では損だが決まれば勝てる」）
+  // だった。kickBigをsendに置き換え、脚の残り（LegsBar）を見て選ばせる。
   const climbKicker = onClimb && (t === "CLM" || A("mount") || A("allclimber"));
   const sprLike = t === "SPR" || A("sprinter_sp");
   const finisherLike = A("kicker") || A("finisher") || A("closer");
   title = "勝負所の判断";
-  sub = "ゴールが近い。どこまで踏むか";
+  sub = "ゴールが近い。どこで動くか";
   if (finisherLike) {
-    choices.push({ move: "kick", label: "会心の差し脚", desc: "豪脚の切れ味で差し切る（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "渾身の一撃", desc: "豪脚の全てを解き放つ（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "あえて先に出る", desc: "早駆けで抜け出す（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "会心の差し脚", desc: "豪脚の切れ味で差し切る（脚を使う）" });
   } else if (climbKicker) {
-    choices.push({ move: "kick", label: "じわりと詰める", desc: "登りでじわじわ食らいつく（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "登りで振り切る", desc: "最後の登りで一気に踏んで独走へ（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "登りで先に出る", desc: "最後の登りで一気に踏んで独走へ（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "じわりと詰める", desc: "登りでじわじわ食らいつく（脚を使う）" });
   } else if (sprLike) {
-    choices.push({ move: "kick", label: "番手から差す", desc: "番手をキープして差しにかける（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "早めに踏み切る", desc: "集団の前で早めに仕掛ける（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "早めに踏み切る", desc: "集団の前で早めに仕掛ける（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "番手から差す", desc: "番手をキープして差しにかける（脚を使う）" });
   } else {
-    choices.push({ move: "kick", label: "差す", desc: "手堅く差しにかける（脚を大きく使う）" });
-    choices.push({ move: "kickBig", label: "振り切る", desc: "全てを賭けて抜け出す（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "send", label: "早駆け", desc: "早めに抜け出して踏み切る（脚を大きく使う・飲まれると大きく失う）" });
+    choices.push({ move: "kick", label: "差す", desc: "手堅く差しにかける（脚を使う）" });
   }
+  // 第96弾§7.9〜§7.11: conserveはfinaleでは`kick`/`send`に両軸で支配される罠の選択肢
+  // だった（実測）ため廃止。非アシスト時は差す/早駆けの2択のみになる。
   if (isAssist) choices.push({ move: "assistLaunch", label: "エースを射出", desc: "最終局面、エースのスプリントを援護する" });
-  else choices.push({ move: "conserve", label: "脚を溜める", desc: "無理をせず脚を残し、流れに乗る" });
   return { title, sub, choices: choices.slice(0, 4) };
 }
