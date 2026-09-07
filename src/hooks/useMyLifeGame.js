@@ -3,6 +3,7 @@
 // 確認ダイアログ）の2つのみ（詳細はDEVLOG §9参照）。
 import { useEffect, useRef, useState } from "react";
 import { T } from "../data/theme.js";
+import { mulberry, pickRiderName } from "../core/core.js";
 import { ML_STOCK_ITEMS, computeMyLifeClearPoints, noteAbilityDiscovery, persistCourseRecord, protegeState } from "../logic/support.js";
 import { mlRecordLegend } from "../breeding/breeding.js";
 import { buildMyLifeSim, computeAchievements, advanceWorldYear, initMyLife, loadMeta, recordTitle, saveMeta, saveMyLife } from "../state/state.js";
@@ -135,6 +136,11 @@ export function useMyLifeGame({ superMode, askConfirm }) {
     mlCreateArgsRef.current = { type, background, master, partner }; // v36(#5): 引き直し用に保持
     const cpMeta = loadMeta();
     setMl(s => domainMlCreateChar(s, type, background, master, partner, cpMeta));
+  }
+  // 第100弾(devlog/wave100.md): 選手をつくる画面の「引き直す」——名前だけを振り直す。
+  // 素質診断のmlRerollCandidate（能力・特殊能力ごと再生成）とは別物。
+  function mlRerollName() {
+    setMl(s => ({ ...s, nameChoice: pickRiderName(mulberry(Date.now() % 999983), new Set([s.nameChoice])) }));
   }
   // v36(#5リセマラ): 素質診断からの引き直し。直近の作成引数で再ロールし、素質診断に留まる。
   function mlRerollCandidate() {
@@ -322,7 +328,7 @@ export function useMyLifeGame({ superMode, askConfirm }) {
 
   return {
     ml, setMl, mlCreateArgsRef, ML_MILESTONE_LABEL,
-    mlCreateChar, mlRerollCandidate, mlConfirmCandidate, mlSetFocus,
+    mlCreateChar, mlRerollName, mlRerollCandidate, mlConfirmCandidate, mlSetFocus,
     mlToggleBadgeGoal, mlConfirmBadgeGoals, mlSelectRace, mlSetRaceFocus,
     mlBecomeMentor, mlResolveProtegeEvent, mlResolveRivalScene, mlRivalSceneContinue,
     mlStartRace, mlSetIntensity, mlStartLastRace, mlLastRaceFinish, mlRaceFinish, mlAdvanceMonth,

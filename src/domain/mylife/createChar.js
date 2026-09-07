@@ -28,6 +28,9 @@ export function mlCreateChar(s, type, background, master, partner, cpMeta) {
   // 一部引き継いだ状態でデビューする
   const inh = master ? protegeInherit(master) : null;
   const player = newRider(bg.powerBase, rng, { type, age: bg.age, growth: bg.growth, powDist: bg.powDist, banned: new Set(), abBonus: inh ? inh.abBonus : undefined });
+  // 第100弾(devlog/wave100.md): 選手をつくる画面で決めた名前をここで反映する。
+  // mlCreateRival（下記）より前に置く——ライバル名の重複除外がplayer.nameを見るため。
+  if (s.nameChoice) player.name = s.nameChoice;
   player.background = background;
   player.vitality = 100; // v38(#9 B-2): 活力（長期の伸びしろの芯）。満タンでデビュー
   // v36(#4): 経歴ごとの固有メリット。高校卒＝成長力アップ抽選、大学卒／実業団卒＝出自らしい

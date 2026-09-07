@@ -6,6 +6,7 @@
 import React from "react";
 import { loadMlLegends, mlBreedBonus, protegeInherit } from "../../breeding/breeding.js";
 import { bestBloodRecipeProgress, bloodRecipeProgress, deriveBloodMarks, matchBloodRecipe } from "../../breeding/recipes.js";
+import { RiderPortrait } from "../../components/RiderPortrait.jsx";
 import { AbilityGrid, TraitLine } from "../../components/panels.jsx";
 import { PickHead, PickNote, PickRow, PrimaryBtn, QuietBtn, Screen, Section, TypeChip } from "../../components/kit.jsx";
 import { fmtRelTime, overall } from "../../core/core.js";
@@ -14,16 +15,19 @@ import { SEG_LABEL, TEMPLATES } from "../../data/course.js";
 import { DIFFICULTIES, DISCIPLINE_KEYS, DISCIPLINES, FAVORS_TO_DISCIPLINE } from "../../data/progression.js";
 import { FONT_DOT, T } from "../../data/theme.js";
 import { ACQUIRE_REQS, MLCP_DIFF_MUL, ML_BACKGROUNDS, SUB_STAT_LABEL, clearMyLifeSave, hasMyLifeSave, mlGrowthPowRevealed, mlTalentRank } from "../../logic/support.js";
-import { loadMyLifeGame, myLifeSaveInfo } from "../../state/state.js";
+import { loadMeta, loadMyLifeGame, myLifeSaveInfo } from "../../state/state.js";
 
 export function renderMyLifeCreateScreens(ctx) {
-  const { askConfirm, ml, mlConfirmBadgeGoals, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlSetRaceFocus, mlToggleBadgeGoal, mlWrap, setMl, setSuperMode } = ctx;
+  const { askConfirm, ml, mlConfirmBadgeGoals, mlConfirmCandidate, mlCreateChar, mlRerollCandidate, mlRerollName, mlSetRaceFocus, mlToggleBadgeGoal, mlWrap, openRename, setMl, setSuperMode } = ctx;
     if (ml.screen === "mylife_create") {
       const typeOpts = Object.entries(TYPES);
       const bgOpts = Object.entries(ML_BACKGROUNDS);
       const curType = TYPES[ml.typeChoice];
       const curBg = ML_BACKGROUNDS[ml.bgChoice];
       const curDiff = DIFFICULTIES.find(d => d.id === (ml.mlDiffChoice || "normal")) || DIFFICULTIES[1];
+      // 第100弾(devlog/wave100.md): 初回プレイ（生涯CP・歴代選手ともに0件）ではCP倍率の説明を
+      // 出さない。meta.jsxのshowAuxと同じ条件式。
+      const isExperienced = loadMeta().totalEarnedCP > 0 || loadMlLegends().length > 0;
       return mlWrap(
         <Screen>
           <div style={{ fontSize: T.size.title, marginBottom: T.space.md }}>選手をつくる</div>
@@ -37,6 +41,26 @@ export function renderMyLifeCreateScreens(ctx) {
               </PrimaryBtn>
             );
           })()}
+
+          {/* 第100弾(devlog/wave100.md): 選手の姿と名前を画面の頭に置く。脚質を選び直すと
+              RiderPortraitの色（TYPES[ml.typeChoice].color）が変わる＝選択が絵に効く。 */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: T.space.md, background: T.color.surface, padding: T.space.md, marginBottom: T.space.md }}>
+            <div style={{ flex: "none" }}><RiderPortrait color={curType?.color || T.color.sub} size={120} /></div>
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
+              <div style={{ fontSize: T.size.caption, color: T.color.sub }}>名前</div>
+              <div style={{ fontSize: T.size.title, color: T.color.text, lineHeight: 1.2, marginTop: 2 }}>{ml.nameChoice}</div>
+              <div style={{ display: "flex", gap: T.space.md, marginTop: 6 }}>
+                <button onClick={() => openRename("選手名", ml.nameChoice, v => setMl(s => ({ ...s, nameChoice: v })), 12)} style={{
+                  background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: FONT_DOT,
+                  fontSize: T.size.caption, color: T.color.action,
+                }}>名前を変える</button>
+                <button onClick={mlRerollName} style={{
+                  background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: FONT_DOT,
+                  fontSize: T.size.caption, color: T.color.sub,
+                }}>引き直す</button>
+              </div>
+            </div>
+          </div>
 
           {/* 第63弾(devlog/wave63.md): 見出し「脚質」→「得意な走り」。旧版はaffinityの数値
               （例「平坦 +4」）だけが出ており、5択が何を意味するのか初見には伝わらなかった。
@@ -77,12 +101,15 @@ export function renderMyLifeCreateScreens(ctx) {
                   {/* 第99弾(TODO #32-b): descはシーズン用（成長上限が上がる、と書いてある）。
                       マイライフは逆に難易度が上がるほど伸びしろが広がりにくいため、mlDescを使う。 */}
                   <span style={{ fontSize: T.size.body, color: T.color.text }}>{curDiff.mlDesc || curDiff.desc}</span>
-                  <span style={{ fontSize: T.size.head, color: cpMul > 1 ? T.color.good : T.color.sub, flex: "none", marginLeft: T.space.sm }}>×{cpMul}</span>
+                  {/* 第100弾(devlog/wave100.md): CPが0の初回プレイに周回前提のメタ通貨を
+                      説明していた（観察2）。生涯CP・歴代選手のどちらかがある時だけ出す。 */}
+                  {isExperienced && (
+                    <span style={{ fontSize: T.size.head, color: cpMul > 1 ? T.color.good : T.color.sub, flex: "none", marginLeft: T.space.sm }}>×{cpMul}</span>
+                  )}
                 </div>
-                {/* 第63弾(devlog/wave63.md): 未プレイの初見に「クリアポイント」が説明ゼロで
-                    初出していた（引退時に貯まり次のキャリアを有利にする周回ボーナス）。
-                    用語自体はhelp.jsxで詳しく説明されるためここでは1句だけ添える。 */}
-                <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>クリアポイント倍率（引退時に貯まり、次のキャリアを有利にする）</div>
+                {isExperienced && (
+                  <div style={{ fontSize: T.size.caption, color: T.color.sub, marginTop: 2 }}>クリアポイント倍率（引退時に貯まり、次のキャリアを有利にする）</div>
+                )}
               </PickNote>
             );
           })()}
@@ -213,7 +240,7 @@ export function renderMyLifeCreateScreens(ctx) {
             const doCreate = () => { clearMyLifeSave(); mlCreateChar(ml.typeChoice, ml.bgChoice, master, partner); };
             if (hasMyLifeSave()) askConfirm("保存データを消して新しい選手でキャリアを始めます。よろしいですか？", doCreate, "新しく始める");
             else doCreate();
-          }}>この内容でデビュー →</PrimaryBtn>
+          }}>この選手でデビュー →</PrimaryBtn>
           <QuietBtn onClick={() => setMl(s => ({ ...s, screen: "mylife_legends", careerBack: s.screen }))}>歴代選手の殿堂を見る</QuietBtn>
           <QuietBtn onClick={() => setSuperMode(null)}>モード選択に戻る</QuietBtn>
         </Screen>
