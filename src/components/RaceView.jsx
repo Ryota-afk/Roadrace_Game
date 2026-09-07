@@ -12,6 +12,7 @@ import { TICK_SEC, riderHash01, resumeSim } from "../sim/race.js";
 import { smoothRaceCamera } from "../domain/shared/raceCamera.js";
 import { viewWander } from "../domain/shared/viewHash.js";
 import { buildDecisions, composeCard } from "../domain/shared/raceDecisions.js";
+import { LEGS_SPENT_ENERGY } from "../domain/shared/moveEdge.js";
 import { logEvent } from "../dev/telemetry.js";
 import { groupAt, interpFrac, modeAt, modeStreakAt, nextPullerAt, slotAt, tagAt } from "../domain/shared/raceViewModel.js";
 import {
@@ -101,6 +102,11 @@ export function RaceView({ sim, onFinish }) {
   const clockRef = useRef(0);
   const firedRef = useRef(new Set());
   const [resimBusy, setResimBusy] = useState(false);
+  // 第97弾(devlog/wave97.md §4.9): attackを選ぶと、次に別の手を選ぶまでcommittedBreakが
+  // 解除されず脚を緩められない（sim側は無変更、ticks.js参照）。この代償は仕掛けた瞬間には
+  // 見えないため、実際に集団へ吸収された（mode が draft/pull に戻った）瞬間を検出して実況で
+  // 伝える。r.e.committedBreak は再生時にはシム終了後の値のため使えず、選択そのものを追跡する。
+  const committedRef = useRef(null); // { fired: boolean } | null
 
   const resolveDecision = (moveId) => {
     const d = decisionRef.current;
@@ -133,6 +139,9 @@ export function RaceView({ sim, onFinish }) {
       if (moveId === "attack" || moveId === "send") {
         beatRef.current = { until: nowP + 3200, slow: 0.30, focusId: focusEnt ? focusEnt.id : null };
       }
+      // 第97弾: attackを選んだら「集団へ吸収された瞬間」の検出を仕込む。他の手を選んだ場合は
+      // sim側で committedBreak が即座に false へ戻るため、追跡する必要がなくなる。
+      committedRef.current = moveId === "attack" ? { fired: false } : null;
       decisionRef.current = null;
       setDecision(null);
       setResimBusy(false);
@@ -349,6 +358,18 @@ export function RaceView({ sim, onFinish }) {
           const d = decisions.find(dc => !firedRef.current.has(dc.id) && (dc.allowFinal || !finalSegRef.current) && (dc.at != null ? focusR.frac >= dc.at : (dc.cond && dc.cond(ctx))));
           if (d) {
             firedRef.current.add(d.id);
+            // 第98弾(devlog/wave98.md §5): 脚が尽きた選手はどの選択肢もΔ着順・Δ秒とも
+            // 厳密に0.00（実測）——判断の形をしたものを出してレースを止めるだけで、
+            // 意味のある判断にならない（CLAUDE.md §0-1）。カードを出さず実況だけ返し、
+            // レースは止めない。sim（ticks.js）・raceDecisions.jsは無変更。
+            if (ctx.energy < LEGS_SPENT_ENERGY) {
+              liveRef.current = {
+                text: pick([`${focusName}、脚が尽きた——ここからは意地だけだ`, `${focusName}、もう応える脚が無い。それでもペダルを回す`, `${focusName}は限界を越えている。完走だけを見つめる`]),
+                until: now + 2800,
+              };
+              logEvent("decision_skipped", { kind: d.kind, energy: ctx.energy });
+              return;
+            }
             const card = composeCard(d.kind, focusR.e, ctx);
             // v46(#27): 一手の威力が残脚で決まるようになったため、判断の material として残脚を渡す
             decisionRef.current = { id: d.id, kind: d.kind, fromTick, energy: ctx.energy, ...card };
@@ -582,6 +603,18 @@ export function RaceView({ sim, onFinish }) {
             }
             prevFocusRank = focusRank;
             lastFocusSampleAt = now;
+          }
+        }
+        // 第97弾(devlog/wave97.md §4.9): attackを選んだ後、集団に吸収された瞬間（modeが
+        // draft/pullに戻った瞬間）を検出して実況する。committedBreakは次の判断で別の手を
+        // 選ぶまで解除されないため、吸収された後も脚を緩められないことを伝える。
+        // サンプリング間隔に縛られず毎tick確認する（一度きりのイベントのため）。
+        if (!focusFired && committedRef.current && !committedRef.current.fired && focusId != null) {
+          const focusR2 = riders.find(r => r.e.id === focusId);
+          if (focusR2 && (focusR2.mode === "draft" || focusR2.mode === "pull")) {
+            committedRef.current.fired = true;
+            liveRef.current = { text: pick([`${focusName}、集団に戻った——だが脚は緩められない`, `${focusName}、捕まった。それでも踏み続けるしかない`, `${focusName}が飲み込まれた。仕掛けた脚は戻らない`]), until: now + 2600 };
+            lastDynCommentAt = now; focusFired = true;
           }
         }
         // v27: 実況の動的イベント。逃げとメインのギャップが大きく動いた瞬間に実況を差し込む

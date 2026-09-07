@@ -18,6 +18,7 @@ import { mlBondsAfterRace } from "../../domain/mylife/bonds.js";
 import { applyPopGain, popAdd } from "../../domain/mylife/popularity.js";
 import { segMixOfRace } from "../../domain/shared/segMix.js";
 import { mlSelectedRace } from "../../domain/mylife/race.js";
+import { INTENSITY_POP_MUL, mlIntensityStake, mlIntensitySuccess, mlIntensityTargetLabel } from "../../domain/mylife/intensity.js";
 
 export function mlRaceFinish(s) {
   const sim = s.result;
@@ -25,6 +26,13 @@ export function mlRaceFinish(s) {
   if (sim.teamTT) return mlFinishTeamTT(s, sim, race);
   const me = sim.ranked.find(e => e.isPlayerChar);
   const pts = Math.round((PTS[me.rank - 1] || 0) * GRADE_MUL[race.grade]);
+  // 第99弾(devlog/wave99.md): 「本気度」——出走表で賭けた金・活力の答え合わせ。
+  // ⚠️賭け金は成否によらず引かれる（払うのは今、当たるかは後）。人気度・出走経験の
+  // 成長は成功時のみ上乗せする（出走経験の成長は月次アクション側=controllers/mylife/month.js
+  // で適用するため、ここではresultInfo.betへ成否と段だけを渡す）。
+  const betLevel = s.intensity || 0;
+  const betStake = betLevel > 0 ? mlIntensityStake(s.year, s.classIdx, betLevel) : 0;
+  const betSuccess = betLevel > 0 ? mlIntensitySuccess(me.rank, s.classIdx) : false;
   // v14.3: 監督指示を全うできたかどうかで監督評価が増減する。賞金はクラス倍率に応じて即時支給
   // v33.5: セーブから復元した監督指示はJSONでcheck関数が失われているため、キーで正規テーブルから引き直す
   const directive = s.directive ? (MANAGER_DIRECTIVES[s.directive.key] || s.directive) : null;
@@ -72,7 +80,10 @@ export function mlRaceFinish(s) {
     : (directive ? directive.key : (me.isAce ? "ace" : "support"));
   // v25: 個人スポンサー・メディア人気度。着順が良いほど、また規模の大きいレースほど伸びる
   // v28: 代表の役割を全うすれば名声（人気度）が上乗せされる
-  const popGain = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade] + natPopBonus;
+  // 第99弾: 本気度に成功した回だけ、着順部分（natPopBonusは対象外＝別の代表役割の褒賞）に
+  // INTENSITY_POP_MULを掛ける
+  const popGainBase = (me.rank === 1 ? 3 : me.rank <= 3 ? 1.5 : me.rank <= 10 ? 0.5 : 0.1) * GRADE_MUL[race.grade];
+  const popGain = popGainBase * (betSuccess ? (INTENSITY_POP_MUL[betLevel] || 1) : 1) + natPopBonus;
   const { popularity: newPopularity, popMilestones, popBonus, newlyHit } = applyPopGain(s.player, popGain);
   const player = {
     ...s.player,
@@ -195,16 +206,24 @@ export function mlRaceFinish(s) {
   return {
     ...s, player, points: s.points + pts, log,
     managerEval: Math.max(0, Math.min(100, s.managerEval + evalDelta + assistEval)),
-    money: s.money + prize + popBonus + ambMoney + assistMoney, rivalRecord, rivalRecord2,
+    // 第99弾: 賭け金は成否によらず引く（払うのは今、当たるかは後）
+    money: s.money + prize + popBonus + ambMoney + assistMoney - betStake, rivalRecord, rivalRecord2,
     worldPoints, worldRank, worldRankBest, careerWins, careerPodiums, careerBigWins, careerTitles, careerClassics,
     ambitionIdx, ambitionDone,
     // v37: 永続キャラ（ライバル／チームメイト）の成績台帳を更新（上でworldRank算出のため既に計算済み）
     riderStats,
     bonds, // 第18弾: 僚友との絆
+    // 第99弾: 賭けは今回のレース限り。翌月以降に持ち越さないようここで0へ戻す
+    // （次にmlStartRaceを呼ぶ時点でも0へ設定されるが、mlAdvanceMonthを挟まず
+    // 別画面へ進む経路のためにも二重に倒しておく）
+    intensity: 0, raceSeed: null,
     resultInfo: { race, rank: me.rank, total: sim.ranked.length, pts, directive, fulfilled, evalDelta, prize, rivalOutcome, rivalOutcome2, rival2Intro, popGain: Math.round(popGain * 10) / 10, popBonus, courseRecord, natRole, natFulfilled, natPopBonus, wpGain, worldRank, worldRankPrev: s.worldRank, ambitionCleared, assistOutcome, milestoneWin,
       // v34(UI): レース後サマリーの整理。フィニッシュタイム・トップとの差・下馬評の答え合わせ。
       finishTime: me.finishTime, gapSec: me.rank === 1 ? 0 : (me.finishTime - winner.finishTime),
       forecast: (() => { const fc = raceForecast(sim.entrants, race.tmpl?.favors); const my = fc.get(me); return my ? { rank: my.rank, mark: my.mark ? my.mark.label : "無印", markColor: my.mark ? my.mark.color : "#9aa3b5" } : null; })(),
+      // 第99弾(devlog/wave99.md): 本気度の答え合わせ。levelは月次アクション側（controllers/
+      // mylife/month.js）が出走経験の成長倍率を決めるのに使う（growthは成功時のみ上乗せ）。
+      bet: betLevel > 0 ? { level: betLevel, stake: betStake, success: betSuccess, targetLabel: mlIntensityTargetLabel(s.classIdx) } : null,
       newspaper, standings },
     screen: "mylife_result",
   };

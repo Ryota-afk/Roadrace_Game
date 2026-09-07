@@ -10,6 +10,7 @@ import { AI_STYLES, assignAIRoles, computeTeamTT, effAbilities, generateCourse, 
 import { aiPowerFor, mlAiCapFor } from "../domain/shared/scouting.js";
 import { loadMlLegends } from "../breeding/breeding.js";
 import { avgBondFor } from "../domain/mylife/bonds.js";
+import { INTENSITY_POWER_RATIO } from "../domain/mylife/intensity.js";
 
 // 第16弾A: ライバルの強さは年齢の山なりで変化する（世界のロースターと同じ「全盛期が最も強い」
 // 発想）。従来は生成時の年齢によらず常にpower+6の固定強度だったため、世界の300名が世代交代する
@@ -24,27 +25,48 @@ function rivalPowerBonus(rival) {
   return 1;                      // 最晩年：それでも並のAIよりは強い
 }
 
-export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege, bonds) {
+export function buildMyLifeSim(raceMeta, player, myTeamName, classIdx, difficultyId, dayTag, directiveKey, rival, year, rival2, teammates, tactic, worldRosters, protege, bonds, intensity, seed) {
   const diffDef = DIFFICULTIES.find(d => d.id === difficultyId) || DIFFICULTIES[1];
-  const diffAiMul = diffDef.aiMul;
   // v38(#6): マイライフのAI能力上限を難易度で引き上げる。従来は easy/normal/hard がどれも94上限で
   // 実質同強度になり、能力を極めた終盤（100超）に対して hard でも相手が頭打ちで無双できた。
   // hard=102/oni=112 まで許容し、極まった選手にも歯応えが残るようにする（season側のDIFFICULTIESは不変）。
-  const aiCap = mlAiCapFor(difficultyId, diffDef.abilCap);
+  const baseAiCap = mlAiCapFor(difficultyId, diffDef.abilCap);
+  // 第99弾(devlog/wave99.md): 「本気度」——このレースだけ相手を本気にさせるつまみ。
+  // ⚠️当初案（aiMulへの固定加算）は実測で不成立だった：newRiderがAI能力をabilCapで
+  // クランプするため、abilCapを動かさない限りaiMulを何倍にしても表彰台率がほぼ動かない。
+  // 採用案：段は絶対値ではなく「プレイヤー能力に対する相手の格＝比」で決める
+  // （power = max(素のpower, プレイヤー能力平均 * 比)）。max()が無いと素の比より低い
+  // キャリア（新人〜中堅）で「賭けたのに相手が弱くなる」事故になる。比が効くよう
+  // aiCapも同時に引き上げる（実測で確認済み・詳細はdevlog/wave99.md）。
+  const intensityRatio = INTENSITY_POWER_RATIO[intensity] || 0;
   // 第31弾: newRider内部で脚質ごとの能力の形が付くのに上限が全能力へ一律にかかっていたため、
   // 上限が効く場面（高クラス・高グレード）で得意能力だけ切り落とされ苦手はそのまま残る
   // ＝AIが万能型に見える不具合があった。プレイヤー用のML_TYPE_CAP_OFFSET（第29弾）を
   // そのまま共有し、cap がかかる全ての生成に一律で適用する（伝説選手はfinalAbilitiesで
   // 上書きされるため対象外。詳細はdevlog/wave31.md）。
   const course = generateCourse(raceMeta, dayTag);
-  const rng = mulberry(Date.now() % 999983);
+  // 第99弾(devlog/wave99.md): 「本気度」を選び直すとintensityだけ変えてこの関数を呼び直す
+  // （useMyLifeGame.jsのmlSetIntensity）。既定はDate.now()由来の非決定論的な乱数列だが、
+  // その都度サイコロを振り直すと出走者の顔ぶれ（人数・チーム構成・当日の調子）まで
+  // 毎回入れ替わってしまい、「同じ顔ぶれが本気を出す」というUIの前提が崩れる
+  // （実測で確認済み：newRider内のrng消費量はpower＝本気度に依存しないため、seedさえ
+  // 揃えれば顔ぶれ・年齢・成長タイプ・当日の調子の乱数列は完全に一致し、能力の基準値
+  // （power）だけが動く）。seed省略時（通常のレース開始）は従来どおりDate.now()を使う。
+  const rng = mulberry((seed != null ? seed : Date.now()) % 999983);
   // v47(第7弾C): yearBonus（経過年数だけでAIの地力を底上げする一律ボーナス、最大+24）を廃止した。
   // 「新世代の台頭」という同じ役割は既にageWorldRosters()が本物として実装済み（各選手が加齢し、
   // ピークまで伸び、その後衰え、33〜38歳で引退してルーキーに置き換わる）。yearBonusはこれと同じ
   // 役割の雑な二重実装で、①プレイヤーから見えない②自チームの僚友も同率で強化してしまう
   // ③aiCapに吸収される④17年で頭打ち、という欠陥があった。年次の手応えは、以降ワールドロースター
   // 自身の世代交代（baseline経由の個体差）だけから生まれる（詳細はDEVLOG §38参照）
-  const power = aiPowerFor(50, classIdx, raceMeta.grade, diffAiMul);
+  const naturalPower = aiPowerFor(50, classIdx, raceMeta.grade, diffDef.aiMul);
+  // プレイヤーの生の能力平均（effAbilities適用前）。較正計測もこの値で行っている——
+  // 装備・バッジで底上げされたplayerEffを使うと較正が無効になる（devlog/wave99.md）。
+  const playerAbilAvg = AB_KEYS.reduce((a, k) => a + (player[k] || 0), 0) / AB_KEYS.length;
+  const power = intensityRatio ? Math.max(naturalPower, playerAbilAvg * intensityRatio) : naturalPower;
+  // ⚠️比を効かせるにはaiCapも同時に引き上げる必要がある（newRiderがabilCapで能力を
+  // クランプするため）。newRiderの最大生成値はpower+11（ばらつき幅の上限）+脚質補正14。
+  const aiCap = intensityRatio ? Math.max(baseAiCap, Math.round(power) + 26) : baseAiCap;
   const { squadMin, squadMax } = raceMeta.tmpl;
   const nameBanned = new Set([player.name]);
   const riders = [];

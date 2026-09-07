@@ -8,6 +8,7 @@ import React from "react";
 import { FONT_DOT, T } from "../data/theme.js";
 import { Item, PrimaryBtn, QuietBtn, Section, ShopRow } from "../components/kit.jsx";
 import { LineageForestView, FactorCollectionView } from "../components/dynasty.jsx";
+import { TitlePeloton } from "../components/TitlePeloton.jsx";
 import { loadMlLegends } from "../breeding/breeding.js";
 import { CP_SHOP, computePrestige, cpBalance, cpOwned, loadMeta, loadWorldMeta } from "../state/state.js";
 import { cpUnlockRows, mlFactorCollection, mlLineageForest } from "../logic/support.js";
@@ -54,17 +55,28 @@ function renderModeSelect(ctx) {
       </div>
     </button>
   );
+  // 第100弾（devlog/wave100.md）: 作品名「ロードレーサーになろう！」＋集団の絵に作り直した
+  // （旧版はジャンル名「ロードレース シミュレーション」のみ・絵ゼロだった）。
+  // フォントサイズ50/26pxはT.sizeのスケールに無いが、作品名という1画面1回だけの役割の
+  // ため専用値とする（実フォント実測：上段357px・下段の字間はletterSpacingで作る）。
   return wrap(
-    <div style={{ display: "grid", gap: T.space.sm }}>
-      <div style={{ textAlign: "center", padding: "26px 0 22px" }}>
-        <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.25 }}>ロードレース</div>
-        <div style={{ fontSize: T.size.display, color: T.color.accent, lineHeight: 1.25 }}>シミュレーション</div>
+    <div style={{ minHeight: "calc(100svh - 46px)", display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: "none", textAlign: "center", padding: "22px 0 18px" }}>
+        <div style={{ fontSize: 50, color: T.color.accent, letterSpacing: "0.02em", lineHeight: 1.05 }}>ロードレーサー</div>
+        <div style={{ marginTop: 8 }}>
+          {/* letterSpacingは末尾の文字の後ろにも入るため中央がずれる。marginRightで打ち消す */}
+          <span style={{ display: "inline-block", fontSize: 26, color: T.color.text, letterSpacing: "0.58em", marginRight: "-0.58em", lineHeight: 1.2 }}>になろう！</span>
+        </div>
       </div>
-      <div style={{ fontSize: T.size.body, color: T.color.text, marginBottom: T.space.xs }}>どちらで遊びますか？</div>
-      {modeCard("選手を育てる", "ひとりの選手の、デビューから引退まで", "毎月ひとつ選んで進める", T.color.action, () => setSuperMode("mylife"))}
-      {modeCard("チームを率いる", "監督として選手を集め、勝てるチームを作る", "1年＝12か月で昇格を目指す", T.color.accent, () => setSuperMode("season"))}
+      <div style={{ flex: 1, position: "relative", minHeight: 140 }}>
+        <TitlePeloton />
+      </div>
+      <div style={{ flex: "none" }}>
+        {modeCard("選手を育てる", "ひとりの選手の、デビューから引退まで", "毎月ひとつ選んで進める", T.color.action, () => setSuperMode("mylife"))}
+        {modeCard("チームを率いる", "監督として選手を集め、勝てるチームを作る", "1年＝12か月で昇格を目指す", T.color.accent, () => setSuperMode("season"))}
+      </div>
       {showAux && (
-        <div style={{ display: "flex", gap: T.space.sm, marginTop: T.space.xs }}>
+        <div style={{ flex: "none", display: "flex", gap: T.space.sm, marginTop: T.space.xs }}>
           {auxCard("生涯評価", p.score.toLocaleString(), () => setSuperMode("prestige"))}
           {auxCard("クリアポイント", <>{bal}<span style={{ fontSize: T.size.caption }}> pt</span></>, () => setSuperMode("cpshop"))}
         </div>
