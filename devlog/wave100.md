@@ -262,6 +262,118 @@ Playwrightで実機（430×860＝スマホ相当）を起動し、⚠️**初見
 モードカードの間に200px以上の空きが残っていた。3体を**下端揃え**にし、
 サイズを122/152/186→150/176/204へ上げた。同じ地面に立つ集団として読める。
 
+## ② の決定：**案4**（2行・大小・「になろう！」は`text`色）
+
+---
+
+# 実装仕様（合意済み・Sonnetが実行する）
+
+## 実装1 タイトル画面 — `src/screens/meta.jsx` `renderModeSelect`
+
+**全体の骨格**：`makeMetaWrap`の内側は`padding: 6px 14px 40px`で高さを持たないため、
+`renderModeSelect`が返す最上位divに
+`minHeight: "calc(100svh - 46px)", display: "flex", flexDirection: "column"`を与える。
+上から：作品名（flex none）→ 集団（flex 1・`position: relative`）→ モードカード×2（flex none）
+→ auxCard行（flex none・`showAux`時のみ）。
+
+**作品名**（現行の`ロードレース`／`シミュレーション`の2行を差し替える）
+
+| 行 | 文字列 | fontSize | color | letterSpacing | lineHeight |
+|---|---|---|---|---|---|
+| 上 | `ロードレーサー` | 50 | `T.color.accent` | `.02em` | 1.05 |
+| 下 | `になろう！` | 26 | `T.color.text` | `.58em`（下記） | 1.2・`marginTop: 8` |
+
+- 実測（実フォント・Chromium）：上段は**357px**。430幅の内側398pxに収まる（余白41px）。
+- 下段は合意したモックが**205px**。モックは文字間に実際の空白を入れて出した値だが、
+  実装では空白を入れず`letterSpacing`で作る。`letter-spacing`は最後の1字の後ろにも
+  入るため、中央揃えが半分ぶん左へずれる。**`display: inline-block` にして
+  `marginRight: "-0.58em"`** で打ち消す。実装後に幅が205px前後になっているか確認する。
+- リード文**「どちらで遊びますか？」は削除**。
+- モードカード2枚の文言・色・`auxCard`は一切変更しない。
+
+**集団の絵**（新規コンポーネント。`src/components/`に置く。`RiderPortrait.jsx`が前例）
+
+1枚の`<svg viewBox="0 0 398 280" width="100%">`の中に3体を置く（%指定にせずviewBoxで
+拡大縮小させる。`maxWidth: 560`の広い画面でも比率が崩れない）。各体は
+`<g transform="translate(tx, ty) scale(s)"><PixelBike x={W/2} y={H} color={...}
+posture="normal" dir="SE" t={0} phase={0} /></g>`。`W = 37 * BIKE_PX`, `H = 50 * BIKE_PX`。
+
+| 体 | 色 | 脚質 | 幅 | left | opacity |
+|---|---|---|---|---|---|
+| 奥 | `#35c07e` | SPR | 150 | 0 | 0.5 |
+| 中 | `#c98bf0` | PUN | 176 | 92 | 0.78 |
+| 手前 | `#e8544f` | CLM | 204 | 194 | 1 |
+
+- **3体とも下端を揃える**（同じ地面に立つ集団として読ませる）。高さは`幅 × 50 / 37`。
+- svgは集団エリアの**下端から30px上**に置く（`bottom: 30`）。
+- 色は`TYPES.SPR/PUN/CLM`の`color`をハードコードせず**`TYPES[k].color`から取る**。
+
+## 実装2 選手をつくる — `src/screens/mylife/create.jsx` `mylife_create`
+
+**2-a 選手の姿と名前（画面最上部・「選手をつくる」見出しの直下、「続きから」より下）**
+
+`background: T.color.surface`・`padding: T.space.md`の帯に、左＝`RiderPortrait`（120px・
+`color = TYPES[ml.typeChoice].color`）、右＝名前。脚質を選び直すと色が変わる。
+
+| 行 | 内容 | 取得元 |
+|---|---|---|
+| 1 | `名前`（caption・sub） | 固定 |
+| 2 | 名前本体（title・text） | `ml.nameChoice` |
+| 3 | `引き直す`（caption・action） | `mlRerollName()` |
+
+**2-b 命名（新規）**
+
+- `initMyLife()`（`src/state/mylifeState.js:109`付近）に`nameChoice`を追加。初期値は
+  `pickRiderName(mulberry(Date.now() % 999983), new Set())`。
+- 名前本体をタップ → **既存の共有モーダルを使う**：
+  `openRename("選手名", ml.nameChoice, v => setMl(s => ({ ...s, nameChoice: v })), 12)`。
+  `openRename`は`renderMyLifeCreateScreens`のctxに**既に入っている**（`main.jsx:98`の
+  `shellForScreens`）ので、destructureに足すだけ。新しいモーダルは作らない。
+- `引き直す` → `mlRerollName()`（`useMyLifeGame.js`に追加）が`nameChoice`だけ引き直す。
+  素質診断の`mlRerollCandidate`とは別物。
+- `domain/mylife/createChar.js` の`mlCreateChar(s, ...)`は既に`s`を受け取っているので
+  **引数は増やさない**。`newRider(...)`の直後に`if (s.nameChoice) player.name = s.nameChoice;`
+  を置く。⚠️**`newRider`より後・`mlCreateRival`（209行目）より前**であること
+  （ライバル名の重複除外が`player.name`を見るため）。`newRider`のrng消費数は変わらない。
+
+**2-c 初回プレイではCP倍率を出さない**
+
+難易度の`PickNote`内の`×{cpMul}`と「クリアポイント倍率（引退時に貯まり、次のキャリアを
+有利にする）」の2つを、`loadMeta().totalEarnedCP > 0 || loadMlLegends().length > 0`のときだけ
+出す。条件式は`meta.jsx`の`showAux`と同じ形。
+
+**2-d 文言**：`この内容でデビュー →` → **`この選手でデビュー →`**（主語を選手に戻す。
+素質診断側の同文言と揃う）。
+
+## 実装3 第一戦 — `src/domain/mylife/race.js` `mlSelectedRace`
+
+デビュー戦に限り、既定で選ばれる1本をTT以外にする。
+
+```js
+if (sel == null && (ml.player?.raceLog || []).length === 0) {
+  const nonTT = races.find(r => !r.tmpl?.teamTT && !r.tmpl?.soloTT);
+  if (nonTT) return nonTT;
+}
+return races[0];
+```
+
+- 条件は`raceLog.length === 0`＝**まだ1戦も走っていないとき**だけ。2戦目以降は現状のまま
+  `races[0]`なので、⚠️**出走傾向は動かない＝§10の計測は不要**。
+- 1年目1月の実データでは`日光グラベルレース`（3級・晴・PUN）が既定になる。
+
+## 検証（実装後にやること）
+
+1. `npm run build` — ⚠️`npx vite build`ではなく`npm run build`。ルートの`index.html`は
+   追跡されているビルド成果物なので、`src/`の変更と同じコミットに入れる。
+2. Playwrightで430×860を起動し、**タイトル → 選手をつくる → 素質診断 → 目標バッジ →
+   ホーム → 出走表**まで進んで実際に目で見る（第100弾の診断と同じ手順）。確認項目：
+   - 作品名の下段が205px前後で中央に来ているか
+   - 集団3体の下端が揃い、モードカードと重なっていないか
+   - 脚質を切り替えると`RiderPortrait`の色が変わるか
+   - 名前をタップ→改名モーダル→反映、`引き直す`で別名になるか
+   - 初回プレイでCP倍率の行が出ていないか
+   - デビュー戦の既定が`日光グラベルレース`になっているか
+
 ## 保留の指摘（実装は止めない）
 
 作品名「ロードレーサーになろう！」は**選手側のキャリアだけを指す**が、同じタイトル画面は
