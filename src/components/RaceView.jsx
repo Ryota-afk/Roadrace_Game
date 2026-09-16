@@ -12,8 +12,10 @@ import { TICK_SEC, riderHash01, resumeSim } from "../sim/race.js";
 import { smoothRaceCamera } from "../domain/shared/raceCamera.js";
 import { viewWander } from "../domain/shared/viewHash.js";
 import { buildDecisions, composeCard } from "../domain/shared/raceDecisions.js";
+import { LEGS_SPENT_ENERGY } from "../domain/shared/moveEdge.js";
 import { logEvent } from "../dev/telemetry.js";
 import { groupAt, interpFrac, modeAt, modeStreakAt, nextPullerAt, slotAt, tagAt } from "../domain/shared/raceViewModel.js";
+import { computeRaceGroups, groupLabelFor } from "../domain/shared/raceGroups.js";
 import {
   ATTACK_EXAGGERATION, ATTACK_VISUAL_TICKS, CINEMATIC_TIME_RATIO, DROP_EXTRA_DX_RATIO, DROP_EXTRA_LANE,
   DROP_TRANSITION_TICKS, ELONGATION_BY_SEG, FINAL_SEG_TIME_RATIO, LAUNCH_TIME_RATIO, LEAD_GROUP_FRAC,
@@ -22,7 +24,7 @@ import {
   PACK_WIDTH_BASE, PACK_WIDTH_PER_MEMBER, SIDE_H, SPRINT_CONTENDER_GAP_SEC, SPRINT_MAX_CONTENDERS,
   SPRINT_MIN_VIEW_FRAC, TOP_H, VIEW_LEAD_BIAS, buildSidePath, buildTopPath, mapX,
 } from "./race/raceViewConstants.js";
-import { FinalSprintCinematic, RiderNameTag, mapTagKind, riderTagIcon } from "./race/FinalSprintCinematic.jsx";
+import { FinalSprintCinematic, RiderNameTag, mapTagKind } from "./race/FinalSprintCinematic.jsx";
 
 export class RaceErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { crashed: false }; }
@@ -56,12 +58,18 @@ export function RaceView({ sim, onFinish }) {
   // isPlayerChar で判定する（シーズンは単一アバターが無いので従来どおり team==="PLAYER"＝自チーム）。
   const hasAvatar = sim.entrants.some(e => e.isPlayerChar);
   const isAvatar = (e) => hasAvatar ? !!e.isPlayerChar : (e.team === "PLAYER");
-  const [hud, setHud] = useState({ top: [], seg: "", clock: 0, done: false, comment: "", gap: null });
+  // 第101弾(devlog/wave101.md A-1): 既定カメラを「先頭集団」ではなく自分にする。
+  // マイライフ（isPlayerCharが居る）だけ自分のidで初期化し、シーズン（居ない）は
+  // 従来どおり"lead"のまま——挙動を変えない。これだけで、最終区間のleadGid絞り込み
+  // （残り27%で自分が画面外に出る）とシネマティックの母集団選定（cameraFramingRef経由）が
+  // 自分を追う側に揃う（実測はdevlog/wave101.md）。
+  const initialCamMode = sim.entrants.find(e => e.isPlayerChar)?.id ?? "lead";
+  const [hud, setHud] = useState({ top: [], seg: "", clock: 0, done: false, comment: "", gap: null, myRank: null, myGap: null, myField: null, myDone: false, myGroupLabel: null });
   const [ridersUi, setRidersUi] = useState([]);
   const [cam, setCam] = useState({ start: 0, end: MIN_VIEW_FRAC });
   const camSmoothRef = useRef(null); // v39.7: 俯瞰カメラのズーム/パンを毎フレーム補間して滑らかにする
-  const [camMode, setCamMode] = useState("lead"); // v11: "lead" または自チーム選手id（選手フィーチャー）
-  const camModeRef = useRef("lead");
+  const [camMode, setCamMode] = useState(initialCamMode); // v11: "lead" または自チーム選手id（選手フィーチャー）
+  const camModeRef = useRef(initialCamMode);
   // v12: 無線指示（追走強化/静観/エース早期発射）は出走前の「作戦」選択に一本化し廃止。
   // 観戦画面はカメラ操作のみの純粋な観戦専用画面になった
   const [finalSeg, setFinalSeg] = useState(false); // 最終区間突入フラグ（カメラの超ズーム・スロー演出のトリガー）
@@ -101,6 +109,11 @@ export function RaceView({ sim, onFinish }) {
   const clockRef = useRef(0);
   const firedRef = useRef(new Set());
   const [resimBusy, setResimBusy] = useState(false);
+  // 第97弾(devlog/wave97.md §4.9): attackを選ぶと、次に別の手を選ぶまでcommittedBreakが
+  // 解除されず脚を緩められない（sim側は無変更、ticks.js参照）。この代償は仕掛けた瞬間には
+  // 見えないため、実際に集団へ吸収された（mode が draft/pull に戻った）瞬間を検出して実況で
+  // 伝える。r.e.committedBreak は再生時にはシム終了後の値のため使えず、選択そのものを追跡する。
+  const committedRef = useRef(null); // { fired: boolean } | null
 
   const resolveDecision = (moveId) => {
     const d = decisionRef.current;
@@ -133,6 +146,9 @@ export function RaceView({ sim, onFinish }) {
       if (moveId === "attack" || moveId === "send") {
         beatRef.current = { until: nowP + 3200, slow: 0.30, focusId: focusEnt ? focusEnt.id : null };
       }
+      // 第97弾: attackを選んだら「集団へ吸収された瞬間」の検出を仕込む。他の手を選んだ場合は
+      // sim側で committedBreak が即座に false へ戻るため、追跡する必要がなくなる。
+      committedRef.current = moveId === "attack" ? { fired: false } : null;
       decisionRef.current = null;
       setDecision(null);
       setResimBusy(false);
@@ -349,6 +365,18 @@ export function RaceView({ sim, onFinish }) {
           const d = decisions.find(dc => !firedRef.current.has(dc.id) && (dc.allowFinal || !finalSegRef.current) && (dc.at != null ? focusR.frac >= dc.at : (dc.cond && dc.cond(ctx))));
           if (d) {
             firedRef.current.add(d.id);
+            // 第98弾(devlog/wave98.md §5): 脚が尽きた選手はどの選択肢もΔ着順・Δ秒とも
+            // 厳密に0.00（実測）——判断の形をしたものを出してレースを止めるだけで、
+            // 意味のある判断にならない（CLAUDE.md §0-1）。カードを出さず実況だけ返し、
+            // レースは止めない。sim（ticks.js）・raceDecisions.jsは無変更。
+            if (ctx.energy < LEGS_SPENT_ENERGY) {
+              liveRef.current = {
+                text: pick([`${focusName}、脚が尽きた——ここからは意地だけだ`, `${focusName}、もう応える脚が無い。それでもペダルを回す`, `${focusName}は限界を越えている。完走だけを見つめる`]),
+                until: now + 2800,
+              };
+              logEvent("decision_skipped", { kind: d.kind, energy: ctx.energy });
+              return;
+            }
             const card = composeCard(d.kind, focusR.e, ctx);
             // v46(#27): 一手の威力が残脚で決まるようになったため、判断の material として残脚を渡す
             decisionRef.current = { id: d.id, kind: d.kind, fromTick, energy: ctx.energy, ...card };
@@ -497,20 +525,29 @@ export function RaceView({ sim, onFinish }) {
           const pool = [...camGroup, ...nearBunch];
           const sortedByFinish = [...pool].sort((a, b) => a.e.finishTime - b.e.finishTime);
           const winnerTime = sortedByFinish[0].e.finishTime;
-          const contenders = sortedByFinish
+          // v39.7(演出): スプリントの駆け引きを可視化するため、各選手の「動き方」を数値化する。
+          // kick>0＝後方から伸びる差し脚（ごぼう抜き）、kick<0＝先行して垂れるリードアウト/アシスト、
+          // ≒0＝淡々。逃げ切り(単独で大きく先行)は別途 render 側で検出して独走に見せる。
+          const toContender = (r) => {
+            const sp = r.e.sprint || 60;
+            let kick;
+            if (r.e.isAssisting || r.e.leadoutFor != null) kick = -0.9;
+            else if (hasAbility(r.e, "finisher") || hasAbility(r.e, "kicker")) kick = 1;
+            else kick = Math.max(-0.5, Math.min(0.9, (sp - 72) / 24));
+            return { id: r.e.id, name: r.e.name, color: r.color, isAce: r.e.isAce, isPlayer: isAvatar(r.e), isMyTeam: r.e.team === "PLAYER", gapSec: r.e.finishTime - winnerTime, kick };
+          };
+          let contenders = sortedByFinish
             .filter(r => r.e.finishTime - winnerTime < SPRINT_CONTENDER_GAP_SEC)
             .slice(0, SPRINT_MAX_CONTENDERS)
-            .map(r => {
-              // v39.7(演出): スプリントの駆け引きを可視化するため、各選手の「動き方」を数値化する。
-              // kick>0＝後方から伸びる差し脚（ごぼう抜き）、kick<0＝先行して垂れるリードアウト/アシスト、
-              // ≒0＝淡々。逃げ切り(単独で大きく先行)は別途 render 側で検出して独走に見せる。
-              const sp = r.e.sprint || 60;
-              let kick;
-              if (r.e.isAssisting || r.e.leadoutFor != null) kick = -0.9;
-              else if (hasAbility(r.e, "finisher") || hasAbility(r.e, "kicker")) kick = 1;
-              else kick = Math.max(-0.5, Math.min(0.9, (sp - 72) / 24));
-              return { id: r.e.id, name: r.e.name, color: r.color, isAce: r.e.isAce, isPlayer: isAvatar(r.e), isMyTeam: r.e.team === "PLAYER", gapSec: r.e.finishTime - winnerTime, kick };
-            });
+            .map(toContender);
+          // 第101弾(devlog/wave101.md A-3): A-1でカメラは自分の集団を最後まで正しく追うが、
+          // 先頭が着差30秒（SPRINT_CONTENDER_GAP_SEC）以上突き放す独走勝利等では、自分の
+          // 着差がこの枠を超えてcontendersから漏れる（実測）。最終直線で自分の名前が
+          // どこにも出ない、という第101弾の実測結果への対応として、漏れていれば追加する。
+          if (hasAvatar && !contenders.some(c => c.isPlayer)) {
+            const me = riders.find(r => isAvatar(r.e));
+            if (me) contenders = [...contenders, toContender(me)];
+          }
           setCinematic({ contenders });
         }
       }
@@ -534,6 +571,15 @@ export function RaceView({ sim, onFinish }) {
           name: r.e.name, team: r.e.team, isPlayer: isAvatar(r.e),
           gap: i === 0 ? 0 : (leadFracNow - r.frac) / Math.max(1e-6, paceFracPerSec),
         }));
+        // 第101弾(devlog/wave101.md A-2・案3): 走行中に「あなた」の順位・人数・先頭との差・
+        // 居場所（どの集団か）を出す。順位表(top)と同じsorted/paceFracPerSecから作るため、
+        // 同じ瞬間の値として整合する。myGroupLabelはこの瞬間のridersの集団構成（riders。
+        // stateのridersUiではなく、このtick内で確定した最新のgid/fracを使う）から取る。
+        const myIdx = hasAvatar ? sorted.findIndex(r => isAvatar(r.e)) : -1;
+        const myRank = myIdx >= 0 ? myIdx + 1 : null;
+        const myGap = myIdx > 0 ? (leadFracNow - sorted[myIdx].frac) / Math.max(1e-6, paceFracPerSec) : (myIdx === 0 ? 0 : null);
+        const myDone = myIdx >= 0 ? rt >= sorted[myIdx].e.finishTime : false;
+        const myGroupLabel = myIdx >= 0 ? groupLabelFor(riders, sorted[myIdx].gid) : null;
         let segLabel = course.segs[course.segs.length - 1].label;
         let segTypeNow = course.segs[course.segs.length - 1].type;
         for (let j = 0; j < course.segs.length; j++) { if (leadFrac <= course.cumFrac[j] + 1e-6) { segLabel = course.segs[j].label; segTypeNow = course.segs[j].type; break; } }
@@ -584,6 +630,18 @@ export function RaceView({ sim, onFinish }) {
             lastFocusSampleAt = now;
           }
         }
+        // 第97弾(devlog/wave97.md §4.9): attackを選んだ後、集団に吸収された瞬間（modeが
+        // draft/pullに戻った瞬間）を検出して実況する。committedBreakは次の判断で別の手を
+        // 選ぶまで解除されないため、吸収された後も脚を緩められないことを伝える。
+        // サンプリング間隔に縛られず毎tick確認する（一度きりのイベントのため）。
+        if (!focusFired && committedRef.current && !committedRef.current.fired && focusId != null) {
+          const focusR2 = riders.find(r => r.e.id === focusId);
+          if (focusR2 && (focusR2.mode === "draft" || focusR2.mode === "pull")) {
+            committedRef.current.fired = true;
+            liveRef.current = { text: pick([`${focusName}、集団に戻った——だが脚は緩められない`, `${focusName}、捕まった。それでも踏み続けるしかない`, `${focusName}が飲み込まれた。仕掛けた脚は戻らない`]), until: now + 2600 };
+            lastDynCommentAt = now; focusFired = true;
+          }
+        }
         // v27: 実況の動的イベント。逃げとメインのギャップが大きく動いた瞬間に実況を差し込む
         // （最終区間はラストスパート演出が優先されるため対象外。過度な連発を避けて4秒間隔で抑制）
         if (!focusFired && !finalSegRef.current && curGapSec != null && prevGapSec != null && now - lastDynCommentAt > 4000) {
@@ -605,7 +663,7 @@ export function RaceView({ sim, onFinish }) {
         }
         const isDone = clock >= PLAY_DUR;
         const lap = course.laps > 1 ? course.lapAtFrac(leadFrac) : null;
-        setHud({ top, seg: segLabel, segType: segTypeNow, segSteep, remain: Math.max(0, Math.round((1 - leadFrac) * 100)), clock: rt, done: isDone, comment, gap: gapText, lap });
+        setHud({ top, seg: segLabel, segType: segTypeNow, segSteep, remain: Math.max(0, Math.round((1 - leadFrac) * 100)), clock: rt, done: isDone, comment, gap: gapText, lap, myRank, myGap, myField: riders.length, myDone, myGroupLabel });
         if (isDone && !done) { done = true; if (intervalId) clearInterval(intervalId); return; }
       }
     };
@@ -658,6 +716,24 @@ export function RaceView({ sim, onFinish }) {
       {!cinematic && !decision && (
         <ChipRow value={camMode} onChange={selectCam}
           options={[{ value: "lead", label: "先頭集団" }, ...playerRoster.map(e => ({ value: e.id, label: `${e.name.split(" ")[0]}${e.isAce ? "・エース" : ""}` }))]} />
+      )}
+      {/* 第101弾(devlog/wave101.md A-2・案3): マップ直上に「あなた」専用の帯。走行中196秒間、
+          自分が何位でどの集団にいるかが画面のどこにも出ていなかった実測への対応。
+          順位表(hud.top)と同じ300ms周期のsorted/paceFracPerSecから作るため値は整合する。
+          シーズンモード（hasAvatar===false）では出さない。 */}
+      {hasAvatar && !cinematic && hud.myRank != null && (
+        <div style={{ background: T.color.surface, padding: `${T.space.sm}px ${T.space.md}px`, display: "flex", alignItems: "baseline", gap: T.space.sm }}>
+          <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>あなた</span>
+          <span style={{ fontFamily: FONT_DOT, fontSize: T.size.head, color: T.color.accent, flex: "none" }}>{hud.myRank}位</span>
+          <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: "none" }}>/ {hud.myField}人</span>
+          <span style={{ fontFamily: FONT_DOT, fontSize: T.size.caption, color: T.color.sub, flex: 1, textAlign: "right" }}>
+            {hud.myDone
+              ? "ゴール"
+              : hud.myRank === 1
+                ? `先頭${hud.myGroupLabel ? `　${hud.myGroupLabel.t}${hud.myGroupLabel.t === "独走" ? "中" : "内"}` : ""}`
+                : `先頭と ${fmtGap(hud.myGap)}${hud.myGroupLabel ? `　${hud.myGroupLabel.t}${hud.myGroupLabel.t === "独走" ? "中" : "内"}` : ""}`}
+          </span>
+        </div>
       )}
       {cinematic ? (
         <div>
@@ -724,30 +800,17 @@ export function RaceView({ sim, onFinish }) {
                 </g>
               ))}
               {/* v39.19: 集団の役割ラベル（逃げ集団／追走集団／ペロトン／遅れ）。ロードレースの
-                  展開用語で「今どういう構図か」を読み取れるようにする。最大人数の塊＝ペロトン。 */}
+                  展開用語で「今どういう構図か」を読み取れるようにする。最大人数の塊＝ペロトン。
+                  第101弾(devlog/wave101.md): ラベル算出はdomain/shared/raceGroups.jsへ抽出
+                  （「あなた」の帯と同じロジックを共有するため。表示は1ピクセルも変えていない）。 */}
               {(() => {
-                if (ridersUi.length < 2) return null;
-                const byG = {};
-                ridersUi.forEach(r => { (byG[r.gid] = byG[r.gid] || []).push(r); });
-                const groups = Object.values(byG).map(m => ({
-                  m, n: m.length,
-                  front: Math.max(...m.map(r => r.frac)),
-                  cx: m.reduce((s, r) => s + r.frac, 0) / m.length,
-                }));
-                if (groups.length < 2) return null;
-                groups.sort((a, b) => b.front - a.front);
-                const pelotonN = Math.max(...groups.map(g => g.n));
-                const labelOf = (g, i) => {
-                  if (g.n === pelotonN && g.n >= 5) return { t: "ペロトン", c: "#cfd6e4" };
-                  if (i === 0) return { t: g.n === 1 ? "独走" : "逃げ集団", c: "#ffd23f" };
-                  if (g.front < groups[0].front && g.n >= 1 && i < groups.length - 1) return { t: "追走集団", c: "#7fd6a0" };
-                  return { t: "遅れた集団", c: "#9aa3b5" };
-                };
+                const groups = computeRaceGroups(ridersUi);
+                if (!groups) return null;
                 return (
                   <g>
                     {groups.slice(0, 4).map((g, i) => {
                       if (g.cx < cam.start - 0.01 || g.cx > cam.end + 0.01) return null;
-                      const lab = labelOf(g, i);
+                      const lab = g.label;
                       const x = mapX(g.cx, cam.start, cam.end), y = riderTopY(g.cx, 0) - 30;
                       const w = lab.t.length * 9 + 20;
                       return (
@@ -862,7 +925,7 @@ export function RaceView({ sim, onFinish }) {
                         v45: 最終スプリント演出と同じ「引き出し線＋タグ」方式に統一（判断⑤参照）。 */}
                     {labelIds.has(r.id) && (
                       <RiderNameTag x={0} y={-9} dx={13 + (riderHash01(r.id, 41) - 0.5) * 5} dy={-14 - riderHash01(r.id, 43) * 8}
-                        kind={mapTagKind(r)} label={riderTagIcon(mapTagKind(r)) + (r.name ? r.name.split(" ")[0] : "")} scale={1.1} />
+                        kind={mapTagKind(r)} label={r.name ? r.name.split(" ")[0] : ""} scale={1.1} />
                     )}
                   </g>
                 );
@@ -909,7 +972,7 @@ export function RaceView({ sim, onFinish }) {
                     {/* v45: 側面マップにも上と同じ引き出し線タグを追加（従来はラベル自体が無かった） */}
                     {labelIds.has(r.id) && (
                       <RiderNameTag x={0} y={0} dx={13 + (riderHash01(r.id, 41) - 0.5) * 5} dy={-16 - riderHash01(r.id, 43) * 8}
-                        kind={mapTagKind(r)} label={riderTagIcon(mapTagKind(r)) + (r.name ? r.name.split(" ")[0] : "")} scale={1.1} />
+                        kind={mapTagKind(r)} label={r.name ? r.name.split(" ")[0] : ""} scale={1.1} />
                     )}
                   </g>
                 );

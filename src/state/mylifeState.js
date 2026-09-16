@@ -107,6 +107,9 @@ export function mlAmbitionCleared(ml, amb) {
 export function initMyLife() {
   return {
     screen: "mylife_create", typeChoice: "RUL", bgChoice: "university",
+    // 第100弾(devlog/wave100.md): 選手をつくる画面で名前を自分で決められるように。
+    // 初期値は自動生成名（従来どおり）で、引き直す／改名モーダルで変更できる。
+    nameChoice: pickRiderName(mulberry(Date.now() % 999983), new Set()),
     year: 1, month: 0, classIdx: 0, classIdxBest: 0, points: 0,
     player: null, team: null,
     races: [], sel: { raceId: null },

@@ -11,10 +11,19 @@
 //   共有し、entrants だけ深クローンする：{ ...sim, entrants: sim.entrants.map(structuredClone) }。
 //   これで元のsimを一切汚さず何度でも同じ地点からフォークできる（乱数の再現性は不要）。
 //
+// 【⚠️必ず守ること：成果指標の飽和（第98弾§4.2）】
+// ⚠️着順だけで「判断が効いたか」を測ってはいけない。勝てる選手（能力100/PRO等）は
+// 多くのレースで1着になり、⚠️1着は1着より上が無いのでどの手を選んでもΔ着順が0になる。
+// 第97弾はこれを「健全な場面の36%で判断が結果を動かさない」と誤読し、3つの節
+// （§4.11・§4.12・§4.15）を丸ごと撤回する羽目になった（実際はタイムが15〜41秒違っていた）。
+// ⇒ 本ツールは⚠️**Δ秒（ゴールタイムの差）を必ず併記**し、勝率が高いときは⚠️警告を出す。
+// ⚠️離散量（着順）で差を測るときは、必ず連続量（タイム）と並べて確認すること。
+//
 // 【使い方】
 //   node tools/decisioncard_ev.mjs                          # 既定=5脚質×easy/hard×40人
 //   node tools/decisioncard_ev.mjs --types RUL --diffs easy --chars 40 --verbose
 //   node tools/decisioncard_ev.mjs --out /tmp/ev
+//   node tools/decisioncard_ev.mjs --ability 100 --class 2  # 円熟期（能力100・PRO）
 //
 // 【第一次計測（devlog/wave95.md §4.5）との違い】
 // 第一次はRUL・キャリア開始時のみだった。本ツールは脚質を選べるようにした恒久版。
@@ -37,6 +46,8 @@ const { mlCreateChar } = await import(`${R}/domain/mylife/createChar.js`);
 const { buildMyLifeSim } = await import(`${R}/sim/buildMyLifeSim.js`);
 const { resumeSim } = await import(`${R}/sim/race.js`);
 const { buildDecisions, composeCard } = await import(`${R}/domain/shared/raceDecisions.js`);
+const { AB_KEYS } = await import(`${R}/data/abilities.js`);
+const { careerRaces, defaultYearFor } = await import("./_shared.mjs");
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);
@@ -45,9 +56,25 @@ const arg = (name, dflt) => {
 const TYPES = arg("--types", "RUL,SPR,CLM,PUN,TT").split(",");
 const DIFFS = arg("--diffs", "easy,hard").split(",");
 const CHARS = Number(arg("--chars", "40"));
+// 第96弾§7.8(TODO #32-f): キャリア時期を選べるようにする。既定は従来どおり
+// 「新人のまま・そのキャラのクラス」＝キャリア開始時。
+// ⚠️finaleカードの設計意図（脚が残っていれば踏む）が効くのは能力が育った後であり、
+// 既定値だけでは最も肝心な円熟期を測れない（第95弾のEV計測はここを測っていなかった）。
+//   --ability 100 --class 2   … 円熟期（能力平均100）をクラスPROで
+const ABILITY = arg("--ability", null) != null ? Number(arg("--ability", null)) : null;
+const CLASSIDX = arg("--class", null) != null ? Number(arg("--class", null)) : null;
+// ⚠️第97弾§4.13: 出走するレースは`mlGenRaceCandidates`から年間日程を組む。
+// 旧実装は`s.races`（その月の候補3件）を使っており、⚠️クラスや能力を変えても
+// 走るコースは新人1年目の2〜3本のままだった（山岳ロードを一度も走っていなかった）。
+// --year を省くとクラスに対応する年次を使う（B1→1年目 / A→5年目 / PRO→9年目）。
+const YEAR = arg("--year", null) != null ? Number(arg("--year", null)) : null;
 const VERBOSE = process.argv.includes("--verbose");
 const OUT = arg("--out", null);
 if (OUT) fs.mkdirSync(OUT, { recursive: true });
+
+const EFF_CLASS = CLASSIDX ?? 0;
+const EFF_YEAR = YEAR ?? defaultYearFor(EFF_CLASS);
+const RACE_LIST = await careerRaces(R, EFF_YEAR, EFF_CLASS);
 
 function segTypeAt(course, frac) {
   for (let i = 0; i < course.segs.length; i++) if (frac <= course.cumFrac[i]) return course.segs[i].type;
@@ -60,32 +87,52 @@ function legsTier(energy) {
   return e >= 40 ? "十分" : e >= 0 ? "やや消耗" : e >= -60 ? "苦しい" : "限界";
 }
 
+// 能力の平均を目標値へ揃える（tools/difficulty_check.mjsと同じ手法）。
+function scaleTo(p, t) {
+  const cur = AB_KEYS.reduce((a, k) => a + (p[k] || 0), 0) / AB_KEYS.length;
+  AB_KEYS.forEach(k => { p[k] = (p[k] || 0) * (t / cur); });
+  return p;
+}
+
 function newChar(type) {
-  return mlCreateChar(initMyLife(), type, "university", null, null, { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
+  const s = mlCreateChar(initMyLife(), type, "university", null, null, { totalEarnedCP: 0, cpSpent: 0, cpUnlocks: [] });
+  if (ABILITY != null) scaleTo(s.player, ABILITY);
+  return s;
 }
 
 // 1脚質×1難易度ぶんを計測する。戻り値: { baseline: {n,meanRank,winPct,podiumPct}, cards: {kind/move: {...}} }
 function measure(type, diff, nChars) {
   const baseRanks = [];
-  const acc = {}; // "kind/move" -> {n, dsum, wins, top3}
-  const tierAcc = {}; // finaleのみ: "tier/move" -> {n, dsum, wins, top3}
-  const rec = (bucket, kind, move, delta, rank) => {
+  const acc = {}; // "kind/move" -> {n, dsum, wins, top3, tsum}
+  const tierAcc = {}; // finaleのみ: "tier/move" -> 同上
+  // ⚠️第98弾§4.2: Δタイムも必ず記録する。着順だけで測ると、勝てる選手では
+  // 「どの手を選んでも1着」で差が消え、⚠️判断が効いていないように見える（実際は
+  // タイムが15〜41秒違っていた）。⚠️離散量（着順）は連続量（タイム）と並べて見ること。
+  const rec = (bucket, kind, move, delta, rank, dtime) => {
     const k = `${kind}/${move}`;
-    bucket[k] = bucket[k] || { n: 0, dsum: 0, wins: 0, top3: 0 };
+    bucket[k] = bucket[k] || { n: 0, dsum: 0, wins: 0, top3: 0, tsum: 0 };
     const a = bucket[k];
-    a.n++; a.dsum += delta; if (rank === 1) a.wins++; if (rank <= 3) a.top3++;
+    a.n++; a.dsum += delta; a.tsum += dtime; if (rank === 1) a.wins++; if (rank <= 3) a.top3++;
   };
   let races = 0;
   for (let c = 0; c < nChars; c++) {
     const s = newChar(type);
-    const list = s.races.filter(r => !(r.tmpl && (r.tmpl.teamTT || r.tmpl.soloTT)));
-    for (const race of list) {
-      const sim = buildMyLifeSim(race, s.player, s.team, s.classIdx, diff, undefined, null,
-        s.rival, s.year, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
+    // ⚠️第97弾§4.13: 旧実装は`s.races`（＝その月の候補3件）を使っており、
+    // キャリア1年目の2〜3レースだけを繰り返し測っていた。実際の年間日程を使う。
+    for (const race of RACE_LIST) {
+      // ⚠️第97弾§4.13: クラスと年次も日程に揃える（s.classIdx/s.yearは常に1年目のB1）。
+      const sim = buildMyLifeSim(race, s.player, s.team, EFF_CLASS, diff, undefined, null,
+        s.rival, EFF_YEAR, s.rival2, s.teammates, s.tactic, s.worldRosters, null, s.bonds);
       if (!sim.entrants) continue;
-      const me = sim.entrants.find(e => e.isPlayer) || sim.entrants[0];
+      // ⚠️第96弾: ここは長らく `find(e => e.isPlayer) || sim.entrants[0]` だった。
+      // entrant側の実フィールドは isPlayerChar（buildMyLifeSim.js）で isPlayer は存在せず、
+      // find は常に失敗して sim.entrants[0]＝AI選手（プレイヤーは添字30前後）を掴んでいた。
+      // ＝第95弾のEV計測はすべて「AI選手に、プレイヤーの手を適用した」結果だった。
+      const me = sim.entrants.find(e => e.isPlayerChar);
+      if (!me) continue;
       if (!me.posHist || me.posHist.length < 60) continue;
       const base = me.rank;
+      const baseTime = me.finishTime;   // ⚠️第98弾§4.2: 着順が飽和しても差が見える連続量
       baseRanks.push(base);
       const decs = buildDecisions(sim.course, me, false).filter(d => d.at != null);
       for (const dec of decs) {
@@ -99,9 +146,11 @@ function measure(type, diff, nChars) {
         for (const ch of card.choices) {
           const forked = { ...sim, entrants: sim.entrants.map(e => structuredClone(e)) };
           resumeSim(forked, fromTick, me.id, ch.move);
-          const r = forked.entrants.find(e => e.id === me.id).rank;
-          rec(acc, dec.kind, ch.move, r - base, r);
-          if (dec.kind === "finale") rec(tierAcc, tier, ch.move, r - base, r);
+          const fm = forked.entrants.find(e => e.id === me.id);
+          const r = fm.rank;
+          const dt = (fm.finishTime ?? baseTime) - baseTime;
+          rec(acc, dec.kind, ch.move, r - base, r, dt);
+          if (dec.kind === "finale") rec(tierAcc, tier, ch.move, r - base, r, dt);
         }
       }
       races++;
@@ -115,7 +164,11 @@ function measure(type, diff, nChars) {
     podiumPct: +(100 * baseRanks.filter(r => r <= 3).length / n).toFixed(0),
   } : null;
   const fmt = (bucket) => Object.fromEntries(Object.entries(bucket).map(([k, a]) =>
-    [k, { n: a.n, meanDelta: +(a.dsum / a.n).toFixed(2), winPct: +(100 * a.wins / a.n).toFixed(0), podiumPct: +(100 * a.top3 / a.n).toFixed(0) }]));
+    [k, {
+      n: a.n, meanDelta: +(a.dsum / a.n).toFixed(2),
+      meanDtime: +(a.tsum / a.n).toFixed(1),   // ⚠️第98弾§4.2: 着順が飽和しても差が見える
+      winPct: +(100 * a.wins / a.n).toFixed(0), podiumPct: +(100 * a.top3 / a.n).toFixed(0),
+    }]));
   return { races, baseline, cards: fmt(acc), finaleByLegs: fmt(tierAcc) };
 }
 
@@ -130,12 +183,19 @@ for (const type of TYPES) {
     console.log(`\n=== ${type} / ${diff} （${result.races}レース・${ms}ms） ===`);
     if (result.baseline) {
       console.log(`無入力基準: n=${result.baseline.n} 平均${result.baseline.meanRank}着 勝率${result.baseline.winPct}% 表彰台${result.baseline.podiumPct}%`);
+      // ⚠️第98弾§4.2: 着順という尺度の飽和を自動で警告する。勝率が高いと「どの手を選んでも
+      // 1着」で着順の差が消え、⚠️判断が効いていないように見える（実際はタイムが15〜41秒違う）。
+      // この罠に3度落ちているので（第96弾§7・第97弾§4.13・第98弾§4.2）ツール側で検知する。
+      if (result.baseline.winPct >= 40) {
+        console.log(`  ⚠️注意: 無入力でも勝率${result.baseline.winPct}%＝着順が天井に張り付いており、`);
+        console.log(`     ⚠️「Δ着順≒0」は判断が効いていない証拠にならない。Δ秒で判定すること。`);
+      }
     } else {
       console.log("無入力基準: データ不足（レースが取れなかった）");
     }
     const rows = Object.entries(result.cards).sort((a, b) => a[0].localeCompare(b[0]));
     rows.forEach(([k, a]) => {
-      console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
+      console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  Δ秒=${a.meanDtime.toFixed(1).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
     });
     const legTiers = ["十分", "やや消耗", "苦しい", "限界"];
     const legRows = Object.entries(result.finaleByLegs);
@@ -145,7 +205,7 @@ for (const type of TYPES) {
         const rowsForTier = legRows.filter(([k]) => k.startsWith(`${tier}/`));
         if (!rowsForTier.length) return;
         rowsForTier.sort((a, b) => a[0].localeCompare(b[0])).forEach(([k, a]) => {
-          console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
+          console.log(`  ${k.padEnd(22)} n=${String(a.n).padStart(3)}  Δ着順=${a.meanDelta.toFixed(2).padStart(7)}  Δ秒=${a.meanDtime.toFixed(1).padStart(7)}  勝率${String(a.winPct).padStart(3)}%  表彰台${String(a.podiumPct).padStart(3)}%`);
         });
       });
     }

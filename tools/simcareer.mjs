@@ -51,6 +51,9 @@ const {
 } = await import(`${R}/data/gear.js`);
 const { PART_SLOTS, PARTS } = await import(`${R}/data/parts.js`);
 const { ML_SALARY_CAP } = await import(`${R}/data/economy.js`);
+const { overall } = await import(`${R}/core/core.js`);
+// 第99弾(devlog/wave99.md): 本気度（賭け）の方策比較に使う
+const { mlIntensityCanAfford, INTENSITY_VIT } = await import(`${R}/domain/mylife/intensity.js`);
 
 // ---------------------------------------------------------------------------
 // 引数
@@ -62,7 +65,10 @@ const N_CAREERS = Number(arg("--careers", "20"));
 const OUT = arg("--out", null);
 const MAX_STEPS = Number(arg("--steps", "20000")); // 安全弁。--yearsで先に止まるのが通常経路
 const MAX_YEARS = Number(arg("--years", "15"));
-const ONLY_POLICY = arg("--policy", null); // 指定時はそのpolicyだけ回す（デバッグ用）
+// 指定時はそのpolicyだけ回す。カンマ区切りで複数可（第99弾：本気度の方策比較で
+// builder系4本だけを回すため。⚠️README記載の「方策は必ず2つ以上を回して両方報告する」は
+// 引き続き守ること——1本だけ回して結論を出したのが第89弾の誤りだった）。
+const ONLY_POLICY = arg("--policy", null);
 const VERBOSE = process.argv.includes("--verbose");
 if (OUT) fs.mkdirSync(OUT, { recursive: true });
 
@@ -71,17 +77,22 @@ if (OUT) fs.mkdirSync(OUT, { recursive: true });
 // ⚠️これはuseMyLifeGame.js内にreducerとしてexportされておらず、フックの中に直に
 // 書かれているクロージャなので、同じロジックを純粋関数としてここに複製する
 // （src/側は一切変更しない。手順はsrc/hooks/useMyLifeGame.jsのmlStartRaceと同一）。
-function mlStartRace(s) {
+// 第99弾(devlog/wave99.md): 第2引数intensity＝「本気度」（0/1/2）。UI側（useMyLifeGame.jsの
+// mlStartRace＋mlSetIntensity）は出走表で選び直すたびにsimを作り直すが、ここは方策が
+// 事前に段を決めるので1回のbuildMyLifeSimで足りる。⚠️intensityはbuildMyLifeSimへ渡すと
+// 同時にstateへも入れること——賭け金の引き落とし・成否判定はmlRaceFinishがs.intensityを
+// 見て行うため、片方だけだと「相手だけ強くなって賭け金を払わない」等の嘘の計測になる。
+function mlStartRace(s, intensity = 0) {
   const baseDirectiveKey = s.directive ? s.directive.key : null;
   const selectedRace = mlSelectedRace(s);
   const { race, directiveKey } = resolveNationalRole(selectedRace, s.managerEval, baseDirectiveKey);
   const protegeForRace = s.protege ? { ...s.protege, curOvr: protegeState(s.protege, s.year).ovr } : null;
-  const sim = buildMyLifeSim(race, s.player, s.team, s.classIdx, s.difficulty || "easy", undefined, directiveKey, s.rival, s.year, s.rival2, s.teammates, s.tactic, s.worldRosters, protegeForRace, s.bonds);
+  const sim = buildMyLifeSim(race, s.player, s.team, s.classIdx, s.difficulty || "easy", undefined, directiveKey, s.rival, s.year, s.rival2, s.teammates, s.tactic, s.worldRosters, protegeForRace, s.bonds, intensity);
   return {
     ...s,
     races: race !== selectedRace ? s.races.map(r => r.id === selectedRace.id ? race : r) : s.races,
     sel: { ...s.sel, raceId: race.id },
-    result: sim, screen: "mylife_startlist",
+    result: sim, screen: "mylife_startlist", intensity,
   };
 }
 
@@ -154,10 +165,28 @@ function builderSinks(s) {
   return s;
 }
 
+// 第99弾(devlog/wave99.md): 本気度（賭け）の方策。intensity(s) は 0/1/2 を返す。
+// ⚠️比較の土台はbuilder（唯一シンクを実際に使う方策）に揃える——賭け金は開発・科学トレ・
+// パーツ強化と同じ財布を奪い合うので、何も買わない方策で測ると賭けのコストが見えない。
+// bet1/bet2＝毎レース必ずその段で賭ける（上限側の計測）。betSmart＝資金と活力に余裕が
+// あるときだけ段1で賭ける（「まともなプレイヤー」の近似）。
+function betAlways(level) {
+  return (s) => (mlIntensityCanAfford(s, level) ? level : 0);
+}
+function betSmart(s) {
+  const vit = s.player?.vitality ?? 100;
+  // 活力70で成長が満額（month.jsのvitMul）。賭けで16削っても70を割らない時だけ張る。
+  if (vit - INTENSITY_VIT[1] < 70) return 0;
+  return mlIntensityCanAfford(s, 1) ? 1 : 0;
+}
+
 const POLICIES = {
   frugal: { maintainSinks: frugalSinks },
   spender: { maintainSinks: spenderSinks },
   builder: { maintainSinks: builderSinks },
+  builder_bet1: { maintainSinks: builderSinks, intensity: betAlways(1) },
+  builder_bet2: { maintainSinks: builderSinks, intensity: betAlways(2) },
+  builder_betSmart: { maintainSinks: builderSinks, intensity: betSmart },
 };
 
 // 決定的な乱数（シンクのスロット選択・開発方針の抽選にのみ使う。第92弾時点ではキャリア
@@ -217,7 +246,9 @@ function step(s, policy, rng) {
     case "mylife_badge_goals": return confirmBadgeGoals(s);
     case "mylife_main": {
       const withSinks = policy.maintainSinks(s, rng);
-      return mlStartRace(withSinks);
+      // ⚠️シンクを使った後の資金で本気度を決める（買い物より賭けを優先しない）
+      const lv = policy.intensity ? policy.intensity(withSinks) : 0;
+      return mlStartRace(withSinks, lv);
     }
     case "mylife_startlist": {
       const soloTT = s.result.teamTT || s.result.raceMeta?.tmpl?.soloTT;
@@ -312,6 +343,10 @@ function runOneCareer(policyName, careerId, seed) {
   let lastYear = s.year;
   let steps = 0;
   let saturatedYear = null; // 恒久的な使い道をすべて買い切った最初の年（第94弾P2）
+  // 第99弾(devlog/wave99.md): 本気度の実施状況。races=全レース数、bets=賭けた回数、
+  // betWins=賭けて目標を達成した回数。⚠️「賭けたくても資金が無くて張れない」割合が
+  // 分かるように、賭けなかった回も含めた全レース数と対で数える。
+  let nRaces = 0, nBets = 0, nBetWins = 0, lastResultInfo = null;
   for (; steps < MAX_STEPS; steps++) {
     // SIM_DEBUG=1で進捗を可視化できる（1キャリアが数十秒〜数分かかるため、固まったのか
     // 実行中なのか外から見分けられないと困る。tools/autoplay.mjsのログ全部書きと同じ理由）。
@@ -319,7 +354,9 @@ function runOneCareer(policyName, careerId, seed) {
     checkInvariants(s, violations, careerId);
     if (saturatedYear == null && isFiniteSaturated(s)) saturatedYear = s.year;
     if (s.year !== lastYear) {
-      yearly.push({ year: lastYear, pop: s.player?.popularity ?? 0, money: s.money, salary: s.salary, classIdx: s.classIdx, worldRank: s.worldRank, age: s.player?.age });
+      // 第99弾: 本気度の見返り（成長・勝ち）を年ごとに残す。ovr＝総合力、winsは通算勝利。
+      yearly.push({ year: lastYear, pop: s.player?.popularity ?? 0, money: s.money, salary: s.salary, classIdx: s.classIdx, worldRank: s.worldRank, age: s.player?.age,
+        ovr: s.player ? overall(s.player) : 0, wins: s.careerWins || 0, podiums: s.careerPodiums || 0, vit: s.player?.vitality ?? 100 });
       lastYear = s.year;
       // ⚠️自ら引退しない方策（mlRetireAdviceContinueを常に選ぶ）なのでmylife_retiredには
       // 到達しない。--yearsで打ち切るのが通常の終了経路（devlog/wave92.md実測：
@@ -328,6 +365,13 @@ function runOneCareer(policyName, careerId, seed) {
       if (s.year > MAX_YEARS) { s = { ...s, __stoppedBy: "years" }; break; }
     }
     if (s.screen === "mylife_retired") { s = { ...s, __stoppedBy: "retired" }; break; }
+    // 第99弾: 出走表は1レースにつき1回だけ通るのでここで賭けの実施を数える。
+    if (s.screen === "mylife_startlist") { nRaces++; if (s.intensity) nBets++; }
+    // 結果は同じresultInfoで複数ステップ滞在しうるので、参照が変わった時だけ数える。
+    if (s.resultInfo && s.resultInfo !== lastResultInfo) {
+      lastResultInfo = s.resultInfo;
+      if (s.resultInfo.bet && s.resultInfo.bet.success) nBetWins++;
+    }
     const next = step(s, policy, rng);
     if (next === null) { s = { ...s, __stoppedBy: "retired" }; break; }
     s = next;
@@ -340,6 +384,12 @@ function runOneCareer(policyName, careerId, seed) {
     policyName, careerId, steps, stoppedBy, violations, yearly, finalYear: s.year, finalAge: s.player?.age,
     saturatedYear, finiteSpendTotal: spend.total, partUpgradeSpend: spend.partUpgradeSpend, partBodySpend: spend.partBodySpend,
     customParts: customPartsSummary(s),
+    // 第99弾(devlog/wave99.md): 本気度の方策比較で見る最終状態
+    finalOvr: s.player ? overall(s.player) : 0,
+    finalWins: s.careerWins || 0, finalPodiums: s.careerPodiums || 0, finalTitles: s.careerTitles || 0,
+    finalPop: s.player?.popularity ?? 0, finalMoney: s.money, finalClassIdx: s.classIdx,
+    finalWorldRank: s.worldRank ?? null, finalVit: s.player?.vitality ?? 100,
+    nRaces, nBets, nBetWins,
   };
 }
 
@@ -383,6 +433,10 @@ function summarizePolicy(results) {
         popMedian: median(rows.map(r => r.pop)).toFixed(1),
         moneyMedian: median(rows.map(r => r.money)),
         salaryMedian: median(rows.map(r => r.salary)),
+        // 第99弾: 総合力と活力の推移。⚠️本気度の閾値は能力60/80/92で較正したが、
+        // 実際のキャリアが何年目にそこを追い越すかを見ないと較正が空振りする。
+        ovrMedian: median(rows.map(r => r.ovr ?? 0)).toFixed(1),
+        vitMedian: median(rows.map(r => r.vit ?? 100)).toFixed(0),
       };
     });
   // 人気度100張り付き率（統計的な不変条件A2の本体。devlog/wave92.md参照）
@@ -401,7 +455,23 @@ function summarizePolicy(results) {
   const equippedAbSumMedian = median(results.map(r => r.customParts.equippedAbSum));
   const qualityTotals = { bronze: 0, silver: 0, gold: 0, rainbow: 0, unknown: 0 };
   results.forEach(r => { Object.entries(r.customParts.byQuality).forEach(([k, v]) => { qualityTotals[k] += v; }); });
+  // 第99弾(devlog/wave99.md): 本気度の方策比較で見る最終状態の中央値
+  const bet = {
+    ovr: median(results.map(r => r.finalOvr)),
+    wins: median(results.map(r => r.finalWins)),
+    podiums: median(results.map(r => r.finalPodiums)),
+    titles: median(results.map(r => r.finalTitles)),
+    pop: median(results.map(r => r.finalPop)),
+    money: median(results.map(r => r.finalMoney)),
+    classIdx: median(results.map(r => r.finalClassIdx)),
+    vit: median(results.map(r => r.finalVit)),
+    spend: median(results.map(r => r.finiteSpendTotal)),
+    races: results.reduce((a, r) => a + r.nRaces, 0),
+    bets: results.reduce((a, r) => a + r.nBets, 0),
+    betWins: results.reduce((a, r) => a + r.nBetWins, 0),
+  };
   return {
+    bet,
     careers: results.length, stepsExhausted, violationCount: allViolations.length, violations: allViolations,
     yearRows, pinnedRate, monthCount: allMonths.length,
     saturatedMedianYear, saturatedRate, finiteSpendMedian, partUpgradeSpendMedian, partBodySpendMedian,
@@ -410,7 +480,8 @@ function summarizePolicy(results) {
 }
 
 // ---------------------------------------------------------------------------
-const policyNames = ONLY_POLICY ? [ONLY_POLICY] : Object.keys(POLICIES);
+const policyNames = ONLY_POLICY ? ONLY_POLICY.split(",").map(x => x.trim()).filter(Boolean) : Object.keys(POLICIES);
+policyNames.forEach(p => { if (!POLICIES[p]) throw new Error(`未知の方策「${p}」。選べるのは: ${Object.keys(POLICIES).join(", ")}`); });
 const report = {};
 // ⚠️1キャリアが数十秒〜数分かかるため、標準出力をファイルへリダイレクトすると
 // バッファリングで最後まで何も見えなくなる（tools/autoplay.mjsで踏んだのと同じ問題）。
@@ -437,8 +508,8 @@ for (const p of policyNames) {
   md += `## 方策: ${p}\n\n`;
   md += `${r.careers}本中、指定年数(${MAX_YEARS}年)まで到達 ${r.careers - r.stepsExhausted}本 / ステップ上限で打ち切り ${r.stepsExhausted}本 / 不変条件違反 ${r.violationCount}件\n\n`;
   md += `⚠️人気度が100に張り付いた月の割合: **${r.pinnedRate.toFixed(1)}%**（全${r.monthCount}ヶ月中）\n\n`;
-  md += `| 年目 | サンプル数 | 人気度(中央値) | 資金(中央値) | 年俸(中央値) |\n|---|---|---|---|---|\n`;
-  r.yearRows.forEach(y => { md += `| ${y.year} | ${y.n} | ${y.popMedian} | ${y.moneyMedian}万 | ${y.salaryMedian}万 |\n`; });
+  md += `| 年目 | サンプル数 | 人気度(中央値) | 資金(中央値) | 年俸(中央値) | 総合力(中央値) | 活力(中央値) |\n|---|---|---|---|---|---|---|\n`;
+  r.yearRows.forEach(y => { md += `| ${y.year} | ${y.n} | ${y.popMedian} | ${y.moneyMedian}万 | ${y.salaryMedian}万 | ${y.ovrMedian} | ${y.vitMedian} |\n`; });
   md += `\n`;
   // 第94弾P2: 恒久的な使い道の実測
   md += `恒久的な使い道（住居・車・練習用品・コーチ・パーツ本体・パーツ強化）を買い切った本数: `
@@ -451,6 +522,35 @@ for (const p of policyNames) {
     + `（品質分布 銅${qt.bronze}・銀${qt.silver}・金${qt.gold}・虹${qt.rainbow}${qt.unknown ? `・不明${qt.unknown}` : ""}／全${qn}本）\n\n`;
   md += `装着中パーツのab合計（強さの目安）の中央値: ${r.equippedAbSumMedian ?? "—"}\n\n`;
 }
+// 第99弾(devlog/wave99.md): 本気度（賭け）の方策比較。同じbuilderのシンク挙動に対し
+// 賭けの段だけを変えた3本を並べる。⚠️合格条件は「どの段も、ある条件では最善になる」
+// （非支配）こと。builderがすべての列で勝つなら、賭けは支配された選択肢＝設計不成立。
+{
+  const betPolicies = policyNames.filter(p => p === "builder" || p.startsWith("builder_bet"));
+  if (betPolicies.length >= 2) {
+    md += `## 本気度（賭け）の方策比較\n\n`;
+    md += `${MAX_YEARS}年時点の中央値。土台のシンク挙動はすべてbuilderで共通、賭けの段だけが違う。\n\n`;
+    md += `| 方策 | 総合力 | 通算勝利 | 表彰台 | タイトル | 人気度 | 資金 | クラス | 活力 | シンク支出 |\n|---|---|---|---|---|---|---|---|---|---|\n`;
+    betPolicies.forEach(p => {
+      const b = report[p].bet;
+      md += `| ${p} | ${b.ovr.toFixed(1)} | ${b.wins} | ${b.podiums} | ${b.titles} | ${b.pop.toFixed(1)} | ${b.money.toLocaleString()}万 | ${b.classIdx.toFixed(1)} | ${b.vit.toFixed(0)} | ${b.spend.toLocaleString()}万 |\n`;
+    });
+    md += `\n`;
+    md += `賭けの実施状況（全キャリア合計）\n\n`;
+    md += `| 方策 | 全レース | 賭けた回数 | 賭けた率 | 賭けて達成 | 達成率 |\n|---|---|---|---|---|---|\n`;
+    betPolicies.forEach(p => {
+      const b = report[p].bet;
+      const betRate = b.races ? (100 * b.bets / b.races) : 0;
+      const winRate = b.bets ? (100 * b.betWins / b.bets) : 0;
+      md += `| ${p} | ${b.races} | ${b.bets} | ${betRate.toFixed(0)}% | ${b.betWins} | ${winRate.toFixed(0)}% |\n`;
+    });
+    md += `\n⚠️「賭けた率」が低い方策は、⚠️**資金が無くて張れなかった**ことを意味する（段は選べても実際には使えない）。\n\n`;
+    md += `⚠️読み方：**総合力**が賭けの主な見返り（出走経験の成長倍率）、**人気度**が即時の見返り、\n`;
+    md += `**資金・活力・シンク支出**が賭けのコスト。builderより総合力・勝利が伸びていなければ、\n`;
+    md += `賭けは払った分を取り返せていない＝倍率の較正が要る。\n\n`;
+  }
+}
+
 md += `## 不変条件違反の一覧\n\n`;
 const allV = policyNames.flatMap(p => report[p].violations);
 if (allV.length === 0) {

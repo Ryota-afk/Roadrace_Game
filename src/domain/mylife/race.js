@@ -91,6 +91,9 @@ export function mlGenRace(year, month, classIdx) {
 
 // 第41弾: ml.sel.raceIdで選択中のレースを解決する。未選択（null・該当なし）なら
 // races[0]にフォールバック——旧セーブ（races長さ1・sel.raceId未設定）はこれで従来と同じ挙動になる。
+// 第100弾(devlog/wave100.md・観察4): デビュー戦（raceLog長さ0）に限り、既定をTT以外の
+// 先頭候補にする——判断カードが1枚も出ない種目（skipWatch）が初見の第一戦になっていた。
+// 2戦目以降は挙動を変えない（races[0]のまま）ため出走傾向は動かず、計測は不要（§10）。
 export function mlSelectedRace(ml) {
   const races = ml.races || [];
   if (races.length === 0) return null;
@@ -98,6 +101,11 @@ export function mlSelectedRace(ml) {
   if (sel != null) {
     const found = races.find(r => r.id === sel);
     if (found) return found;
+  }
+  const isDebut = ((ml.player && ml.player.raceLog) || []).length === 0;
+  if (isDebut) {
+    const nonTT = races.find(r => !r.tmpl?.teamTT && !r.tmpl?.soloTT);
+    if (nonTT) return nonTT;
   }
   return races[0];
 }

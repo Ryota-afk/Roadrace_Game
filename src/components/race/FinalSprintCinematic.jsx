@@ -29,7 +29,7 @@ function riderTagKind(r) {
 // rival/legend/otherは俯瞰マップ側（先頭選手・ライバル・殿堂選手）で使う
 // （演出側は自分/エース/自チームのみ）。legendはユーザー呼称「転生ライバル」＝殿堂選手
 // （引退後に衰えて後年に再登場する歴代選手）。ライバルと紛らわしくないよう同じ赤系だが
-// 別トーン＋🏛アイコンで区別する。
+// 別トーンの縁取り色で区別する（第101弾でアイコン（🏛等）は撤去・devlog/wave101.md副産物2）。
 const RIDER_TAG_STYLE = {
   selfAce: { fill: "#27d3ff", border: "#ffd23c", text: "#0c2430" },
   self: { fill: "#0E0E10", border: "#27d3ff", text: "#27d3ff" },
@@ -48,10 +48,6 @@ export function mapTagKind(r) {
   if (r.isMyTeam && r.isAce) return "ace";
   if (r.isMyTeam) return "mate";
   return "other";
-}
-// タグ内の名前に添える小アイコン（自分=🚴／ライバル=🔥／殿堂選手=🏛／自チームエース=★）。
-export function riderTagIcon(kind) {
-  return kind === "self" || kind === "selfAce" ? "🚴" : kind === "rival" ? "🔥" : kind === "legend" ? "🏛" : kind === "ace" ? "★" : "";
 }
 // x,y: 選手本体の基準点。dx,dy: タグの中心をどれだけずらすか（斜め上方向を想定）。
 // scaleでキャンバスのサイズ差（演出=340幅／マップ=660幅）を吸収する。
@@ -259,7 +255,7 @@ export function FinalSprintCinematic({ contenders }) {
           const dy = -24 - riderHash01(r.c.id, 43) * 9;
           const kind = riderTagKind(r.c);
           return <RiderNameTag key={"tag" + r.c.id} x={r.x} y={r.y - 9} dx={dx} dy={dy}
-            kind={kind} label={riderTagIcon(kind) + r.c.name.split(" ")[0]} />;
+            kind={kind} label={r.c.name.split(" ")[0]} />;
         })}
       </svg>
       {fade > 0.01 && <div style={{ position: "absolute", inset: 0, background: "#000", opacity: fade, borderRadius: 8, pointerEvents: "none" }} />}
